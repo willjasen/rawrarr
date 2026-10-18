@@ -20,6 +20,8 @@
 
 # Rawrarr runbooks
 
+- [Media `.ev` folder layout](2026-10-18-media-ev-folder-layout.md) — Rename the MacBook's media replica root and reserve a movies-only folder for future selective sync.
+
 - [Public Rawrarr landing page](2026-10-18-public-landing-page.md) — Serve a security-qualified product introduction before passkey sign-in while keeping the authenticated workspace at the coordinator root.
 
 - [Integrate subscriber tailnets with Swarmsail](2026-10-18-swarmsail-subscriber-tailnet-integration.md) — Record the eligibility gate, one-way privacy rule, current Swarmsail change, and remaining hosted integration.
