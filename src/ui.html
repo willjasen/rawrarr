@@ -54,6 +54,8 @@
     .card-symbol { color: #a4b0a6; font-size: 17px; }
     .card-value { margin-top: 17px; font-size: 21px; font-weight: 680; letter-spacing: -.035em; }
     .card-sub { margin-top: 5px; color: #89968c; font-size: 10px; }
+    .card-link { display: inline-block; margin-top: 10px; color: var(--green); font-size: 10px; text-decoration: none; }
+    .card-link:hover { color: #d4ff9e; text-decoration: underline; }
     .status-value { display: flex; align-items: center; gap: 8px; }
     .status-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--amber); }
     .status-dot.connected { background: var(--green); box-shadow: 0 0 12px #b8f36a66; }
@@ -108,6 +110,7 @@
       <div class="section-label">Workspace</div>
       <div class="nav-item active"><span class="nav-icon">⌂</span><span class="nav-text">Overview</span></div>
       <div class="nav-item" aria-disabled="true"><span class="nav-icon">▧</span><span class="nav-text">Movies</span><span class="nav-soon">SOON</span></div>
+      <a class="nav-item" href="#radarr-settings-panel" id="settings-nav" style="text-decoration:none"><span class="nav-icon">⚙</span><span class="nav-text">Settings</span></a>
       <div class="sidebar-bottom">A fresh home for your movie library.<br>Early access · Radarr first</div>
     </aside>
     <main>
@@ -122,7 +125,7 @@
       <section class="grid" aria-label="Library summary">
         <article class="card"><div class="card-head"><span>Media files found</span><span class="card-symbol">▧</span></div><div id="media-total" class="card-value">—</div><div id="media-detail" class="card-sub">Configure a folder, then scan</div></article>
         <article class="card"><div class="card-head"><span>Download providers</span><span class="card-symbol">⇩</span></div><div class="card-value">0</div><div class="card-sub">Provider-neutral adapter interface is in place</div></article>
-        <article class="card"><div class="card-head"><span>Radarr connection</span><span class="card-symbol">↗</span></div><div class="card-value status-value"><span id="radarr-dot" class="status-dot"></span><span id="radarr-state">Checking…</span></div><div id="radarr-detail" class="card-sub">Checking configured Radarr endpoint</div></article>
+        <article class="card"><div class="card-head"><span>Radarr connection</span><span class="card-symbol">↗</span></div><div class="card-value status-value"><span id="radarr-dot" class="status-dot"></span><span id="radarr-state">Checking…</span></div><div id="radarr-detail" class="card-sub">Checking configured Radarr endpoint</div><a class="card-link" href="#radarr-settings-panel" id="configure-radarr-link">Configure Radarr →</a></article>
       </section>
       <section class="columns">
         <article class="panel">
@@ -139,7 +142,7 @@
           <div class="panel-head"><h2>Devices</h2><span id="device-count">—</span></div>
           <div id="device-list" class="device-list"><div class="device-meta">Loading scanner devices…</div></div>
         </article>
-        <article class="panel">
+        <article class="panel" id="radarr-settings-panel" style="grid-column: 1 / -1; scroll-margin-top: 24px">
           <div class="panel-head"><h2>Connect Radarr</h2><button id="refresh" class="refresh" type="button">Refresh status ↻</button></div>
           <form id="radarr-settings" class="settings-form">
             <p class="setup-intro">Configure a Radarr URL and API key. The key is held in memory and never sent back to this page; enter it again after rawrarr restarts.</p>
@@ -161,6 +164,14 @@
     const detail = document.getElementById('radarr-detail');
     const scanButton = document.getElementById('scan');
     const settingsForm = document.getElementById('radarr-settings');
+    function openRadarrSettings(event) {
+      event.preventDefault();
+      const panel = document.getElementById('radarr-settings-panel');
+      panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.getElementById('radarr-url').focus({ preventScroll: true });
+    }
+    document.getElementById('configure-radarr-link').addEventListener('click', openRadarrSettings);
+    document.getElementById('settings-nav').addEventListener('click', openRadarrSettings);
     const libraryEmpty = document.getElementById('library-empty');
     const libraryResults = document.getElementById('library-results');
     let libraryConfigured = false;
