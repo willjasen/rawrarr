@@ -51,6 +51,14 @@ The main workspace should make the user's shared files, media, and service healt
 
 Use plain language in empty states. When there is no library content, direct the user to configure a media folder and scan it. When an integration is disconnected, show its last known state and a specific next step.
 
+## AI chat and request review (planned)
+
+Offer an optional chat entry point in roarlay for questions about the owner's library and for narrowly scoped actions. For example, “Which of my movies were made in the 90s?” should resolve to a movie release-year filter (1990 through 1999), return matching titles from actual library records, and show the source and freshness of those records. If the library is unavailable or a field is missing, say so rather than inventing a result. Start with read-only library questions, then consider metadata refresh requests, recommendations based on owned titles, and draft requests for missing movies or shows.
+
+Record each submitted question in coordinator-local PostgreSQL as an owner-reviewable request, with its requester, time, interpreted intent and filters, result or failure state, and any proposed follow-up. Make the history searchable and deletable with a defined retention setting. Treat the question text as private user data. A separately authorized, owner-run agent may read the request inbox and propose metadata refreshes, catalog improvements, or configuration changes; show what it proposes and what actually happened. A question does not by itself authorize a configuration edit, download, sharing change, or other mutation. Require an explicit owner action for such changes, and retain an audit trail of approval and outcome.
+
+Use existing metadata to answer a question before proposing a configuration change. A missing release year calls for a metadata refresh or catalog repair; adding a new source or changing an integration belongs in age-encrypted configuration only if the owner approves it. The agent must use scoped application operations rather than arbitrary SQL or shell commands. Cloud AI receives only the question and minimal context needed for its task, with an explicit owner-controlled enablement and clear notice of what leaves the instance. Keep private age identities, credentials, media bytes, and plaintext shared configuration out of cloud requests and the operator service. Roarlay must preserve its blind-content boundary: library records are filtered through an authorized metadata path or the owner's browser, and any future cloud access to decrypted titles requires a separate, explicit product decision.
+
 ## Integrations and library behavior
 
 ### Arr summary cards
