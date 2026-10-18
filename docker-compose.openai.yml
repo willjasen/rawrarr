@@ -1,0 +1,12 @@
+# Optional roarlay OpenAI integration. Include only after creating the protected key file.
+services:
+  roarlay:
+    environment:
+      RAWARR_OPENAI_API_KEY_FILE: /run/secrets/rawrarr_openai_api_key
+      RAWARR_OPENAI_MODEL: ${RAWARR_OPENAI_MODEL:-gpt-4o-mini}
+    secrets:
+      - rawrarr_openai_api_key
+
+secrets:
+  rawrarr_openai_api_key:
+    file: "${RAWARR_OPENAI_API_KEY_PATH:-${HOME}/Library/Application Support/rawrarr/openai-api-key}"

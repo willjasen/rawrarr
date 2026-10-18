@@ -51,7 +51,13 @@ The main workspace should make the user's shared files, media, and service healt
 
 Use plain language in empty states. When there is no library content, direct the user to configure a media folder and scan it. When an integration is disconnected, show its last known state and a specific next step.
 
-## AI chat and request review (planned)
+## AI chat and request review
+
+The first implementation supports signed-in, read-only movie year and genre questions in roarlay. OpenAI interprets the question, while the browser filters its decrypted movie records. Press-to-talk sends a short recording to OpenAI for transcription, then uses the same question path; a local browser voice speaks the full answer when available. Roarlay stores questions, channels, status, and interpreted filters in local PostgreSQL. The daily five-question limit currently applies to all accounts because trial and paid entitlement records are not yet implemented. A missing OpenAI key disables the interface. Voice is turn based and requires a microphone-capable browser.
+
+The owner review agent, configuration proposals and approvals, retention controls, searchable inbox, Twilio entry point, and entitlement-specific quota remain planned.
+
+Give the text and voice assistant an innocent, warm, curious personality. It can ask a short follow-up when a question is unclear and sound pleased to help, while staying candid about missing records and never claiming to have found titles it has not checked.
 
 Offer an optional chat entry point in roarlay for questions about the owner's library and for narrowly scoped actions. For example, “Which of my movies were made in the 90s?” should resolve to a movie release-year filter (1990 through 1999), return matching titles from actual library records, and show the source and freshness of those records. If the library is unavailable or a field is missing, say so rather than inventing a result. Start with read-only library questions, then consider metadata refresh requests, recommendations based on owned titles, and draft requests for missing movies or shows.
 

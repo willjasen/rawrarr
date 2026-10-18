@@ -1,4 +1,6 @@
 //! Central passkey authentication and owner-approved node enrollment.
+#[path = "coordinator_ai.rs"]
+mod ai;
 use crate::{auth::AuthState, node_role::NodeRole};
 use axum::{
     Extension, Json, Router,
@@ -221,6 +223,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/assets/rawrarr-logo.png", get(coordinator_rawrarr_logo))
         .route("/assets/rawrarr-logo.jxl", get(coordinator_rawrarr_logo_jxl))
         .route("/assets/coordinator-workspace.mjs", get(coordinator_workspace_script))
+        .route("/assets/coordinator-ai.mjs", get(coordinator_ai_script))
         .route("/assets/coordinator-device-routes.mjs", get(coordinator_device_routes_script))
         .route("/assets/profile-color.mjs", get(coordinator_profile_color_script))
         .route("/assets/metadata-export.js", get(coordinator_metadata_export_js))
@@ -276,6 +279,9 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/api/workspace/direct-session", post(direct_session))
         .route("/api/workspace/pending", get(pending_nodes))
         .route("/api/workspace/approve", post(approve_node))
+        .route("/api/ai/status", get(ai::status))
+        .route("/api/ai/requests", get(ai::list_requests).post(ai::submit))
+        .route("/api/ai/transcribe", post(ai::transcribe))
         .layer(middleware::from_fn_with_state(
             state.coordinator_auth.clone(),
             coordinator_auth_context,
@@ -973,6 +979,13 @@ async fn direct_session(
 
 async fn coordinator_workspace_script() -> Response {
     let mut response = axum::response::Response::new(Body::from(include_str!("coordinator-workspace.mjs")));
+    response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/javascript; charset=utf-8"));
+    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+async fn coordinator_ai_script() -> Response {
+    let mut response = Response::new(Body::from(include_str!("coordinator-ai.mjs")));
     response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/javascript; charset=utf-8"));
     response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response

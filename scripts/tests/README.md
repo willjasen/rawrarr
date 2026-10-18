@@ -5,6 +5,7 @@
 
 - `test_rawrarr_subscriber_compose.mjs` — Validates subscriber-only metadata/apex Compose output, local mounts, secret exclusion, and rejection of coordinator role; run with `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
 - `test_rawrarr_subscriber_onboarding_browser.mjs` — Chromium checks local age/root creation, backup gates, private-key display boundaries, and subscriber-only role choices; run in the isolated test image.
+- `test_rawrarr_ai_chat.mjs` — checks that 1990s and genre questions use only browser-local movie records and that locked or unsupported requests are reported honestly. Run `node --test scripts/tests/test_rawrarr_ai_chat.mjs`.
 
 - `test_rawrarr_landing_page.mjs` — Chromium checks for the signed-out landing page, passkey sign-in links, accurate security/maturity disclosure, and mobile layout. Run with `node --test scripts/tests/test_rawrarr_landing_page.mjs` in the isolated test image.
 

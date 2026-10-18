@@ -31,7 +31,7 @@ Keep the entitlement payload small and free of personal billing details. Candida
 
 ## Trial expiry, renewal, and offline behavior
 
-- During the 24-hour trial, the instance has the intended paid feature set except that each signed-in account may submit at most five AI questions per UTC calendar day across text and voice. Roarlay enforces this using its local PostgreSQL request records. Show the remaining allowance and local-time reset; do not count failed requests without a usable result, internal model/tool turns, or owner review-agent processing. The AI feature and trial enforcement are still planned.
+- During the 24-hour trial, the instance has the intended paid feature set except that each signed-in account may submit at most five AI questions per UTC calendar day across text and voice. Roarlay enforces this using its local PostgreSQL request records. Show the remaining allowance and local-time reset; do not count failed requests without a usable result, internal model/tool turns, or owner review-agent processing. The initial AI implementation applies this limit to all accounts; trial and paid entitlement enforcement remain planned.
 - At trial expiry with no valid subscription, gate product workflows. Always retain passkey sign-in, subscription recovery, data export, backup recovery, and account/data deletion paths. Preserve the user's data; never delete or re-encrypt it as a payment enforcement action.
 - On cancellation, retain access through the provider-confirmed paid-through date. On a failed renewal, allow the proposed 14-day grace period before gating features.
 - An offline node can use the most recent signed entitlement until its grace deadline. Do not treat a temporary billing-service outage as cancellation.

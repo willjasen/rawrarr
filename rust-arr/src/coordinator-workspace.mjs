@@ -1,5 +1,6 @@
 import { checkDeviceRoutes } from './coordinator-device-routes.mjs';
 import { dinosaurMainColor, dinosaurWingWord } from './profile-color.mjs';
+import { initAiChat } from './coordinator-ai.mjs';
 
 const status = document.getElementById('status');
 const nodesPanel = document.getElementById('nodes');
@@ -7,6 +8,8 @@ const pendingPanel = document.getElementById('pending');
 const contentPanel = document.getElementById('content');
 const contentStatus = document.getElementById('content-status');
 const moviesPanel = document.getElementById('movies');
+let aiMovies = null;
+const aiChat = initAiChat({ getMovies: () => aiMovies, openMovies: () => showView('movies') });
 const ARR_SUMMARY_DEFINITIONS = {
   radarr: {
     containerId: 'radarr-summary',
@@ -78,7 +81,7 @@ const ageStorageMessage = document.getElementById('age-storage-message');
 const settingsAgeIdInput = document.getElementById('settings-age-id');
 const saveAgeIdButton = document.getElementById('save-age-id');
 const removeAgeIdButton = document.getElementById('remove-age-id');
-const views = Object.fromEntries(['overview', 'devices', 'movies', 'series', 'configuration', 'settings', 'about'].map(name => [name, document.getElementById(`${name}-view`)]));
+const views = Object.fromEntries(['overview', 'devices', 'movies', 'series', 'assistant', 'configuration', 'settings', 'about'].map(name => [name, document.getElementById(`${name}-view`)]));
 function roleLabel(role) {
   return role === 'coordinator' ? 'roarlay' : role === 'storage' ? 'apex' : 'metadata';
 }
@@ -116,6 +119,7 @@ function showView(name, updateHash = true) {
       void loadArrSettings('sonarr');
     }
   }
+  if (view === 'assistant') void aiChat.refresh();
   if ((view === 'movies' || view === 'series') && updateHash) void loadMetadataSizes();
 }
 document.querySelectorAll('.nav-item[data-view]').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
@@ -368,6 +372,7 @@ function updateAgeStorageSettings() {
   removeAgeIdButton.textContent = isStored ? 'Remove age ID from this browser' : 'Clear age ID from this tab';
 }
 function clearAgeIdentity() {
+  aiMovies = null;
   ageIdentityInMemory = '';
   ageInput.value = '';
   rememberAgeId.checked = false;
@@ -711,6 +716,7 @@ function openNode(node) {
     card.dataset.selected = String(card.dataset.nodeId === selectedNode);
   }
   contentPanel.hidden = node.role !== 'metadata';
+  aiMovies = null;
   moviesPanel.replaceChildren();
   resetArrSummary('radarr');
   status.textContent = node.role === 'metadata'
@@ -1125,6 +1131,7 @@ window.setInterval(() => {
 }, 3000);
 
 function renderMovies(movies) {
+  aiMovies = movies;
   moviesPanel.replaceChildren();
   const files = movies.filter(movie => movie.hasFile).length;
   setArrSummaryValues('radarr', {
