@@ -28,3 +28,17 @@ test('locked metadata and unsupported questions are candid', () => {
   assert.match(answerMovieQuery({ kind: 'movie_filter' }, null), /unlock Movies/);
   assert.match(answerMovieQuery({ kind: 'unsupported' }, movies), /saved that question for review/);
 });
+
+test('movie and TV file-size shares use the combined reported bytes', () => {
+  const localMovies = [{ sizeOnDisk: 3000 }, { sizeOnDisk: 1000 }];
+  const localSeries = [{ sizeOnDisk: 6000 }, { sizeOnDisk: 0 }];
+  const answer = answerMovieQuery({ kind: 'library_storage_share' }, localMovies, localSeries);
+  assert.match(answer, /Movies use 3\.9 KB \(40\.0%\)/);
+  assert.match(answer, /TV uses 5\.9 KB \(60\.0%\)/);
+  assert.match(answer, /combined 9\.8 KB/);
+});
+
+test('missing TV sizes are explained without guessing a percentage', () => {
+  assert.match(answerMovieQuery({ kind: 'library_storage_share' }, movies), /could not load TV sizes/);
+  assert.match(answerMovieQuery({ kind: 'library_storage_share' }, [{ sizeOnDisk: 0 }], [{ sizeOnDisk: 0 }]), /could not find reported file sizes/);
+});

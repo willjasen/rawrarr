@@ -9,7 +9,13 @@ const contentPanel = document.getElementById('content');
 const contentStatus = document.getElementById('content-status');
 const moviesPanel = document.getElementById('movies');
 let aiMovies = null;
-const aiChat = initAiChat({ getMovies: () => aiMovies, openMovies: () => showView('movies') });
+let aiSeries = null;
+const aiChat = initAiChat({
+  getMovies: () => aiMovies,
+  getSeries: () => aiSeries,
+  loadSeries: () => loadSonarrSeries(),
+  openMovies: () => showView('movies'),
+});
 const ARR_SUMMARY_DEFINITIONS = {
   radarr: {
     containerId: 'radarr-summary',
@@ -373,6 +379,7 @@ function updateAgeStorageSettings() {
 }
 function clearAgeIdentity() {
   aiMovies = null;
+  aiSeries = null;
   ageIdentityInMemory = '';
   ageInput.value = '';
   rememberAgeId.checked = false;
@@ -717,6 +724,7 @@ function openNode(node) {
   }
   contentPanel.hidden = node.role !== 'metadata';
   aiMovies = null;
+  aiSeries = null;
   moviesPanel.replaceChildren();
   resetArrSummary('radarr');
   status.textContent = node.role === 'metadata'
@@ -1018,6 +1026,7 @@ async function loadSonarrSeries() {
     if (generation !== sonarrLoadGeneration || selectedNode !== nodeId) return;
     const artworkBase = await arrDirectUrl();
     if (generation !== sonarrLoadGeneration || selectedNode !== nodeId) return;
+    aiSeries = series;
     rows.replaceChildren();
     let episodesPresent = 0;
     let diskUsage = 0;

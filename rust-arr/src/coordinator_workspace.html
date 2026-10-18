@@ -19,6 +19,9 @@
     .nav-item.active { color:var(--text); background:#202a23; box-shadow:inset 2px 0 var(--green) }
     .nav-icon { width:17px; text-align:center }
     .ai-panel { max-width:760px; padding:20px; border:1px solid var(--line); border-radius:12px; background:var(--panel) }
+    .ai-tabs { display:flex; gap:8px; border-bottom:1px solid var(--line); margin:18px 0; padding-bottom:8px }
+    .ai-tabs button[aria-selected="true"] { border-color:var(--green); color:var(--text); background:#202a23 }
+    .ai-tab-panel[hidden] { display:none }
     .ai-form { display:grid; gap:12px }
     .ai-form textarea { width:100%; min-height:100px; padding:12px; border:1px solid #46574a; border-radius:8px; color:var(--text); background:#101411; font:inherit; resize:vertical }
     .ai-actions { display:flex; flex-wrap:wrap; gap:10px }
@@ -201,17 +204,28 @@
     </section>
     <section id="assistant-view" hidden><h1 class="page-title">Ask rawrarr</h1>
       <div class="ai-panel">
-        <p>Ask about movies in your library. Try “Which of my movies were made in the 90s?”</p>
+        <p>Ask about your library. Try “Which of my movies were made in the 90s?” or “What percentage of my file sizes is Movies versus TV?”</p>
         <p id="ai-quota" class="ai-note" role="status">Checking daily allowance…</p>
-        <p class="ai-note">Your typed question or voice recording goes to OpenAI. The transcribed question is saved in roarlay’s private request inbox. Movie titles stay in this browser. Unlock Movies before asking.</p>
-        <form id="ai-form" class="ai-form">
-          <label for="ai-question">Your question</label>
-          <textarea id="ai-question" maxlength="500" required></textarea>
-          <label><input id="ai-cloud-consent" type="checkbox" required> Send my question or recording to OpenAI</label>
-          <div class="ai-actions"><button id="ai-submit" type="submit">Ask</button><button id="ai-talk" type="button" hidden>Talk</button><button id="ai-open-movies" type="button">Unlock Movies</button></div>
-          <p class="ai-note">Talk uses your microphone. Spoken answers use a local browser voice when available; otherwise only a generic message is spoken and the full answer appears here.</p>
-        </form>
-        <div id="ai-answer" class="ai-answer" role="status" aria-live="polite"></div>
+        <p class="ai-note">Sending a question or using Voice sends your words or recording to OpenAI. Roarlay saves the question and interpreted request in its private PostgreSQL inbox. Movie titles and library sizes stay in this browser. Unlock Movies before asking.</p>
+        <div class="ai-tabs" role="tablist" aria-label="Assistant mode">
+          <button id="ai-tab-chat" type="button" role="tab" aria-selected="true" aria-controls="ai-chat-panel">Chat</button>
+          <button id="ai-tab-voice" type="button" role="tab" aria-selected="false" aria-controls="ai-voice-panel" tabindex="-1">Voice</button>
+        </div>
+        <section id="ai-chat-panel" class="ai-tab-panel" role="tabpanel" aria-labelledby="ai-tab-chat">
+          <form id="ai-form" class="ai-form">
+            <label for="ai-question">Your question</label>
+            <textarea id="ai-question" maxlength="500" required></textarea>
+            <div class="ai-actions"><button id="ai-submit" type="submit">Ask</button></div>
+          </form>
+          <div id="ai-answer" class="ai-answer" role="status" aria-live="polite"></div>
+        </section>
+        <section id="ai-voice-panel" class="ai-tab-panel" role="tabpanel" aria-labelledby="ai-tab-voice" hidden>
+          <button id="ai-talk" type="button" hidden>Talk</button>
+          <p class="ai-note">Talk uses your microphone. Spoken answers use a local browser voice when available; otherwise only a generic message is spoken and the full answer appears below.</p>
+          <p id="ai-voice-transcript" class="ai-note" role="status"></p>
+          <div id="ai-voice-answer" class="ai-answer" role="status" aria-live="polite"></div>
+        </section>
+        <p><button id="ai-open-movies" type="button">Unlock Movies</button></p>
         <h2>Request inbox</h2><p class="ai-note">Questions and interpreted filters stay in roarlay’s PostgreSQL database for review.</p>
         <ol id="ai-history" class="ai-history"></ol>
       </div>

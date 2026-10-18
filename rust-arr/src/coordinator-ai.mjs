@@ -1,5 +1,27 @@
-export function answerMovieQuery(intent, movies) {
+function formatStorageSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = bytes / 1024;
+  for (const unit of units) {
+    if (value < 1024 || unit === 'TB') return `${value.toFixed(1)} ${unit}`;
+    value /= 1024;
+  }
+}
+
+export function answerMovieQuery(intent, movies, series = null) {
   if (!Array.isArray(movies)) return 'Could you unlock Movies first? Then I can look through your library.';
+  if (intent?.kind === 'library_storage_share') {
+    if (!Array.isArray(series)) return 'I can see Movies, but I could not load TV sizes yet. Open TV and check its Sonarr connection, then try again.';
+    const totalSize = records => records.reduce((total, item) => {
+      const size = Number(item.sizeOnDisk);
+      return total + (Number.isFinite(size) && size > 0 ? size : 0);
+    }, 0);
+    const movieBytes = totalSize(movies);
+    const tvBytes = totalSize(series);
+    const combined = movieBytes + tvBytes;
+    if (!combined) return 'I could not find reported file sizes for Movies or TV yet. What would you like to check next?';
+    return `From the file sizes reported by Radarr and Sonarr, Movies use ${formatStorageSize(movieBytes)} (${(movieBytes / combined * 100).toFixed(1)}%) and TV uses ${formatStorageSize(tvBytes)} (${(tvBytes / combined * 100).toFixed(1)}%) of their combined ${formatStorageSize(combined)}. What else are you curious about?`;
+  }
   if (intent?.kind !== 'movie_filter') return 'I saved that question for review. I can search your movies by year or genre right now. What would you like to try?';
   const start = Number.isInteger(intent.startYear) ? intent.startYear : null;
   const end = Number.isInteger(intent.endYear) ? intent.endYear : null;
@@ -19,18 +41,44 @@ export function answerMovieQuery(intent, movies) {
   return `${header}\n${titles.join('\n')}${more}`;
 }
 
-export function initAiChat({ getMovies, openMovies }) {
+export function initAiChat({ getMovies, getSeries, loadSeries, openMovies }) {
   const form = document.getElementById('ai-form');
   if (!form) return { refresh: async () => {} };
   const question = document.getElementById('ai-question');
-  const consent = document.getElementById('ai-cloud-consent');
-  const answer = document.getElementById('ai-answer');
+  const chatAnswer = document.getElementById('ai-answer');
+  const voiceAnswer = document.getElementById('ai-voice-answer');
+  const transcript = document.getElementById('ai-voice-transcript');
   const quota = document.getElementById('ai-quota');
   const history = document.getElementById('ai-history');
   const submit = document.getElementById('ai-submit');
   const talk = document.getElementById('ai-talk');
+  const chatTab = document.getElementById('ai-tab-chat');
+  const voiceTab = document.getElementById('ai-tab-voice');
+  const chatPanel = document.getElementById('ai-chat-panel');
+  const voicePanel = document.getElementById('ai-voice-panel');
   document.getElementById('ai-open-movies').addEventListener('click', openMovies);
   let recorder = null;
+
+  function selectMode(mode) {
+    const chat = mode === 'chat';
+    chatTab.setAttribute('aria-selected', String(chat));
+    voiceTab.setAttribute('aria-selected', String(!chat));
+    chatTab.tabIndex = chat ? 0 : -1;
+    voiceTab.tabIndex = chat ? -1 : 0;
+    chatPanel.hidden = !chat;
+    voicePanel.hidden = chat;
+  }
+  chatTab.addEventListener('click', () => selectMode('chat'));
+  voiceTab.addEventListener('click', () => selectMode('voice'));
+  for (const [tab, mode] of [[chatTab, 'chat'], [voiceTab, 'voice']]) {
+    tab.addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const next = event.key === 'Home' ? 'chat' : event.key === 'End' ? 'voice' : mode === 'chat' ? 'voice' : 'chat';
+      selectMode(next);
+      (next === 'chat' ? chatTab : voiceTab).focus();
+    });
+  }
 
   function speak(answerText) {
     if (!('speechSynthesis' in window)) return;
@@ -70,9 +118,9 @@ export function initAiChat({ getMovies, openMovies }) {
     } catch (error) { quota.textContent = error.message || 'Could not load the request inbox.'; }
   }
 
-  async function ask(channel) {
+  async function ask(channel, askedQuestion) {
+    const answer = channel === 'voice' ? voiceAnswer : chatAnswer;
     if (!getMovies()) { answer.textContent = 'Unlock Movies first so I can answer from your library.'; return; }
-    if (!consent.checked) { answer.textContent = 'Choose whether to send this question to OpenAI.'; return; }
     submit.disabled = true;
     if (talk) talk.disabled = true;
     answer.textContent = 'Interpreting your question…';
@@ -80,32 +128,32 @@ export function initAiChat({ getMovies, openMovies }) {
       const response = await fetch('/api/ai/requests', {
         method: 'POST', cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: crypto.randomUUID(), question: question.value.trim(), channel, cloudConsent: true }),
+        body: JSON.stringify({ id: crypto.randomUUID(), question: askedQuestion.trim(), channel, cloudConsent: true }),
       });
       if (response.status === 429) throw new Error('You have used your five questions today.');
       if (!response.ok) throw new Error('Rawrarr could not interpret this question. The attempt was not counted.');
       const result = await response.json();
       if (result.status === 'pending') answer.textContent = 'This question is still processing. Check the inbox in a moment.';
       else {
-        answer.textContent = answerMovieQuery(result.intent, getMovies());
+        if (result.intent?.kind === 'library_storage_share' && !getSeries()) await loadSeries();
+        answer.textContent = answerMovieQuery(result.intent, getMovies(), getSeries());
         if (channel === 'voice') speak(answer.textContent);
       }
-      if (result.status !== 'pending') form.reset();
+      if (channel === 'text' && result.status !== 'pending') form.reset();
     } catch (error) { answer.textContent = error.message || 'Could not ask Rawrarr.'; }
     finally { await refresh(); }
   }
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
-    await ask('text');
+    await ask('text', question.value);
   });
 
   if (talk && navigator.mediaDevices?.getUserMedia && window.MediaRecorder) {
     talk.hidden = false;
     talk.addEventListener('click', async () => {
       if (recorder?.state === 'recording') { recorder.stop(); return; }
-      if (!getMovies()) { answer.textContent = 'Unlock Movies first so I can answer from your library.'; return; }
-      if (!consent.checked) { answer.textContent = 'Choose whether to send your recording to OpenAI.'; return; }
+      if (!getMovies()) { voiceAnswer.textContent = 'Unlock Movies first so I can answer from your library.'; return; }
       let stream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -119,7 +167,7 @@ export function initAiChat({ getMovies, openMovies }) {
           stream.getTracks().forEach(track => track.stop());
           talk.textContent = 'Talk';
           talk.disabled = true;
-          answer.textContent = 'Transcribing your question…';
+          voiceAnswer.textContent = 'Transcribing your question…';
           try {
             const audio = new Blob(chunks, { type: mimeType });
             if (audio.size > 2_000_000) throw new Error('That recording is too long. Please try a shorter question.');
@@ -129,18 +177,19 @@ export function initAiChat({ getMovies, openMovies }) {
             });
             if (response.status === 429) throw new Error('You have used your five questions today.');
             if (!response.ok) throw new Error('I could not understand that recording. Please try again.');
-            question.value = (await response.json()).question;
-            await ask('voice');
-          } catch (error) { answer.textContent = error.message || 'Voice is unavailable.'; }
+            const spokenQuestion = (await response.json()).question;
+            transcript.textContent = `You asked: ${spokenQuestion}`;
+            await ask('voice', spokenQuestion);
+          } catch (error) { voiceAnswer.textContent = error.message || 'Voice is unavailable.'; }
           finally { await refresh(); if (recorder === activeRecorder) recorder = null; }
         };
         activeRecorder.start();
         talk.textContent = 'Stop recording';
-        answer.textContent = 'I’m listening. Press Stop recording when you’re done.';
+        voiceAnswer.textContent = 'I’m listening. Press Stop recording when you’re done.';
         setTimeout(() => { if (activeRecorder.state === 'recording') activeRecorder.stop(); }, 15000);
       } catch (error) {
         stream?.getTracks().forEach(track => track.stop());
-        answer.textContent = error.message || 'Microphone access is unavailable.';
+        voiceAnswer.textContent = error.message || 'Microphone access is unavailable.';
       }
     });
   }

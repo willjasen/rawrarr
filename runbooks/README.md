@@ -20,6 +20,8 @@
 
 # Rawrarr runbooks
 
+- [Improve AI answers and split chat and voice](2026-10-18-improve-ai-chat-voice-tabs.md) — Answer Movies-versus-TV disk usage questions and give chat and voice separate tabs without a consent checkbox.
+
 - [Subscriber node onboarding on roarlay](2026-10-18-subscriber-node-onboarding.md) — Guide passkey owners through local age/root backup and offer subscriber-only Compose deployment instructions.
 - [Implement OpenAI chat and voice](2026-10-18-implement-openai-chat-and-voice.md) — Build the authenticated request path, usage accounting, and browser interface.
 
