@@ -6,6 +6,10 @@ rawrarr is an early self-hosted device-to-device file-sharing project, with medi
 
 See the [user guide](docs/user-guide.md) for Docker Compose setup, passkey onboarding, age identity setup, Radarr configuration, and local scanning.
 
+## Development workflow
+
+Code changes are made and verified before updating the persistent `rawrarr-local` environment. Rebuild that environment only when requested, so it stays available for hands-on review between updates. The application image uses BuildKit Cargo caches to reuse downloaded crates and Rust build artifacts across source changes.
+
 ## Test
 
 Run the Node and Rust suites in a uniquely named container cloned from the reusable dependency image:

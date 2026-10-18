@@ -2,6 +2,8 @@
 
 Task records and operational procedures for this Rawrarr repository. Each entry links to the specific task; older records are retained as history.
 
+- [Speed up local development builds](2026-10-18-faster-local-development.md) — Persist Cargo registry and compiler artifacts through BuildKit caches, and keep the persistent local runtime user-updated.
+
 - [Fix the age challenge start position](2026-10-18-fixed-age-challenge-position.md) — Always start the sequential private-key character check at the 5th character after the fixed age prefix.
 
 - [Rebuild rawrarr-local from the current checkout](2026-10-18-rebuild-rawrarr-local.md) — Rebuild and recreate only the local app service with its current configuration, then verify health and the served setup page.

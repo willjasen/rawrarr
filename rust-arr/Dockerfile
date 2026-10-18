@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 FROM golang:1.25-bookworm AS age-builder
 RUN go install filippo.io/age/cmd/...@v1.3.2
 
@@ -6,7 +8,11 @@ WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY migrations ./migrations
-RUN cargo build --release --locked
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git/db,sharing=locked \
+    --mount=type=cache,target=/src/target,sharing=locked \
+    cargo build --release --locked \
+    && cp /src/target/release/rust-arr /rust-arr
 
 FROM debian:bookworm-slim
 RUN apt-get update \
@@ -16,7 +22,7 @@ RUN apt-get update \
     && mkdir -p /data \
     && ln -s /shared/metadata /metadata \
     && chown 10001:10001 /data
-COPY --from=builder /src/target/release/rust-arr /usr/local/bin/rust-arr
+COPY --from=builder /rust-arr /usr/local/bin/rust-arr
 COPY --from=age-builder /go/bin/age /go/bin/age-keygen /usr/local/bin/
 USER 10001:10001
 EXPOSE 8080
