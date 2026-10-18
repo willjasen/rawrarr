@@ -5,7 +5,7 @@ use std::{error::Error, fs};
 
 pub fn scan_once() -> Result<library::ScanSummary, Box<dyn Error>> {
     let root = library::LibraryRoot::from_env()?.ok_or("RAWARR_LIBRARY_PATH is required")?;
-    let shared_dir = secure_config::AgeVault::shared_dir();
+    let metadata_dir = secure_config::AgeVault::metadata_dir();
     let recipient = fs::read_to_string(secure_config::AgeVault::public_recipient_path())?;
     let recipient = recipient.trim();
     if !secure_config::is_post_quantum_recipient(recipient) {
@@ -26,7 +26,7 @@ pub fn scan_once() -> Result<library::ScanSummary, Box<dyn Error>> {
             .map_err(|_| secure_config::VaultError::InvalidConfig)
             .and_then(|json| {
                 secure_config::AgeVault::store_library_sidecar_with_recipient(
-                    &shared_dir,
+                    &metadata_dir,
                     recipient,
                     &device_id,
                     &summary.library_name,

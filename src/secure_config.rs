@@ -14,6 +14,7 @@ pub struct AgeVault {
     identity: String,
     recipient: String,
     shared_dir: PathBuf,
+    metadata_dir: PathBuf,
     config_path: PathBuf,
 }
 
@@ -74,6 +75,15 @@ impl AgeVault {
             .unwrap_or_else(|| PathBuf::from("data/shared"))
     }
 
+    /// The metadata domain is mounted at /metadata in the container and remains
+    /// a subtree of the Syncthing shared root by default.
+    pub fn metadata_dir() -> PathBuf {
+        metadata_dir_for(
+            &Self::shared_dir(),
+            env::var_os("RAWARR_METADATA_DIR").map(PathBuf::from),
+        )
+    }
+
     pub fn config_path() -> PathBuf {
         Self::shared_dir().join("config.aged")
     }
@@ -83,8 +93,7 @@ impl AgeVault {
     }
 
     fn artwork_path(&self, tmdb_id: u64) -> PathBuf {
-        self.shared_dir
-            .join("metadata")
+        self.metadata_dir
             .join("movies")
             .join(format!("{tmdb_id}.aged"))
     }
@@ -169,7 +178,7 @@ impl AgeVault {
         plaintext_json: &[u8],
     ) -> Result<(), VaultError> {
         Self::store_library_sidecar_with_recipient(
-            &self.shared_dir,
+            &self.metadata_dir,
             &self.recipient,
             device_id,
             library_name,
@@ -179,8 +188,9 @@ impl AgeVault {
     }
 
     /// Store a sidecar using only the public age recipient, for storage-only nodes.
+    /// `metadata_dir` is the node's /metadata domain, backed by /shared/metadata.
     pub fn store_library_sidecar_with_recipient(
-        shared_dir: &Path,
+        metadata_dir: &Path,
         recipient: &str,
         device_id: &str,
         library_name: &str,
@@ -210,7 +220,7 @@ impl AgeVault {
         digest.update([0]);
         digest.update(relative_path.as_bytes());
         let filename = format!("{}.json.aged", encode_hex(&digest.finalize()));
-        let path = shared_dir.join("metadata").join("library").join(filename);
+        let path = metadata_dir.join("library").join(filename);
         encrypt_shared_file(recipient, &path, plaintext_json)
     }
 
@@ -298,6 +308,10 @@ impl AgeVault {
         Ok(Self {
             identity,
             recipient,
+            metadata_dir: metadata_dir_for(
+                &shared_dir,
+                env::var_os("RAWARR_METADATA_DIR").map(PathBuf::from),
+            ),
             config_path: shared_dir.join("config.aged"),
             shared_dir,
         })
@@ -406,6 +420,10 @@ impl AgeVault {
             Err(_) => Err(VaultError::StorageFailed),
         }
     }
+}
+
+fn metadata_dir_for(shared_dir: &Path, override_dir: Option<PathBuf>) -> PathBuf {
+    override_dir.unwrap_or_else(|| shared_dir.join("metadata"))
 }
 
 pub fn is_post_quantum_recipient(recipient: &str) -> bool {
@@ -556,6 +574,19 @@ fn set_shared_directory_permissions(path: &Path) -> Result<(), VaultError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn metadata_domain_defaults_to_shared_subtree_and_accepts_container_alias() {
+        let shared = PathBuf::from("/shared");
+        assert_eq!(
+            metadata_dir_for(&shared, None),
+            PathBuf::from("/shared/metadata")
+        );
+        assert_eq!(
+            metadata_dir_for(&shared, Some(PathBuf::from("/metadata"))),
+            PathBuf::from("/metadata")
+        );
+    }
 
     #[test]
     fn encrypted_config_and_artwork_are_shareable_age_ciphertexts() {

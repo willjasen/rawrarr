@@ -14,6 +14,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin rustarr \
     && mkdir -p /data \
+    && ln -s /shared/metadata /metadata \
     && chown 10001:10001 /data
 COPY --from=builder /src/target/release/rust-arr /usr/local/bin/rust-arr
 COPY --from=age-builder /go/bin/age /go/bin/age-keygen /usr/local/bin/
@@ -22,5 +23,6 @@ EXPOSE 8080
 ENV RUST_ARR_LISTEN_ADDR=0.0.0.0:8080
 ENV RAWARR_DATA_DIR=/data
 ENV RAWARR_SHARED_DATA_DIR=/shared
+ENV RAWARR_METADATA_DIR=/metadata
 VOLUME ["/data", "/shared"]
 ENTRYPOINT ["/usr/local/bin/rust-arr"]
