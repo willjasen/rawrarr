@@ -109,3 +109,9 @@ Age private-ID provisioning for the Mac mini is a separate local setup step with
 Movie metadata decryption is memoized only in the unlocked subscriber vault process. Ciphertext content changes invalidate entries; cold reads use bounded concurrency. Shared encrypted files remain authoritative.
 
 Movies reloads show the active subscriber connection’s last successful list immediately, labeled with its update time while a live request runs. This memory-only snapshot is discarded when the connection is replaced or cleared. Live results always take precedence over late snapshots.
+
+## Shared Arr library presentation
+
+Radarr and Sonarr use one `libraryColumns` schema and `renderArrLibrary` renderer in `rust-arr/src/ui.html`. Column order, cell formatting, artwork behavior, and table layout changes apply to both. Provider descriptors supply labels, IDs (TMDb/TVDB), detail paths, and availability (movie file/episode counts). Keep future app adapters in this registry instead of copying tables.
+
+Sonarr uses the shared Arr HTTPS transport, validates service identity before saving, and stores its connection in the subscriber age-encrypted config. Locked read-modify-write operations preserve other app connections and the metadata filename key. Sonarr artwork caching, metadata search, and episode mutations remain planned.

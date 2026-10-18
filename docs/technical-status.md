@@ -20,3 +20,7 @@ These descriptions reflect the current checkout, which may include uncommitted i
 ## Verification inventory
 
 Automated checks are indexed in [scripts/tests/README.md](../scripts/tests/README.md). Recent documented checks include Rust unit tests, a Node DOM test for age setup behavior, disposable PostgreSQL API tests, and isolated two-node Syncthing tests with OrbStack or local Syncthing processes. Not every test runs on every change. Check each test's prerequisites and its runbook before treating historical results as proof of current runtime health.
+
+### Sonarr initial integration
+
+Implemented authenticated Sonarr status, encrypted connection settings (read/save/clear), and read-only series inventory using the v3 API (Sonarr 3/4). Shared library column schema and renderer serve Radarr and Sonarr. Sonarr exposes episode counts, TVDB ID, monitoring, year, quality profile, and disk size; posters, snapshots, and metadata lookup are not yet implemented for Sonarr. Live Sonarr connectivity is unverified.

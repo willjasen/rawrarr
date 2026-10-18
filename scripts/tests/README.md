@@ -28,3 +28,7 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 - `test_setup_local_syncthing.py` — Sanitized local-review bootstrap tests: preserve API key, idempotent folder setup, loopback listener, reject remote peers/unrelated folders. Run `python3 scripts/tests/test_setup_local_syncthing.py`; no Docker required.
 
 - `test_rawrarr_movie_snapshot.rs` — snapshot lifetime, empty libraries, shared client clones, and replacement-client isolation. Run `cargo test movie_snapshot`. The responsiveness browser tests also cover immediate snapshot display and late-response ordering.
+
+- `test_rawrarr_sonarr.rs`: Sonarr series normalization and legacy config compatibility; `cargo test sonarr`.
+- `test_rawrarr_arr_settings.rs`: encrypted cross-app save/clear isolation and filename-key preservation; `cargo test arr_settings` (age required).
+- `test_rawrarr_shared_library.mjs`: Chromium fixture test proving column changes propagate across Radarr and Sonarr, provider-specific values, and navigation; `node --test scripts/tests/test_rawrarr_shared_library.mjs` in the test image.
