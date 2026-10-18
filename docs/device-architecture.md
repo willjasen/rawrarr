@@ -1,6 +1,6 @@
 # Device and scanner architecture
 
-Every subscriber Rawrarr node is intended to run the full web/API service. Storage is an optional node capability: a **shard** omits `/media`, while a **storage node** runs the same service with its local media root. The operator-owned **service node** is a separate deployment role that will eventually run SwarmSail and coordinate subscriber tailnets; it is not part of a subscriber instance. See [node types](node-types.md) and the [Tailscale integration plan](tailscale-integration-plan.md).
+The accepted subscriber roles are coordinator, storage, and shard. The coordinator runs the web/API, user authentication, PostgreSQL, catalog, and device coordination; storage is a read-only media worker without PostgreSQL or user passkeys; shard retains shared ciphertext with further serving duties undecided. Coordinator and storage capabilities can coexist. This MacBook fills the coordinator role; the Mac mini is planned as storage. The operator service is separate. See [node types](node-types.md) and [coordinator linking](coordinator-linking-plan.md).
 
 ## Current prototype boundary
 
@@ -12,8 +12,9 @@ This local prototype boundary is distinct from the intended deployment roles bel
 
 ## Ownership boundaries
 
-- **Shard node:** runs the dashboard/API, local database, device coordination, metadata providers, and future download/import orchestration. It keeps a replica of the shared folder and has no `/media` mount.
-- **Storage node:** runs the same dashboard/API and local database, syncs the same shared folder, and mounts its local media root read-only at `/media` for scanning. Media bytes stay on their storage node; only encrypted metadata and app data are shared unless a user explicitly configures otherwise.
+- **Coordinator node:** subscriber web/API, passkeys, PostgreSQL, catalog, enrollment, and task coordination.
+- **Shard node:** encrypted app-data replica; no implicit coordinator/database or media access. Additional serving behavior is undecided.
+- **Storage node:** reads local media beneath `/media`, publishes encrypted inventory/metadata, and authenticates outbound to the coordinator with its own device identity. No local PostgreSQL, user passkeys, or private age identity is required for encryption-only scanning. Mixed and category-specific libraries may contribute to the coordinator catalog; multi-library aggregation remains planned.
 - **Service node:** operator-owned SwarmSail/Headscale, account/subscription, and future blind-relay role. It coordinates tailnets but does not join or decrypt a subscriber's `/shared` data and does not proxy media.
 - **Optional Tailscale sidecar:** joins the user's tailnet for private Rawrarr web/API and control/application-data traffic, plus optional Service advertisement. It has a node-local identity and state; Rawrarr can still start and be reached locally without it. Rawrarr never uses Tailscale to transfer media files or streams; `/media` remains on its storage node.
 - **Download agent (future):** runs where its configured client or destination is available and receives narrowly scoped work from the coordinator.
@@ -24,11 +25,11 @@ Rawrarr's canonical path and synchronization rules are listed in [data domains](
 
 ## Local and shared app data
 
-The local app-data volume holds node-specific operational state, including PostgreSQL's live data directory, session tokens, and authentication challenges. Rawrarr must never sync a live PostgreSQL data directory through Syncthing.
+Node-local `/data` holds device identity and operational state. PostgreSQL has its own coordinator-local volume for user authentication and future catalog/control records. Storage progress or queues can use local files or a lightweight store if needed. Never sync a live PostgreSQL datadir.
 
-The separate Syncthing folder holds portable shared user and application records, including age-encrypted configuration (`config.aged`) and encrypted metadata/artwork (`.aged`). The metadata path `/metadata` points into that folder at `/shared/metadata`; it does not introduce a second sync root. It also contains the public age recipient so a scanner can encrypt new records without receiving a private identity; the recipient is public key material, not a secret. Rawrarr may keep a local PostgreSQL projection/cache of those records, but it is not the shared source of truth. Ciphertext and its directories must be readable/traversable by Syncthing; private age identities and plaintext config never belong in the share. See the [roadmap](../ROADMAP.md) for portable passkey/user records and other unimplemented synchronization work.
+The separate Syncthing folder holds portable shared user and application records, including age-encrypted configuration (`config.aged`) and encrypted metadata/artwork (`.aged`). The metadata path `/metadata` points into that folder at `/shared/metadata`; it does not introduce a second sync root. It also contains the public age recipient so a scanner can encrypt new records without receiving a private identity; the recipient is public key material, not a secret. Rawrarr may keep a local PostgreSQL projection/cache of those records, but it is not the shared source of truth. Ciphertext and its directories must be readable/traversable by Syncthing; private age identities and plaintext config never belong in the share. See the [roadmap](../ROADMAP.md) for device enrollment and catalog synchronization work.
 
-The owner prefers passkey sign-in before age-identity unlock on a newly joined web node. Because the shared passkey records are themselves age encrypted, the bootstrap path that lets a new node verify the passkey before it can decrypt those records remains to be designed. Do not resolve this by synchronizing a PostgreSQL datadir or storing the private age identity in the share.
+Owners sign in on the coordinator before approving device links. Storage-only and shard nodes do not need copies of user passkeys or browser sessions. Future multiple-coordinator authentication/failover remains a separate design question, not a prerequisite for storage enrollment.
 
 
 Rawrarr's wider direction is a unified media automation system with a Prowlarr-class discovery role plus library management and fulfillment. See [product direction](product-direction.md) for the intended design and the [roadmap](../ROADMAP.md) for implementation status.
@@ -61,6 +62,6 @@ Serve the Rawrarr UI through the node's end-to-end encrypted session so portal/r
 
 ## Current implementation and next step
 
-The app exposes `/api/devices` with a persistent per-node ID and reports whether `RAWARR_LIBRARY_PATH` is configured. The web API can scan its local root when the age identity is unlocked. A separate `storage-scan-once` command scans a storage root without PostgreSQL or the web server and uses the shared public age recipient to write encrypted JSON sidecars. Keep it as a utility; the target persistent storage-node deployment runs the full web/API service too. See the [roadmap](../ROADMAP.md) for pairing, cross-node consistency, and the operator service milestone, and the [Tailscale plan](tailscale-integration-plan.md) for transport design.
+The app exposes `/api/devices` with a persistent per-node ID and reports whether `RAWARR_LIBRARY_PATH` is configured. The web API can scan its local root when the age identity is unlocked. A separate `storage-scan-once` command scans a storage root without PostgreSQL or the web server and uses the shared public age recipient to write encrypted JSON sidecars. This is the existing database-free foundation for a future persistent storage worker; device linking, authenticated command polling, durable retries, and coordinator catalog consumption are not implemented. See the [roadmap](../ROADMAP.md) for pairing, cross-node consistency, and the operator service milestone, and the [Tailscale plan](tailscale-integration-plan.md) for transport design.
 
 See the [roadmap](../ROADMAP.md) for the next implementation milestone and the remaining multi-node work. The boundary in this guide remains: a web host must never gain direct access to another node's media filesystem, and the future public relay must not become a trusted Rawrarr application server.

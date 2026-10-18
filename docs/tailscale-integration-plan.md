@@ -1,56 +1,51 @@
 # Optional Tailscale integration plan
 
+Status: planned; role and device-code direction revised 2026-10-18. No Tailscale configuration was changed for this plan.
+
 ## Product decision
 
-Tailscale will be an optional connectivity layer for Rawrarr. A subscriber Docker deployment will run a separate Tailscale container/sidecar. SwarmSail on the operator's service node will eventually create one Headscale tailnet per subscriber account, enroll that account's Rawrarr containers, and communicate with them over the overlay. Rawrarr must remain usable on a local network or another private network when Tailscale is not installed, logged in, or reachable.
+Tailscale is an optional connectivity layer. Rawrarr remains usable through another trusted private transport. It carries coordinator web/API, authenticated device control, and application data only; never media files/streams or PostgreSQL access. Tailscale membership does not authorize Rawrarr data access or decrypt ciphertext.
 
-Tailscale is an overlay transport only: private access to Rawrarr web/API service and Rawrarr control/application-data exchanges between nodes. Membership does not authorize data access or decrypt shared content; Rawrarr permissions and age recipients govern that. Tailscale must not carry media files, media streams, or other `/media` storage payloads. Keep media on its storage node. The shared Rawrarr app-data folder is synchronized separately through Syncthing; Tailscale may provide private network reachability for Rawrarr endpoints but is not a media replication mechanism.
+The MacBook's current local deployment is the subscriber **coordinator**. The Mac mini is the planned **storage** worker without PostgreSQL or user passkeys. **Shard** means encrypted app-data replica, with further serving duties undecided. Coordinator and storage may be combined elsewhere. This supersedes the earlier full-web-app-on-every-node direction. See [node types](node-types.md).
 
-Every Rawrarr node will run the full Rawrarr web/API service. A node's role comes from its mounted data domains:
+## Private coordinator endpoint
 
-- **Web-only node:** runs the web/API service and its local database, mounts `/shared` and `/metadata`, and has no `/media` mount.
-- **Web + storage node:** runs the same web/API service and local database, mounts `/shared` and `/metadata`, and also mounts its own `/media` read-only for scanning.
+Prefer a stable named Tailscale Service such as `https://rawrarr.<tailnet>.ts.net` with the coordinator as its sole initial backend. The name is illustrative, not a verified or published endpoint. Per-device Tailscale Serve can first verify access under the coordinator host's MagicDNS name. Serve exposes a local endpoint; a named Service supplies a stable service identity and routing. Neither enrolls Rawrarr devices by itself.
 
-This replaces the planned long-term split where a storage/scanner node runs only a headless process. The existing `storage-scan-once` command remains a useful scanner/testing mode, but is not the target deployment for a persistent storage node.
+Only an actual coordinator can serve this endpoint. Do not advertise storage/shard replicas as interchangeable backends or claim failover from shared ciphertext. Multiple coordinators would require a separate database, authentication, and consistency design.
 
-## Name and routing model
+Keep the existing local app at `127.0.0.1:7297`. A host-level Serve proxy can target that listener if supported by the installed client. Before publication, inspect existing Serve routes and avoid overwriting them. Named Services require compatible clients, tagged service hosts, service definition/host approval, and access policy; verify current requirements and the installed macOS client support before choosing host-level versus a dedicated sidecar identity. Do not retag the user's whole MacBook merely to fit the design without assessing its existing identity/access. A dedicated sidecar avoids conflating host and app identity, but needs separate enrollment and verified container routing.
 
-Each node gets its own stable Tailscale machine identity and MagicDNS device name. In addition, a user's tailnet can define a Tailscale Service named `rawrarr`; its MagicDNS name is the stable entry point, for example `https://rawrarr.<tailnet-name>.ts.net`. Tailscale Services can advertise multiple service hosts, letting clients use one service name while Tailscale routes to available hosts. They are tailnet-scoped, not public DNS or a replacement for the future Rawrarr relay. Individual node MagicDNS names remain useful for diagnostics and explicitly targeting one node.
+For a sidecar, use independent persistent Tailscale state and the app's explicit Docker network address; sidecar localhost is not the MacBook host. Compare userspace and kernel/TUN requirements before adding privileges. On the Mini, prove DNS and TLS reachability from inside the actual OrbStack worker container even if the host already uses Tailscale. Do not place auth keys in Compose, logs, `/shared`, or encrypted app configuration. Enrollment uses interactive login or a scoped secret mechanism, and all resulting private state remains node-local.
 
-The service name is only a network entry point. It does not choose a particular user's library, make the node databases consistent, or tell Rawrarr which storage device owns a media path. Rawrarr's `instance_id`, device identity, shared-folder data, and app-level authorization remain authoritative. Direct node names are used when an operation specifically targets one device; the shared service name is used for general web access.
+## Link storage to the coordinator
 
-## Docker shape
+Configure the worker with the coordinator's trusted HTTPS base URL. The worker registers a key-bound pending device, then prints the `/devices/link` URL and a short-lived human code in local Docker logs. The owner signs in on the coordinator, enters the code, reviews the device, and explicitly approves. The worker polls with key proof and retains its own approved identity. See the [linking plan](coordinator-linking-plan.md) for expiry, rate limits, revocation, and log boundaries.
 
-Package the optional Tailscale client as a separate sidecar in both subscriber deployment shapes. Keep the core Rawrarr web/API container identical; the storage role mounts local `/media`, while the shard role does not. When enabled, the sidecar gets its own per-node persistent state and unique machine hostname, and exposes the Rawrarr endpoint to the account tailnet. SwarmSail coordinates enrollment and management from the operator service node. When disabled, local Compose port and private-network access continue to work. Do not treat Tailscale membership as a Rawrarr authorization grant.
+Tailscale reachability must exist before Rawrarr linking. The logged URL does not itself enroll Tailscale or open the tailnet to the browser. Use an authenticated browser/device that can reach the private coordinator.
 
-The integration must not require a Tailscale auth key in the Compose file, shared folder, or `config.aged`. Support an interactive first login or a narrowly scoped secret-based enrollment flow; persist the resulting Tailscale state only in a node-local volume. Never share a Tailscale state directory between nodes. Start with the least privileged networking mode supported by the target Docker runtime; compare userspace networking with kernel/TUN mode for inbound Service/Serve behavior before fixing the Compose implementation.
+## WebAuthn and outage behavior
 
-Tailscale Serve is the per-node private HTTPS option. Tailscale Services is the multi-host stable-name option. A Service host requires a tag-based Tailscale identity, and advertising a Service may require tailnet administrator approval. Current Tailscale documentation lists version 1.86.0 or later for stable Services, TCP endpoints, and a host configured with Tailscale; recheck requirements and plan compatibility when implementation begins. Do not enable Funnel or public exposure as part of this feature.
+Existing localhost RP credentials are not automatically usable at a new Tailscale hostname. Implement a deliberate HTTPS-origin/RP enrollment or migration strategy, test login and approval there, and retain existing local access. Do not merely change Compose origin variables and assume existing credentials survive. Device API authentication remains independent from browser passkeys.
 
-## Build order
+When the MacBook sleeps or disconnects, linking and new commands wait; worker retries use bounded backoff and queued state. Local media stays available to its other consumers. Define whether approved scans can continue offline and how their results are queued before implementation. A shard does not automatically become the coordinator during an outage.
 
-1. **Make each node a full Rawrarr node.** Replace the long-term scanner-only deployment assumption with web/API + local database on storage nodes; retain `/media` as an optional capability. Define per-node health, readiness, and device identity.
-2. **Make arbitrary-node web access correct.** Identify which data currently exists only in local PostgreSQL, which auth/session state can be shared safely, and how shared age identity unlock works. Before putting multiple nodes behind one Service, prove that a request can land on any healthy backend without losing sign-in, settings, device visibility, or catalog consistency. Syncthing file replication is not database replication or quorum.
-3. **Add the optional sidecar to both Compose shapes.** Implement independent persistent state per node, safe enrollment, stable hostname configuration, health/status reporting, and clean disable/removal behavior. Keep Rawrarr boot and local access independent from Tailscale availability.
-4. **Expose one node privately.** Use Tailscale Serve to reach a node's web UI over its MagicDNS HTTPS name. Verify that passkey authentication remains enabled and that access is still bounded by the tailnet ACLs and Rawrarr's own authorization.
-5. **Add the stable `rawrarr` Service.** Define a Service in the user's tailnet and advertise eligible Rawrarr nodes as hosts. Verify joining/leaving behavior, health-aware routing, TLS, service-host tag requirements, approval, and access policies. Only advertise a node that is ready to serve the complete shared instance.
-6. **Test outage and no-Tailscale paths.** With two nodes online, use the stable Service name; take one node offline and confirm the remaining eligible node serves. Then disable/remove Tailscale and confirm the local/private-network Rawrarr URL still works.
+## Build order and acceptance
 
-## Acceptance checks
+1. Separate worker startup from web/auth/PostgreSQL, building on `storage-scan-once`.
+2. Implement coordinator device-code enrollment, owner approval, worker authentication, durable identity, and revocation.
+3. Inspect host/tailnet state; choose the appropriate Serve/Service identity without disturbing existing routes. Verify named-Service platform support or first validate a per-device Serve endpoint.
+4. Configure a controlled HTTPS/WebAuthn path, scoped network access, and a single coordinator backend. Keep transport optional and local listener usable; do not enable Funnel.
+5. Prove DNS, certificate verification, enrollment, poll/command authorization, and encrypted inventory delivery from the Mini's actual container. Test denial, expired codes, revoked keys, service restart, coordinator outage, and worker restart.
+6. Verify catalog consumption separately from `/health` and file synchronization. Test local access with Tailscale unavailable. Document exactly what remains unimplemented.
 
-- Both web-only and web+storage Compose deployments run the full web/API app.
-- A storage node can scan only its own `/media`; a web-only node has no media mount.
-- Each node has independent Rawrarr and Tailscale identities/state while sharing the same Rawrarr `instance_id` and Syncthing folder.
-- `https://rawrarr.<tailnet-name>.ts.net` works when Service routing is enabled and more than one eligible node exists; a per-node MagicDNS URL can still reach a selected node.
-- Passkey login, encrypted configuration access, metadata, and device status work regardless of which eligible backend handles the request.
-- Tailscale secrets and private state never enter Syncthing-shared files or logs. Tailscale disabled/unavailable does not prevent local app startup or local access.
-- No public Funnel or public listener is created by default.
-- Tailscale carries only Rawrarr web/API, control, and app-data traffic; media files and streams remain on storage nodes and are never routed as Tailscale payloads by Rawrarr.
+## Future operator infrastructure
+
+SwarmSail/Headscale remains the future operator service direction for isolated subscriber networks and hosted account claims. It is separate from the private coordinator device-code flow. Do not assume Tailscale SaaS Serve/Services or certificate behavior is supported identically by Headscale; verify compatibility independently. The operator must never receive subscriber private identities, decrypted application data, or media.
 
 ## Official references
 
-- [Tailscale Services](https://tailscale.com/docs/features/tailscale-services) — stable MagicDNS Service names, multiple hosts, TCP endpoints, tag-based hosts, and current client requirements.
-- [Tailscale Serve](https://tailscale.com/docs/features/tailscale-serve) — private access to a per-node local service and HTTPS prerequisites.
-- [Tailscale Docker Compose guide](https://tailscale.com/docs/features/containers/docker/how-to/connect-docker-container) — container enrollment and local persistent state.
-- [Userspace networking for containers](https://tailscale.com/docs/concepts/userspace-networking) — userspace mode and Docker `TS_USERSPACE` behavior.
-- [MagicDNS](https://tailscale.com/docs/features/magicdns) — device hostnames and tailnet-specific fully qualified names.
+- [Tailscale Services](https://tailscale.com/docs/features/tailscale-services) — named services, host eligibility, approval, and routing.
+- [Tailscale Serve CLI](https://tailscale.com/docs/reference/tailscale-cli/serve) — private endpoint proxying.
+- [MagicDNS](https://tailscale.com/docs/features/magicdns) — device DNS names.
+- [Docker integration](https://tailscale.com/docs/features/containers/docker/how-to/connect-docker-container) — container identity and networking.

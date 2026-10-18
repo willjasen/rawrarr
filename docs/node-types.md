@@ -2,19 +2,22 @@
 
 ## Roles
 
-Rawrarr has three deployment roles. They share the packaged product, but the operator-owned service node and subscriber-owned Rawrarr nodes are separate trust and data boundaries.
+Rawrarr has four named roles. This is the accepted target architecture; persistent role-specific startup and packaging remain planned. The current full application still requires PostgreSQL for authentication, while `storage-scan-once` already bypasses web/auth startup.
 
-| Role | Owner and purpose | Runs | Data and capabilities |
+| Role | Owner and purpose | Responsibilities | Required local state |
 | --- | --- | --- | --- |
-| **Service node** (`service`) | Rawrarr operator's hosted main node | SwarmSail/Headscale coordination, hosted account and subscription services, and the future blind relay | Stores service accounts, passkey records, public age recipients, billing/license state, instance/device IDs, and Headscale provisioning state. It does not join a subscriber's Rawrarr data folder, receive private age identities, or store/decrypt subscriber app data or media. |
-| **Storage node** (`storage`) | Subscriber's device that holds media | Full Rawrarr web/API plus local storage scanning | Has the subscriber's instance and device IDs, local app database/state, replica of `/shared`, and one or more local media roots mounted read-only under `/media`. Media is local to this node and is never copied through SwarmSail/Headscale. |
-| **Shard node** (`shard`) | Subscriber's media-less device | Full Rawrarr web/API | Has the subscriber's instance and device IDs, local app database/state, and replica of `/shared`; it has no `/media` mount. It can serve the UI/API and participate in the subscriber's app-data mesh. |
+| **Coordinator** (`coordinator`) | Subscriber's control node; currently this MacBook's local deployment | Web UI/API, user/passkey authentication, catalog, device enrollment and task coordination | PostgreSQL, node-local state, authorized shared app data |
+| **Storage** (`storage`) | Subscriber's media worker; planned for the Mac mini | Read-only local scans, encrypted inventory/metadata publication, authenticated outbound coordinator communication | Device identity and scan/queue state; no PostgreSQL, user passkeys, or browser sessions required |
+| **Shard** (`shard`) | Subscriber's encrypted app-data replica | Retain and synchronize shared ciphertext; additional serving responsibilities remain undecided | Node-local identity and replica state; no implicit coordinator, PostgreSQL, or media access |
+| **Service** (`service`) | Operator-owned infrastructure | Hosted account/subscription services, SwarmSail/Headscale coordination, future blind relay | Operator state only; never subscriber private identities, plaintext app data, or media |
 
-`service`, `storage`, and `shard` are explicit deployment roles, not user privilege levels. A storage node and shard node are both subscriber Rawrarr nodes and both run the web/API. The distinction is whether a local media root is mounted. The service node is not a subscriber node and is not part of their `instance_id` or Syncthing folder.
+Roles describe capabilities, not user privileges. Coordinator and storage may run together on one machine; that combined deployment needs the coordinator's database. A storage-only deployment does not. The MacBook remains the coordinator and the Mac mini joins its instance as storage. A storage node may scan mixed media or category-specific libraries; multi-library and combined catalog behavior remain planned. The operator service remains outside the subscriber instance and its Syncthing folder.
+
+Storage needs device authentication, distinct from the owner's passkeys. Persist device keys and durable scan progress locally; files or SQLite are possible implementations, not a decision to add another database. A public age recipient can encrypt scan output without giving the worker the private age identity. Do not require private-key distribution merely to scan. See [coordinator linking](coordinator-linking-plan.md).
 
 ## Instance and enrollment model
 
-- A subscriber subscription is attached to the shared Rawrarr `instance_id`, not to a container. It covers that instance's storage and shard nodes under the agreed plan/device limits.
+- A subscriber subscription is attached to the shared Rawrarr `instance_id`, not to a container. It covers that instance's coordinator, storage, and shard nodes under the agreed plan/device limits.
 - SwarmSail creates one isolated Headscale tailnet per subscriber account. The account's authorized Rawrarr nodes use that overlay, even if the account later has more than one Rawrarr instance; the precise instance/account subscription mapping remains a separate product decision.
 - Each subscriber Docker deployment runs a Tailscale container/sidecar. SwarmSail on the operator's service node communicates with authorized Rawrarr containers over that account's overlay and coordinates short-lived, single-use enrollment.
 - A node keeps its own Headscale/Tailscale identity and state locally. Enrollment secrets are transient and must never enter Compose files, shared Syncthing data, age-encrypted app configuration, logs, or the service database after use.
@@ -24,17 +27,20 @@ Rawrarr has three deployment roles. They share the packaged product, but the ope
 
 ## Container configuration direction
 
-The eventual Docker packaging should expose a validated role setting, provisionally `RAWRARR_MODE=service|storage|shard`, and reject unknown or incompatible settings at startup. Compose examples should make role-specific mounts and services explicit. In particular:
+The eventual Docker packaging should expose a validated role setting, with syntax still to be chosen for `coordinator`, `storage`, `shard`, and `service`, including coordinator + storage combinations, and reject unknown or incompatible settings at startup. Compose examples should make role-specific mounts and services explicit. In particular:
 
 - `service` starts operator services only and does not mount subscriber `/shared` or `/media`.
-- `storage` starts Rawrarr web/API and node-local services, mounts that instance's shared app-data folder, and mounts its media root(s) read-only under `/media`.
-- `shard` starts the same Rawrarr web/API and shared app-data participation as `storage`, but has no media mount or scanner access to host paths.
+- `coordinator` starts the subscriber web/API, passkey authentication, PostgreSQL, catalog, and device coordination.
+- `storage` starts the media worker without PostgreSQL or user-login routes, mounts authorized shared data and its local read-only `/media`, and connects outbound to its coordinator.
+- `shard` maintains an authorized encrypted app-data replica without media or an implicit web/auth/database stack; additional serving behavior remains open.
 
 Whether these roles use one image with separate entrypoints or distinct images remains an implementation choice. Do not let a single broad Compose mode blur the service-node privacy boundary.
 
 ## Docker Compose deployment and claim flow (planned)
 
-The Rawrarr site should provide a Compose file tailored to the user's selected role (`storage` or `shard`) and deployment options. The user saves it locally and runs `docker compose up -d`; the node then initiates an outbound connection to the operator's service node so it can be discovered and claimed without requiring an inbound port on the user's network.
+The private storage-to-coordinator link is a separate flow from operator account claims. The worker logs a coordinator HTTPS linking URL and short-lived device code, the owner signs in, enters the code and approves, and the worker proves its device key. See [coordinator linking](coordinator-linking-plan.md). The operator portal below is not required for this private setup.
+
+The Rawrarr site should provide a Compose file tailored to the user's selected role (`coordinator`, `storage`, `shard`, or coordinator + storage) and deployment options. The user saves it locally and runs `docker compose up -d`; the node then initiates an outbound connection to the operator's service node so it can be discovered and claimed without requiring an inbound port on the user's network.
 
 On first boot, the node should create its device identity and register as a pending device. The owner signs in to the Rawrarr portal with a passkey and explicitly claims that pending device into a private workspace or subscribed account. The node should prove continuity with its locally generated device key. A log message may include a non-secret URL or device identifier to help the owner find the pending claim, but must not expose a reusable bearer credential. The Compose YAML must not contain an enrollment secret, age private identity, or passkey material. Any short-lived bootstrap proof must be single-use, audience-bound, and delivered or confirmed without persisting it in Compose, logs, or shared app data.
 

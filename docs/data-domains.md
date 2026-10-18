@@ -8,17 +8,17 @@ Rawrarr uses stable container paths to describe where each kind of data belongs.
 | Metadata | `/metadata` | Every node | Alias of `/shared/metadata`; age-encrypted files sync as part of the shared folder | Library JSON sidecars in `library/`; encrypted artwork in `movies/` |
 | Shared app state | `/shared` | Every node | Syncthing replicated; encrypt private payloads with age before writing | `config.aged`, public `age-recipient`, and the metadata domain |
 | Local operational state | `/data` | Each node | Node-local persistent volume; never synced | Device ID and local runtime state |
-| Database | PostgreSQL data volume | Web/control node | Node-local database volume; never put its live datadir in Syncthing | Current passkey/authentication database and local projections |
+| Database | PostgreSQL data volume | Coordinator | Node-local database volume; never put its live datadir in Syncthing | Current passkey/authentication database and local projections |
 | Shared-folder backups | Configured node-local destination | One designated subscriber node | Stored outside `/shared`, never Syncthing-replicated; destination device/path is recorded in age-encrypted `config.aged` | Verified snapshots of the shared Rawrarr folder only; excludes node-local database and `/media` |
 
 ## Placement rules
 
-- Both web-only and web+storage nodes run the full Rawrarr web/API service. Each mounts `/shared` and gets `/metadata` through the image's alias.
-- A web-only node does not need `/media`. A web+storage node mounts its own library at `/media`, read-only for scanning.
+- The coordinator owns the user-facing web/auth stack and PostgreSQL. Storage and shard nodes can hold authorized shared ciphertext without those services; `/metadata` remains an alias inside `/shared`.
+- Only storage capability mounts local media read-only under `/media`. A coordinator can optionally also have storage capability. A shard has no media mount; multi-library/cross-node catalog behavior remains planned.
 - `/metadata` is a classification and access path, not a new sync root. All metadata remains physically under `/shared/metadata`, so every synchronized node sees the same ciphertext and new nodes do not need a second Syncthing folder.
 - Metadata files use `.aged`; names and directory structure should avoid leaking media titles or absolute host paths. The current library sidecar filename is a stable hash, and the relative media path stays inside ciphertext.
 - Do not write media bytes, private age identities, plaintext configuration, sessions, challenges, or a live PostgreSQL datadir under `/shared` or `/metadata`.
-- User and passkey records are intended to become shared portable records, but are not yet synchronized. Until their encrypted record format and passkey-first bootstrap are implemented, PostgreSQL remains node-local.
+- User passkeys and browser sessions belong to the coordinator; storage-only and shard nodes use device identity instead. Portable records for future multiple-coordinator use remain undecided and are not required for this deployment.
 
 ## Container mapping
 

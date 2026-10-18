@@ -5,8 +5,8 @@ This document is the single index of what the repository has completed and what 
 ## Recommended next work
 
 1. **Verify SSE through the intended Cloudflare/reverse-proxy route.** The app currently streams dashboard updates from `/api/events`, but the deployed path has not been tested. Confirm streaming, reconnect behavior, buffering, and connection timeouts using the exact planned proxy configuration.
-2. **Make a local two-node subscriber setup coherent.** Persist device and library records, define pairing and revocation, add heartbeat/remote command behavior, and resolve local passkey/session and catalog consistency across nodes. Keep each node's PostgreSQL local; do not synchronize database files.
-3. **Add private node access and enrollment.** Once the node/auth contract works, add the optional subscriber Tailscale sidecar and tailnet-scoped service, followed by one-time claim through the operator service node. Transport membership must not grant data access.
+2. **Make coordinator + storage work.** Keep this MacBook as coordinator and add a PostgreSQL-free Mac mini worker. Build on `storage-scan-once`; implement persistent operation, device/library records, authenticated pairing, revocation, heartbeat/commands, and catalog ingestion.
+3. **Add private coordinator access and linking.** Expose the coordinator through Tailscale HTTPS, preferably a stable named Service. The worker logs `/devices/link` at that coordinator; the owner signs in, enters the short-lived code from local Docker logs, and approves a device-key-bound request. Verify WebAuthn origin migration and OrbStack-container reachability. Operator portal claims remain separate.
 
 This sequence closes a known deployment question first, then builds the node coordination needed by the larger hosted design. Revisit it if product priorities change.
 
@@ -26,8 +26,8 @@ This sequence closes a known deployment question first, then builds the node coo
 
 - Durable device and library catalog with stale/offline state, scan generations, and reconciliation.
 - Pairing, approval, revocation, device identity continuity, heartbeats, and a narrowly scoped remote command channel.
-- Consistent login/session and user identity behavior across subscriber web nodes. Passkeys and live PostgreSQL data are currently node-local; portable user/passkey records and secure bootstrap remain unresolved.
-- Prove storage and shard nodes each run the intended web/API service while media remains local to storage nodes.
+- Keep user sign-in and PostgreSQL on the coordinator. Define separate device authentication for storage/shard nodes; multiple-coordinator auth/failover remains future work.
+- Implement role-specific startup and packaging: coordinator, database-free storage, encrypted-replica shard, and isolated operator service; allow coordinator + storage combinations.
 - Implement explicit per-user sharing grants. Syncthing peer/folder configuration does not currently implement invitations, trust decisions, or selective sharing.
 
 ### Private access, operator service, and relay
@@ -40,7 +40,7 @@ This sequence closes a known deployment question first, then builds the node coo
 ### Packaging and subscriptions
 
 - Publish versioned, multi-architecture application images with release notes, provenance, and a documented upgrade path.
-- Generate role-specific Compose files for private/subscribed storage and shard deployments. The current Compose files are local source-build examples.
+- Generate role-specific Compose files for private/subscribed coordinator, storage, shard, and combined coordinator + storage deployments. The current Compose files are local source-build examples.
 - Hosted passkey account, checkout, trial, subscription/license issuance and enforcement. The selected direction is a shared-instance entitlement with signed licenses; provider, pricing, grace period, and final lock behavior remain undecided.
 
 ### Product capabilities and durability

@@ -97,3 +97,4 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Responsive movies refresh](2026-10-18-responsive-movies-refresh.md) — remove link-probe delays from movie rendering and retain visible rows during updates.
 
 - [Separate movie identifiers](2026-10-18-separate-movie-identifiers.md) — keep titles clean and display TMDb IDs in their own column.
+- [Coordinator roles and storage device-code linking](2026-10-18-coordinator-storage-device-linking.md) — Define coordinator/storage/shard/service boundaries and plan Tailscale HTTPS with owner-approved device codes.

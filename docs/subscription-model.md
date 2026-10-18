@@ -8,7 +8,7 @@ Rawrarr is intended to be self-hosted from a packaged Docker image. The first se
 
 ### Bill the shared instance
 
-Attach one subscription to the Rawrarr `instance_id`, which represents the shared app-data folder. Do not bill by container or device: a web-only node and several storage nodes are all part of one installation, and node-count billing would make the distributed design harder to use. A person who creates the instance is its billing owner. Invited people and devices use that instance's entitlement; they do not create extra subscriptions just by pairing.
+Attach one subscription to the Rawrarr `instance_id`, which represents the shared app-data folder. Do not bill by container or device: a coordinator, optional shards, and several storage nodes are all part of one installation, and node-count billing would make the distributed design harder to use. A person who creates the instance is its billing owner. Invited people and devices use that instance's entitlement; they do not create extra subscriptions just by pairing.
 
 This leaves a future product decision: whether collaborator count or optional hosted services belong in higher tiers. Keep those limits out of the first license schema until the product has a clear reason to meter them.
 

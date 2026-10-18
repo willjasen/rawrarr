@@ -63,7 +63,7 @@ Rawrarr is intended to grow beyond Radarr into discovery, library management, an
 
 ## Devices and sharing
 
-Use the words **storage node** for a Rawrarr device with local media and **shard node** for a media-less Rawrarr web node. The operator's SwarmSail service node is a separate operational role. Make each device's role visible, but avoid requiring users to understand container internals to manage their setup.
+Use **coordinator node** for the subscriber web UI/API, passkeys, PostgreSQL, catalog, and task coordination; **storage node** for a read-only media worker without user passkeys or PostgreSQL; and **shard node** for an encrypted app-data replica whose additional serving duties remain open. Coordinator and storage capabilities may coexist on one machine. The operator **service node** remains separate. The current MacBook deployment fills the coordinator role; the Mac mini is planned as storage. Mixed and distributed libraries contribute to the coordinator catalog while media paths and bytes remain local. Show these roles without requiring users to understand container internals.
 
 A device being online or connected through Syncthing or Tailscale does not mean it is trusted to access every user's data. Explain what a sharing action will expose and to whom. New invitees begin untrusted; the owner must explicitly choose what to share. Tailscale is an optional app-data/control transport and must never be presented as a media replication or media streaming feature.
 
@@ -88,7 +88,7 @@ When the user recommends or approves a change to how Rawrarr should look or beha
 
 ## Mac mini storage-node deployment direction
 
-The Mac mini will run a subscriber storage node in OrbStack, joining the current instance and scanning `/Volumes/silo/Media/data` read-only. Keep media local, give the node independent operational/authentication storage, and preserve the existing shared instance and age recipient. Present drive unavailability separately from an empty library; combined cross-node catalogs and portable authentication remain planned. See the [deployment plan](mac-mini-storage-node-plan.md) for bootstrap gaps, verification, and recovery.
+The Mac mini will run a storage-only worker in OrbStack, joining the MacBook coordinator instance and scanning `/Volumes/silo/Media/data` read-only. It needs its own device identity and operational state, but no PostgreSQL, user passkeys, or private age identity for encryption-only scanning. Preserve the shared instance and public age recipient. See the [deployment plan](mac-mini-storage-node-plan.md); persistent worker, enrollment, and catalog integration remain planned.
 
 - Movie quality-profile names come from shared metadata first. Resolve missing names from Radarr and persist them in encrypted movie metadata; refresh the cached name when the assigned profile ID changes.
 
@@ -99,3 +99,9 @@ Render movie rows and begin loading posters as soon as the movie API responds. C
 ## Movie identifiers
 
 The Movies table displays the movie title without appended identifiers. Its existing TMDb identifier appears in a dedicated TMDb ID column; missing IDs display an em dash.
+
+## Link a storage node to its coordinator (planned)
+
+The worker displays the coordinator Tailscale HTTPS URL at `/devices/link` and a short-lived device code in local Docker logs. The owner opens it, signs in on the coordinator, enters the code, reviews the node name, storage role, and key fingerprint, and explicitly approves. Preserve the link destination through sign-in. Keep the code out of the URL and synchronized logs; rate-limit attempts and make codes expire after one use or timeout. Visiting the URL or entering a code must not approve anything by itself. The worker proves possession of its device key before enrollment completes. Show pending, approved, expired, rejected, and coordinator-offline states clearly. See the [linking plan](coordinator-linking-plan.md).
+
+Age private-ID provisioning for the Mac mini is a separate local setup step with hidden terminal input and a protected read-only secret mount. Do not request or transfer it through the web UI or device-linking process. Device approval and local vault readiness are separate statuses; neither implies the other.

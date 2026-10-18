@@ -8,7 +8,7 @@ This is an architectural analogy, not a claim about UniFi's internal implementat
 
 ## Components and trust boundaries
 
-The operator-owned deployment is the **service node**; subscriber deployments are **storage nodes** or **shard nodes**. The service node will eventually run SwarmSail to provision one isolated Headscale tailnet per subscriber account. Tailscale is an overlay transport only: it does not grant access to shared Rawrarr data, which remains controlled by Rawrarr permissions and age recipients. The service node remains outside each subscriber's shared folder and is not a Rawrarr app backend. See [node types](node-types.md).
+The operator-owned deployment is the **service node**; subscriber deployments use **coordinator**, **storage**, and **shard** roles, with coordinator and storage optionally combined. The service node will eventually run SwarmSail to provision one isolated Headscale tailnet per subscriber account. Tailscale is an overlay transport only: it does not grant access to shared Rawrarr data, which remains controlled by Rawrarr permissions and age recipients. The service node remains outside each subscriber's shared folder and is not a Rawrarr app backend. See [node types](node-types.md).
 
 | Component | Responsibility | Data it may know | Data it must not access |
 | --- | --- | --- | --- |

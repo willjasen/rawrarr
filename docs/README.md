@@ -30,3 +30,5 @@ Start here for the current project state and everyday use:
 - [Runbooks](../runbooks/README.md) — dated implementation and operations records.
 
 - [Mac mini storage-node plan](mac-mini-storage-node-plan.md) — OrbStack deployment, attached-drive access, same-instance bootstrap, and acceptance checks.
+
+- [Coordinator device linking](coordinator-linking-plan.md) — Planned Docker-log device code, coordinator sign-in and approval, and authenticated storage enrollment.
