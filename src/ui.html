@@ -489,7 +489,7 @@
     function renderMetadataInfo(info) {
       metadataConfigured = info.configured;
       document.getElementById('metadata-note').textContent = metadataConfigured
-        ? 'Movie filename and year are searched through Radarr. Review candidates before treating a match as confirmed.'
+        ? 'Movie filename and year are searched through Radarr. Poster art is cached as age-encrypted .aged files while the vault is unlocked. Review candidates before treating a match as confirmed.'
         : 'Connect Radarr with its URL and API key to search for movie metadata.';
     }
 
@@ -628,7 +628,22 @@
             const overview = document.createElement('div');
             overview.textContent = movie.overview || 'No overview available.';
             overview.style.marginTop = '4px';
-            candidate.append(heading, overview);
+            candidate.style.display = 'flex';
+            candidate.style.gap = '12px';
+            if (movie.posterUrl) {
+              const poster = document.createElement('img');
+              poster.src = movie.posterUrl;
+              poster.alt = `${movie.title} poster`;
+              poster.loading = 'lazy';
+              poster.style.width = '72px';
+              poster.style.height = '108px';
+              poster.style.objectFit = 'cover';
+              poster.style.borderRadius = '6px';
+              candidate.append(poster);
+            }
+            const text = document.createElement('div');
+            text.append(heading, overview);
+            candidate.append(text);
             cell.append(candidate);
           }
         }

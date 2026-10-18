@@ -8,10 +8,11 @@ pub mod secure_config;
 
 use axum::{
     Json, Router,
-    extract::State,
-    http::StatusCode,
+    body::Body,
+    extract::{Path as AxumPath, State},
+    http::{StatusCode, header},
     response::{
-        Html, Sse,
+        Html, Response, Sse,
         sse::{Event, KeepAlive},
     },
     routing::get,
@@ -514,20 +515,138 @@ async fn search_movie_metadata(
             }),
         ));
     };
-    provider
-        .search_movies(request)
+    let mut result = provider.search_movies(request).await.map_err(|error| {
+        let (status, message) = match error {
+            metadata::SearchError::InvalidQuery | metadata::SearchError::InvalidYear => {
+                (StatusCode::BAD_REQUEST, "Invalid movie search request")
+            }
+            metadata::SearchError::Upstream => {
+                (StatusCode::BAD_GATEWAY, "Movie metadata search failed")
+            }
+        };
+        (status, Json(ApiError { error: message }))
+    })?;
+    if let Some(vault) = state.vault.read().await.clone() {
+        for candidate in &mut result.candidates {
+            if let Some(source) = candidate.poster_source.take() {
+                let Ok(source) = validated_tmdb_image_url(&source) else {
+                    continue;
+                };
+                let id = candidate.tmdb_id;
+                if !vault.artwork_exists(id) {
+                    if let Ok(Some((content_type, bytes))) = fetch_tmdb_image(source).await {
+                        let vault = vault.clone();
+                        let _ = tokio::task::spawn_blocking(move || {
+                            vault.store_artwork(id, &content_type, &bytes)
+                        })
+                        .await;
+                    }
+                }
+                if vault.artwork_exists(id) {
+                    candidate.poster_url = Some(format!("/api/metadata/movies/{id}/poster"));
+                }
+            }
+        }
+    }
+    Ok(Json(result))
+}
+
+fn validated_tmdb_image_url(value: &str) -> Result<reqwest::Url, ()> {
+    let url = reqwest::Url::parse(value).map_err(|_| ())?;
+    if url.scheme() != "https"
+        || url.host_str() != Some("image.tmdb.org")
+        || url.port().is_some_and(|port| port != 443)
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || !url.path().starts_with("/t/p/")
+    {
+        return Err(());
+    }
+    Ok(url)
+}
+
+async fn fetch_tmdb_image(url: reqwest::Url) -> Result<Option<(String, Vec<u8>)>, ()> {
+    const MAX_ARTWORK_BYTES: usize = 8 * 1024 * 1024;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|_| ())?;
+    let mut response = client.get(url).send().await.map_err(|_| ())?;
+    if !response.status().is_success()
+        || response
+            .content_length()
+            .is_some_and(|length| length > MAX_ARTWORK_BYTES as u64)
+    {
+        return Ok(None);
+    }
+    let content_type = response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(';').next())
+        .map(str::trim)
+        .filter(|value| matches!(*value, "image/jpeg" | "image/png" | "image/webp"))
+        .ok_or(())?
+        .to_owned();
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|_| ())? {
+        if bytes.len().saturating_add(chunk.len()) > MAX_ARTWORK_BYTES {
+            return Ok(None);
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    if bytes.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some((content_type, bytes)))
+}
+
+async fn get_movie_poster(
+    State(state): State<Arc<AppState>>,
+    AxumPath(tmdb_id): AxumPath<u64>,
+) -> Result<Response<Body>, (StatusCode, Json<ApiError>)> {
+    let vault = state.vault.read().await.clone().ok_or((
+        StatusCode::LOCKED,
+        Json(ApiError {
+            error: "Unlock the age-encrypted config to read cached artwork",
+        }),
+    ))?;
+    let artwork = tokio::task::spawn_blocking(move || vault.load_artwork(tmdb_id))
         .await
-        .map(Json)
-        .map_err(|error| {
-            let (status, message) = match error {
-                metadata::SearchError::InvalidQuery | metadata::SearchError::InvalidYear => {
-                    (StatusCode::BAD_REQUEST, "Invalid movie search request")
-                }
-                metadata::SearchError::Upstream => {
-                    (StatusCode::BAD_GATEWAY, "Movie metadata search failed")
-                }
-            };
-            (status, Json(ApiError { error: message }))
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError {
+                    error: "Could not decrypt cached artwork",
+                }),
+            )
+        })?
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError {
+                    error: "Could not decrypt cached artwork",
+                }),
+            )
+        })?
+        .ok_or((
+            StatusCode::NOT_FOUND,
+            Json(ApiError {
+                error: "Encrypted artwork was not found",
+            }),
+        ))?;
+    Response::builder()
+        .header(header::CONTENT_TYPE, artwork.content_type)
+        .header(header::CACHE_CONTROL, "private, no-store")
+        .body(Body::from(artwork.bytes))
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError {
+                    error: "Could not serve cached artwork",
+                }),
+            )
         })
 }
 
@@ -820,6 +939,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/metadata/movies/search",
             axum::routing::post(search_movie_metadata),
         )
+        .route(
+            "/api/metadata/movies/{tmdb_id}/poster",
+            get(get_movie_poster),
+        )
         .route("/api/metadata/status", get(metadata_status))
         .route(
             "/api/settings/radarr",
@@ -844,4 +967,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("rawrarr listening on {socket_address}");
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod metadata_image_tests {
+    use super::validated_tmdb_image_url;
+
+    #[test]
+    fn metadata_image_urls_are_restricted_to_tmdb_image_paths() {
+        assert!(validated_tmdb_image_url("https://image.tmdb.org/t/p/original/poster.jpg").is_ok());
+        assert!(validated_tmdb_image_url("http://image.tmdb.org/t/p/original/poster.jpg").is_err());
+        assert!(
+            validated_tmdb_image_url(
+                "https://image.tmdb.org.attacker.invalid/t/p/original/poster.jpg"
+            )
+            .is_err()
+        );
+        assert!(
+            validated_tmdb_image_url("https://user@image.tmdb.org/t/p/original/poster.jpg")
+                .is_err()
+        );
+    }
 }

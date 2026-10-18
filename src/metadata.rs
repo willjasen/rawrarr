@@ -42,6 +42,16 @@ pub struct MovieCandidate {
     pub original_title: String,
     pub year: Option<u16>,
     pub overview: String,
+    pub poster_url: Option<String>,
+    #[serde(skip)]
+    pub(crate) poster_source: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RadarrImage {
+    pub cover_type: String,
+    pub remote_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -54,6 +64,8 @@ pub struct RadarrMovieLookupItem {
     pub year: Option<u16>,
     #[serde(default)]
     pub overview: String,
+    #[serde(default)]
+    pub images: Vec<RadarrImage>,
 }
 
 impl From<RadarrMovieLookupItem> for MovieCandidate {
@@ -64,6 +76,12 @@ impl From<RadarrMovieLookupItem> for MovieCandidate {
             original_title: item.original_title,
             year: item.year,
             overview: item.overview,
+            poster_url: None,
+            poster_source: item
+                .images
+                .into_iter()
+                .find(|image| image.cover_type.eq_ignore_ascii_case("poster"))
+                .and_then(|image| image.remote_url),
         }
     }
 }
