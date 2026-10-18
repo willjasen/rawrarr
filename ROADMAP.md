@@ -62,7 +62,7 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 
 - Restore private-key character verification after fixing the reported rejection of correct answers and validating the full browser flow.
 
-- Add the optional roarlay AI chat and PostgreSQL request inbox described in [the design guide](docs/DESIGN.md#ai-chat-and-request-review-planned). First answer read-only library questions from verified records, then let an owner-run agent review gaps and propose scoped changes. Define cloud-data consent, retention, approval, and the blind-content query path before implementation.
+- Add the optional roarlay AI chat, talking voice mode, and PostgreSQL request inbox described in [the design guide](docs/DESIGN.md#ai-chat-and-request-review-planned). First answer read-only library questions from verified records, then let an owner-run agent review gaps and propose scoped changes. Consider a Twilio phone entry point after signed-in browser voice. Define cloud-data consent, transcript retention, caller authentication, approval, and the blind-content query path before implementation.
 
 - General-purpose file/folder sharing beyond media.
 - Sonarr posters/artwork, snapshots, metadata lookup, and episode mutations; Lidarr, Readarr, and Bazarr integrations; Prowlarr-style indexer management and search; concrete download-client adapters and fulfillment. The current download-client abstraction has no concrete adapter.
