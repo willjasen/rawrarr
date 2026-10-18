@@ -1177,7 +1177,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             shared_logs::SharedLogger::open(&secure_config::AgeVault::shared_dir(), &device_id)
                 .ok();
         if logger.is_none() {
-            eprintln!("Rawrarr shared logging could not be initialized");
+            eprintln!("rawrarr shared logging could not be initialized");
         }
         let summary = storage_node::scan_once()?;
         if let Some(logger) = logger {
@@ -1223,7 +1223,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let shared_logs =
         shared_logs::SharedLogger::open(&secure_config::AgeVault::shared_dir(), &device_id).ok();
     if shared_logs.is_none() {
-        eprintln!("Rawrarr shared logging could not be initialized");
+        eprintln!("rawrarr shared logging could not be initialized");
     }
     let state = Arc::new(AppState {
         auth: auth.clone(),
@@ -1296,9 +1296,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         logger.application_started();
     }
     if quiet_logs_enabled(env::var("RAWARR_QUIET_LOGS").ok().as_deref()) {
-        println!("Rawrarr request logging is quiet; server errors remain visible");
+        println!("rawrarr request logging is quiet; server errors remain visible");
     } else {
-        println!("Rawrarr verbose request logging enabled");
+        println!("rawrarr verbose request logging enabled");
     }
     println!("rawrarr listening on {socket_address}");
     axum::serve(listener, app).await?;

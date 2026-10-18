@@ -15,6 +15,8 @@ This is the living product-design guide for how Rawrarr should behave and feel t
 
 Rawrarr should feel approachable and distinctive without making the interface look like a toy. Use a restrained dark or light surface system, readable typography, clear section hierarchy, and green as the primary brand accent. Reserve bright colors for status, identity illustrations, and meaningful actions.
 
+Always render the product name as lowercase **rawrarr** in user-facing interface text, errors, and logs.
+
 A generated identity illustration and the active workspace color scheme should be derived deterministically from the public age recipient. The same recipient should always produce the same logo and palette across nodes. Keep the normal Rawrarr brand palette before an identity is created or unlocked; switch to the recipient-derived palette after creation or successful import. Use a recognizable multicolor geometric identity mark and a coordinated accent/surface tint in the app. Never place the full recipient or private identity inside the illustration or its accessible label. The logo and palette identify an age identity visually, while the displayed short form lets a person distinguish nearby identities. Preserve contrast and semantic status colors so color alone never communicates status.
 
 ## Account and first-run flow

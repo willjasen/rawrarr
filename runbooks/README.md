@@ -57,3 +57,4 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Paste an existing age identity during setup](2026-10-18-rawrarr-paste-age-identity.md) — Remove file selection from the setup flow and import an existing identity by pasting it into the masked field.
 - [Make Rawrarr container logs verbose](2026-10-18-rawrarr-verbose-container-logs.md) — Log routine HTTP request summaries and safe scan counts to container stdout, with a quiet-mode environment option.
 - [Move local Rawrarr shared data outside Codebox](2026-10-18-rawrarr-local-shared-data-location.md) — Bind `/shared` to a persistent, Finder-accessible directory in Application Support and preserve the old folder as a rollback copy.
+- [Display rawrarr in lowercase](2026-10-18-rawrarr-lowercase-brand-copy.md) — Keep the product name lowercase in user-facing interface copy, errors, and logs, with a regression test for displayed text.

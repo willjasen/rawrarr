@@ -83,7 +83,7 @@ pub fn load_or_create_device_id() -> Result<String, io::Error> {
             }
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                "saved Rawrarr device ID is invalid",
+                "saved rawrarr device ID is invalid",
             ));
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound => {}
@@ -113,7 +113,7 @@ pub fn load_or_create_device_id() -> Result<String, io::Error> {
             } else {
                 Err(io::Error::new(
                     io::ErrorKind::InvalidData,
-                    "saved Rawrarr device ID is invalid",
+                "saved rawrarr device ID is invalid",
                 ))
             }
         }

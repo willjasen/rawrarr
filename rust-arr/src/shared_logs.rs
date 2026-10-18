@@ -97,7 +97,7 @@ impl SharedLogger {
         scan: Option<(usize, usize, usize, usize, bool)>,
     ) {
         if self.write_record(event, scan).is_err() {
-            eprintln!("Rawrarr could not append a compressed shared log record");
+            eprintln!("rawrarr could not append a compressed shared log record");
         }
     }
 

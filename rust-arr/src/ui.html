@@ -125,7 +125,7 @@
         <div style="display:flex;align-items:center;gap:12px"><div class="live-pill"><span class="pulse"></span>LOCAL INSTANCE</div><button id="sign-out" class="refresh" type="button">Sign out</button></div>
       </div>
       <section class="welcome">
-        <div><h2>Welcome to rawrarr</h2><p>A device with the media mounted scans its library and writes age-encrypted JSON sidecars into the shared Rawrarr folder for Syncthing replication.</p></div>
+        <div><h2>Welcome to rawrarr</h2><p>A device with the media mounted scans its library and writes age-encrypted JSON sidecars into the shared rawrarr folder for Syncthing replication.</p></div>
         <div class="welcome-tag">RADARR · FIRST INTEGRATION</div>
       </section>
       <section class="grid" aria-label="Library summary">
@@ -153,7 +153,7 @@
             <label for="st-remote-url">Storage node Syncthing URL</label><input id="st-remote-url" type="url" placeholder="http://storage-node:8384" required>
             <label for="st-remote-key">Storage node API key</label><input id="st-remote-key" type="password" autocomplete="new-password" required>
             <label for="st-folder-id">Shared folder ID</label><input id="st-folder-id" value="rawrarr-metadata" required>
-            <label for="st-label">Folder label</label><input id="st-label" value="Rawrarr metadata" required>
+            <label for="st-label">Folder label</label><input id="st-label" value="rawrarr metadata" required>
             <label for="st-local-path">Web node folder path</label><input id="st-local-path" placeholder="/data/shared-metadata" required>
             <label for="st-remote-path">Storage node folder path</label><input id="st-remote-path" placeholder="/media/rawrarr-metadata" required>
             <label for="st-local-address">Web node address, reachable by storage</label><input id="st-local-address" placeholder="tcp://web.example:22000" required>
@@ -191,7 +191,7 @@
       <section id="configuration-content" hidden>
         <article class="panel" style="margin-bottom:14px">
           <div class="panel-head"><h2>Shared configuration · decrypted view</h2><button id="refresh-configuration" class="refresh" type="button">Verify again ↻</button></div>
-          <div class="metadata-note">This is a readable preview of configuration intended for sharing between Rawrarr nodes. Secret values are redacted in the browser. Peer synchronization is not implemented yet.</div>
+          <div class="metadata-note">This is a readable preview of configuration intended for sharing between rawrarr nodes. Secret values are redacted in the browser. Peer synchronization is not implemented yet.</div>
           <pre id="configuration-json" class="config-json">Loading configuration…</pre>
         </article>
         <article class="panel">
@@ -387,7 +387,7 @@
       scanButton.disabled = !info.configured;
       if (info.configured) {
         document.getElementById('library-empty-title').textContent = `${info.name} is ready to scan`;
-        document.getElementById('library-empty-copy').textContent = 'Choose Scan folder to inventory recognized media and write age-encrypted JSON sidecars into the shared Rawrarr folder. Unlock the age identity first.';
+        document.getElementById('library-empty-copy').textContent = 'Choose Scan folder to inventory recognized media and write age-encrypted JSON sidecars into the shared rawrarr folder. Unlock the age identity first.';
       }
     }
 
@@ -646,7 +646,7 @@
 
         document.getElementById('media-total').textContent = result.counts.movies + result.counts.television + result.counts.music + result.counts.books + result.counts.subtitles + result.counts.other;
         document.getElementById('media-detail').textContent = `${result.counts.movies} movies · ${result.counts.television} TV · ${result.counts.music} music`;
-        document.getElementById('scan-summary').textContent = `${result.libraryName} · ${result.items.length}${result.truncated ? '+' : ''} media files · ${result.sidecarsCreated} encrypted sidecars saved to shared Rawrarr data · ${result.sidecarErrors} sidecar errors`;
+        document.getElementById('scan-summary').textContent = `${result.libraryName} · ${result.items.length}${result.truncated ? '+' : ''} media files · ${result.sidecarsCreated} encrypted sidecars saved to shared rawrarr data · ${result.sidecarErrors} sidecar errors`;
 
         const rows = document.getElementById('media-rows');
         rows.replaceChildren();

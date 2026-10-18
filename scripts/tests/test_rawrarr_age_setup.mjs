@@ -35,7 +35,7 @@ test('generated private age identity has a short preview and full value is expos
   assert.match(page, />Unlock vault<\/button>/);
   assert.match(page, /To use a saved key, paste it into the masked field/);
   assert.match(page, /I have saved my private age identity somewhere safe and can retrieve it later/);
-  assert.match(page, /Rawrarr cannot recover this identity if it is lost/);
+  assert.match(page, /rawrarr cannot recover this identity if it is lost/);
   assert.doesNotMatch(page, />Import and unlock<\/button>/);
 
   const ids = ['identity', 'message', 'public-card', 'public-recipient',
