@@ -22,14 +22,14 @@ Start here for the current project state and everyday use:
 - [Device signing design](device-signing-design.md) — proposed signed device enrollment and configuration integrity.
 - [Data domains](data-domains.md) — placement and synchronization boundaries for `/media`, `/metadata`, `/shared`, `/data`, and backups.
 - [Shared config schema v1](shared-config-v1.schema.json) — versioned age-encrypted config document with Radarr and Sonarr entries in `services`.
-- [Metadata export plan](metadata-export-plan.md) — browser-side age decryption and local ZIP export; includes the working three-record mini-export prototype and remaining production scope.
+- [Metadata export plan](metadata-export-plan.md) — browser-side age decryption and ZIP export of indexed movie metadata; includes remaining media classes and scale limits.
 - [Artwork cache plan](artwork-cache-plan.md) — node-local Redis cache for encrypted artwork, sizing, stale-entry handling, operations, and rollout acceptance criteria.
 - [Blind coordinator content flow](blind-coordinator-content.md) — keep metadata/storage content encrypted through the coordinator and decrypt it in the user's browser; documents the bounded implementation and remaining scope.
 - [Browser security test plan](security-test-plan.md) — plan Playwright integration evidence for metadata/storage confidentiality through the coordinator, including limits and malicious-coordinator caveats.
 - [Local backups](local-backups.md) — planned manual, age-encrypted backup of `/shared` to one node-local destination.
 - [Device architecture](device-architecture.md) — IDs, local/shared records, storage, and remote access boundaries.
 - [Cloud access](cloud-access-architecture.md) — passkey account service, blind relay, and subscriber-data boundary.
-- [Optional direct node connections](direct-node-connection-plan.md) — plan browser-to-node routing when reachable, with coordinator fallback, prerequisites, security requirements, and acceptance criteria.
+- [Optional direct node connections](direct-node-connection-plan.md) — direct Tailscale route and coordinator fallback, with remaining transport and security work.
 - [Subscription model](subscription-model.md) — proposed trial, hosted checkout, and signed entitlement model.
 - [Donation plan](donation-plan.md) — proposed optional one-time contributions, separate from subscription entitlements.
 - [Tailscale integration](tailscale-integration-plan.md) — optional overlay transport plan; SwarmSail will manage one tailnet per subscriber account.

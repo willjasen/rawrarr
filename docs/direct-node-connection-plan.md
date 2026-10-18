@@ -9,11 +9,11 @@ The initial self-hosted Tailscale path is implemented for the MacBook metadata n
 ## Current state
 
 - The coordinator workspace lists owner-authorized nodes and maps approved node IDs to trusted HTTP(S) targets with `RAWARR_NODE_RELAY_TARGETS`.
-- The coordinator currently proxies selected node content. The selected node's UI/API and coordinator endpoints have different security boundaries; the current self-hosted proxy is trusted to see any plaintext it proxies.
-- Some node containers are intentionally isolated from host-published ports. The current Mac mini storage deployment does not expose a browser-reachable direct app route.
+- The coordinator relays only scoped node APIs. Movie and TV inventory responses are encrypted to a browser session, and metadata export reads return age ciphertext. The selected node's UI/API and coordinator endpoints still have different security boundaries.
+- Some node containers are intentionally isolated from host-published ports. The current Mac mini storage deployment has a narrow tailnet `/direct-api/` route; its general node UI is not exposed as a direct browser route.
 - A separate target for the future public portal says prefer a direct peer path and fall back to an opaque relay. That future blind relay is distinct from today's trusted coordinator proxy.
 - The coordinator remains necessary for access from networks where no direct browser-to-node route exists.
-- The MacBook Tailscale Serve endpoint has a dedicated `/direct-api/` handler to a loopback-only metadata API listener. The handler exposes only the encrypted library response, encrypted config, and ciphertext export endpoints.
+- The MacBook Tailscale Serve endpoint has a dedicated `/direct-api/` handler to a loopback-only metadata API listener. The handler exposes narrow browser APIs, including encrypted library responses, encrypted config, and ciphertext export.
 - The coordinator advertises a direct route only when explicitly configured and same-origin with the portal. It issues a five-minute HttpOnly, Strict, node-scoped session cookie restricted to that direct path after checking the exact browser Origin and owner/node relationship.
 - The workspace probes the Tailscale path automatically, reports whether it is active, and retries through the existing coordinator relay if a direct request fails. The direct listener does not expose the node's general UI or other APIs.
 

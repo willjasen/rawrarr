@@ -8,7 +8,7 @@ See the [user guide](docs/user-guide.md) for Docker Compose setup, passkey onboa
 
 ## Development workflow
 
-Code changes are made and verified before updating the persistent `rawrarr-local` environment. After UI changes, rebuild that environment so hands-on review at http://localhost:7297 uses the current implementation. The application image uses BuildKit Cargo caches to reuse downloaded crates and Rust build artifacts across source changes.
+Code changes are made and verified before updating the persistent `rawrarr-local` environment. Roarlay UI review uses the tailnet workspace at `https://rawrarr.risk-mermaid.ts.net/`; local port 7297 currently forwards to roarlay for diagnostics. Rebuild only the affected service with its recorded Compose files and deployment lock, then verify health and the tailnet route. The application image uses BuildKit Cargo caches to reuse downloaded crates and Rust build artifacts across source changes.
 
 ## Test
 

@@ -1,6 +1,6 @@
 # Rawrarr technical status
 
-> Updated container architecture (2026-10-18): central **coordinator** owns passkeys/authentication and node coordination; **storage** and **metadata** serve the app, Radarr, and shared data. Only storage reads media. Metadata replaces shard; the MacBook app is metadata. See [deployment and Mac mini setup](container-deployment.md), which supersedes older role/startup statements below. Owner-approved pending enrollment is implemented; browser device-code linking remains planned.
+> Current container architecture (2026-10-18): **roarlay** (`coordinator`) owns passkeys and node coordination; **apex** (`storage`) reads media; **metadata** serves encrypted app data and Arr connections. See [container deployment](container-deployment.md). Owner-approved pending enrollment is implemented; browser device-code linking remains planned.
 
 Last reviewed: 2026-10-18.
 
@@ -16,11 +16,11 @@ The [roadmap](../ROADMAP.md) is the source of truth for completed and outstandin
 
 ## Current-source and runtime status
 
-These descriptions reflect the current checkout and the local runtime deployment verified on 2026-10-18. Historical runbook tests and deployment results apply only to their recorded task.
+These descriptions reflect the current checkout. Dated runbook tests and deployment results apply only to their recorded task; source behavior alone does not establish the currently running image or live integration state.
 
-The coordinator root shows passkey sign-in while anonymous and the owner workspace after sign-in. It lists owner-authorized nodes and renders a bounded movie metadata view by relaying only age ciphertext to the browser for local decryption. General node-page and plaintext API relay requests are rejected. The browser keeps the age private ID in tab-scoped `sessionStorage` and clears it on sign-out. The three-record view remains a proof of concept; see [blind coordinator content flow](blind-coordinator-content.md). `/health` remains a separate HTML status page and checks web-process responsiveness only. A successful response does not establish database, integration, or peer readiness.
+Roarlay shows passkey sign-in while anonymous and the owner workspace after sign-in. The workspace has Overview, Devices, Movies, TV, Configuration, Settings, and About views. It lists owner-authorized nodes, probes a scoped direct Tailscale route from the browser, and falls back to a coordinator relay when direct access fails. The full Movies and TV inventories use a per-request encrypted response that the browser decrypts; shared movie metadata export uses age ciphertext and browser-side decryption. Roarlay must not receive private age identities or media. The browser can keep the age private ID for the tab or, by explicit opt-in, persist it in browser storage; sign-out clears the in-memory ID. The [blind coordinator content flow](blind-coordinator-content.md) describes remaining limits. `/health` remains an HTML web-process liveness page, not proof of database, Arr, or peer readiness.
 
-The local `rawrarr-local` coordinator and metadata containers were rebuilt and recreated for the workspace change. Verification passed for local and Tailscale-root sign-in pages, `/health`, coordinator-to-metadata network reachability, and a recent metadata heartbeat. A disposable Docker/PostgreSQL/Chromium integration verified coordinator passkey sign-in, automatic metadata selection and page display, account-linked passkey registration, node-scoped sessions, enrollment approval, and fail-closed behavior. A real interactive passkey ceremony at the live Tailscale origin remains a user action.
+The source implements owner approval for joining nodes, a direct route probe and relay fallback, on-demand metadata rescans, all-indexed-movie browser export, and periodic storage scans. The export currently builds the ZIP in browser memory; periodic scans first run after one configured interval. A [dated bounded Mini scan](../runbooks/2026-10-18-clarify-storage-scan-action.md) produced three synchronized encrypted sidecars, and a [later Mini update](../runbooks/2026-10-18-update-mac-mini-containers.md) rebuilt storage. Neither runbook observed an unattended scheduled scan. Recheck image IDs, service health, authenticated pages, and tailnet routes before claiming a current deployment result.
 
 ## Verification inventory
 

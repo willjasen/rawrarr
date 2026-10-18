@@ -4,21 +4,23 @@ This document is the single index of what the repository has completed and what 
 
 ## Recommended next work
 
-1. **Verify Sonarr against a real instance.** The TV page now reads the configured Sonarr series inventory directly from metadata and displays series, episode, disk-usage, quality-profile, and TVDB data. Verify the deployed page against the configured live Sonarr instance; the sanitized browser fixture covers response rendering and refresh.
-2. **Verify SSE through the intended Cloudflare/reverse-proxy route.** The app currently streams dashboard updates from `/api/events`, but the deployed path has not been tested. Confirm streaming, reconnect behavior, buffering, and connection timeouts using the exact planned proxy configuration.
-3. **Make coordinator + storage work.** Keep this MacBook as coordinator and add a PostgreSQL-free Mac mini worker. Build on `storage-scan-once`; implement persistent operation, device/library records, authenticated pairing, revocation, heartbeat/commands, and catalog ingestion.
-4. **Add private coordinator access and linking.** Expose the coordinator through Tailscale HTTPS, preferably a stable named Service. The worker logs `/devices/link` at that coordinator; the owner signs in, enters the short-lived code from local Docker logs, and approves a device-key-bound request. Verify WebAuthn origin migration and OrbStack-container reachability. Operator portal claims remain separate.
+1. **Verify an unattended storage scan.** Source and the standalone storage Compose file schedule a bounded scan after the first 24-hour interval, or at an owner-configured interval. The [manual Mini scan](runbooks/2026-10-18-clarify-storage-scan-action.md) completed and synced three encrypted sidecars, and the [later container update](runbooks/2026-10-18-update-mac-mini-containers.md) rebuilt storage. A scheduled run on that image has not yet been observed.
+2. **Build a durable cross-node catalog.** Owner-approved node enrollment, heartbeats, selected-node pages, direct routes, and scan commands exist. Add persistent library/device records, scan generations, stale/offline inventory, and reconciliation without moving media bytes through roarlay.
+3. **Finish export beyond movies.** Settings can export all indexed movie text and matching available artwork in a browser-built ZIP. Add other metadata classes, cancellation, bounded streaming, and explicit partial-failure reporting before calling it a complete archive.
+4. **Verify the intended public reverse-proxy route.** The local Tailscale HTTPS route is distinct from the planned Cloudflare/public route. Test `/api/events` streaming, reconnects, buffering, and timeouts through the exact public proxy configuration.
 
-This sequence closes the partially delivered Sonarr integration first, then verifies the existing transport and builds node coordination needed by the larger hosted design. Revisit it if product priorities change.
+This sequence verifies deployed storage behavior, then addresses the missing catalog and export durability. Revisit it if product priorities change.
 
 ## Completed in the repository
 
 - **Standalone Rust application:** Axum web/API service, local PostgreSQL migrations and state, `/health`, Docker Compose, and container health checks.
+- **Role-separated local deployment:** roarlay keeps passkeys and PostgreSQL; metadata and apex are subscriber nodes with separate local state. Owner-approved enrollment, node heartbeats, a roarlay workspace, scoped browser direct routes with relay fallback, and owner-requested scans are implemented. A Mac mini bounded manual scan and encrypted sidecar synchronization were verified; the scheduled scan still needs observation.
 - **Local passkey onboarding:** first-account registration and sign-in use WebAuthn with passkeys and sessions stored in that node's PostgreSQL database.
 - **Age-encrypted shared settings:** create or paste a post-quantum age identity; encrypt configuration as `/shared/config.aged`. The private identity is sent to the subscriber web process for unlock and retained there while unlocked. An explicit **Keep this ID on this device** option saves it with owner-only permissions in node-local `/data/age-identity`; it never belongs in `/shared`, PostgreSQL, or the operator service. Generated IDs use a copy pop-up and copy acknowledgement, followed by an explicit **Continue** click before vault unlock and dashboard navigation. Pasted IDs unlock directly with **Unlock vault**, without copy acknowledgement. The dialog has no Close action. Character verification is temporarily disabled.
 - **Radarr and local library prototype:** configure Radarr, inspect movie inventory and connection status, scan a configured local media path, and create age-encrypted metadata and artwork. Media stays on its storage host.
-- **Initial Sonarr integration:** configure and validate an HTTPS Sonarr connection, store its settings in the subscriber's age-encrypted configuration, and read series inventory through authenticated APIs. The coordinator Settings form sends credentials directly from the browser to metadata; roarlay never receives the API key. Radarr and Sonarr share one library column schema and renderer. Focused browser and Rust tests pass; persistent deployment and direct routing are verified, while live Sonarr connectivity still needs verification (see [Sonarr delivery runbook](runbooks/2026-10-18-sonarr-shared-library.md) and [connection settings runbook](runbooks/2026-10-18-sonarr-settings-flow.md)).
+- **Sonarr integration:** configure and validate an HTTPS Sonarr connection, store its settings in the subscriber's age-encrypted configuration, and read series inventory through authenticated APIs. The browser sends credentials directly to metadata; roarlay never receives the API key. Radarr and Sonarr share library presentation. A [dated live verification](runbooks/2026-10-18-automatic-sonarr-metadata-backfill.md) observed 228 TV series and 226 encrypted text and artwork records; that snapshot does not establish current connectivity or complete coverage.
 - **Syncthing and status foundation:** configure supported Syncthing peer/folder settings, expose per-node device identity and scan status, write compressed allowlisted shared logs, and stream dashboard updates using server-sent events.
+- **Browser movie export:** decrypt all indexed movie text metadata and matching available artwork in the browser and download a ZIP. The current ZIP is assembled in memory and is limited to movie metadata.
 - **Local Docker data and test workflow:** persist shared data outside the source tree, retain PostgreSQL and node-local state in Docker-managed storage, and check web/PostgreSQL health. The `rawrarr-testing-base:local` image caches external tools and Rust dependencies; each test run creates a unique container from that base, copies in current source, and retains its log. The base is rebuilt only when missing or explicitly requested.
 - **Project foundations:** standalone Git repository, product and data-boundary documentation, design guide, user guide, and test suites for current Rust and browser behavior.
 
@@ -28,9 +30,9 @@ This sequence closes the partially delivered Sonarr integration first, then veri
 
 - Durable device and library catalog with stale/offline state, scan generations, and reconciliation.
 - Define library configuration and scanning for mixed-media roots and category-specific roots distributed across multiple storage nodes; combine them in the instance catalog without moving media bytes.
-- Pairing, approval, revocation, device identity continuity, heartbeats, and a narrowly scoped remote command channel.
-- Keep user sign-in and PostgreSQL on the coordinator. Define separate device authentication for storage/shard nodes; multiple-coordinator auth/failover remains future work.
-- Implement role-specific startup and packaging: coordinator, database-free storage, encrypted-replica shard, and isolated operator service; allow coordinator + storage combinations.
+- Complete device credential rotation and revocation behavior, identity continuity, and a durable, narrowly scoped command/catalog channel. The current approval, heartbeats, and scan request are the foundation.
+- Keep user sign-in and PostgreSQL on roarlay. Multi-account invitations and multiple-coordinator auth/failover remain future work.
+- Publish role-specific packaging for roarlay, apex, metadata, and an isolated operator service; the existing Compose files are local source-build examples.
 - Implement explicit per-user sharing grants. Syncthing peer/folder configuration does not currently implement invitations, trust decisions, or selective sharing.
 
 ### Shared clusters and owner-controlled membership
@@ -46,7 +48,7 @@ This sequence closes the partially delivered Sonarr integration first, then veri
 ### Private access, operator service, and relay
 
 - Cloudflare/reverse-proxy support for the intended public hostname, including verified SSE streaming behavior.
-- Optional Tailscale sidecars and a tailnet-scoped Rawrarr service, with transport kept separate from Rawrarr authorization and age-key access.
+- Productionize the existing local Tailscale sidecars and tailnet-scoped routes while keeping transport separate from Rawrarr authorization and age-key access.
 - Operator service node running SwarmSail/Headscale account coordination, with a one-time, revocable node claim flow.
 - Blind relay and portal for reaching subscriber nodes through outbound tunnels. The subscriber node must retain application authentication and TLS termination; the relay must not decrypt or store subscriber app data or proxy media.
 

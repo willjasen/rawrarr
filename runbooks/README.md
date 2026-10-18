@@ -430,3 +430,4 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Give the profile name room for a two by two layout](2026-10-18-settings-profile-words-layout.md) — Narrow the browser Age ID card and display profile words in two columns beside the avatar.
 - [Fix Overview genre data](2026-10-18-fix-overview-genre-data.md) — Preserve Radarr genres in the browser library payload and initialize Arr loaders for Overview charts.
 - [Task-owned Git workflow](2026-10-18-task-owned-git-workflow.md) — Allow focused task-owned commits as work progresses and use dedicated worktrees when concurrent edits overlap.
+- [Review current Rawrarr documentation](2026-10-18-current-state-documentation-review.md) — Align setup, architecture, export, scanning, and roadmap claims with current source and observed local port routing.
