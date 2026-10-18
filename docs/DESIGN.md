@@ -91,3 +91,7 @@ When the user recommends or approves a change to how Rawrarr should look or beha
 The Mac mini will run a subscriber storage node in OrbStack, joining the current instance and scanning `/Volumes/silo/Media/data` read-only. Keep media local, give the node independent operational/authentication storage, and preserve the existing shared instance and age recipient. Present drive unavailability separately from an empty library; combined cross-node catalogs and portable authentication remain planned. See the [deployment plan](mac-mini-storage-node-plan.md) for bootstrap gaps, verification, and recovery.
 
 - Movie quality-profile names come from shared metadata first. Resolve missing names from Radarr and persist them in encrypted movie metadata; refresh the cached name when the assigned profile ID changes.
+
+## Responsive movie loading
+
+Render movie rows and begin loading posters as soon as the movie API responds. Check browser access to Radarr independently and enable detail links afterward. Keep the previous list visible during an in-page refresh and explicitly label it as previous data if updating fails. Do not persist movie metadata in browser storage.

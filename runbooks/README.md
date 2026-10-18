@@ -93,3 +93,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Plan the Mac mini storage node](2026-10-18-mac-mini-storage-node-plan.md) — Plan OrbStack, read-only silo media access, and joining the current instance.
 
 - [Movie quality profile cache](2026-10-18-movie-quality-profile-cache.md) — Resolve quality names from shared metadata, fetch missing Radarr profiles, and persist encrypted updates.
+
+- [Responsive movies refresh](2026-10-18-responsive-movies-refresh.md) — remove link-probe delays from movie rendering and retain visible rows during updates.
