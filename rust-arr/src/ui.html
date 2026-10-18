@@ -51,6 +51,7 @@
     .welcome p { color: #adbaae; font-size: 12px; line-height: 1.6; margin: 0; max-width: 610px; }
     .welcome-tag { border: 1px solid hsl(var(--theme-hue) 22% 38%); background: var(--green-dim); color: var(--green); border-radius: 999px; padding: 7px 10px; font-size: 10px; white-space: nowrap; }
     .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 22px; }
+    .movies-summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .card { border: 1px solid var(--line); background: linear-gradient(145deg, #19201d, #151b18); border-radius: var(--radius); padding: 18px; min-height: 128px; }
     .card-head { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 11px; }
     .card-symbol { color: #a4b0a6; font-size: 17px; }
@@ -84,9 +85,12 @@
     .scan-summary { padding: 12px 18px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 10px; }
     table { width: 100%; border-collapse: collapse; text-align: left; }
     th { color: #77867b; font-size: 9px; text-transform: uppercase; letter-spacing: .09em; font-weight: 650; padding: 10px 16px; }
-    td { border-top: 1px solid #26312b; padding: 10px 16px; font-size: 10px; color: #d6dfd7; vertical-align: top; }
+    td { border-top: 1px solid #26312b; padding: 10px 16px; font-size: 16px; color: #d6dfd7; vertical-align: top; }
     td.path { color: var(--muted); overflow-wrap: anywhere; }
     td.size { text-align: right; white-space: nowrap; color: var(--muted); }
+    .arr-external-link { display: inline-flex; width: 14px; height: 14px; margin-left: 4px; color: var(--muted); vertical-align: -2px; }
+    .arr-external-link:hover, .arr-external-link:focus-visible { color: var(--accent); }
+    .arr-external-link svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
     .kind-tag { display: inline-block; border: 1px solid #3a493e; background: #202923; color: #c6d4c8; border-radius: 5px; padding: 3px 6px; font-size: 9px; white-space: nowrap; }
     .issue-note { color: var(--amber); padding: 0 18px 13px; font-size: 10px; }
     .footer { color: #647168; text-align: right; font-size: 9px; margin-top: 16px; }
@@ -104,7 +108,16 @@
     .device-name { font-size: 11px; font-weight: 650; }
     .device-meta { color: var(--muted); font-size: 10px; line-height: 1.6; margin-top: 5px; }
     .device-status { color: var(--green); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; float: right; }
-    @media (max-width: 850px) { .app { grid-template-columns: 70px minmax(0, 1fr); } aside { padding: 22px 10px; } .brand { justify-content: center; padding: 0 0 32px; } .brand-logo { width: 42px; height: 42px; object-fit: cover; object-position: left center; padding: 1px; } .section-label, .nav-text, .nav-soon, .sidebar-bottom { display: none; } .nav-item { justify-content: center; padding: 0; } main { padding: 30px 24px 50px; } .grid { grid-template-columns: 1fr 1fr; } .grid .card:last-child { grid-column: span 2; } }
+    .about-copy { padding: 20px; color: #b5c0b7; font-size: 12px; line-height: 1.75; }
+    .about-copy p { margin: 0 0 14px; }
+    .about-copy p:last-child { margin-bottom: 0; }
+    .pending-approvals { border-top: 1px solid var(--line); padding: 14px 18px 4px; }
+    .approval-button { margin-top: 9px; border: 1px solid #536c3e; border-radius: 6px; background: #23301f; color: #d9f7c4; padding: 7px 10px; font: inherit; cursor: pointer; }
+    .approval-button:disabled { opacity: .55; cursor: wait; }
+    .artwork-backfill { padding: 12px 18px; border-bottom: 1px solid var(--line); }
+    .artwork-backfill.complete { padding: 5px 18px; color: var(--muted); font-size: 11px; }
+    .artwork-backfill progress { display: block; width: 100%; height: 9px; margin-top: 8px; accent-color: var(--green); }
+    @media (max-width: 850px) { .app { grid-template-columns: 70px minmax(0, 1fr); } aside { padding: 22px 10px; } .brand { justify-content: center; padding: 0 0 32px; } .brand-logo { width: 42px; height: 42px; object-fit: cover; object-position: left center; padding: 1px; } .section-label, .nav-text, .nav-soon, .sidebar-bottom { display: none; } .nav-item { justify-content: center; padding: 0; } main { padding: 30px 24px 50px; } .grid { grid-template-columns: 1fr 1fr; } .grid .card:last-child { grid-column: span 2; } .movies-summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } .movies-summary-grid .card:last-child { grid-column: auto; } }
     @media (max-width: 580px) { .app { display: block; } aside { position: sticky; z-index: 2; top: 0; height: 60px; display: flex; align-items: center; border-right: 0; border-bottom: 1px solid var(--line); padding: 0 14px; } .brand { padding: 0; margin-right: auto; } .brand-copy { display: block; } .nav-item { width: 40px; height: 40px; margin: 0 3px; } .nav-item.active { box-shadow: inset 0 -2px var(--green); } main { padding: 26px 16px 42px; } .topline { align-items: flex-start; margin-bottom: 22px; } .live-pill { font-size: 0; padding: 9px; } .welcome { align-items: flex-start; flex-direction: column; padding: 19px; } .grid { gap: 9px; } .card { padding: 14px; min-height: 116px; } .columns { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -115,14 +128,16 @@
       <div class="section-label">rawrchive</div>
       <div class="nav-item active"><span class="nav-icon">⌂</span><span class="nav-text">Overview</span></div>
       <button class="nav-item" id="movies-nav" type="button" style="width:100%;border:0;background:transparent;text-align:left;cursor:pointer"><span class="nav-icon">▧</span><span class="nav-text">Movies</span></button>
+      <button class="nav-item" id="series-nav" type="button" style="width:100%;border:0;background:transparent;text-align:left;cursor:pointer"><span class="nav-icon">▧</span><span class="nav-text">TV</span></button>
       <button class="nav-item" id="configuration-nav" type="button" style="width:100%;border:0;background:transparent;text-align:left;cursor:pointer"><span class="nav-icon">◇</span><span class="nav-text">Configuration</span></button>
       <a class="nav-item" href="#radarr-settings-panel" id="settings-nav" style="text-decoration:none"><span class="nav-icon">⚙</span><span class="nav-text">Settings</span></a>
+      <button class="nav-item" id="about-nav" type="button" style="width:100%;border:0;background:transparent;text-align:left;cursor:pointer"><span class="nav-icon">ⓘ</span><span class="nav-text">About</span></button>
       <div class="sidebar-bottom">Discovery, libraries, and fulfillment.<br>Early access · Radarr first</div>
     </aside>
     <main>
       <div class="topline">
         <div><div class="eyebrow">Your workspace</div><h1 id="page-title">Overview</h1></div>
-        <div style="display:flex;align-items:center;gap:12px"><div class="live-pill"><span class="pulse"></span>LOCAL INSTANCE</div><button id="sign-out" class="refresh" type="button">Sign out</button></div>
+        <div style="display:flex;align-items:center;gap:12px"><div class="live-pill"><span class="pulse"></span>LOCAL INSTANCE</div><button id="add-coordinator-passkey" class="refresh" type="button" hidden>Add passkey for roarlay</button><button id="sign-out" class="refresh" type="button">Sign out</button></div>
       </div>
       <section class="welcome">
         <div><h2>Welcome to rawrarr</h2><p>A device with the media mounted scans its library and writes age-encrypted JSON sidecars into the shared rawrarr folder for Syncthing replication.</p></div>
@@ -146,18 +161,23 @@
         </article>
         <article class="panel">
           <div class="panel-head"><h2>Devices</h2><span id="device-count">—</span></div>
-          <div id="device-list" class="device-list"><div class="device-meta">Loading scanner devices…</div></div>
+          <div id="device-list" class="device-list"><div class="device-meta">Loading nodes…</div></div>
+          <section class="pending-approvals" aria-labelledby="pending-approvals-heading">
+            <h3 id="pending-approvals-heading">Pending node approvals</h3>
+            <p class="device-meta">New nodes are associated with your signed-in account by roarlay. A joining node cannot select its owner.</p>
+            <div id="pending-node-list" class="device-meta" role="status" aria-live="polite">Checking for new nodes…</div>
+          </section>
           <form id="syncthing-share" class="settings-form" style="border-top:1px solid var(--line)">
-            <h3 style="margin:0">Share metadata with a storage node</h3>
-            <p class="setup-intro">Configure a local Syncthing API in the web container, then enter the storage node API and peer addresses reachable on port 22000. Use HTTPS or a trusted private network for the remote API. The key is used for this request and is not saved.</p>
-            <label for="st-remote-url">Storage node Syncthing URL</label><input id="st-remote-url" type="url" placeholder="http://storage-node:8384" required>
-            <label for="st-remote-key">Storage node API key</label><input id="st-remote-key" type="password" autocomplete="new-password" required>
+            <h3 style="margin:0">Share metadata with an apex node</h3>
+            <p class="setup-intro">Configure a local Syncthing API in the web container, then enter the apex node API and peer addresses reachable on port 22000. Use HTTPS or a trusted private network for the remote API. The key is used for this request and is not saved.</p>
+            <label for="st-remote-url">Apex Syncthing URL</label><input id="st-remote-url" type="url" placeholder="http://apex-node:8384" required>
+            <label for="st-remote-key">Apex API key</label><input id="st-remote-key" type="password" autocomplete="new-password" required>
             <label for="st-folder-id">Shared folder ID</label><input id="st-folder-id" value="rawrarr-metadata" required>
             <label for="st-label">Folder label</label><input id="st-label" value="rawrarr metadata" required>
             <label for="st-local-path">Web node folder path</label><input id="st-local-path" placeholder="/data/shared-metadata" required>
-            <label for="st-remote-path">Storage node folder path</label><input id="st-remote-path" placeholder="/media/rawrarr-metadata" required>
-            <label for="st-local-address">Web node address, reachable by storage</label><input id="st-local-address" placeholder="tcp://web.example:22000" required>
-            <label for="st-remote-address">Storage node address, reachable by web</label><input id="st-remote-address" placeholder="tcp://storage.example:22000" required>
+            <label for="st-remote-path">Apex folder path</label><input id="st-remote-path" placeholder="/media/rawrarr-metadata" required>
+            <label for="st-local-address">Web node address, reachable by apex</label><input id="st-local-address" placeholder="tcp://web.example:22000" required>
+            <label for="st-remote-address">Apex address, reachable by web</label><input id="st-remote-address" placeholder="tcp://apex.example:22000" required>
             <div class="settings-actions"><button class="refresh" type="submit">Connect and share</button></div>
             <div id="syncthing-message" class="settings-message" role="status" aria-live="polite"></div>
           </form>
@@ -172,20 +192,52 @@
             <input id="radarr-key" name="apiKey" type="password" autocomplete="new-password" required>
             <div id="radarr-key-note" class="settings-key-note">Required for the first encrypted save.</div>
             <div class="settings-actions"><button id="save-radarr" class="refresh" type="submit">Save and connect</button><button id="clear-radarr" class="refresh" type="button">Clear</button></div>
+            <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+            <h3 style="margin:0 0 6px">Your metadata</h3><p class="setup-intro">Decrypt and download all available movie metadata records and matching artwork as a ZIP. Decryption and archive creation happen in this browser.</p><button id="mini-export" class="refresh" type="button">Export metadata</button>
             <div id="radarr-settings-message" class="settings-message" role="status" aria-live="polite"></div>
+          </form>
+        </article>
+        <article class="panel" id="sonarr-settings-panel" style="grid-column: 1 / -1; scroll-margin-top: 24px">
+          <div class="panel-head"><h2>Connect Sonarr</h2></div>
+          <form id="sonarr-settings" class="settings-form">
+            <p class="setup-intro">Settings apply immediately and are saved encrypted. After a restart, unlock them with the age identity unless it is mounted as a Docker secret.</p>
+            <label for="sonarr-url">Sonarr URL</label>
+            <input id="sonarr-url" name="url" type="url" placeholder="https://sonarr.example.com" autocomplete="url" required>
+            <label for="sonarr-key">Sonarr API key</label>
+            <input id="sonarr-key" name="apiKey" type="password" autocomplete="new-password" required>
+            <div id="sonarr-key-note" class="settings-key-note">Required for the first encrypted save.</div>
+            <div class="settings-actions"><button id="save-sonarr" class="refresh" type="submit">Save and connect</button><button id="clear-sonarr" class="refresh" type="button">Clear</button></div>
+            <div id="sonarr-settings-message" class="settings-message" role="status" aria-live="polite"></div>
           </form>
         </article>
       </section>
       <section id="movies-content" hidden>
-        <section class="grid" aria-label="Radarr movie statistics">
+        <section class="grid movies-summary-grid" aria-label="Radarr movie statistics">
           <article class="card"><div class="card-head"><span>Movies in Radarr</span></div><div class="card-value" id="movie-count">—</div><div class="card-sub">Tracked library entries</div></article>
           <article class="card"><div class="card-head"><span>Files present</span></div><div class="card-value" id="movie-files">—</div><div class="card-sub">Movies with an imported movie file</div></article>
           <article class="card"><div class="card-head"><span>Disk usage</span></div><div class="card-value" id="movie-size">—</div><div class="card-sub">Size reported by Radarr</div></article>
+          <article class="card"><div class="card-head"><span>Shared metadata</span></div><div class="card-value" id="metadata-size">—</div><div class="card-sub">Encrypted metadata and artwork</div></article>
         </section>
         <article class="panel">
-          <div class="panel-head"><h2>Radarr movie library</h2><div style="display:flex;gap:8px"><button id="mini-export" class="refresh" type="button">Try mini export</button><button id="refresh-movies" class="refresh" type="button">Refresh movies ↻</button></div></div>
+          <div class="panel-head"><h2>Radarr movie library</h2><div style="display:flex;gap:8px"><button id="refresh-movies" class="refresh" type="button">Refresh movies ↻</button></div></div>
           <div id="movies-message" class="scan-summary" role="status">Select refresh to load your Radarr library.</div>
-          <div class="table-wrap"><table><thead><tr><th>Movie</th><th>Load time</th><th>Artwork source</th><th>TMDb ID</th><th>Year</th><th>File</th><th>Monitored</th><th>Quality profile</th><th>Size</th></tr></thead><tbody id="radarr-movie-rows"></tbody></table></div>
+          <div id="artwork-backfill" class="artwork-backfill" hidden>
+            <div id="artwork-backfill-label" role="status" aria-live="polite">Artwork backfill status</div>
+            <progress id="artwork-backfill-progress" aria-label="Movie artwork backfill progress" max="1" value="0"></progress>
+          </div>
+          <div class="table-wrap"><table><thead><tr></tr></thead><tbody id="radarr-movie-rows"></tbody></table></div>
+        </article>
+      </section>
+      <section id="series-content" hidden>
+        <section class="grid" aria-label="Sonarr series statistics">
+          <article class="card"><div class="card-head"><span>Series in Sonarr</span></div><div class="card-value" id="series-count">—</div><div class="card-sub">Tracked library entries</div></article>
+          <article class="card"><div class="card-head"><span>Files present</span></div><div class="card-value" id="series-files">—</div><div class="card-sub">Series with imported episodes</div></article>
+          <article class="card"><div class="card-head"><span>Disk usage</span></div><div class="card-value" id="series-size">—</div><div class="card-sub">Size reported by Sonarr</div></article>
+        </section>
+        <article class="panel">
+          <div class="panel-head"><h2>Sonarr series library</h2><button id="refresh-series" class="refresh" type="button">Refresh series ↻</button></div>
+          <div id="series-message" class="scan-summary" role="status">Select refresh to load your Sonarr library.</div>
+          <div class="table-wrap"><table><thead><tr></tr></thead><tbody id="sonarr-series-rows"></tbody></table></div>
         </article>
       </section>
       <section id="configuration-content" hidden>
@@ -199,9 +251,45 @@
           <div id="encryption-details" class="setup"></div>
         </article>
       </section>
+      <section id="about-content" hidden aria-labelledby="about-heading">
+        <section class="welcome">
+          <div><h2 id="about-heading">A shared library for your devices</h2><p>rawrarr connects the media tools you already use with a private, synchronized library of useful metadata.</p></div>
+          <div class="welcome-tag">BUILT FOR YOUR DEVICES</div>
+        </section>
+        <section class="columns">
+          <article class="panel">
+            <div class="panel-head"><h2>What rawrarr does</h2></div>
+            <div class="about-copy">
+              <p>rawrarr brings your media libraries together across devices. Radarr and Sonarr provide the library views, while rawrarr organizes shared metadata and artwork so your devices can use the same information.</p>
+              <p>Metadata shared between nodes is age-encrypted before it is synchronized. A coordinator helps your signed-in account manage its devices, while storage nodes keep media on their own disks.</p>
+              <p>Use Movies and TV to browse connected libraries, and Settings to connect Radarr or Sonarr and manage other app options.</p>
+            </div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><h2>How the pieces fit</h2></div>
+            <div class="about-copy">
+              <p><strong>rawrarr</strong> coordinates your library and keeps shared metadata available across your devices.</p>
+              <p><strong>Radarr and Sonarr</strong> manage movie and TV libraries. Connect them in Settings to see their library data in rawrarr.</p>
+              <p><strong>Your devices</strong> synchronize encrypted shared metadata. Media files remain on the storage you choose; rawrarr does not upload them to the coordinator.</p>
+              <p>Rawrarr is evolving. General-purpose sharing of files and folders is a future direction; the current app focuses on media libraries and their metadata.</p>
+            </div>
+          </article>
+        </section>
+      </section>
       <div class="footer"><span id="live-status">Connecting to live updates…</span> · TMDb metadata provided by <a href="https://www.themoviedb.org/" target="_blank" rel="noreferrer"><img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg" alt="TMDb" width="18" height="18" style="vertical-align:middle"></a> The Movie Database. This product uses the TMDB API but is not endorsed or certified by TMDB.</div>
     </main>
   </div>
+  <dialog id="mini-export-dialog" style="width:min(520px,calc(100% - 28px));border:1px solid #39463d;border-radius:14px;background:#151b18;color:#e7eee8;padding:22px">
+    <form id="mini-export-form">
+      <h2 style="margin:0 0 8px;font-size:18px">Export metadata</h2>
+      <p class="setup-intro">This downloads all available movie metadata records and matching artwork. Your browser decrypts the shared config and files, then builds a ZIP locally. The age private ID is used only in this tab and is not sent to Rawrarr.</p>
+      <label for="mini-export-identity" class="settings-form" style="display:block;padding:0;color:var(--muted);font-size:10px">Post-quantum age private ID</label>
+      <textarea id="mini-export-identity" autocomplete="off" spellcheck="false" required style="width:100%;min-height:92px;margin-top:6px;border:1px solid var(--line);border-radius:7px;background:#101613;color:var(--text);padding:9px;font:10px ui-monospace,monospace"></textarea>
+      <div class="settings-actions"><button id="mini-export-start" class="refresh" type="submit">Decrypt and download ZIP</button><button id="mini-export-cancel" class="refresh" type="button">Cancel</button></div>
+      <div id="mini-export-status" class="settings-message" role="status" aria-live="polite"></div>
+    </form>
+  </dialog>
+  <script src="/assets/metadata-export.js"></script>
   <script>
     function applyIdentityTheme(seed) {
       if (typeof seed !== 'string' || !/^[0-9a-f]{64}$/i.test(seed)) return;
@@ -227,35 +315,38 @@
     const configurationNav = document.getElementById('configuration-nav');
     const overviewNav = document.querySelector('.nav-item.active');
     function showView(view, updateUrl = true) {
-      if (!['overview', 'movies', 'configuration'].includes(view)) view = 'overview';
+      if (!['overview', 'movies', 'series', 'configuration', 'about'].includes(view)) view = 'overview';
       if (updateUrl && window.location.hash !== `#${view}`) {
         window.history.pushState(null, '', `#${view}`);
       }
+      if (window.parent !== window) {
+        const parentUrl = new URL(window.parent.location.href);
+        parentUrl.hash = window.location.hash;
+        window.parent.history.replaceState(null, '', parentUrl);
+      }
       const movies = view === 'movies';
+      const series = view === 'series';
+      document.getElementById('series-content').hidden = !series;
+      document.getElementById('series-nav').classList.toggle('active', series);
+      document.getElementById('series-nav').setAttribute('aria-current', series ? 'page' : 'false');
       const configuration = view === 'configuration';
-      document.getElementById('page-title').textContent = configuration ? 'Configuration' : movies ? 'Movies' : 'Overview';
-      document.getElementById('overview-content').hidden = movies || configuration;
+      const about = view === 'about';
+      document.getElementById('page-title').textContent = about ? 'About' : configuration ? 'Configuration' : movies ? 'Movies' : series ? 'TV' : 'Overview';
+      document.getElementById('overview-content').hidden = movies || series || configuration || about;
       document.getElementById('movies-content').hidden = !movies;
       document.getElementById('configuration-content').hidden = !configuration;
-      document.querySelector('.welcome').hidden = movies || configuration;
-      document.querySelector('[aria-label="Library summary"]').hidden = movies || configuration;
+      document.getElementById('about-content').hidden = !about;
+      document.querySelector('.welcome').hidden = movies || series || configuration || about;
+      document.querySelector('[aria-label="Library summary"]').hidden = movies || series || configuration;
       moviesNav.classList.toggle('active', movies);
       configurationNav.classList.toggle('active', configuration);
-      overviewNav.classList.toggle('active', !movies && !configuration);
+      overviewNav.classList.toggle('active', !movies && !series && !configuration && !about);
       moviesNav.setAttribute('aria-current', movies ? 'page' : 'false');
       configurationNav.setAttribute('aria-current', configuration ? 'page' : 'false');
-  <dialog id="mini-export-dialog" style="width:min(520px,calc(100% - 28px));border:1px solid #39463d;border-radius:14px;background:#151b18;color:#e7eee8;padding:22px">
-    <form id="mini-export-form">
-      <h2 style="margin:0 0 8px;font-size:18px">Try a mini metadata export</h2>
-      <p class="setup-intro">This prototype exports up to three movie records and matching artwork. Your browser decrypts the shared config and metadata, then builds a ZIP locally. The age ID is used only in this tab and is not sent to Rawrarr.</p>
-      <label for="mini-export-identity" class="settings-form" style="display:block;padding:0;color:var(--muted);font-size:10px">Post-quantum age private ID</label>
-      <textarea id="mini-export-identity" autocomplete="off" spellcheck="false" required style="width:100%;min-height:92px;margin-top:6px;border:1px solid var(--line);border-radius:7px;background:#101613;color:var(--text);padding:9px;font:10px ui-monospace,monospace"></textarea>
-      <div class="settings-actions"><button id="mini-export-start" class="refresh" type="submit">Decrypt and download ZIP</button><button id="mini-export-cancel" class="refresh" type="button">Cancel</button></div>
-      <div id="mini-export-status" class="settings-message" role="status" aria-live="polite"></div>
-    </form>
-  </dialog>
-  <script src="/assets/metadata-export.js"></script>
+      document.getElementById('about-nav').classList.toggle('active', about);
+      document.getElementById('about-nav').setAttribute('aria-current', about ? 'page' : 'false');
       if (movies) loadRadarrMovies();
+      if (series) loadSonarrSeries();
       if (configuration) loadConfiguration();
     }
     function restoreView() {
@@ -263,7 +354,9 @@
     }
     window.addEventListener('hashchange', restoreView);
     moviesNav.addEventListener('click', () => showView('movies'));
+    document.getElementById('series-nav').addEventListener('click', () => showView('series'));
     configurationNav.addEventListener('click', () => showView('configuration'));
+    document.getElementById('about-nav').addEventListener('click', () => showView('about'));
     overviewNav.addEventListener('click', () => showView('overview'));
     const settingsForm = document.getElementById('radarr-settings');
     function openRadarrSettings(event) {
@@ -278,6 +371,32 @@
     document.getElementById('sign-out').addEventListener('click', async () => {
       await fetch('/api/auth/logout', { method: 'POST', headers: { Accept: 'application/json' } });
       window.location.replace('/auth');
+    });
+
+    const coordinatorPasskeyButton = document.getElementById('add-coordinator-passkey');
+    coordinatorPasskeyButton.hidden = window.location.origin === 'http://localhost:7297' ? false : true;
+    coordinatorPasskeyButton.addEventListener('click', async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      button.textContent = 'Preparing secure link…';
+      try {
+        const response = await fetch('/api/auth/passkeys/coordinator/link', {
+          method: 'POST',
+          headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+          cache: 'no-store',
+          body: '{}',
+        });
+        const result = await response.json();
+        if (!response.ok || typeof result.url !== 'string') {
+          throw new Error(response.status === 401
+            ? 'Your sign-in expired. Sign in again, then retry.'
+            : 'Could not start roarlay passkey setup. Try again.');
+        }
+        window.location.assign(result.url);
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = error.message || 'Could not start passkey setup';
+      }
     });
     const libraryEmpty = document.getElementById('library-empty');
     const libraryResults = document.getElementById('library-results');
@@ -397,7 +516,7 @@
       const response = await fetch('/api/settings/radarr', { method: 'DELETE', headers: { Accept: 'application/json' } });
       if (response.ok) {
         document.getElementById('radarr-key').value = '';
-        document.getElementById('radarr-settings-message').textContent = 'Cleared active and encrypted settings. Environment settings may apply again after a restart.';
+        document.getElementById('radarr-settings-message').textContent = 'Cleared Radarr settings. The shared filename secret is preserved. Environment settings may apply again after a restart.';
         await Promise.all([loadRadarrSettings(), refreshStatus(), loadMetadataInfo()]);
       }
     });
@@ -439,14 +558,14 @@
           const meta = document.createElement('div');
           meta.className = 'device-meta';
           meta.textContent = device.libraryName
-            ? `Local scanner · ${device.libraryName} · scan runs on this host`
-            : 'Local scanner · configure RAWARR_LIBRARY_PATH on this host';
+            ? `Apex node · ${device.libraryName} · scan runs on this host`
+            : 'Metadata node · shared data and Radarr · no local media';
           card.append(name, meta);
           list.append(card);
         }
         const note = document.createElement('div');
         note.className = 'device-meta';
-        note.textContent = 'Remote scanners will connect to this library as separate devices.';
+        note.textContent = 'Apex and metadata nodes share application data; media stays on apex nodes.';
         list.append(note);
       } catch (_) {
         document.getElementById('device-count').textContent = 'Unavailable';
@@ -463,10 +582,62 @@
       }
     }
 
+    let loadingPendingNodes = false;
+    async function loadPendingNodes() {
+      if (loadingPendingNodes) return;
+      loadingPendingNodes = true;
+      const list = document.getElementById('pending-node-list');
+      try {
+        const response = await fetch('/api/nodes/pending', { headers: { Accept: 'application/json' }, cache: 'no-store' });
+        if (!response.ok) throw new Error('Could not check for pending nodes.');
+        const nodes = await response.json();
+        list.replaceChildren();
+        if (nodes.length === 0) {
+          list.textContent = 'No nodes are waiting for approval.';
+          return;
+        }
+        for (const node of nodes) {
+          const card = document.createElement('div');
+          card.className = 'device-item';
+          const title = document.createElement('div');
+          title.className = 'device-name';
+          title.textContent = `${node.displayName} · ${node.role} node`;
+          const details = document.createElement('div');
+          details.className = 'device-meta';
+          details.textContent = `For ${node.ownerDisplayName}'s account · ${node.nodeId} · requested ${new Date(node.requestedAt).toLocaleString()}`;
+          const button = document.createElement('button');
+          button.className = 'approval-button';
+          button.type = 'button';
+          button.textContent = `Add ${node.displayName} to ${node.ownerDisplayName}'s account`;
+          button.addEventListener('click', async () => {
+            button.disabled = true;
+            button.textContent = 'Approving…';
+            try {
+              const result = await fetch('/api/nodes/approve', {
+                method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify({ requestId: node.requestId })
+              });
+              if (!result.ok) throw new Error(result.status === 404 ? 'This request expired. Restart the node to request approval again.' : 'Could not approve this node.');
+              await loadPendingNodes();
+            } catch (error) {
+              button.disabled = false;
+              button.textContent = error.message;
+            }
+          });
+          card.append(title, details, button);
+          list.append(card);
+        }
+      } catch (_) {
+        list.textContent = 'Could not check for pending nodes.';
+      } finally {
+        loadingPendingNodes = false;
+      }
+    }
+
     function renderMetadataInfo(info) {
       metadataConfigured = info.configured;
-      document.getElementById('metadata-note').textContent = metadataConfigured
-        ? 'Movie filename and year are searched through Radarr. Poster art is cached as age-encrypted .aged files while the vault is unlocked. Review candidates before treating a match as confirmed.'
+        document.getElementById('metadata-note').textContent = metadataConfigured
+        ? 'Movie artwork loads from shared encrypted metadata when available. New posters and Radarr movie details are scraped into the shared folder on demand, with live Radarr fallback.'
         : 'Connect Radarr with its URL and API key to search for movie metadata.';
     }
 
@@ -489,129 +660,311 @@
       return `${size.toFixed(1)} ${units[unit]}`;
     }
 
-    let movieLoadGeneration = 0;
-
-    async function reachableRadarrUrl() {
+    async function reachableRadarrUrl(provider = 'radarr') {
       try {
-        const response = await fetch('/api/settings/radarr', {
+        const settingsResponse = await fetch(`/api/settings/${provider}`, {
           headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(3000)
         });
-        if (!response.ok) return null;
-        const settings = await response.json();
+        if (!settingsResponse.ok) return null;
+        const settings = await settingsResponse.json();
         const url = new URL(settings.url);
         if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) return null;
+        // An opaque response proves contact without requiring Radarr to enable CORS.
+        // Never send the API key or browser credentials in this reachability probe.
         await fetch(url.href, {
-          mode: 'no-cors', credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer',
-          signal: AbortSignal.timeout(3000)
+          mode: 'no-cors', credentials: 'omit', cache: 'no-store',
+          referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(3000)
         });
         return url.href.replace(/\/$/, '');
-      } catch (_) { return null; }
+      } catch {
+        return null;
+      }
     }
+
+    let movieLoadGeneration = 0;
 
     async function loadRadarrMovies() {
       const message = document.getElementById('movies-message');
       const button = document.getElementById('refresh-movies');
-      const rows = document.getElementById('radarr-movie-rows');
       if (button.disabled) return;
       const generation = ++movieLoadGeneration;
-      const hasMovies = rows.childElementCount > 0;
-      let liveReceived = false;
+      const hasMovies = document.getElementById('radarr-movie-rows').childElementCount > 0;
       button.disabled = true;
       message.textContent = hasMovies ? 'Updating movies…' : 'Loading movies…';
-      if (!hasMovies) {
-        void fetch('/api/radarr/movies/snapshot', {
-          cache: 'no-store', headers: { Accept: 'application/json' }
-        }).then(response => response.ok ? response.json() : null).then(snapshot => {
+      let liveReceived = false;
+      // A fast server-memory snapshot is independent of the live Radarr request.
+      if (!hasMovies) void fetch('/api/radarr/movies/snapshot', { cache: 'no-store', headers: { Accept: 'application/json' } })
+        .then(response => response.ok ? response.json() : null)
+        .then(snapshot => {
           if (snapshot && !liveReceived && generation === movieLoadGeneration) {
             renderRadarrMovies(snapshot.movies, generation, snapshot.updatedAt);
           }
         }).catch(() => {});
-      }
       try {
         const response = await fetch('/api/radarr/movies', { headers: { Accept: 'application/json' } });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Could not load Radarr movies');
         liveReceived = true;
         renderRadarrMovies(result, generation);
+
       } catch (error) {
         liveReceived = true;
-        message.textContent = rows.childElementCount
-          ? `Could not update movies. Showing the previous list. ${error.message}` : error.message;
+        message.textContent = document.getElementById('radarr-movie-rows').childElementCount ? `Could not update movies. Showing the previous list. ${error.message}` : error.message;
       } finally {
         button.disabled = false;
       }
     }
-
     function renderRadarrMovies(result, generation, snapshotTime = null) {
-      const rows = document.getElementById('radarr-movie-rows');
-      rows.replaceChildren();
-      let size = 0;
-      let withFiles = 0;
-      const links = [];
-      for (const movie of result) {
-        size += movie.sizeOnDisk || 0;
-        if (movie.hasFile) withFiles += 1;
-        const row = document.createElement('tr');
-        const titleCell = document.createElement('td');
-        const titleContent = document.createElement('div');
-        titleContent.style.cssText = 'display:flex;align-items:center;gap:10px';
-        if (movie.posterUrl) {
-          const poster = document.createElement('img');
-          const startedAt = performance.now();
-          poster.src = movie.posterUrl;
-          poster.alt = `${movie.title} poster`;
-          poster.loading = 'lazy';
-          poster.decoding = 'async';
-          poster.referrerPolicy = 'no-referrer';
-          poster.style.cssText = 'width:48px;height:72px;object-fit:cover;border-radius:5px;background:var(--panel-strong)';
-          poster.addEventListener('load', () => {
-            const elapsed = performance.now() - startedAt;
-            row.cells[1].textContent = elapsed < 1000 ? `${Math.round(elapsed)} ms` : `${(elapsed / 1000).toFixed(2)} s`;
-          }, { once: true });
-          poster.addEventListener('error', () => { poster.remove(); row.cells[2].textContent = 'Unavailable'; }, { once: true });
-          titleContent.append(poster);
-        }
-        const title = document.createElement('span');
-        title.textContent = movie.title;
-        titleContent.append(title);
-        titleCell.append(titleContent);
-        const values = [
-          titleCell, movie.posterUrl ? 'Loading…' : '—', movie.artworkSource === 'shared' ? 'Shared folder' : movie.posterUrl ? 'Radarr' : 'Unavailable',
-          movie.tmdbId || '—', movie.year || '—', movie.hasFile ? 'Present' : 'Missing',
-          movie.monitored ? 'Yes' : 'No', movie.qualityProfile || '—', formatBytes(movie.sizeOnDisk || 0)
-        ];
-        for (const [index, value] of values.entries()) {
-          const cell = document.createElement('td');
-          if (index === 0) cell.replaceWith(titleCell);
-          else cell.textContent = value;
-          if (index === 8) cell.className = 'size';
-          row.append(index === 0 ? titleCell : cell);
-        }
-        rows.append(row);
-        links.push({ movie, titleContent });
+      renderArrLibrary(result, generation, snapshotTime, libraryApps.radarr);
+    }
+    // Edit this schema once to change the order/labels/cells of every Arr library.
+    const libraryColumns = [
+      { key: 'title', label: app => app.titleLabel },
+      { key: 'load', label: () => 'Load time' },
+      { key: 'artwork', label: () => 'Artwork source' },
+      { key: 'id', label: app => app.idLabel, value: (item, app) => item[app.idKey] || '—' },
+      { key: 'year', label: () => 'Year', value: item => item.year || '—' },
+      { key: 'files', label: app => app.fileLabel, value: (item, app) => app.availability(item) },
+      { key: 'monitored', label: () => 'Monitored', value: item => item.monitored ? 'Yes' : 'No' },
+      { key: 'quality', label: () => 'Quality profile', value: item => item.qualityProfile || '—' },
+      { key: 'size', label: () => 'Size', value: item => formatBytes(item.sizeOnDisk || 0) }
+    ];
+    const libraryApps = {
+      radarr: { provider: 'radarr', name: 'Radarr', noun: 'movies', titleLabel: 'Movie', idLabel: 'TMDb ID', idKey: 'tmdbId', fileLabel: 'File', prefix: 'movie', rows: 'radarr-movie-rows', detailPath: 'movie', generation: () => movieLoadGeneration, availability: item => item.hasFile ? 'Present' : 'Missing' },
+      sonarr: { provider: 'sonarr', name: 'Sonarr', noun: 'series', titleLabel: 'Series', idLabel: 'TVDB ID', idKey: 'tvdbId', fileLabel: 'Episodes', prefix: 'series', rows: 'sonarr-series-rows', detailPath: 'series', generation: () => seriesLoadGeneration, availability: item => `${item.episodeFileCount || 0} / ${item.episodeCount || 0}` }
+    };
+    let seriesLoadGeneration = 0;
+    async function loadSonarrSeries() {
+      const button = document.getElementById('refresh-series');
+      if (button.disabled) return;
+      button.disabled = true;
+      const generation = ++seriesLoadGeneration;
+      const message = document.getElementById('series-message');
+      message.textContent = 'Loading series…';
+      try {
+        const response = await fetch('/api/sonarr/series', { headers: { Accept: 'application/json' } });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Could not load Sonarr series');
+        if (generation === seriesLoadGeneration) renderArrLibrary(result, generation, null, libraryApps.sonarr);
+      } catch (error) {
+        message.textContent = (document.getElementById('sonarr-series-rows').childElementCount ? 'Could not update series. Showing the previous list. ' : '') + error.message;
+      } finally { button.disabled = false; }
+    }
+    document.getElementById('refresh-series').addEventListener('click', loadSonarrSeries);
+    // Observe resources independently of the browser's limited resource timing buffer.
+    const artworkRequestTimings = new Map();
+    function rememberArtworkTimings(entries) {
+      for (const entry of entries) {
+        if (entry.initiatorType === 'img') artworkRequestTimings.set(entry.name, entry);
       }
-      document.getElementById('movie-count').textContent = result.length.toLocaleString();
-      document.getElementById('movie-files').textContent = `${withFiles.toLocaleString()} / ${result.length.toLocaleString()}`;
-      document.getElementById('movie-size').textContent = formatBytes(size);
-      document.getElementById('movies-message').textContent = snapshotTime
-        ? `${result.length.toLocaleString()} movies · last updated ${new Date(snapshotTime * 1000).toLocaleTimeString()} · Updating…`
-        : result.length ? `${result.length.toLocaleString()} movies · live data from Radarr` : 'Radarr is connected, but its movie library is empty.';
-      if (result.length) void reachableRadarrUrl().then(base => {
-        if (!base || generation !== movieLoadGeneration) return;
-        for (const { movie, titleContent } of links) {
-          if (!titleContent.isConnected || !movie.titleSlug || ['.', '..'].includes(movie.titleSlug)) continue;
-          const link = document.createElement('a');
-          link.href = `${base}/movie/${encodeURIComponent(movie.titleSlug)}`;
-          link.target = '_blank';
-          link.rel = 'noopener noreferrer';
-          link.title = `Open ${movie.title} in Radarr (new tab)`;
-          link.style.cssText = titleContent.style.cssText;
-          link.append(...titleContent.childNodes);
-          titleContent.replaceWith(link);
+    }
+    const artworkTimingObserver = typeof PerformanceObserver === 'function'
+      ? new PerformanceObserver(list => rememberArtworkTimings(list.getEntries())) : null;
+    artworkTimingObserver?.observe({ type: 'resource', buffered: true });
+    async function refreshArtworkBackfillStatus() {
+      try {
+        const response = await fetch('/api/metadata/artwork/backfill', { cache: 'no-store', headers: { Accept: 'application/json' } });
+        if (!response.ok) return;
+        const progress = await response.json();
+        const panel = document.getElementById('artwork-backfill');
+        if (!progress.total) { panel.hidden = true; return; }
+        panel.hidden = false;
+        const bar = document.getElementById('artwork-backfill-progress');
+        bar.max = Math.max(1, progress.total);
+        bar.value = progress.scraped;
+        bar.setAttribute('aria-valuenow', String(progress.scraped));
+        const label = document.getElementById('artwork-backfill-label');
+        const saved = `${progress.scraped.toLocaleString()} / ${progress.total.toLocaleString()} posters saved`;
+        const pass = progress.active ? ` · ${progress.completed.toLocaleString()} checked this pass` : '';
+        const failures = progress.failed ? ` · ${progress.failed.toLocaleString()} unavailable` : '';
+        const complete = !progress.active && progress.scraped >= progress.total;
+        panel.classList.toggle('complete', complete);
+        bar.hidden = !progress.active;
+        label.textContent = progress.active
+          ? `Saving artwork to encrypted shared metadata: ${saved}${pass}${failures}`
+          : complete
+            ? `Artwork cache complete${failures}`
+            : `Artwork cache status: ${saved}${failures}`;
+      } catch { /* The status panel will refresh on its next poll. */ }
+    }
+    void refreshArtworkBackfillStatus();
+    window.setInterval(refreshArtworkBackfillStatus, 3000);
+    function formatBytes(bytes) {
+      if (!Number.isFinite(bytes) || bytes < 0) return '—';
+      if (bytes < 1024) return `${bytes} B`;
+      const units = ['KB', 'MB', 'GB', 'TB'];
+      let value = bytes;
+      let unit = -1;
+      do { value /= 1024; unit += 1; } while (value >= 1024 && unit < units.length - 1);
+      return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${units[unit]}`;
+    }
+    async function refreshMetadataStorageSize() {
+      try {
+        const response = await fetch('/api/metadata/storage', { cache: 'no-store', headers: { Accept: 'application/json' } });
+        if (!response.ok) return;
+        const result = await response.json();
+        document.getElementById('metadata-size').textContent = formatBytes(result.bytes);
+      } catch { /* Retry on the next poll. */ }
+    }
+    void refreshMetadataStorageSize();
+    window.setInterval(refreshMetadataStorageSize, 3000);
+    function artworkRequestDuration(url) {
+      if (artworkTimingObserver) rememberArtworkTimings(artworkTimingObserver.takeRecords());
+      const entry = artworkRequestTimings.get(url);
+      // A missing or privacy-restricted timing must not become a made-up duration.
+      return entry && entry.requestStart > 0 && entry.responseEnd >= entry.requestStart
+        ? entry.responseEnd - entry.requestStart : null;
+    }
+    function renderArrLibrary(result, generation, snapshotTime, app) {
+      const message = document.getElementById(`${app.noun}-message`);
+        // Link availability must never delay the library or its artwork.
+        const arrUrlPromise = result.length ? reachableRadarrUrl(app.provider) : Promise.resolve(null);
+        const detailLinks = [];
+        const rows = document.getElementById(app.rows);
+        rows.replaceChildren();
+        const heading = rows.closest('table').querySelector('thead tr');
+        heading.replaceChildren(...libraryColumns.map(column => {
+          const th = document.createElement('th'); th.textContent = column.label(app); return th;
+        }));
+        let size = 0;
+        let withFiles = 0;
+        for (const movie of result) {
+          size += movie.sizeOnDisk || 0;
+          if (movie.hasFile) withFiles += 1;
+          const row = document.createElement('tr');
+          const titleCell = document.createElement('td');
+          titleCell.style.minWidth = '230px';
+          titleCell.style.whiteSpace = 'normal';
+          const titleContent = document.createElement('div');
+          detailLinks.push({ item: movie, titleContent, titleCell, yearCell: null });
+          titleContent.style.display = 'flex';
+          titleContent.style.alignItems = 'center';
+          titleContent.style.gap = '10px';
+          const artworkSource = document.createElement('td');
+          artworkSource.textContent = movie.artworkSource === 'shared'
+            ? 'Shared folder'
+            : movie.artworkSource === app.provider ? app.name : 'Unavailable';
+          const artworkLoadTime = document.createElement('td');
+          artworkLoadTime.textContent = movie.posterUrl ? 'Pending…' : '—';
+          if (movie.posterUrl) {
+            const poster = document.createElement('img');
+            poster.alt = `${movie.title} poster`;
+            poster.loading = 'lazy';
+            poster.decoding = 'async';
+            poster.referrerPolicy = 'no-referrer';
+            poster.style.width = '48px';
+            poster.style.height = '72px';
+            poster.style.objectFit = 'cover';
+            poster.style.borderRadius = '5px';
+            poster.style.background = 'var(--panel-strong)';
+            poster.addEventListener('load', () => {
+              const elapsedMs = artworkRequestDuration(poster.currentSrc || poster.src);
+              artworkLoadTime.title = 'Artwork request to response completion; excludes lazy-loading wait, browser queueing, and image decoding.';
+              artworkLoadTime.textContent = elapsedMs === null ? 'Unavailable' : elapsedMs < 1000
+                ? `${Math.round(elapsedMs)} ms`
+                : `${(elapsedMs / 1000).toFixed(2)} s`;
+            }, { once: true });
+            poster.addEventListener('error', () => poster.remove(), { once: true });
+            poster.addEventListener('error', () => {
+              artworkLoadTime.textContent = 'Failed';
+              artworkSource.textContent = 'Unavailable';
+            }, { once: true });
+            poster.src = movie.posterUrl;
+            titleContent.append(poster);
+          }
+          const title = document.createElement('span');
+          title.textContent = `${movie.title} (${movie.year || '—'})`;
+          titleContent.append(title);
+          titleCell.append(titleContent);
+          const yearCell = document.createElement('td');
+          yearCell.style.whiteSpace = 'nowrap';
+          const yearText = document.createElement('span');
+          yearText.textContent = movie.year || '—';
+          yearCell.append(yearText);
+          detailLinks[detailLinks.length - 1].yearCell = yearCell;
+          const specialCells = { title: titleCell, load: artworkLoadTime, artwork: artworkSource, year: yearCell };
+          for (const column of libraryColumns) {
+            const cell = specialCells[column.key] || document.createElement('td');
+            if (column.value) cell.textContent = column.value(movie, app);
+            if (column.key === 'size') cell.className = 'size';
+            row.append(cell);
+          }
+          rows.append(row);
         }
-      });
+        document.getElementById(`${app.prefix}-count`).textContent = result.length.toLocaleString();
+        document.getElementById(`${app.prefix}-files`).textContent = `${withFiles.toLocaleString()} / ${result.length.toLocaleString()}`;
+        document.getElementById(`${app.prefix}-size`).textContent = formatBytes(size);
+        message.textContent = snapshotTime
+          ? `${result.length.toLocaleString()} ${app.noun} · last updated ${new Date(snapshotTime * 1000).toLocaleTimeString()} · Updating…`
+          : `${result.length.toLocaleString()} ${app.noun} · live data from ${app.name}`;
+        if (!result.length && !snapshotTime) message.textContent = `${app.name} is connected, but its library is empty.`;
+        void arrUrlPromise.then(arrUrl => {
+          if (!arrUrl || generation !== app.generation()) return;
+          for (const { item, titleContent, titleCell } of detailLinks) {
+            if (!item.titleSlug || ['.', '..'].includes(item.titleSlug)) continue;
+            const detailUrl = `${arrUrl}/${app.detailPath}/${encodeURIComponent(item.titleSlug)}`;
+            if (titleContent.isConnected) {
+            const link = document.createElement('a');
+            link.href = detailUrl;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.title = `Open ${item.title} in ${app.name} (new tab)`;
+            link.style.cssText = titleContent.style.cssText;
+            link.append(...titleContent.childNodes);
+            titleContent.replaceWith(link);
+            }
+            if (!titleCell?.isConnected) continue;
+            const detailLink = document.createElement('a');
+            detailLink.href = detailUrl;
+            detailLink.target = '_blank';
+            detailLink.rel = 'noopener noreferrer';
+            detailLink.className = 'arr-external-link';
+            detailLink.title = `Open ${item.title} in ${app.name} (new tab)`;
+            detailLink.setAttribute('aria-label', `Open ${item.title} in ${app.name} (new tab)`);
+            detailLink.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6 3H3.75A1.75 1.75 0 0 0 2 4.75v7.5A1.75 1.75 0 0 0 3.75 14h7.5A1.75 1.75 0 0 0 13 12.25V10M8 2h6v6M14 2 7 9"/></svg>';
+            const titleLink = titleCell.querySelector('a');
+            (titleLink || titleContent).append(detailLink);
+          }
+        });
     }
     document.getElementById('refresh-movies').addEventListener('click', loadRadarrMovies);
+
+    async function loadSonarrSettings() {
+      const response = await fetch('/api/settings/sonarr');
+      if (!response.ok) return;
+      const settings = await response.json();
+      document.getElementById('sonarr-url').value = settings.url || '';
+      document.getElementById('sonarr-key').required = !settings.configured;
+      document.getElementById('sonarr-key-note').textContent = settings.configured ? 'Leave blank to keep the saved API key.' : 'Required for the first encrypted save.';
+    }
+    document.getElementById('sonarr-settings').addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = document.getElementById('save-sonarr');
+      const message = document.getElementById('sonarr-settings-message');
+      button.disabled = true;
+      message.textContent = 'Connecting to Sonarr…';
+      try {
+        const response = await fetch('/api/settings/sonarr', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: document.getElementById('sonarr-url').value, apiKey: document.getElementById('sonarr-key').value }) });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Could not save Sonarr settings');
+        document.getElementById('sonarr-key').value = '';
+        renderArrLibrary([], ++seriesLoadGeneration, null, libraryApps.sonarr);
+        await loadSonarrSettings();
+        message.textContent = 'Connected to Sonarr. Settings saved encrypted.';
+      } catch (error) { message.textContent = error.message; }
+      finally { button.disabled = false; }
+    });
+    document.getElementById('clear-sonarr').addEventListener('click', async () => {
+      const message = document.getElementById('sonarr-settings-message');
+      try {
+        const response = await fetch('/api/settings/sonarr', { method: 'DELETE' });
+        if (!response.ok) throw new Error((await response.json()).error || 'Could not clear Sonarr');
+        document.getElementById('sonarr-key').value = '';
+        renderArrLibrary([], ++seriesLoadGeneration, null, libraryApps.sonarr);
+        await loadSonarrSettings();
+        message.textContent = 'Sonarr settings cleared.';
+      } catch (error) { message.textContent = error.message; }
+    });
 
     async function loadConfiguration() {
       const json = document.getElementById('configuration-json');
@@ -809,12 +1162,6 @@
 
     document.getElementById('refresh').addEventListener('click', refreshStatus);
     scanButton.addEventListener('click', scanLibrary);
-    restoreView();
-    loadIdentityTheme();
-    loadRadarrSettings();
-  </script>
-</body>
-</html>
     const miniExportDialog = document.getElementById('mini-export-dialog');
     const miniExportForm = document.getElementById('mini-export-form');
     const miniExportInput = document.getElementById('mini-export-identity');
@@ -840,10 +1187,10 @@
       miniExportInput.disabled = true;
       try {
         const count = await window.rawrarrMiniExport.runMiniExport(identity, message => { miniExportStatus.textContent = message; });
-        miniExportStatus.textContent = `Downloaded ${count} movie record(s). The ZIP was built in this browser.`;
+        miniExportStatus.textContent = `Downloaded ${count} movie metadata record(s) and matching available artwork. The ZIP was built in this browser.`;
         miniExportInput.value = '';
       } catch (error) {
-        miniExportStatus.textContent = error instanceof Error ? error.message : 'Mini export failed.';
+        miniExportStatus.textContent = error instanceof Error ? error.message : 'Metadata export failed.';
       } finally {
         identity = '';
         miniExportInput.value = '';
@@ -854,3 +1201,12 @@
       }
     });
     for (const app of Object.values(libraryApps)) renderArrLibrary([], 0, null, app);
+    restoreView();
+    loadIdentityTheme();
+    loadPendingNodes();
+    setInterval(loadPendingNodes, 10000);
+    loadRadarrSettings();
+    loadSonarrSettings().catch(() => {});
+  </script>
+</body>
+</html>

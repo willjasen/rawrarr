@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 from pathlib import Path
+import os
 import shutil
 import subprocess
 import sys
@@ -17,6 +19,8 @@ TESTS = ROOT / "scripts" / "tests"
 PROJECT = "rawrarr-testing"
 IMAGE = "rawrarr-testing-base:local"
 BASE36 = "0123456789abcdefghijklmnopqrstuvwxyz"
+CLEANUP_INTERVAL_SECONDS = 60 * 60
+CLEANUP_STATE = Path.home() / "Library" / "Application Support" / "Rawrarr" / ".test-container-cleanup-last-run"
 
 
 def timestamp_code() -> str:
@@ -48,16 +52,73 @@ def copy_project_into_container(context: str, name: str, destination: Path) -> N
     subprocess.run(["docker", "--context", context, "cp", str(ROOT / "docker-compose.yml"), f"{name}:/workspace/docker-compose.yml"], check=True)
 
 
+def cleanup_candidates(context: str) -> list[tuple[str, str, str]]:
+    ids = docker(context, "ps", "-aq", "--filter", f"label=com.docker.compose.project={PROJECT}").splitlines()
+    candidates = []
+    cutoff = time.time() - CLEANUP_INTERVAL_SECONDS
+    for container_id in ids:
+        created, status, name, service = docker(
+            context,
+            "inspect", "--format", "{{.Created}}|{{.State.Status}}|{{.Name}}|{{index .Config.Labels \"com.docker.compose.service\"}}",
+            container_id,
+        ).lstrip("/").replace("|/", "|").split("|", 3)
+        created_epoch = datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp()
+        # Only remove stopped containers created by this test runner, never the shared base image container.
+        is_test_runner = service.startswith("tests-") or name.startswith(f"{PROJECT}-tests-")
+        if status != "running" and is_test_runner and created_epoch < cutoff:
+            candidates.append((container_id, name, created))
+    return candidates
+
+
+def cleanup_if_due(context: str, *, dry_run: bool = False, force: bool = False) -> int:
+    try:
+        last_cleanup = float(CLEANUP_STATE.read_text(encoding="ascii").strip())
+    except (FileNotFoundError, ValueError):
+        last_cleanup = 0
+    remaining = CLEANUP_INTERVAL_SECONDS - (time.time() - last_cleanup)
+    if remaining > 0 and not dry_run and not force:
+        print(f"TEST CLEANUP: skipped; next cleanup eligible in {int(remaining)} seconds")
+        return 0
+
+    candidates = cleanup_candidates(context)
+    mode = "DRY RUN" if dry_run else "CLEANUP"
+    print(f"TEST {mode}: {len(candidates)} stopped test container(s) older than one hour")
+    for container_id, name, created in candidates:
+        print(f"  {name} ({container_id[:12]}) created {created}")
+    if dry_run:
+        return len(candidates)
+
+    for container_id, name, _created in candidates:
+        docker(context, "rm", container_id)
+        print(f"  removed {name}")
+    CLEANUP_STATE.parent.mkdir(parents=True, exist_ok=True)
+    temp_state = CLEANUP_STATE.with_name(f"{CLEANUP_STATE.name}.{os.getpid()}.tmp")
+    temp_state.write_text(f"{time.time():.6f}\n", encoding="ascii")
+    temp_state.replace(CLEANUP_STATE)
+    return len(candidates)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--context", default="orbstack", help="Docker context (default: orbstack)")
     parser.add_argument("--remove-after", action="store_true", help="remove the completed test container after showing its logs")
     parser.add_argument("--rebuild-base", action="store_true", help="rebuild the dependency image (for toolchain or dependency updates)")
+    parser.add_argument("--cleanup-dry-run", action="store_true", help="list stopped test containers older than one hour without removing them")
+    parser.add_argument("--cleanup-now", action="store_true", help="remove eligible old stopped test containers now, without starting a test run")
     args = parser.parse_args()
 
     context = docker(args.context, "context", "show")
     if context != args.context:
         raise RuntimeError(f"expected Docker context '{args.context}', got '{context}'")
+
+    if args.cleanup_dry_run:
+        cleanup_if_due(args.context, dry_run=True)
+        return 0
+    if args.cleanup_now:
+        cleanup_if_due(args.context, dry_run=False, force=True)
+        return 0
+
+    cleanup_if_due(args.context)
 
     run_id = timestamp_code()
     name = f"{PROJECT}-tests-{run_id}"

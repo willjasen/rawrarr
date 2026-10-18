@@ -1,6 +1,8 @@
 services:
-  rawrarr:
+  metadata:
+    container_name: rawrarr-local-apex
     environment:
+      RAWARR_ROLE: storage
       RAWARR_LIBRARY_PATH: /media
       RAWARR_LIBRARY_NAME: ${RAWARR_LIBRARY_NAME:-Media library}
     volumes:
@@ -8,3 +10,5 @@ services:
         source: ${RAWARR_HOST_MEDIA_PATH:?Set RAWARR_HOST_MEDIA_PATH to a host media folder}
         target: /media
         read_only: true
+        bind:
+          create_host_path: false

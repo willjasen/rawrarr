@@ -1,0 +1,270 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
+import { chromium } from '/usr/local/lib/node_modules/playwright-core/index.mjs';
+
+const root = new URL('../../', import.meta.url);
+const [html, script, deviceRoutes] = await Promise.all([
+  readFile(new URL('rust-arr/src/coordinator_workspace.html', root), 'utf8'),
+  readFile(new URL('rust-arr/src/coordinator-workspace.mjs', root), 'utf8'),
+  readFile(new URL('rust-arr/src/coordinator-device-routes.mjs', root), 'utf8'),
+]);
+
+test('coordinator saves Radarr and Sonarr settings over the direct metadata route only', async t => {
+  const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  const identity = 'AGE-SECRET-KEY-PQ-1browser-only-test-fixture';
+  const workspaceRequests = [];
+  const directRequests = [];
+  let vaultUnlocked = false;
+  let sonarr = null;
+  let radarr = null;
+
+  await page.route('http://rawrarr.test/**', async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
+    if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
+    if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
+    if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }] });
+    if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
+    if (url.pathname === '/api/workspace/direct-session') {
+      workspaceRequests.push({ path: url.pathname, body: request.postData() || '' });
+      return route.fulfill({ status: 204, headers: { 'set-cookie': `rawrarr_direct_session=${'a'.repeat(64)}; Path=/direct-api/; SameSite=Strict` } });
+    }
+    if (url.pathname === '/direct-api/api/direct/health') return route.fulfill({ status: 204 });
+    if (url.pathname.startsWith('/direct-api/api/')) {
+      directRequests.push({ path: url.pathname, method: request.method(), body: request.postData() || '' });
+      if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'GET') {
+        return route.fulfill({ json: { unlocked: vaultUnlocked, encryptedConfigExists: true } });
+      }
+      if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'POST') {
+        const body = request.postDataJSON();
+        assert.equal(body.identity, identity);
+        assert.equal(body.rememberOnDevice, false);
+        vaultUnlocked = true;
+        return route.fulfill({ json: { unlocked: true, encryptedConfigExists: true } });
+      }
+      if (url.pathname === '/direct-api/api/settings/sonarr' && request.method() === 'GET') {
+        return route.fulfill({ json: { configured: Boolean(sonarr), persisted: Boolean(sonarr), url: sonarr?.url || null } });
+      }
+      if (url.pathname === '/direct-api/api/settings/sonarr' && request.method() === 'PUT') {
+        sonarr = request.postDataJSON();
+        return route.fulfill({ json: { configured: true, persisted: true, url: sonarr.url } });
+      }
+      if (url.pathname === '/direct-api/api/settings/sonarr' && request.method() === 'DELETE') {
+        sonarr = null;
+        return route.fulfill({ json: { configured: false, persisted: false, url: null } });
+      }
+      if (url.pathname === '/direct-api/api/sonarr/series') {
+        return route.fulfill({ json: [{ id: 7, title: 'Example Show', year: 2024, tvdbId: 7123, monitored: true, episodeFileCount: 3, episodeCount: 8, sizeOnDisk: 1536, qualityProfile: 'HD-1080p' }] });
+      }
+      if (url.pathname === '/direct-api/api/settings/radarr' && request.method() === 'GET') {
+        return route.fulfill({ json: { configured: Boolean(radarr), persisted: Boolean(radarr), url: radarr?.url || null } });
+      }
+      if (url.pathname === '/direct-api/api/settings/radarr' && request.method() === 'PUT') {
+        radarr = request.postDataJSON();
+        return route.fulfill({ json: { configured: true, persisted: true, url: radarr.url } });
+      }
+      if (url.pathname === '/direct-api/api/settings/radarr' && request.method() === 'DELETE') {
+        radarr = null;
+        return route.fulfill({ json: { configured: false, persisted: false, url: null } });
+      }
+    }
+    if (url.pathname.startsWith('/api/workspace/')) {
+      workspaceRequests.push({ path: url.pathname, body: request.postData() || '' });
+      return route.fulfill({ json: {} });
+    }
+    return route.fulfill({ status: 404, body: 'not found' });
+  });
+
+  await page.goto('http://rawrarr.test/');
+  await page.waitForFunction(() => document.querySelector('[data-node-id="metadata-one"]')?.dataset.selected === 'true');
+  await page.click('[data-view="movies"]');
+  assert.equal(await page.locator('#radarr-connection-card').isVisible(), false, 'Radarr form must start hidden until its saved state is loaded');
+  assert.equal(await page.locator('#remember-age-id').isChecked(), false);
+  await page.locator('#age-id').fill(identity);
+  await page.locator('#unlock').click();
+  await page.waitForFunction(() => document.getElementById('age-id').value === '');
+  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
+  await page.click('[data-view="series"]');
+  assert.equal(new URL(page.url()).hash, '#tv');
+  await page.locator('#sonarr-settings-message').getByText('Enter your Sonarr HTTPS URL and API key.').waitFor();
+  await page.locator('#sonarr-url').fill('https://sonarr.example.test');
+  await page.locator('#sonarr-key').fill('sonarr-secret-api-key');
+  await page.click('#save-sonarr');
+  await page.locator('#sonarr-connection-card').waitFor({ state: 'hidden' });
+  await page.locator('#sonarr-series tr').waitFor();
+  assert.equal(await page.locator('#sonarr-series tr').textContent(), 'Example Show (2024)712320243 / 8YesHD-1080p1.5 KB');
+  assert.equal(await page.locator('#tv-series-count').textContent(), '1');
+  assert.equal(await page.locator('#tv-episodes-present').textContent(), '3');
+  assert.ok(directRequests.some(request => request.path === '/direct-api/api/sonarr/series' && request.method === 'GET' && !request.body.includes('sonarr-secret-api-key')));
+
+  assert.equal(sonarr.url, 'https://sonarr.example.test');
+  assert.equal(sonarr.apiKey, 'sonarr-secret-api-key');
+  assert.equal(await page.locator('#sonarr-key').inputValue(), '');
+  assert.ok(directRequests.some(request => request.path === '/direct-api/api/settings/sonarr' && request.method === 'PUT' && request.body.includes('sonarr-secret-api-key')));
+  assert.ok(directRequests.some(request => request.path === '/direct-api/api/settings/age' && request.method === 'POST'));
+  assert.ok(workspaceRequests.every(request => !request.body.includes(identity) && !request.body.includes('sonarr-secret-api-key')));
+
+  await page.click('[data-view="settings"]');
+  await page.locator('#settings-sonarr-saved').waitFor({ state: 'visible' });
+  await page.locator('#sonarr-connection-card').waitFor({ state: 'hidden' });
+  assert.equal(await page.locator('#settings-sonarr-saved-url').textContent(), 'https://sonarr.example.test');
+  assert.equal(await page.locator('#settings-sonarr-key').inputValue(), '');
+  assert.doesNotMatch(await page.locator('#settings-sonarr-saved').textContent(), /sonarr-secret-api-key/);
+  await page.click('#settings-clear-sonarr');
+  await page.locator('#settings-sonarr-settings-message').getByText('Sonarr settings cleared from the age-encrypted config.').waitFor();
+  await page.click('[data-view="series"]');
+  await page.locator('#sonarr-connection-card').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#tv-library').isVisible(), false);
+  assert.equal(sonarr, null);
+  assert.ok(directRequests.some(request => request.path === '/direct-api/api/settings/sonarr' && request.method === 'DELETE'));
+
+  await page.click('[data-view="movies"]');
+  await page.locator('#radarr-settings-message').getByText('Enter your Radarr HTTPS URL and API key.').waitFor();
+  await page.locator('#radarr-url').fill('https://radarr.example.test');
+  await page.locator('#radarr-key').fill('radarr-secret-api-key');
+  await page.click('#save-radarr');
+  await page.locator('#radarr-connection-card').waitFor({ state: 'hidden' });
+  assert.equal(radarr.url, 'https://radarr.example.test');
+  assert.equal(radarr.apiKey, 'radarr-secret-api-key');
+  assert.equal(await page.locator('#radarr-key').inputValue(), '');
+  assert.ok(directRequests.some(request => request.path === '/direct-api/api/settings/radarr' && request.method === 'PUT' && request.body.includes('radarr-secret-api-key')));
+  await page.click('[data-view="settings"]');
+  await page.locator('#settings-radarr-saved').waitFor({ state: 'visible' });
+  await page.locator('#radarr-connection-card').waitFor({ state: 'hidden' });
+  assert.equal(await page.locator('#settings-radarr-saved-url').textContent(), 'https://radarr.example.test');
+  assert.equal(await page.locator('#settings-radarr-key').inputValue(), '');
+  assert.doesNotMatch(await page.locator('#settings-radarr-saved').textContent(), /radarr-secret-api-key/);
+  await page.click('#settings-clear-radarr');
+  await page.locator('#settings-radarr-settings-message').getByText('Radarr settings cleared from the age-encrypted config.').waitFor();
+  await page.click('[data-view="movies"]');
+  await page.locator('#radarr-connection-card').waitFor({ state: 'visible' });
+  assert.equal(radarr, null);
+  assert.ok(directRequests.some(request => request.path === '/direct-api/api/settings/radarr' && request.method === 'DELETE'));
+  assert.ok(workspaceRequests.every(request => !request.body.includes('radarr-secret-api-key')));
+});
+
+test('coordinator opens TV from #tv and upgrades the old #series link', async t => {
+  const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.route('http://rawrarr.test/**', async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/') return route.fulfill({ body: html, contentType: 'text/html' });
+    if (path === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
+    if (path === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
+    if (path === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
+    if (path === '/api/workspace/nodes') return route.fulfill({ json: [] });
+    if (path === '/api/workspace/pending') return route.fulfill({ json: [] });
+    return route.fulfill({ status: 404, body: 'not found' });
+  });
+  await page.goto('http://rawrarr.test/#tv');
+  assert.equal(await page.locator('#series-view').isVisible(), true);
+  assert.equal(new URL(page.url()).hash, '#tv');
+  await page.goto('http://rawrarr.test/?legacy=1#series');
+  assert.equal(await page.locator('#series-view').isVisible(), true);
+  assert.equal(new URL(page.url()).hash, '#tv');
+});
+
+test('remembered age ID survives a reload and is removed on sign-out', async t => {
+  const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  const identity = 'AGE-SECRET-KEY-PQ-1remembered-test-fixture';
+  let vaultUnlocked = false;
+  await page.route('http://rawrarr.test/**', async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
+    if (url.pathname === '/auth') return route.fulfill({ status: 200, body: 'signed out' });
+    if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: 'window.rawrarrMiniExport = { loadRadarrLibrary: async () => [] };' });
+    if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
+    if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }] });
+    if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
+    if (url.pathname === '/api/workspace/direct-session') return route.fulfill({ status: 204, headers: { 'set-cookie': `rawrarr_direct_session=${'b'.repeat(64)}; Path=/direct-api/; SameSite=Strict` } });
+    if (url.pathname === '/direct-api/api/direct/health') return route.fulfill({ status: 204 });
+    if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'GET') return route.fulfill({ json: { unlocked: vaultUnlocked, encryptedConfigExists: true } });
+    if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'POST') {
+      const body = request.postDataJSON();
+      assert.equal(body.identity, identity);
+      vaultUnlocked = true;
+      return route.fulfill({ json: { unlocked: true, encryptedConfigExists: true } });
+    }
+    if (url.pathname === '/direct-api/api/settings/radarr') return route.fulfill({ json: { configured: false, persisted: false, url: null } });
+    if (url.pathname.startsWith('/direct-api/api/')) return route.fulfill({ json: {} });
+    if (url.pathname.startsWith('/api/workspace/')) return route.fulfill({ json: {} });
+    return route.fulfill({ status: 404, body: 'not found' });
+  });
+
+  await page.goto('http://rawrarr.test/#movies');
+  await page.waitForFunction(() => document.querySelector('[data-node-id="metadata-one"]')?.dataset.selected === 'true');
+  await page.locator('#remember-age-id').check();
+  await page.locator('#age-id').fill(identity);
+  await page.click('#unlock');
+  await page.waitForFunction(() => localStorage.getItem('rawrarr.browser.age-id')?.includes('remembered-test-fixture'));
+  await page.reload();
+  await page.waitForFunction(() => document.querySelector('[data-node-id="metadata-one"]')?.dataset.selected === 'true');
+  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), identity);
+  assert.equal(await page.locator('#remember-age-id').isChecked(), true);
+  await page.click('#sign-out');
+  await page.waitForURL('**/auth');
+  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
+});
+
+test('Settings reports age ID storage and validates before saving or removing it', async t => {
+  const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  const identity = 'AGE-SECRET-KEY-PQ-1settings-test-fixture';
+  let unlocked = false;
+  await page.route('http://rawrarr.test/**', async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
+    if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: 'window.rawrarrMiniExport = { loadRadarrLibrary: async () => [] };' });
+    if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
+    if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }] });
+    if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
+    if (url.pathname === '/api/workspace/direct-session') return route.fulfill({ status: 204, headers: { 'set-cookie': `rawrarr_direct_session=${'c'.repeat(64)}; Path=/direct-api/; SameSite=Strict` } });
+    if (url.pathname === '/direct-api/api/direct/health') return route.fulfill({ status: 204 });
+    if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'POST') {
+      const body = request.postDataJSON();
+      assert.equal(body.identity, identity);
+      assert.equal(body.rememberOnDevice, false);
+      unlocked = true;
+      return route.fulfill({ json: { unlocked: true, encryptedConfigExists: true } });
+    }
+    if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'GET') return route.fulfill({ json: { unlocked, encryptedConfigExists: true } });
+    if (url.pathname.startsWith('/direct-api/api/')) return route.fulfill({ json: {} });
+    if (url.pathname.startsWith('/api/workspace/')) return route.fulfill({ json: {} });
+    return route.fulfill({ status: 404, body: 'not found' });
+  });
+
+  await page.goto('http://rawrarr.test/#settings');
+  await page.waitForFunction(() => document.querySelector('[data-node-id="metadata-one"]')?.dataset.selected === 'true');
+  await page.getByText('Age private ID is not stored in this browser.').waitFor();
+  await page.locator('#settings-age-id').fill(identity);
+  await page.click('#save-age-id');
+  await page.getByText('Age private ID saved in this browser.').waitFor();
+  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), identity);
+  assert.equal(await page.locator('#settings-age-id').inputValue(), '');
+  assert.equal(await page.locator('#remember-age-id').isChecked(), true);
+
+  await page.click('[data-view="movies"]');
+  await page.getByText('0 encrypted Radarr library entries decrypted locally.').waitFor();
+  assert.equal(await page.locator('#age-id-entry').isVisible(), false);
+  await page.click('[data-view="settings"]');
+  await page.click('#remove-age-id');
+  await page.getByText('Age private ID removed from this browser.').waitFor();
+  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
+  assert.equal(await page.locator('#remember-age-id').isChecked(), false);
+  assert.match(await page.locator('#content-status').textContent(), /metadata is locked/);
+});

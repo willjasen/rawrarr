@@ -19,7 +19,8 @@ const filenameKey = randomBytes(32);
 const records = [
   { tmdbId: 24001, title: 'Mini Export Fixture One', schemaVersion: 1 },
   { tmdbId: 24002, title: 'Mini Export Fixture Two', schemaVersion: 1 },
-  { tmdbId: 24003, title: 'Mini Export Fixture Three', schemaVersion: 1 },
+  { tmdbId: 24003, title: 'Metadata Export Fixture Three', schemaVersion: 1 },
+  { tmdbId: 24004, title: 'Metadata Export Fixture Four', schemaVersion: 1 },
 ];
 function hmacFilename(kind, id, suffix) {
   return `${createHmac('sha256', filenameKey).update(`rawrarr-metadata-filename-v1\0${kind}\0tmdb\0${id}`).digest('hex')}${suffix}`;
@@ -36,7 +37,7 @@ const artworkPayloads = new Map(records.map((record, index) => {
 
 let server;
 let browser;
-test('browser mini-export decrypts real post-quantum age files and builds a local ZIP', async t => {
+test('browser metadata export includes every indexed movie record and matching artwork', async t => {
   const tmp = await mkdtemp(join(tmpdir(), 'rawrarr-mini-export-'));
   t.after(async () => { await browser?.close(); await new Promise(resolve => server?.close(resolve)); await rm(tmp, { recursive: true, force: true }); });
   const requests = [];
@@ -81,13 +82,13 @@ test('browser mini-export decrypts real post-quantum age files and builds a loca
   await page.locator('#identity').fill(privateIdentity);
   await page.locator('#start').click();
   const download = await downloadPromise;
-  assert.equal(download.suggestedFilename(), 'rawrarr-mini-metadata-export.zip');
+  assert.equal(download.suggestedFilename(), 'rawrarr-metadata-export.zip');
   const archivePath = join(tmp, 'result.zip');
   await download.saveAs(archivePath);
   await page.waitForFunction(() => document.getElementById('status').textContent === 'complete');
   const archive = unzipSync(await (await import('node:fs/promises')).readFile(archivePath));
   const manifest = JSON.parse(Buffer.from(archive['manifest.json']).toString('utf8'));
-  assert.equal(manifest.movies.length, 3);
+  assert.equal(manifest.movies.length, records.length);
   for (const record of records) {
     const text = JSON.parse(Buffer.from(archive[`movies/text/${record.tmdbId}.json`]).toString('utf8'));
     assert.equal(text.title, record.title);

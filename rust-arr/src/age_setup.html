@@ -18,7 +18,7 @@
     input[type="password"] { width:100%; border:1px solid var(--line); border-radius:9px; padding:12px; color:var(--text); background:#111712; font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace }
     .backup-confirmation { display:flex; align-items:flex-start; gap:10px; margin:16px 0 8px; padding:12px; border:1px solid var(--line); border-radius:10px; background:#111712; color:var(--text); font-size:12px }
     .backup-confirmation input { width:16px; height:16px; flex:none; margin:2px 0 0; accent-color:var(--green) }
-    .backup-warning { margin:0; font-size:11px }
+    .backup-warning { margin:0; padding:10px 12px; border:1px solid #9b772e; border-radius:9px; background:#332a16; color:#f3d778; font-size:12px }
     .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px }
     button { border:1px solid #658968; border-radius:9px; padding:11px 13px; color:#101711; background:var(--green); font:650 12px system-ui; cursor:pointer }
     button.secondary { color:#dbe8dc; border-color:var(--line); background:#202821 }
@@ -37,6 +37,8 @@
     #private-preview-card[hidden] { display:none }
     #private-preview { display:block; color:var(--text); font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace }
     .privacy-note { margin-top:12px; font-size:12px }
+    .coordinator-passkey { margin-top:18px; padding-top:14px; border-top:1px solid var(--line) }
+    .coordinator-passkey button { color:#dbe8dc; border-color:var(--line); background:#202821 }
   </style>
 </head>
 <body>
@@ -56,14 +58,31 @@
       <span class="public-label">Private identity · shortened preview</span>
       <code id="private-preview"></code>
     </section>
-    <label for="identity">Paste existing private identity (optional)</label>
-    <input id="identity" type="password" spellcheck="false" autocomplete="off" placeholder="Paste identity (characters stay masked)">
     <div class="actions">
       <button class="secondary" id="generate" type="button">Create ID</button>
-      <button class="secondary" id="copy" type="button" disabled>Copy and verify ID</button>
+      <button class="secondary" id="import-id" type="button">Import ID</button>
+      <button class="secondary" id="review-generated" type="button" hidden disabled>Review new ID</button>
     </div>
-    <p class="privacy-note">After creating an ID, copy it from the pop-up, confirm that you copied and safely saved it, then select Continue. rawrarr cannot recover a lost private identity.</p>
+    <label class="backup-confirmation" for="remember-on-device">
+      <input id="remember-on-device" type="checkbox">
+      <span>Keep this ID on this device after unlocking</span>
+    </label>
+    <p class="privacy-note">Pasted IDs unlock directly. New IDs use the copy and backup confirmation flow. A remembered ID stays in this node's private local data folder and is not synced.</p>
     <div id="message" role="status" aria-live="polite"></div>
+    <section class="coordinator-passkey" id="coordinator-passkey-section" aria-label="Roarlay passkey" hidden>
+      <p>Add a passkey for roarlay using your existing signed-in Rawrarr account. The passkey ceremony opens on the roarlay website.</p>
+      <button class="secondary" id="add-coordinator-passkey" type="button">Add passkey for roarlay</button>
+    </section>
+    <dialog id="import-dialog" aria-labelledby="import-title">
+      <h2 id="import-title">Import an existing ID</h2>
+      <p>Paste your post-quantum private ID below. It will be sent to this rawrarr node to unlock the encrypted config.</p>
+      <label for="identity">Private age ID</label>
+      <input id="identity" type="password" spellcheck="false" autocomplete="off" placeholder="Paste ID beginning AGE-SECRET-KEY-PQ-1">
+      <div class="actions">
+        <button id="import-submit" type="button" disabled>Unlock vault</button>
+      </div>
+      <p id="import-message" role="status" aria-live="polite"></p>
+    </dialog>
     <dialog id="identity-copy-dialog" aria-labelledby="identity-copy-title">
       <h2 id="identity-copy-title">Copy your private ID</h2>
       <p id="identity-copy-instructions">Copy the private identity and save it somewhere safe. The complete key will not be shown on this page.</p>
@@ -77,6 +96,7 @@
         </label>
         <p class="backup-warning">rawrarr cannot recover this ID if it is lost. Without it, your encrypted shared configuration cannot be unlocked.</p>
       </section>
+
       <p id="identity-copy-status" role="status" aria-live="polite"></p>
       <div class="actions">
         <button id="unlock" type="button" disabled>Unlock vault</button>
@@ -88,12 +108,39 @@
     const message = document.getElementById('message');
     const unlockButton = document.getElementById('unlock');
     const identityCopyDialog = document.getElementById('identity-copy-dialog');
+    const importDialog = document.getElementById('import-dialog');
     const backupConfirmation = document.getElementById('backup-confirmation');
     const backupConfirmed = document.getElementById('backup-confirmed');
     const identityCopyStatus = document.getElementById('identity-copy-status');
     let generatedIdentity = '';
     let identityCopied = false;
     let unlockInProgress = false;
+
+    const coordinatorPasskeySection = document.getElementById('coordinator-passkey-section');
+    coordinatorPasskeySection.hidden = window.location.origin !== 'http://localhost:7297';
+    document.getElementById('add-coordinator-passkey').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      button.textContent = 'Preparing secure link…';
+      try {
+        const response = await fetch('/api/auth/passkeys/coordinator/link', {
+          method: 'POST',
+          headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+          cache: 'no-store',
+          body: '{}',
+        });
+        const result = await response.json();
+        if (!response.ok || typeof result.url !== 'string') {
+          throw new Error(response.status === 401
+            ? 'Sign in to this Rawrarr node before adding a roarlay passkey.'
+            : 'Could not start roarlay passkey setup. Try again.');
+        }
+        window.location.assign(result.url);
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = error.message || 'Could not start passkey setup';
+      }
+    });
 
     function updateBackupConfirmation() {
       const identityAvailable = Boolean(generatedIdentity || privateIdentityKey(identity.value));
@@ -180,7 +227,8 @@
       backupConfirmed.checked = false;
       identityCopyStatus.textContent = '';
       clearPrivatePreview();
-      document.getElementById('copy').disabled = !privateIdentityKey(identity.value);
+      document.getElementById('import-submit').disabled = !privateIdentityKey(identity.value);
+      document.getElementById('review-generated').hidden = !generatedIdentity;
       updateBackupConfirmation();
     });
     backupConfirmed.addEventListener('change', updateBackupConfirmation);
@@ -191,7 +239,8 @@
       identityCopied = false;
       backupConfirmed.checked = false;
       identityCopyStatus.textContent = '';
-      document.getElementById('copy').disabled = !privateIdentityKey(identity.value);
+      document.getElementById('import-submit').disabled = !privateIdentityKey(identity.value);
+      document.getElementById('review-generated').hidden = !generatedIdentity;
       updateBackupConfirmation();
       message.textContent = 'Creating a post-quantum identity…';
       try {
@@ -204,7 +253,8 @@
         backupConfirmed.checked = false;
         document.getElementById('private-preview').textContent = shortenedIdentityPreview(generatedIdentity);
         document.getElementById('private-preview-card').hidden = false;
-        document.getElementById('copy').disabled = false;
+        document.getElementById('review-generated').hidden = false;
+        document.getElementById('review-generated').disabled = false;
         document.getElementById('identity-copy-instructions').textContent = 'Your ID is ready. Copy the private identity and save it somewhere safe. The complete key will not be shown on this page.';
         updateBackupConfirmation();
         await showPublicFingerprint(result.recipient);
@@ -214,15 +264,44 @@
       finally { button.disabled = false; }
     });
 
-    document.getElementById('copy').addEventListener('click', async () => {
-      const privateKey = privateIdentityKey(generatedIdentity || identity.value);
-      if (!privateKey) {
-        message.textContent = 'Create an ID or paste a private identity before continuing.';
+    document.getElementById('import-id').addEventListener('click', () => {
+      document.getElementById('import-message').textContent = '';
+      identity.value = '';
+      document.getElementById('import-submit').disabled = true;
+      importDialog.showModal();
+      identity.focus();
+    });
+
+    document.getElementById('import-submit').addEventListener('click', async event => {
+      const value = identity.value.trim();
+      if (!privateIdentityKey(value)) {
+        document.getElementById('import-message').textContent = 'Paste a post-quantum age private ID beginning with AGE-SECRET-KEY-PQ-1.';
         return;
       }
-      document.getElementById('identity-copy-instructions').textContent = generatedIdentity
-        ? 'Copy the private identity and save it somewhere safe. The complete key will not be shown on this page.'
-        : 'Copy the private identity you pasted and save it somewhere safe. The complete key will not be shown on this page.';
+      const button = event.currentTarget;
+      button.disabled = true;
+      document.getElementById('import-message').textContent = 'Unlocking encrypted configuration…';
+      try {
+        const response = await fetch('/api/settings/age', {
+          method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identity: value, rememberOnDevice: document.getElementById('remember-on-device').checked })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Could not unlock the age vault');
+        applyIdentityTheme(result.themeSeed);
+        identity.value = '';
+        importDialog.close();
+        message.textContent = 'Vault unlocked. Opening your workspace…';
+        window.location.replace('/');
+      } catch (error) {
+        document.getElementById('import-message').textContent = error.message;
+        button.disabled = false;
+      }
+    });
+
+    document.getElementById('review-generated').addEventListener('click', async () => {
+      if (!generatedIdentity) return;
+      document.getElementById('identity-copy-instructions').textContent = 'Copy the private identity and save it somewhere safe. The complete key will not be shown on this page.';
       identityCopyDialog.showModal();
     });
 
@@ -263,7 +342,7 @@
       try {
         const response = await fetch('/api/settings/age', {
           method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identity: privateIdentity })
+          body: JSON.stringify({ identity: privateIdentity, rememberOnDevice: document.getElementById('remember-on-device').checked })
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Could not unlock the age vault');

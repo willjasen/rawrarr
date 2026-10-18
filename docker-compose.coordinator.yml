@@ -1,0 +1,55 @@
+# Central deployment only; never add subscriber /shared or /media mounts.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: rawrarr
+      POSTGRES_USER: rawrarr
+      POSTGRES_PASSWORD_FILE: /run/secrets/rawrarr_postgres_password
+    secrets:
+      - rawrarr_postgres_password
+    volumes:
+      - rawrarr-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rawrarr -d rawrarr"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  roarlay:
+    build:
+      context: ./rust-arr
+    image: rawrarr:local
+    environment:
+      RAWARR_ROLE: coordinator
+      RUST_ARR_LISTEN_ADDR: 0.0.0.0:8080
+      RAWARR_PG_HOST: postgres
+      RAWARR_PG_PORT: 5432
+      RAWARR_PG_USER: rawrarr
+      RAWARR_PG_DATABASE: rawrarr
+      RAWARR_PG_PASSWORD_FILE: /run/secrets/rawrarr_postgres_password
+      RAWARR_APPROVED_NODES_FILE: /run/secrets/rawrarr_approved_nodes
+      RAWARR_COORDINATOR_WEB_RP_ID: ${RAWARR_COORDINATOR_WEB_RP_ID:-rawrarr.risk-mermaid.ts.net}
+      RAWARR_COORDINATOR_WEB_ORIGIN: ${RAWARR_COORDINATOR_WEB_ORIGIN:-https://rawrarr.risk-mermaid.ts.net}
+      RAWARR_NODE_RELAY_TARGETS: ${RAWARR_NODE_RELAY_TARGETS:-{"macbook-metadata":"http://metadata:8080","mac-mini-storage":"https://rawrarr-mini.risk-mermaid.ts.net"}}
+      RAWARR_NODE_RELAY_SOCKS5_URL: ${RAWARR_NODE_RELAY_SOCKS5_URL:-socks5h://127.0.0.1:1055}
+    secrets:
+      - rawrarr_postgres_password
+      - rawrarr_approved_nodes
+    ports:
+      - "127.0.0.1:7298:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+
+volumes:
+  rawrarr-postgres-data:
+
+secrets:
+  rawrarr_postgres_password:
+    file: ${RAWARR_POSTGRES_PASSWORD_FILE:?Set RAWARR_POSTGRES_PASSWORD_FILE to a protected password file}
+  rawrarr_approved_nodes:
+    file: "${RAWARR_APPROVED_NODES_PATH:-${HOME}/Library/Application Support/rawrarr/coordinator/approved-nodes.json}"

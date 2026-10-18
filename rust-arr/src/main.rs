@@ -1,12 +1,18 @@
 #![forbid(unsafe_code)]
 
 mod movie_snapshot;
+mod sonarr;
 
 pub mod auth;
+mod coordinator;
+mod artwork_cache;
+mod coordinator_avatar;
 pub mod devices;
 pub mod download_clients;
 pub mod library;
 pub mod metadata;
+mod node_auth;
+mod node_role;
 mod quality_profiles;
 pub mod secure_config;
 pub mod shared_logs;
@@ -16,8 +22,8 @@ pub mod syncthing;
 use axum::middleware::Next;
 use axum::{
     Json, Router,
-    body::Body,
-    extract::{FromRef, Path as AxumPath, Request, State},
+    body::{Body, Bytes},
+    extract::{Path as AxumPath, Request, State},
     http::{StatusCode, header},
     middleware,
     response::{
@@ -26,6 +32,8 @@ use axum::{
     },
     routing::{get, post},
 };
+use aes_gcm::KeyInit;
+use p256::elliptic_curve::{rand_core::RngCore, sec1::ToEncodedPoint};
 use futures_util::Stream;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
@@ -33,6 +41,7 @@ use sha2::{Digest, Sha256};
 use std::{
     env,
     net::SocketAddr,
+    sync::atomic::{AtomicBool, Ordering},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -41,29 +50,36 @@ use zeroize::{Zeroize, Zeroizing};
 
 #[derive(Clone)]
 struct AppState {
-    auth: auth::AuthState,
+    auth: node_auth::NodeAuth,
+    role: node_role::NodeRole,
     radarr: Arc<RwLock<Option<RadarrClient>>>,
     vault: Arc<RwLock<Option<secure_config::AgeVault>>>,
     library: Option<library::LibraryRoot>,
     device_id: String,
     shared_logs: Option<shared_logs::SharedLogger>,
+    storage_scan: storage_node::ScanController,
     syncthing: Option<syncthing::Client>,
+    artwork_backfill: Arc<RwLock<ArtworkBackfillProgress>>,
+    sonarr_backfill: Arc<RwLock<ArtworkBackfillProgress>>,
+    artwork_scrape_lock: Arc<tokio::sync::Mutex<()>>,
+    artwork_scrape_notify: Arc<tokio::sync::Notify>,
+    artwork_force_rescan: Arc<AtomicBool>,
+    sonarr_scrape_notify: Arc<tokio::sync::Notify>,
+    artwork_cache: Arc<artwork_cache::ArtworkCache>,
 }
 
-impl FromRef<AppState> for auth::AuthState {
-    fn from_ref(state: &AppState) -> Self {
-        state.auth.clone()
-    }
-}
-
-impl FromRef<Arc<AppState>> for auth::AuthState {
-    fn from_ref(state: &Arc<AppState>) -> Self {
-        state.auth.clone()
-    }
+#[derive(Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ArtworkBackfillProgress {
+    active: bool,
+    completed: usize,
+    scraped: usize,
+    total: usize,
+    failed: usize,
 }
 
 #[derive(Clone)]
-struct RadarrClient {
+struct ArrClient {
     movie_snapshot: movie_snapshot::Cache,
     base_url: String,
     api_key: HeaderValue,
@@ -83,6 +99,7 @@ struct RadarrStatus {
 struct RadarrMovie {
     id: i64,
     title: String,
+    title_slug: Option<String>,
     year: Option<i64>,
     monitored: bool,
     has_file: bool,
@@ -91,6 +108,9 @@ struct RadarrMovie {
     quality_profile: Option<String>,
     added: Option<String>,
     tmdb_id: Option<i64>,
+    poster_url: Option<String>,
+    artwork_source: Option<String>,
+    genres: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -140,6 +160,7 @@ struct ConfigurationView {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SharedConfiguration {
+    metadata_filename_key_configured: bool,
     schema_version: u32,
     source: &'static str,
     radarr: Option<SharedRadarrConfig>,
@@ -170,8 +191,11 @@ struct SharingStatus {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct AgeIdentityRequest {
     identity: String,
+    #[serde(default)]
+    remember_on_device: bool,
 }
 
 impl Drop for AgeIdentityRequest {
@@ -242,7 +266,9 @@ impl std::fmt::Display for RadarrConfigError {
 
 impl std::error::Error for RadarrConfigError {}
 
-impl RadarrClient {
+type RadarrClient = ArrClient;
+
+impl ArrClient {
     fn new(base_url: String, api_key: String) -> Result<Self, RadarrConfigError> {
         let api_key = Zeroizing::new(api_key);
         if base_url.trim().is_empty() || base_url.len() > 2048 {
@@ -267,6 +293,7 @@ impl RadarrClient {
         api_key_header.set_sensitive(true);
         let http = reqwest::Client::builder()
             .timeout(Duration::from_secs(5))
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|_| RadarrConfigError::InvalidUrl)?;
 
@@ -319,22 +346,49 @@ impl RadarrClient {
         })
     }
 
-    async fn list_movies(&self, vault: Option<secure_config::AgeVault>) -> Result<Vec<RadarrMovie>, &'static str> {
+    async fn list_movies(
+        &self,
+        vault: Option<secure_config::AgeVault>,
+    ) -> Result<Vec<RadarrMovie>, &'static str> {
         let movies: Vec<serde_json::Value> = self
             .http
             .get(format!("{}/api/v3/movie", self.base_url))
             .header("X-Api-Key", self.api_key.clone())
             .header(ACCEPT, "application/json")
             .send()
-            .await.map_err(|_| "Radarr movie library request failed")?
-            .error_for_status().map_err(|_| "Radarr movie library request failed")?
+            .await
+            .map_err(|_| "Radarr movie library request failed")?
+            .error_for_status()
+            .map_err(|_| "Radarr movie library request failed")?
             .json()
-            .await.map_err(|_| "Radarr movie library request failed")?;
-        let movies = quality_profiles::enrich(self, vault, movies).await?;
+            .await
+            .map_err(|_| "Radarr movie library request failed")?;
+        let movies = quality_profiles::enrich(self, vault.clone(), movies).await?;
         Ok(movies
             .into_iter()
             .map(|movie| {
                 let profile = movie.get("qualityProfile");
+                let tmdb_id = movie.get("tmdbId").and_then(|v| v.as_i64());
+                let poster_url = movie
+                    .get("images")
+                    .and_then(serde_json::Value::as_array)
+                    .and_then(|images| {
+                        images.iter().find(|image| {
+                            image
+                                .get("coverType")
+                                .and_then(|v| v.as_str())
+                                .is_some_and(|kind| kind.eq_ignore_ascii_case("poster"))
+                                && (image.get("remoteUrl").and_then(|v| v.as_str()).is_some()
+                                    || image.get("url").and_then(|v| v.as_str()).is_some())
+                        })
+                    })
+                    .and_then(|_| tmdb_id)
+                    .map(|id| format!("/api/radarr/movies/{id}/poster"));
+                let artwork_source = tmdb_id.filter(|_| poster_url.is_some()).map(|id| {
+                    let cached = u64::try_from(id).ok().is_some_and(|id| vault.as_ref().is_some_and(|vault| vault.artwork_exists(id))) || secure_config::AgeVault::metadata_dir()
+                        .join("movies").join("artwork").join(format!("{id}.aged")).is_file();
+                    if cached { "shared" } else { "radarr" }.to_owned()
+                });
                 RadarrMovie {
                     id: movie.get("id").and_then(|v| v.as_i64()).unwrap_or_default(),
                     title: movie
@@ -342,6 +396,10 @@ impl RadarrClient {
                         .and_then(|v| v.as_str())
                         .unwrap_or("Unknown title")
                         .to_owned(),
+                    title_slug: movie
+                        .get("titleSlug")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_owned),
                     year: movie.get("year").and_then(|v| v.as_i64()),
                     monitored: movie
                         .get("monitored")
@@ -368,15 +426,106 @@ impl RadarrClient {
                         .get("added")
                         .and_then(|v| v.as_str())
                         .map(str::to_owned),
-                    tmdb_id: movie.get("tmdbId").and_then(|v| v.as_i64()),
+                    tmdb_id,
+                    poster_url,
+                    artwork_source,
+                    genres: movie.get("genres").and_then(serde_json::Value::as_array).into_iter().flatten()
+                        .filter_map(serde_json::Value::as_str).map(str::to_owned).collect(),
                 }
             })
             .collect())
     }
+
+    async fn movie_by_tmdb_id(
+        &self,
+        tmdb_id: u64,
+    ) -> Result<Option<serde_json::Value>, reqwest::Error> {
+        let movies: Vec<serde_json::Value> = self
+            .http
+            .get(format!("{}/api/v3/movie", self.base_url))
+            .header("X-Api-Key", self.api_key.clone())
+            .header(ACCEPT, "application/json")
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        Ok(movies
+            .into_iter()
+            .find(|movie| movie.get("tmdbId").and_then(|id| id.as_u64()) == Some(tmdb_id)))
+    }
+
+    async fn fetch_movie_poster(
+        &self,
+        movie: &serde_json::Value,
+    ) -> Result<Option<(String, Vec<u8>)>, ()> {
+        let Some(image) = poster_image(movie) else {
+            return Ok(None);
+        };
+        if let Some(remote) = image.get("remoteUrl").and_then(|value| value.as_str()) {
+            if let Ok(url) = validated_tmdb_image_url(remote) {
+                if let Ok(Some(result)) = fetch_tmdb_image(url).await {
+                    return Ok(Some(result));
+                }
+            }
+        }
+        let Some(path) = image.get("url").and_then(|value| value.as_str()) else {
+            return Ok(None);
+        };
+        if !path.starts_with('/') || path.starts_with("//") || path.contains('\\') {
+            return Ok(None);
+        }
+        let base = reqwest::Url::parse(&self.base_url).map_err(|_| ())?;
+        let url = base.join(path).map_err(|_| ())?;
+        if url.scheme() != base.scheme()
+            || url.host_str() != base.host_str()
+            || url.port_or_known_default() != base.port_or_known_default()
+            || !url.username().is_empty()
+            || url.password().is_some()
+        {
+            return Ok(None);
+        }
+        let mut response = self
+            .http
+            .get(url)
+            .header("X-Api-Key", self.api_key.clone())
+            .send()
+            .await
+            .map_err(|_| ())?;
+        read_image_response(&mut response).await
+    }
 }
 
-async fn health() -> &'static str {
-    "ok"
+fn poster_image(movie: &serde_json::Value) -> Option<&serde_json::Value> {
+    movie.get("images")?.as_array()?.iter().find(|image| {
+        image
+            .get("coverType")
+            .and_then(|value| value.as_str())
+            .is_some_and(|kind| kind.eq_ignore_ascii_case("poster"))
+    })
+}
+
+async fn health() -> Html<&'static str> {
+    Html(
+        r##"<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101514"><title>rawrarr — System health</title>
+<style>
+:root{color-scheme:dark;--bg:#101514;--panel:#171e1a;--line:#303b33;--text:#edf3ed;--muted:#9aa89e;--green:#b8f36a;font:16px Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 75% 0,#263322 0,transparent 42%),var(--bg)}main{width:min(760px,100%);margin:auto;padding:64px 24px}.brand{color:var(--green);font-size:13px;letter-spacing:.14em;text-transform:uppercase;font-weight:750}.eyebrow{margin-top:62px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.14em}h1{font-size:clamp(36px,8vw,62px);letter-spacing:-.06em;margin:10px 0 12px}.summary{color:var(--muted);line-height:1.65;max-width:520px}.state{display:inline-flex;align-items:center;gap:9px;margin-top:22px;border:1px solid #435638;background:#202a1b;color:#d5f7aa;border-radius:999px;padding:9px 13px;font-size:13px}.dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 14px #b8f36a99}.panel{margin-top:42px;border:1px solid var(--line);background:var(--panel);border-radius:16px;overflow:hidden}.panel h2{font-size:14px;margin:0;padding:19px 21px;border-bottom:1px solid var(--line)}.check{display:flex;justify-content:space-between;align-items:center;padding:17px 21px;border-bottom:1px solid #27312a}.check:last-child{border:0}.check strong{font-size:14px;font-weight:600}.check span{font-size:12px;color:var(--muted)}.ok{color:var(--green)!important}.foot{margin-top:24px;color:#718076;font-size:12px}a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}@media(max-width:520px){main{padding:36px 20px}.eyebrow{margin-top:48px}.check{gap:12px}.check span{text-align:right}}
+</style></head><body><main><div class="brand">rawrarr</div><div class="eyebrow">System status</div><h1>All systems ready.</h1><p class="summary">The rawrarr service is responding and ready to handle requests. This page checks the web process; connected services are reported separately in the app.</p><div class="state"><i class="dot"></i>Operational</div><section class="panel" aria-label="Health checks"><h2>Service checks</h2><div class="check"><strong>Web service</strong><span class="ok">● &nbsp;Responding</span></div><div class="check"><strong>Health endpoint</strong><span>/health · HTTP 200</span></div><div class="check"><strong>Checked</strong><span id="checked">Just now</span></div></section><p class="foot"><a href="/">Open rawrarr</a> &nbsp;·&nbsp; Auto-refreshes every 30 seconds</p></main><script>const checked=document.getElementById('checked');function update(){checked.textContent=new Intl.DateTimeFormat(undefined,{hour:'numeric',minute:'2-digit',second:'2-digit'}).format(new Date())}update();setInterval(()=>location.reload(),30000)</script></body></html>"##,
+    )
+}
+
+async fn direct_health(State(state): State<Arc<AppState>>) -> Response {
+    let cache = state.artwork_cache.clone();
+    let (configured, reachable) = tokio::task::spawn_blocking(move || {
+        let configured = cache.is_configured();
+        (configured, configured && cache.ping())
+    }).await.unwrap_or((false, false));
+    Json(serde_json::json!({
+        "status": "ok",
+        "artworkCacheConfigured": configured,
+        "artworkCacheReachable": reachable
+    })).into_response()
 }
 
 fn static_asset(content_type: &'static str, data: &'static [u8]) -> Response<Body> {
@@ -427,7 +576,7 @@ async fn metadata_export_js() -> Response<Body> {
 }
 
 async fn auth_page(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response<Body> {
-    if auth::is_authenticated(&state.auth.pool, &headers).await {
+    if state.auth.authenticated(&headers).await {
         if state.vault.read().await.is_some() {
             return Redirect::to("/").into_response();
         }
@@ -437,7 +586,7 @@ async fn auth_page(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Re
 }
 
 async fn dashboard(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response<Body> {
-    if !auth::is_authenticated(&state.auth.pool, &headers).await {
+    if !state.auth.authenticated(&headers).await {
         return Redirect::to("/auth").into_response();
     }
     if state.vault.read().await.is_none() {
@@ -456,7 +605,7 @@ async fn age_setup_page(State(state): State<Arc<AppState>>) -> Response<Body> {
 async fn logout(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response<Body> {
     *state.vault.write().await = None;
     *state.radarr.write().await = None;
-    auth::end_session(&state.auth, &headers).await
+    state.auth.logout(&headers).await
 }
 
 #[derive(Serialize)]
@@ -642,6 +791,36 @@ async fn scan_library(
     Ok(Json(summary))
 }
 
+async fn request_storage_scan(
+    State(state): State<Arc<AppState>>,
+    Json(options): Json<storage_node::ScanOptions>,
+) -> Response {
+    if state.role != node_role::NodeRole::Storage {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    match state.storage_scan.start(options, state.shared_logs.clone()).await {
+        Ok(()) => (StatusCode::ACCEPTED, Json(state.storage_scan.status().await)).into_response(),
+        Err(error) => (StatusCode::CONFLICT, error).into_response(),
+    }
+}
+
+async fn storage_scan_status(State(state): State<Arc<AppState>>) -> Response {
+    if state.role != node_role::NodeRole::Storage {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    Json(state.storage_scan.status().await).into_response()
+}
+
+async fn cancel_storage_scan(State(state): State<Arc<AppState>>) -> Response {
+    if state.role != node_role::NodeRole::Storage {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    match state.storage_scan.cancel().await {
+        Ok(status) => Json(status).into_response(),
+        Err(error) => (StatusCode::CONFLICT, error).into_response(),
+    }
+}
+
 async fn radarr_status(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<RadarrStatus>, (StatusCode, Json<ApiError>)> {
@@ -678,16 +857,336 @@ async fn radarr_movies(
         ));
     };
     let vault = state.vault.read().await.clone();
-    let movies = radarr.list_movies(vault).await.map_err(|error| {
-        (
-            StatusCode::BAD_GATEWAY,
-            Json(ApiError {
-                error,
-            }),
-        )
-    })?;
+    let movies = radarr
+        .list_movies(vault)
+        .await
+        .map_err(|error| (StatusCode::BAD_GATEWAY, Json(ApiError { error })))?;
     radarr.movie_snapshot.store(movies.clone()).await;
     Ok(Json(movies))
+}
+
+async fn radarr_movie_poster(
+    State(state): State<Arc<AppState>>,
+    AxumPath(tmdb_id): AxumPath<u64>,
+) -> Result<Response<Body>, (StatusCode, Json<ApiError>)> {
+    if tmdb_id == 0 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiError {
+                error: "Invalid movie ID",
+            }),
+        ));
+    }
+    let vault = state.vault.read().await.clone();
+    if let Some(vault) = &vault {
+        let id = tmdb_id;
+        match tokio::task::spawn_blocking({
+            let vault = vault.clone();
+            let cache = state.artwork_cache.clone();
+            move || vault.load_artwork_cached(id, &cache)
+        })
+        .await
+        {
+            Ok(Ok(Some(artwork))) => {
+                return image_response(artwork.content_type, artwork.bytes);
+            }
+            Ok(Ok(None)) => {}
+            _ => {}
+        }
+    }
+
+    let radarr = state.radarr.read().await.clone().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(ApiError {
+            error: "Radarr is not configured",
+        }),
+    ))?;
+    let (content_type, bytes) = scrape_and_store_movie_artwork(&radarr, vault, tmdb_id, state.artwork_scrape_lock.clone(), state.artwork_cache.clone(), false)
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(ApiError {
+                    error: "Could not retrieve or save Radarr poster",
+                }),
+            )
+        })?
+        .ok_or((
+            StatusCode::NOT_FOUND,
+            Json(ApiError {
+                error: "Movie poster was not found",
+            }),
+        ))?;
+    image_response(content_type, bytes)
+}
+
+async fn scrape_and_store_movie_artwork(
+    radarr: &RadarrClient,
+    vault: Option<secure_config::AgeVault>,
+    tmdb_id: u64,
+    scrape_lock: Arc<tokio::sync::Mutex<()>>,
+    artwork_cache: Arc<artwork_cache::ArtworkCache>,
+    refresh_metadata: bool,
+) -> Result<Option<(String, Vec<u8>)>, ()> {
+    let _guard = scrape_lock.lock().await;
+    let Some(movie) = radarr.movie_by_tmdb_id(tmdb_id).await.map_err(|_| ())? else {
+        return Ok(None);
+    };
+    let vault_ref = vault.as_ref().ok_or(())?;
+    if refresh_metadata || !vault_ref.movie_metadata_exists(tmdb_id) {
+        let metadata = metadata::arr_text_record("radarr", "tmdbId", tmdb_id, &movie);
+        let serialized = serde_json::to_vec(&metadata).map_err(|_| ())?;
+        let vault = vault_ref.clone();
+        tokio::task::spawn_blocking(move || vault.store_movie_metadata(tmdb_id, &serialized))
+            .await.map_err(|_| ())?.map_err(|_| ())?;
+    }
+    if vault_ref.artwork_exists(tmdb_id) {
+        let cached_vault = vault_ref.clone();
+        let cache = artwork_cache;
+        let artwork = tokio::task::spawn_blocking(move || cached_vault.load_artwork_cached(tmdb_id, &cache))
+            .await.map_err(|_| ())?.map_err(|_| ())?;
+        return Ok(artwork.map(|artwork| (artwork.content_type, artwork.bytes)));
+    }
+    let Some((content_type, bytes)) = radarr.fetch_movie_poster(&movie).await.map_err(|_| ())? else {
+        return Ok(None);
+    };
+    let store_vault = vault_ref.clone();
+    let store_type = content_type.clone();
+    let store_bytes = bytes.clone();
+    tokio::task::spawn_blocking(move || store_vault.store_artwork(tmdb_id, &store_type, &store_bytes))
+        .await.map_err(|_| ())?.map_err(|_| ())?;
+    Ok(Some((content_type, bytes)))
+}
+
+async fn metadata_artwork_backfill_status(
+    State(state): State<Arc<AppState>>,
+) -> Json<ArtworkBackfillProgress> {
+    Json(state.artwork_backfill.read().await.clone())
+}
+
+async fn metadata_sonarr_backfill_status(
+    State(state): State<Arc<AppState>>,
+) -> Json<ArtworkBackfillProgress> {
+    Json(state.sonarr_backfill.read().await.clone())
+}
+
+async fn request_movie_metadata_rescan(State(state): State<Arc<AppState>>) -> Response {
+    state.artwork_force_rescan.store(true, Ordering::Release);
+    state.artwork_scrape_notify.notify_one();
+    (StatusCode::ACCEPTED, Json(serde_json::json!({"accepted": true}))).into_response()
+}
+
+async fn request_tv_metadata_rescan(State(state): State<Arc<AppState>>) -> Response {
+    state.sonarr_scrape_notify.notify_one();
+    (StatusCode::ACCEPTED, Json(serde_json::json!({"accepted": true}))).into_response()
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MetadataStorageStatus {
+    bytes: u64,
+    movies_bytes: u64,
+    tv_bytes: u64,
+}
+
+async fn metadata_storage_status() -> Json<MetadataStorageStatus> {
+    let metadata_dir = secure_config::AgeVault::metadata_dir();
+    let bytes = tokio::task::spawn_blocking(move || {
+        fn directory_size(path: &std::path::Path) -> u64 {
+            let Ok(entries) = std::fs::read_dir(path) else {
+                return 0;
+            };
+            entries
+                .filter_map(Result::ok)
+                .map(|entry| {
+                    let Ok(file_type) = entry.file_type() else {
+                        return 0;
+                    };
+                    if file_type.is_dir() {
+                        directory_size(&entry.path())
+                    } else if file_type.is_file() {
+                        entry.metadata().map(|metadata| metadata.len()).unwrap_or(0)
+                    } else {
+                        0
+                    }
+                })
+                .sum()
+        }
+        let movies_bytes = directory_size(&metadata_dir.join("movies"));
+        let tv_bytes = directory_size(&metadata_dir.join("tv"));
+        (directory_size(&metadata_dir), movies_bytes, tv_bytes)
+    })
+    .await
+    .unwrap_or((0, 0, 0));
+    Json(MetadataStorageStatus { bytes: bytes.0, movies_bytes: bytes.1, tv_bytes: bytes.2 })
+}
+
+async fn run_metadata_artwork_backfill(state: Arc<AppState>) {
+    wait_for_metadata_backfill(&state, Duration::from_secs(10)).await;
+    loop {
+        let radarr = state.radarr.read().await.clone();
+        let Some(radarr) = radarr else {
+            wait_for_metadata_backfill(&state, Duration::from_secs(60)).await;
+            continue;
+        };
+        let vault = state.vault.read().await.clone();
+        let Some(migration_vault) = vault.clone() else {
+            wait_for_metadata_backfill(&state, Duration::from_secs(60)).await;
+            continue;
+        };
+        if !matches!(tokio::task::spawn_blocking(move || migration_vault.migrate_legacy_movie_filenames()).await, Ok(Ok(_))) {
+            wait_for_metadata_backfill(&state, Duration::from_secs(60)).await;
+            continue;
+        }
+        let movies = match radarr.list_movies(vault.clone()).await {
+            Ok(movies) => movies,
+            Err(_) => {
+                wait_for_metadata_backfill(&state, Duration::from_secs(60)).await;
+                continue;
+            }
+        };
+        let total = movies.iter().filter(|movie| movie.poster_url.is_some()).count();
+        let scraped = movies.iter()
+            .filter(|movie| movie.poster_url.is_some() && movie.artwork_source.as_deref() == Some("shared"))
+            .count();
+        let force_rescan = state.artwork_force_rescan.swap(false, Ordering::AcqRel);
+        let missing: Vec<u64> = movies.iter()
+            .filter(|movie| force_rescan || (movie.poster_url.is_some() && movie.artwork_source.as_deref() == Some("radarr")))
+            .filter_map(|movie| movie.tmdb_id.and_then(|id| u64::try_from(id).ok()))
+            .collect();
+        if missing.is_empty() {
+            *state.artwork_backfill.write().await = ArtworkBackfillProgress {
+                active: false,
+                completed: 0,
+                scraped,
+                total,
+                failed: 0,
+            };
+            wait_for_metadata_backfill(&state, Duration::from_secs(6 * 60 * 60)).await;
+            continue;
+        }
+        *state.artwork_backfill.write().await = ArtworkBackfillProgress {
+            active: true,
+            completed: 0,
+            scraped,
+            total,
+            failed: 0,
+        };
+        for tmdb_id in missing {
+            let cached = vault.as_ref().is_some_and(|vault| vault.artwork_exists(tmdb_id));
+            let succeeded = if cached && !force_rescan { true } else {
+                matches!(scrape_and_store_movie_artwork(&radarr, vault.clone(), tmdb_id, state.artwork_scrape_lock.clone(), state.artwork_cache.clone(), force_rescan).await, Ok(Some(_)))
+                    || (force_rescan && vault.as_ref().is_some_and(|vault| vault.movie_metadata_exists(tmdb_id)))
+            };
+            let mut progress = state.artwork_backfill.write().await;
+            progress.completed += 1;
+            if succeeded {
+                if !cached { progress.scraped += 1; }
+            } else { progress.failed += 1; }
+            drop(progress);
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+        state.artwork_backfill.write().await.active = false;
+        wait_for_metadata_backfill(&state, Duration::from_secs(6 * 60 * 60)).await;
+    }
+}
+
+async fn wait_for_metadata_backfill(state: &AppState, delay: Duration) {
+    tokio::select! {
+        _ = tokio::time::sleep(delay) => {},
+        _ = state.artwork_scrape_notify.notified() => {},
+    }
+}
+
+async fn wait_for_sonarr_backfill(state: &AppState, delay: Duration) {
+    tokio::select! {
+        _ = tokio::time::sleep(delay) => {},
+        _ = state.sonarr_scrape_notify.notified() => {},
+    }
+}
+
+async fn run_metadata_sonarr_backfill(state: Arc<AppState>) {
+    wait_for_sonarr_backfill(&state, Duration::from_secs(10)).await;
+    loop {
+        let vault = state.vault.read().await.clone();
+        let Some(vault) = vault else {
+            wait_for_sonarr_backfill(&state, Duration::from_secs(60)).await;
+            continue;
+        };
+        let client = match sonarr::client(&state).await {
+            Ok(client) => client,
+            Err(_) => {
+                wait_for_sonarr_backfill(&state, Duration::from_secs(60)).await;
+                continue;
+            }
+        };
+        let (series, profiles) = match tokio::try_join!(
+            sonarr::raw_series(&client),
+            sonarr::raw_quality_profiles(&client),
+        ) {
+            Ok(result) => result,
+            Err(_) => {
+                wait_for_sonarr_backfill(&state, Duration::from_secs(60)).await;
+                continue;
+            }
+        };
+        let records: Vec<_> = series.into_iter().filter_map(|mut item| {
+            let tvdb_id = item.get("tvdbId").and_then(serde_json::Value::as_u64).filter(|id| *id > 0)?;
+            let quality_profile_id = item.get("qualityProfileId").and_then(serde_json::Value::as_i64);
+            if let Some(profile) = profiles.iter().find(|profile| {
+                profile.get("id").and_then(serde_json::Value::as_i64) == quality_profile_id
+            }).and_then(|profile| profile.get("name")) {
+                item["qualityProfile"] = profile.clone();
+            }
+            Some((tvdb_id, item))
+        }).collect();
+        let total = records.iter().filter(|(_, item)| sonarr::has_poster(item)).count();
+        let scraped = records.iter().filter(|(tvdb_id, item)| {
+            sonarr::has_poster(item) && vault.tv_artwork_exists(*tvdb_id)
+        }).count();
+        *state.sonarr_backfill.write().await = ArtworkBackfillProgress {
+            active: !records.is_empty(), completed: 0, scraped, total, failed: 0,
+        };
+        for (tvdb_id, item) in records {
+            let cached = vault.tv_artwork_exists(tvdb_id);
+            let expected_artwork = sonarr::has_poster(&item);
+            let scraped = sonarr::scrape_and_store(
+                &client, vault.clone(), &item, tvdb_id, state.artwork_scrape_lock.clone()
+            ).await;
+            let text_saved = vault.tv_metadata_exists(tvdb_id);
+            let artwork_saved = vault.tv_artwork_exists(tvdb_id);
+            let succeeded = scraped.is_ok() && text_saved && (!expected_artwork || artwork_saved);
+            let mut progress = state.sonarr_backfill.write().await;
+            progress.completed += 1;
+            if succeeded {
+                if expected_artwork && !cached && artwork_saved { progress.scraped += 1; }
+            } else {
+                progress.failed += 1;
+            }
+            drop(progress);
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+        state.sonarr_backfill.write().await.active = false;
+        wait_for_sonarr_backfill(&state, Duration::from_secs(6 * 60 * 60)).await;
+    }
+}
+
+fn image_response(
+    content_type: String,
+    bytes: Vec<u8>,
+) -> Result<Response<Body>, (StatusCode, Json<ApiError>)> {
+    Response::builder()
+        .header(header::CONTENT_TYPE, content_type)
+        .header(header::CACHE_CONTROL, "private, max-age=3600")
+        .body(Body::from(bytes))
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError {
+                    error: "Could not serve movie poster",
+                }),
+            )
+        })
 }
 
 async fn search_movie_metadata(
@@ -754,13 +1253,19 @@ fn validated_tmdb_image_url(value: &str) -> Result<reqwest::Url, ()> {
 }
 
 async fn fetch_tmdb_image(url: reqwest::Url) -> Result<Option<(String, Vec<u8>)>, ()> {
-    const MAX_ARTWORK_BYTES: usize = 8 * 1024 * 1024;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|_| ())?;
     let mut response = client.get(url).send().await.map_err(|_| ())?;
+    read_image_response(&mut response).await
+}
+
+async fn read_image_response(
+    response: &mut reqwest::Response,
+) -> Result<Option<(String, Vec<u8>)>, ()> {
+    const MAX_ARTWORK_BYTES: usize = 8 * 1024 * 1024;
     if !response.status().is_success()
         || response
             .content_length()
@@ -800,7 +1305,8 @@ async fn get_movie_poster(
             error: "Unlock the age-encrypted config to read cached artwork",
         }),
     ))?;
-    let artwork = tokio::task::spawn_blocking(move || vault.load_artwork(tmdb_id))
+    let cache = state.artwork_cache.clone();
+    let artwork = tokio::task::spawn_blocking(move || vault.load_artwork_cached(tmdb_id, &cache))
         .await
         .map_err(|_| {
             (
@@ -838,6 +1344,33 @@ async fn get_movie_poster(
         })
 }
 
+async fn get_sonarr_poster(
+    State(state): State<Arc<AppState>>,
+    AxumPath(tvdb_id): AxumPath<u64>,
+) -> Result<Response<Body>, (StatusCode, Json<ApiError>)> {
+    let vault = state.vault.read().await.clone().ok_or((
+        StatusCode::LOCKED,
+        Json(ApiError { error: "Unlock the age-encrypted config to read cached artwork" }),
+    ))?;
+    let cache = state.artwork_cache.clone();
+    let artwork = tokio::task::spawn_blocking(move || vault.load_tv_artwork_cached(tvdb_id, &cache))
+        .await
+        .map_err(|_| {
+            eprintln!("TV artwork worker failed while loading encrypted artwork");
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError { error: "Could not decrypt cached artwork" }))
+        })?
+        .map_err(|error| {
+            eprintln!("TV artwork read/decrypt failed: {error}");
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError { error: "Could not decrypt cached artwork" }))
+        })?
+        .ok_or((StatusCode::NOT_FOUND, Json(ApiError { error: "Encrypted artwork was not found" })))?;
+    Response::builder()
+        .header(header::CONTENT_TYPE, artwork.content_type)
+        .header(header::CACHE_CONTROL, "private, no-store")
+        .body(Body::from(artwork.bytes))
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError { error: "Could not serve cached artwork" })))
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct MiniMetadataExportIndex {
@@ -845,7 +1378,7 @@ struct MiniMetadataExportIndex {
     artwork_files: Vec<String>,
 }
 
-fn valid_export_filename(kind: &str, filename: &str) -> bool {
+pub(crate) fn valid_export_filename(kind: &str, filename: &str) -> bool {
     let stem = match kind {
         "text" => filename.strip_suffix(".json.aged"),
         "artwork" => filename.strip_suffix(".aged"),
@@ -871,8 +1404,6 @@ fn list_export_files(kind: &str) -> Result<Vec<String>, std::io::Error> {
         if valid_export_filename(kind, &name) { names.push(name); }
     }
     names.sort();
-    if kind == "text" { names.truncate(3); }
-    if names.len() > 10_000 { names.truncate(10_000); }
     Ok(names)
 }
 
@@ -886,6 +1417,65 @@ async fn mini_metadata_export_index() -> Result<Json<MiniMetadataExportIndex>, S
     Ok(Json(MiniMetadataExportIndex { text_files, artwork_files }))
 }
 
+async fn encrypted_radarr_library(
+    State(state): State<Arc<AppState>>,
+    body: axum::body::Bytes,
+) -> Result<Response<Body>, StatusCode> {
+    if body.len() != 65 || body[0] != 4 { return Err(StatusCode::BAD_REQUEST); }
+    let client_key = p256::PublicKey::from_sec1_bytes(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
+    let radarr = state.radarr.read().await.clone().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let vault = state.vault.read().await.clone();
+    let movies = radarr.list_movies(vault).await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+    let browser_movies: Vec<_> = movies.iter().map(|movie| BrowserRadarrMovie {
+        title: &movie.title,
+        title_slug: &movie.title_slug,
+        year: movie.year,
+        monitored: movie.monitored,
+        has_file: movie.has_file,
+        size_on_disk: movie.size_on_disk,
+        quality_profile: &movie.quality_profile,
+        added: &movie.added,
+        tmdb_id: movie.tmdb_id,
+        artwork_source: &movie.artwork_source,
+        genres: movie.genres.iter().map(String::as_str).collect(),
+    }).collect();
+    let plaintext = Zeroizing::new(serde_json::to_vec(&browser_movies).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?);
+    if plaintext.len() > 8 * 1024 * 1024 { return Err(StatusCode::PAYLOAD_TOO_LARGE); }
+    let ephemeral = p256::ecdh::EphemeralSecret::random(&mut p256::elliptic_curve::rand_core::OsRng);
+    let server_key = p256::PublicKey::from(&ephemeral);
+    let shared = ephemeral.diffie_hellman(&client_key);
+    let hkdf = hkdf::Hkdf::<sha2::Sha256>::new(Some(b"rawrarr-coordinator-session-v1"), shared.raw_secret_bytes());
+    let mut aes_key = Zeroizing::new([0u8; 32]);
+    hkdf.expand(b"radarr-library-response", &mut *aes_key).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let cipher = aes_gcm::Aes256Gcm::new_from_slice(&*aes_key).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut iv = [0u8; 12];
+    p256::elliptic_curve::rand_core::OsRng.fill_bytes(&mut iv);
+    use aes_gcm::aead::Aead;
+    let encrypted = cipher.encrypt((&iv).into(), plaintext.as_slice()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut response = Vec::with_capacity(65 + iv.len() + encrypted.len());
+    response.extend_from_slice(server_key.to_encoded_point(false).as_bytes());
+    response.extend_from_slice(&iv);
+    response.extend_from_slice(&encrypted);
+    Response::builder().header(header::CONTENT_TYPE, "application/octet-stream").header(header::CACHE_CONTROL, "private, no-store")
+        .body(Body::from(response)).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BrowserRadarrMovie<'a> {
+    title: &'a str,
+    title_slug: &'a Option<String>,
+    year: Option<i64>,
+    monitored: bool,
+    has_file: bool,
+    size_on_disk: u64,
+    quality_profile: &'a Option<String>,
+    added: &'a Option<String>,
+    tmdb_id: Option<i64>,
+    artwork_source: &'a Option<String>,
+    genres: Vec<&'a str>,
+}
+
 async fn export_ciphertext(
     AxumPath((kind, filename)): AxumPath<(String, String)>,
 ) -> Result<Response<Body>, StatusCode> {
@@ -893,7 +1483,7 @@ async fn export_ciphertext(
     let path = secure_config::AgeVault::metadata_dir().join("movies").join(&kind).join(&filename);
     let bytes = tokio::task::spawn_blocking(move || {
         let metadata = std::fs::symlink_metadata(&path)?;
-        let max_bytes = if kind == "artwork" { 10 * 1024 * 1024 } else { 2 * 1024 * 1024 };
+        let max_bytes = if kind == "artwork" { 10 * 1024 * 1024 } else { 7 * 1024 * 1024 + 4096 };
         if !metadata.file_type().is_file() || metadata.len() > max_bytes {
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "unsupported export entry"));
         }
@@ -923,6 +1513,39 @@ async fn export_config_ciphertext() -> Result<Response<Body>, StatusCode> {
         .header(header::CACHE_CONTROL, "private, no-store")
         .body(Body::from(bytes))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+async fn export_age_recipient() -> Result<Response<Body>, StatusCode> {
+    let path = secure_config::AgeVault::public_recipient_path();
+    let recipient = tokio::task::spawn_blocking(move || std::fs::read_to_string(path))
+        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|error| if error.kind() == std::io::ErrorKind::NotFound { StatusCode::NOT_FOUND } else { StatusCode::INTERNAL_SERVER_ERROR })?;
+    if !recipient.trim().starts_with("age1pq1") { return Err(StatusCode::SERVICE_UNAVAILABLE); }
+    Response::builder().header(header::CONTENT_TYPE, "text/plain; charset=utf-8").header(header::CACHE_CONTROL, "private, no-store")
+        .body(Body::from(recipient.trim().to_owned())).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+async fn replace_config_ciphertext(body: Bytes) -> Result<StatusCode, StatusCode> {
+    const MAGIC: &[u8] = b"age-encryption.org/v1\n";
+    if body.len() < MAGIC.len() || body.len() > 2 * 1024 * 1024 || !body.starts_with(MAGIC) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let path = secure_config::AgeVault::config_path();
+    tokio::task::spawn_blocking(move || {
+        use std::io::Write;
+        let parent = path.parent().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        std::fs::create_dir_all(parent).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let temporary = parent.join(format!(".config.{}.tmp", uuid::Uuid::new_v4().simple()));
+        let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&temporary).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let result = (|| {
+            file.write_all(&body).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            file.sync_all().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            std::fs::rename(&temporary, &path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+        })();
+        if result.is_err() { let _ = std::fs::remove_file(&temporary); }
+        result
+    }).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[derive(Serialize)]
@@ -1008,6 +1631,9 @@ async fn get_configuration(State(state): State<Arc<AppState>>) -> Json<Configura
                 .map(|client| (client.base_url.clone(), true))
         })
         .map(|(url, has_api_key)| SharedConfiguration {
+            metadata_filename_key_configured: stored_config
+                .as_ref()
+                .is_some_and(|config| config.metadata_filename_key.is_some()),
             schema_version: 1,
             source,
             radarr: Some(SharedRadarrConfig {
@@ -1071,6 +1697,25 @@ async fn syncthing_status(State(state): State<Arc<AppState>>) -> Json<SyncthingS
             device_id: None,
             version: None,
         }),
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncthingSharedHealthResponse {
+    configured: bool,
+    folders: Option<Vec<syncthing::SharedHealth>>,
+}
+
+async fn syncthing_shared_health(
+    State(state): State<Arc<AppState>>,
+) -> Json<SyncthingSharedHealthResponse> {
+    let Some(client) = &state.syncthing else {
+        return Json(SyncthingSharedHealthResponse { configured: false, folders: None });
+    };
+    match client.shared_health_all().await {
+        Ok(folders) => Json(SyncthingSharedHealthResponse { configured: true, folders: Some(folders) }),
+        Err(_) => Json(SyncthingSharedHealthResponse { configured: true, folders: None }),
     }
 }
 
@@ -1155,6 +1800,16 @@ async fn unlock_age_settings(
             }),
         )
     })?;
+    if request.remember_on_device {
+        vault.persist_identity_locally().map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError {
+                    error: "Could not save the local age identity",
+                }),
+            )
+        })?;
+    }
     vault.persist_public_recipient().map_err(|error| {
         let (status, message) = match error {
             secure_config::VaultError::InvalidIdentity => (
@@ -1168,7 +1823,7 @@ async fn unlock_age_settings(
         };
         (status, Json(ApiError { error: message }))
     })?;
-    if let Some(settings) = stored {
+    if let Some(settings) = stored.filter(|settings| !settings.radarr_url.is_empty()) {
         let client =
             RadarrClient::new(settings.radarr_url.clone(), settings.radarr_api_key.clone())
                 .map_err(|_| {
@@ -1223,11 +1878,27 @@ async fn put_radarr_settings(
     let client =
         RadarrClient::new(std::mem::take(&mut settings.url), api_key).map_err(|error| {
             let message = match error {
-                RadarrConfigError::InvalidUrl => "Enter a valid Radarr HTTP or HTTPS URL",
+                RadarrConfigError::InvalidUrl => "Enter a valid Radarr HTTPS URL",
                 RadarrConfigError::InvalidApiKey => "Enter a valid Radarr API key",
             };
             (StatusCode::BAD_REQUEST, Json(ApiError { error: message }))
         })?;
+    let status = client.status().await.map_err(|_| {
+        (
+            StatusCode::BAD_GATEWAY,
+            Json(ApiError {
+                error: "Could not connect to Radarr; check the URL and API key",
+            }),
+        )
+    })?;
+    if !status.app_name.eq_ignore_ascii_case("radarr") {
+        return Err((
+            StatusCode::BAD_GATEWAY,
+            Json(ApiError {
+                error: "The configured service did not identify itself as Radarr",
+            }),
+        ));
+    }
     let url = client.base_url.clone();
     let api_key = client.api_key.to_str().map_err(|_| {
         (
@@ -1239,8 +1910,13 @@ async fn put_radarr_settings(
     })?;
     vault
         .save(&secure_config::PersistedConfig {
+            device_names: std::collections::HashMap::new(),
+            sonarr: None,
             radarr_url: url.clone(),
             radarr_api_key: api_key.to_owned(),
+            metadata_filename_key: None,
+            additional_services: Vec::new(),
+            needs_migration: false,
         })
         .map_err(|_| {
             (
@@ -1288,7 +1964,27 @@ async fn delete_radarr_settings(
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    if env::args().nth(1).as_deref() == Some("storage-scan-once") {
+    let role = node_role::NodeRole::from_env()?;
+    let media_configured = env::var("RAWARR_LIBRARY_PATH").is_ok_and(|p| !p.trim().is_empty());
+    role.validate_media(media_configured)?;
+    let arguments: Vec<String> = env::args().skip(1).collect();
+    if !arguments.is_empty()
+        && (arguments != ["storage-scan-once"] || role != node_role::NodeRole::Storage)
+    {
+        return Err(
+            "only storage supports the storage-scan-once command; other arguments are invalid"
+                .into(),
+        );
+    }
+    if role == node_role::NodeRole::Coordinator {
+        let address = env::var("RUST_ARR_LISTEN_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".into());
+        let app = coordinator::router().await?;
+        let listener = tokio::net::TcpListener::bind(&address).await?;
+        println!("rawrarr coordinator listening on {address}");
+        axum::serve(listener, app).await?;
+        return Ok(());
+    }
+    if arguments == ["storage-scan-once"] {
         let device_id = devices::load_or_create_device_id()?;
         let logger =
             shared_logs::SharedLogger::open(&secure_config::AgeVault::shared_dir(), &device_id)
@@ -1307,9 +2003,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
         println!(
-            "Storage scan complete: {} media files; {} encrypted sidecars saved; {} sidecar errors; {} scan issues.",
+            "Storage scan complete: {} media files; {} encrypted sidecars saved; {} already complete; {} sidecar errors; {} scan issues.",
             summary.items.len(),
             summary.sidecars_created,
+            summary.sidecars_skipped,
             summary.sidecar_errors,
             summary.issues
         );
@@ -1320,31 +2017,58 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let address = env::var("RUST_ARR_LISTEN_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".to_owned());
     let socket_address: SocketAddr = address.parse()?;
-    let auth = auth::AuthState::connect().await?;
+    let device_id = devices::load_or_create_device_id()?;
+    let device_name = env::var("RAWARR_DEVICE_NAME").unwrap_or_else(|_| "This device".to_owned());
+    let node_id = env::var("RAWARR_NODE_ID").unwrap_or_else(|_| device_id.clone());
+    let auth = node_auth::NodeAuth::from_env(role, &node_id, &device_name).await?;
     let mut radarr = None;
     let mut vault = None;
-    if let Some(identity_path) =
-        env::var_os("RAWARR_AGE_IDENTITY_FILE").filter(|path| !path.is_empty())
-    {
+    secure_config::AgeVault::enforce_local_config_policy()?;
+    let local_settings = secure_config::AgeVault::load_local_config()?;
+    let identity_path = env::var_os("RAWARR_AGE_IDENTITY_FILE")
+        .filter(|path| !path.is_empty())
+        .or_else(|| {
+            let local_identity = env::var_os("RAWARR_DATA_DIR")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| std::path::PathBuf::from("data"))
+                .join("age-identity");
+            local_identity
+                .is_file()
+                .then(|| local_identity.into_os_string())
+        });
+    if let Some(identity_path) = identity_path {
         let identity = std::fs::read_to_string(identity_path)?;
         let unlocked = secure_config::AgeVault::from_identity(identity)?;
-        if let Some(settings) = unlocked.load()? {
+        if let Some(settings) = unlocked
+            .load()?
+            .or(local_settings)
+            .filter(|settings| !settings.radarr_url.is_empty())
+        {
             radarr = Some(RadarrClient::new(
                 settings.radarr_url.clone(),
                 settings.radarr_api_key.clone(),
             )?);
         }
         vault = Some(unlocked);
+    } else if let Some(settings) = local_settings {
+        radarr = Some(RadarrClient::new(
+            settings.radarr_url.clone(),
+            settings.radarr_api_key.clone(),
+        )?);
     }
-    let device_id = devices::load_or_create_device_id()?;
     let shared_logs =
         shared_logs::SharedLogger::open(&secure_config::AgeVault::shared_dir(), &device_id).ok();
     if shared_logs.is_none() {
         eprintln!("rawrarr shared logging could not be initialized");
     }
+    let storage_scan = storage_node::ScanController::default();
     if role == node_role::NodeRole::Storage {
         if let Some(interval) = storage_node::scan_interval_from_env()? {
-            storage_node::start_periodic_scan(interval, shared_logs.clone());
+            storage_node::start_periodic_scan_with_controller(
+                interval,
+                shared_logs.clone(),
+                storage_scan.clone(),
+            );
             println!(
                 "storage automatic scanning enabled; scans repeat every {} seconds",
                 interval.as_secs()
@@ -1360,20 +2084,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         library: library::LibraryRoot::from_env()?,
         device_id,
         shared_logs: shared_logs.clone(),
+        role,
+        storage_scan,
         syncthing: syncthing::Client::from_env()
             .map_err(|_| "invalid Syncthing environment configuration")?,
+        artwork_backfill: Arc::new(RwLock::new(ArtworkBackfillProgress::default())),
+        sonarr_backfill: Arc::new(RwLock::new(ArtworkBackfillProgress::default())),
+        artwork_scrape_lock: Arc::new(tokio::sync::Mutex::new(())),
+        artwork_scrape_notify: Arc::new(tokio::sync::Notify::new()),
+        artwork_force_rescan: Arc::new(AtomicBool::new(false)),
+        sonarr_scrape_notify: Arc::new(tokio::sync::Notify::new()),
+        artwork_cache: Arc::new(artwork_cache::ArtworkCache::from_env()),
     });
+    if role == node_role::NodeRole::Metadata {
+        tokio::spawn(run_metadata_artwork_backfill(state.clone()));
+        tokio::spawn(run_metadata_sonarr_backfill(state.clone()));
+    }
 
     let protected = Router::new()
-        .route("/", get(dashboard))
-        .route("/setup/age", get(age_setup_page))
         .route("/api/auth/logout", post(logout))
         .route("/api/events", get(dashboard_events))
         .route("/api/library", get(library_info))
         .route("/api/devices", get(list_devices))
+        .route("/api/nodes/pending", get(node_auth::proxy))
+        .route("/api/nodes/approve", post(node_auth::proxy))
         .route("/api/syncthing/status", get(syncthing_status))
+        .route("/api/syncthing/shared-health", get(syncthing_shared_health))
         .route("/api/syncthing/share", post(configure_syncthing_share))
         .route("/api/library/scan", axum::routing::post(scan_library))
+        .route("/api/library/scan/missing", post(request_storage_scan))
+        .route("/api/library/scan/status", get(storage_scan_status))
+        .route("/api/library/scan/cancel", post(cancel_storage_scan))
         .route(
             "/api/metadata/movies/search",
             axum::routing::post(search_movie_metadata),
@@ -1384,8 +2125,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .route("/api/metadata/status", get(metadata_status))
         .route("/api/metadata/export/mini", get(mini_metadata_export_index))
-        .route("/api/metadata/export/config", get(export_config_ciphertext))
+        .route("/api/metadata/session/library", axum::routing::post(encrypted_radarr_library))
+        .route("/api/metadata/export/config", get(export_config_ciphertext).put(replace_config_ciphertext))
+        .route("/api/metadata/export/recipient", get(export_age_recipient))
         .route("/api/metadata/export/ciphertext/{kind}/{filename}", get(export_ciphertext))
+        .route("/api/metadata/storage", get(metadata_storage_status))
+        .route("/api/metadata/artwork/backfill", get(metadata_artwork_backfill_status))
+        .route("/api/metadata/artwork/rescan", post(request_movie_metadata_rescan))
+        .route("/api/metadata/sonarr/backfill", get(metadata_sonarr_backfill_status))
+        .route("/api/metadata/sonarr/rescan", post(request_tv_metadata_rescan))
         .route(
             "/api/settings/radarr",
             get(get_radarr_settings)
@@ -1401,30 +2149,114 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             axum::routing::post(generate_age_identity),
         )
         .route("/api/configuration", get(get_configuration))
+        .route("/api/sonarr/status", get(sonarr::status))
+        .route("/api/sonarr/series", get(sonarr::series))
+        .route("/api/sonarr/series/{tvdb_id}/poster", get(get_sonarr_poster))
+        .route(
+            "/api/settings/sonarr",
+            get(sonarr::settings)
+                .put(sonarr::save)
+                .delete(sonarr::clear),
+        )
         .route("/api/radarr/status", get(radarr_status))
         .route("/api/radarr/movies", get(radarr_movies))
         .route("/api/radarr/movies/snapshot", get(movie_snapshot::get))
+        .route(
+            "/api/radarr/movies/{tmdb_id}/poster",
+            get(radarr_movie_poster),
+        )
         .route_layer(middleware::from_fn_with_state(
-            auth.pool.clone(),
-            auth::require_session,
+            auth.clone(),
+            node_auth::require_session,
         ));
+    let direct_protected = Router::new()
+        .route("/api/library/scan/missing", post(request_storage_scan))
+        .route("/api/library/scan/status", get(storage_scan_status))
+        .route("/api/library/scan/cancel", post(cancel_storage_scan))
+        .route("/api/metadata/storage", get(metadata_storage_status))
+        .route("/api/metadata/sonarr/backfill", get(metadata_sonarr_backfill_status))
+        .route("/api/metadata/sonarr/rescan", post(request_tv_metadata_rescan))
+        .route("/api/metadata/artwork/rescan", post(request_movie_metadata_rescan))
+        .route("/api/metadata/export/mini", get(mini_metadata_export_index))
+        .route("/api/metadata/session/library", post(encrypted_radarr_library))
+        .route("/api/metadata/export/config", get(export_config_ciphertext).put(replace_config_ciphertext))
+        .route("/api/metadata/export/recipient", get(export_age_recipient))
+        .route("/api/metadata/export/ciphertext/{kind}/{filename}", get(export_ciphertext))
+        .route("/api/settings/age", get(get_age_settings).post(unlock_age_settings))
+        .route(
+            "/api/settings/radarr",
+            get(get_radarr_settings)
+                .put(put_radarr_settings)
+                .delete(delete_radarr_settings),
+        )
+        .route(
+            "/api/settings/sonarr",
+            get(sonarr::settings)
+                .put(sonarr::save)
+                .delete(sonarr::clear),
+        )
+        .route("/api/sonarr/status", get(sonarr::status))
+        .route("/api/sonarr/series", get(sonarr::series))
+        .route("/api/sonarr/series/{tvdb_id}/poster", get(get_sonarr_poster))
+        .route("/api/radarr/movies", get(radarr_movies))
+        .route_layer(middleware::from_fn_with_state(
+            auth.clone(),
+            node_auth::require_session,
+        ));
+    let direct_app = Router::new()
+        .route("/api/direct/health", get(direct_health))
+        .route("/api/direct/session", post(direct_session_cookie))
+        .merge(direct_protected)
+        .layer(middleware::from_fn(log_request))
+        .layer(middleware::from_fn(direct_api_cors))
+        .with_state(state.clone());
     let app = Router::new()
         .route("/health", get(health))
+        .route("/api/nodes/enroll", post(node_auth::enrollment_proxy))
+        .route(
+            "/api/nodes/enroll/status",
+            post(node_auth::enrollment_proxy),
+        )
         .route("/assets/rawrarr-logo.png", get(rawrarr_logo))
         .route("/assets/rawrarr-logo.jxl", get(rawrarr_logo_jxl))
         .route("/assets/rawrarr-favicon.svg", get(rawrarr_favicon))
         .route("/assets/passkey-client.mjs", get(passkey_client_js))
         .route("/assets/metadata-export.js", get(metadata_export_js))
-        .route("/auth", get(auth_page))
-        .route("/api/auth/status", get(auth::status))
-        .route("/api/auth/register/start", post(auth::begin_registration))
-        .route("/api/auth/register/finish", post(auth::finish_registration))
-        .route("/api/auth/login/start", post(auth::begin_authentication))
-        .route("/api/auth/login/finish", post(auth::finish_authentication))
-        .merge(protected)
-        .layer(middleware::from_fn(log_request))
-        .with_state(state);
+        .route("/api/auth/status", get(node_auth::proxy))
+        .route("/api/auth/register/start", post(node_auth::proxy))
+        .route("/api/auth/register/finish", post(node_auth::proxy))
+        .route("/api/auth/login/start", post(node_auth::proxy))
+        .route("/api/auth/login/finish", post(node_auth::proxy))
+        .route(
+            "/api/auth/passkeys/coordinator/link",
+            post(node_auth::proxy),
+        )
+        .merge(protected);
+    let app = if role == node_role::NodeRole::Coordinator {
+        app.route("/", get(dashboard))
+            .route("/auth", get(auth_page))
+            .route("/setup/age", get(age_setup_page))
+    } else {
+        app.route("/", get(subscriber_ui_disabled))
+            .route("/auth", get(subscriber_ui_disabled))
+            .route("/setup/age", get(subscriber_ui_disabled))
+    }
+    .layer(middleware::from_fn(log_request))
+    .with_state(state);
     let listener = tokio::net::TcpListener::bind(socket_address).await?;
+    if let Ok(direct_address) = env::var("RUST_ARR_DIRECT_LISTEN_ADDR") {
+        if !matches!(role, node_role::NodeRole::Metadata | node_role::NodeRole::Storage) {
+            return Err("the direct API listener is available only for metadata or storage nodes".into());
+        }
+        let direct_socket_address: SocketAddr = direct_address.parse()?;
+        let direct_listener = tokio::net::TcpListener::bind(direct_socket_address).await?;
+        tokio::spawn(async move {
+            if let Err(error) = axum::serve(direct_listener, direct_app).await {
+                eprintln!("rawrarr direct API listener failed: {error}");
+            }
+        });
+        println!("rawrarr direct metadata API listening on {direct_socket_address}");
+    }
 
     if let Some(logger) = shared_logs {
         logger.application_started();
@@ -1437,6 +2269,62 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("rawrarr listening on {socket_address}");
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+async fn direct_session_cookie(headers: HeaderMap) -> Response {
+    let token = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .filter(|value| value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    let Some(token) = token else {
+        return StatusCode::UNAUTHORIZED.into_response();
+    };
+    let cookie = format!("rawrarr_direct_session={token}; Path=/direct-api/; HttpOnly; Secure; SameSite=Strict; Max-Age=300");
+    match HeaderValue::from_str(&cookie) {
+        Ok(value) => Response::builder()
+            .status(StatusCode::NO_CONTENT)
+            .header(header::SET_COOKIE, value)
+            .body(Body::empty())
+            .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response()),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+async fn direct_api_cors(request: Request, next: Next) -> Response {
+    let origin = request.headers().get(header::ORIGIN).cloned();
+    let allowed_origin = env::var("RAWARR_DIRECT_ALLOWED_ORIGIN").ok();
+    let allowed = origin
+        .as_ref()
+        .and_then(|value| value.to_str().ok())
+        .zip(allowed_origin.as_deref())
+        .is_some_and(|(request_origin, allowed)| request_origin == allowed);
+    if request.method() == axum::http::Method::OPTIONS {
+        let mut response = StatusCode::NO_CONTENT.into_response();
+        if allowed {
+            add_direct_cors_headers(&mut response, origin.as_ref());
+        }
+        return response;
+    }
+    let mut response = next.run(request).await;
+    if allowed {
+        add_direct_cors_headers(&mut response, origin.as_ref());
+    }
+    response
+}
+
+fn add_direct_cors_headers(response: &mut Response, origin: Option<&HeaderValue>) {
+    let Some(origin) = origin else { return };
+    let headers = response.headers_mut();
+    headers.insert(header::VARY, HeaderValue::from_static("Origin"));
+    headers.insert("access-control-allow-origin", origin.clone());
+    headers.insert("access-control-allow-credentials", HeaderValue::from_static("true"));
+    headers.insert("access-control-allow-methods", HeaderValue::from_static("GET, POST, PUT, DELETE, OPTIONS"));
+    headers.insert("access-control-allow-headers", HeaderValue::from_static("Accept, Authorization, Content-Type"));
+}
+
+async fn subscriber_ui_disabled() -> StatusCode {
+    StatusCode::NOT_FOUND
 }
 
 #[cfg(test)]
@@ -1486,6 +2374,20 @@ mod logging_tests {
                 "expected {value} to enable quiet logging"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod age_identity_request_tests {
+    use super::AgeIdentityRequest;
+
+    #[test]
+    fn browser_camel_case_remember_flag_is_deserialized() {
+        let request: AgeIdentityRequest = serde_json::from_str(
+            r#"{"identity":"AGE-SECRET-KEY-PQ-1fixture","rememberOnDevice":true}"#,
+        )
+        .expect("decode age unlock request");
+        assert!(request.remember_on_device);
     }
 }
 

@@ -1,0 +1,4 @@
+# Tailscale Serve runs in the shared namespace and proxies HTTPS directly to the
+# coordinator on 127.0.0.1:8080. No Caddy sidecar is needed.
+services: {}
+

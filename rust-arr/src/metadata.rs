@@ -1,6 +1,40 @@
 //! Normalized movie metadata lookup types for provider adapters.
 
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value, json};
+
+/// Build a shareable provider record while omitting node-local paths and
+/// byte-size observations that belong to storage-node sidecars.
+pub(crate) fn arr_text_record(provider: &str, id_field: &str, id: u64, source: &Value) -> Value {
+    let mut text = source.clone();
+    sanitize_arr_text_fields(&mut text);
+    let mut record = match text {
+        Value::Object(fields) => fields,
+        _ => Map::new(),
+    };
+    record.insert("schemaVersion".into(), json!(2));
+    record.insert("provider".into(), json!(provider));
+    record.insert(id_field.into(), json!(id));
+    Value::Object(record)
+}
+
+pub(crate) fn sanitize_arr_text_fields(value: &mut Value) {
+    match value {
+        Value::Object(fields) => {
+            fields.retain(|key, _| {
+                let normalized: String = key.chars().filter(|character| character.is_ascii_alphanumeric())
+                    .map(|character| character.to_ascii_lowercase()).collect();
+                !normalized.ends_with("path")
+                    && !matches!(normalized.as_str(), "size" | "sizeondisk" | "filesize" | "filesizebytes" | "bytes" | "totalbytes")
+            });
+            for field in fields.values_mut() { sanitize_arr_text_fields(field); }
+        }
+        Value::Array(items) => {
+            for item in items { sanitize_arr_text_fields(item); }
+        }
+        _ => {}
+    }
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

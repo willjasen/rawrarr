@@ -31,16 +31,129 @@ async function fetchBytes(url) {
   return new Uint8Array(await response.arrayBuffer());
 }
 
-export async function runMiniExport(identity, onProgress = () => {}) {
+function normalizeConfigShape(config) {
+  if (!Array.isArray(config.services)) {
+    const services = [];
+    if (config.radarr_url || config.radarr_api_key) services.push({ type: 'radarr', url: config.radarr_url || '', api_key: config.radarr_api_key || '' });
+    if (config.sonarr && typeof config.sonarr === 'object') services.push({ type: 'sonarr', url: config.sonarr.url || '', api_key: config.sonarr.api_key || '' });
+    config.services = services;
+  } else {
+    const known = new Set(config.services.map(service => service?.type));
+    if ((config.radarr_url || config.radarr_api_key) && !known.has('radarr')) {
+      config.services.push({ type: 'radarr', url: config.radarr_url || '', api_key: config.radarr_api_key || '' });
+    }
+    if (config.sonarr && typeof config.sonarr === 'object' && !known.has('sonarr')) {
+      config.services.push({ type: 'sonarr', url: config.sonarr.url || '', api_key: config.sonarr.api_key || '' });
+    }
+  }
+  delete config.radarr_url;
+  delete config.radarr_api_key;
+  delete config.sonarr;
+  config.schema_version = 1;
+  if (!config.device_names || typeof config.device_names !== 'object' || Array.isArray(config.device_names)) config.device_names = {};
+  return config;
+}
+
+function canonicalizeConfig(config) {
+  normalizeConfigShape(config);
+  if (!/^[0-9a-f]{64}$/.test(config.metadata_filename_key || '')) {
+    const randomKey = crypto.getRandomValues(new Uint8Array(32));
+    config.metadata_filename_key = [...randomKey].map(byte => byte.toString(16).padStart(2, '0')).join('');
+    randomKey.fill(0);
+  }
+  return config;
+}
+
+function clearConfigStrings(value) {
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index++) {
+      if (typeof value[index] === 'string') value[index] = '';
+      else clearConfigStrings(value[index]);
+    }
+  } else if (value && typeof value === 'object') {
+    for (const key of Object.keys(value)) {
+      if (typeof value[key] === 'string') value[key] = '';
+      else clearConfigStrings(value[key]);
+    }
+  }
+}
+
+export async function saveDeviceName(identity, base, nodeId, name) {
+  if (!identity.trim().startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('Paste a post-quantum age private ID.');
+  const prefix = base.endsWith('/') ? base : `${base}/`;
+  const encrypted = await fetchBytes(`${prefix}api/metadata/export/config`);
+  const plaintext = await decrypt(identity, encrypted);
+  encrypted.fill(0);
+  let config;
+  try { config = JSON.parse(decoder.decode(plaintext)); }
+  finally { plaintext.fill(0); }
+  canonicalizeConfig(config);
+  const names = config.device_names && typeof config.device_names === 'object' && !Array.isArray(config.device_names)
+    ? config.device_names : {};
+  if (name) names[nodeId] = name; else delete names[nodeId];
+  config.device_names = names;
+  const recipientResponse = await fetch(`${prefix}api/metadata/export/recipient`, { cache: 'no-store' });
+  if (!recipientResponse.ok) throw new Error('Could not read the public age recipient from this metadata node.');
+  const recipient = (await recipientResponse.text()).trim();
+  const encrypter = new age.Encrypter();
+  encrypter.addRecipient(recipient);
+  const updated = new TextEncoder().encode(JSON.stringify(config));
+  try {
+    const ciphertext = new Uint8Array(await encrypter.encrypt(updated));
+    const response = await fetch(`${prefix}api/metadata/export/config`, {
+      method: 'PUT', cache: 'no-store', headers: { 'Content-Type': 'application/octet-stream' }, body: ciphertext
+    });
+    ciphertext.fill(0);
+    if (!response.ok) throw new Error(`Could not save encrypted device name (${response.status}).`);
+  } finally {
+    updated.fill(0);
+    clearConfigStrings(config);
+    config = null;
+  }
+}
+
+export async function loadDeviceNames(identity, base) {
+  const prefix = base.endsWith('/') ? base : `${base}/`;
+  const encrypted = await fetchBytes(`${prefix}api/metadata/export/config`);
+  const plaintext = await decrypt(identity, encrypted);
+  encrypted.fill(0);
+  let config;
+  try { config = JSON.parse(decoder.decode(plaintext)); }
+  finally { plaintext.fill(0); }
+  const names = config.device_names && typeof config.device_names === 'object' && !Array.isArray(config.device_names)
+    ? { ...config.device_names } : {};
+  clearConfigStrings(config);
+  config = null;
+  return names;
+}
+
+export async function loadSharedConfig(identity, base) {
+  if (!identity.trim().startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('Paste a post-quantum age private ID.');
+  const prefix = base.endsWith('/') ? base : `${base}/`;
+  const encrypted = await fetchBytes(`${prefix}api/metadata/export/config`);
+  const plaintext = await decrypt(identity, encrypted);
+  encrypted.fill(0);
+  try {
+    const config = JSON.parse(decoder.decode(plaintext));
+    if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('The shared configuration has an invalid format.');
+    return normalizeConfigShape(config);
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new Error('The decrypted shared configuration is not valid JSON.');
+    throw error;
+  } finally { plaintext.fill(0); }
+}
+
+export async function runMiniExport(identity, onProgress = () => {}, base = '') {
+  const url = path => `${base}${path}`;
   if (!identity.trim().startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('Paste a post-quantum age private ID.');
   onProgress('Reading encrypted metadata index…');
-  const indexResponse = await fetch('/api/metadata/export/mini');
+  const indexResponse = await fetch(url('/api/metadata/export/mini'), { cache: 'no-store' });
   if (!indexResponse.ok) throw new Error(indexResponse.status === 404 ? 'No encrypted movie metadata is available yet.' : 'Could not read the metadata export index.');
   const index = await indexResponse.json();
-  if (!index.textFiles?.length) throw new Error('No encrypted movie text records are available for the mini export.');
+  if (!index.textFiles?.length) throw new Error('No encrypted movie metadata records are available to export.');
 
   onProgress('Decrypting shared config in this browser…');
-  const encryptedConfig = await fetchBytes('/api/metadata/export/config');
+  const encryptedConfig = await fetchBytes(url('/api/metadata/export/config'));
   const configBytes = await decrypt(identity, encryptedConfig);
   encryptedConfig.fill(0);
   let config;
@@ -48,7 +161,7 @@ export async function runMiniExport(identity, onProgress = () => {}) {
   finally { configBytes.fill(0); }
   let keyHex = config.metadata_filename_key;
   const validKey = /^[0-9a-f]{64}$/i.test(keyHex || '');
-  for (const entry of Object.keys(config)) if (entry !== 'metadata_filename_key' && typeof config[entry] === 'string') config[entry] = '';
+  clearConfigStrings(config);
   if (!validKey) {
     keyHex = '';
     config.metadata_filename_key = '';
@@ -58,15 +171,14 @@ export async function runMiniExport(identity, onProgress = () => {}) {
   const filenameKey = Uint8Array.from(keyHex.match(/../g), (pair) => Number.parseInt(pair, 16));
   keyHex = '';
   config.metadata_filename_key = '';
-  config.radarr_api_key = '';
 
   const files = {};
   try {
-  const manifest = { formatVersion: 1, createdAt: new Date().toISOString(), scope: 'mini movie metadata export', movies: [] };
+  const manifest = { formatVersion: 1, createdAt: new Date().toISOString(), scope: 'all available movie metadata and matching artwork', movies: [] };
   const candidates = [];
   for (const [position, ciphertextName] of index.textFiles.entries()) {
     onProgress(`Decrypting movie record ${position + 1} of ${index.textFiles.length}…`);
-    const encryptedText = await fetchBytes(`/api/metadata/export/ciphertext/text/${encodeURIComponent(ciphertextName)}`);
+    const encryptedText = await fetchBytes(url(`/api/metadata/export/ciphertext/text/${encodeURIComponent(ciphertextName)}`));
     const textBytes = await decrypt(identity, encryptedText);
     encryptedText.fill(0);
     const record = JSON.parse(decoder.decode(textBytes));
@@ -83,7 +195,7 @@ export async function runMiniExport(identity, onProgress = () => {}) {
     onProgress(`Matching artwork ${position + 1} of ${candidates.length}…`);
     const artworkName = await movieFilename(filenameKey, 'artwork', movie.tmdbId, '.aged');
     if (!index.artworkFiles.includes(artworkName)) continue;
-    const encrypted = await fetchBytes(`/api/metadata/export/ciphertext/artwork/${encodeURIComponent(artworkName)}`);
+    const encrypted = await fetchBytes(url(`/api/metadata/export/ciphertext/artwork/${encodeURIComponent(artworkName)}`));
     const wrappedArtwork = await decrypt(identity, encrypted);
     encrypted.fill(0);
     const separator = wrappedArtwork.indexOf(10);
@@ -114,7 +226,7 @@ export async function runMiniExport(identity, onProgress = () => {}) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'rawrarr-mini-metadata-export.zip';
+  link.download = 'rawrarr-metadata-export.zip';
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
   return manifest.movies.length;
@@ -126,4 +238,153 @@ export async function runMiniExport(identity, onProgress = () => {}) {
   }
 }
 
-window.rawrarrMiniExport = { runMiniExport };
+export async function loadMiniMetadata(identity, base = '', onProgress = () => {}) {
+  if (!identity.trim().startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('Paste a post-quantum age private ID.');
+  const url = path => `${base}${path}`;
+  onProgress('Reading encrypted metadata index…');
+  const response = await fetch(url('/api/metadata/export/mini'), { cache: 'no-store' });
+  if (!response.ok) throw new Error(response.status === 404 ? 'No encrypted movie metadata is available yet.' : `Could not read metadata (${response.status}).`);
+  const index = await response.json();
+  if (!index.textFiles?.length) return [];
+  onProgress('Decrypting shared config in this browser…');
+  const encryptedConfig = await fetchBytes(url('/api/metadata/export/config'));
+  const configBytes = await decrypt(identity, encryptedConfig);
+  encryptedConfig.fill(0);
+  let config;
+  try { config = JSON.parse(decoder.decode(configBytes)); } finally { configBytes.fill(0); }
+  let keyHex = config.metadata_filename_key;
+  if (!/^[0-9a-f]{64}$/i.test(keyHex || '')) throw new Error('The encrypted config has no valid metadata filename key.');
+  const filenameKey = Uint8Array.from(keyHex.match(/../g), pair => Number.parseInt(pair, 16));
+  keyHex = '';
+  clearConfigStrings(config);
+  config = null;
+  const movies = [];
+  try {
+    for (const [position, name] of index.textFiles.entries()) {
+      onProgress(`Decrypting movie record ${position + 1} of ${index.textFiles.length}…`);
+      const encrypted = await fetchBytes(url(`/api/metadata/export/ciphertext/text/${encodeURIComponent(name)}`));
+      const bytes = await decrypt(identity, encrypted); encrypted.fill(0);
+      let record;
+      try { record = JSON.parse(decoder.decode(bytes)); } finally { bytes.fill(0); }
+      const tmdbId = Number(record.tmdbId);
+      if (!Number.isSafeInteger(tmdbId) || tmdbId <= 0 || name !== await movieFilename(filenameKey, 'text', tmdbId, '.json.aged')) throw new Error('A movie record failed its encrypted identity check.');
+      const movie = { tmdbId, title: record.title || 'Untitled', year: record.year || null, overview: record.overview || '', genres: Array.isArray(record.genres) ? record.genres : [], artworkUrl: null };
+      const artworkName = await movieFilename(filenameKey, 'artwork', tmdbId, '.aged');
+      if (index.artworkFiles.includes(artworkName)) {
+        const encryptedArt = await fetchBytes(url(`/api/metadata/export/ciphertext/artwork/${encodeURIComponent(artworkName)}`));
+        const wrapped = await decrypt(identity, encryptedArt); encryptedArt.fill(0);
+        const separator = wrapped.indexOf(10);
+        if (separator > 0) {
+          const type = decoder.decode(wrapped.subarray(0, separator));
+          if (['image/jpeg', 'image/png', 'image/webp'].includes(type)) movie.artworkUrl = URL.createObjectURL(new Blob([wrapped.slice(separator + 1)], { type }));
+        }
+        wrapped.fill(0);
+      }
+      movies.push(movie);
+    }
+    return movies;
+  } finally { filenameKey.fill(0); }
+}
+
+export async function loadRadarrLibrary(identity, base = '', onProgress = () => {}) {
+  if (!identity.trim().startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('Paste a post-quantum age private ID.');
+  const url = path => `${base}${path}`;
+  onProgress('Fetching encrypted Radarr library…');
+  const keyPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+  const browserPublicKey = new Uint8Array(await crypto.subtle.exportKey('raw', keyPair.publicKey));
+  const libraryResponse = await fetch(url('/api/metadata/session/library'), {
+    method: 'POST', cache: 'no-store',
+    headers: { 'Content-Type': 'application/octet-stream', Accept: 'application/octet-stream' },
+    body: browserPublicKey,
+  });
+  browserPublicKey.fill(0);
+  if (!libraryResponse.ok) throw new Error(`Could not establish the encrypted library session (${libraryResponse.status}).`);
+  const encryptedLibrary = new Uint8Array(await libraryResponse.arrayBuffer());
+  const nodePublicKey = await crypto.subtle.importKey('raw', encryptedLibrary.subarray(0, 65), { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+  const sharedSecret = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: nodePublicKey }, keyPair.privateKey, 256));
+  const hkdfSalt = new TextEncoder().encode('rawrarr-coordinator-session-v1');
+  const hkdfInfo = new TextEncoder().encode('radarr-library-response');
+  let hkdfMaterial;
+  let sessionKey;
+  try {
+    hkdfMaterial = await crypto.subtle.importKey('raw', sharedSecret, 'HKDF', false, ['deriveKey']);
+    sessionKey = await crypto.subtle.deriveKey(
+      { name: 'HKDF', hash: 'SHA-256', salt: hkdfSalt, info: hkdfInfo },
+      hkdfMaterial,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['decrypt'],
+    );
+  } finally {
+    sharedSecret.fill(0);
+    hkdfSalt.fill(0);
+    hkdfInfo.fill(0);
+  }
+  const iv = encryptedLibrary.slice(65, 77);
+  const encryptedPayload = encryptedLibrary.slice(77);
+  encryptedLibrary.fill(0);
+  let libraryBytes;
+  try { libraryBytes = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, sessionKey, encryptedPayload)); }
+  catch (_) { throw new Error('The encrypted Radarr library response failed authentication.'); }
+  finally { iv.fill(0); encryptedPayload.fill(0); }
+  let library;
+  try { library = JSON.parse(decoder.decode(libraryBytes)); }
+  finally { libraryBytes.fill(0); }
+  if (!Array.isArray(library)) throw new Error('The decrypted Radarr library has an invalid format.');
+
+  onProgress('Decrypting shared config and reading encrypted artwork index…');
+  const encryptedConfig = await fetchBytes(url('/api/metadata/export/config'));
+  const configBytes = await decrypt(identity, encryptedConfig);
+  encryptedConfig.fill(0);
+  let config;
+  try { config = JSON.parse(decoder.decode(configBytes)); }
+  finally { configBytes.fill(0); }
+  let keyHex = config.metadata_filename_key;
+  if (!/^[0-9a-f]{64}$/i.test(keyHex || '')) throw new Error('The encrypted config has no valid metadata filename key.');
+  const filenameKey = Uint8Array.from(keyHex.match(/../g), pair => Number.parseInt(pair, 16));
+  keyHex = '';
+  clearConfigStrings(config);
+  config = null;
+  try {
+    const indexResponse = await fetch(url('/api/metadata/export/mini'), { cache: 'no-store' });
+    const index = indexResponse.ok ? await indexResponse.json() : { artworkFiles: [] };
+    const artworkFiles = new Set(index.artworkFiles || []);
+    const movies = [];
+    for (const [position, item] of library.entries()) {
+      const tmdbId = Number(item.tmdbId);
+      const movie = {
+        title: typeof item.title === 'string' ? item.title : 'Unknown title',
+        year: Number.isSafeInteger(item.year) ? item.year : null,
+        monitored: Boolean(item.monitored),
+        hasFile: Boolean(item.hasFile),
+        sizeOnDisk: Number(item.sizeOnDisk) || 0,
+        qualityProfile: typeof item.qualityProfile === 'string' ? item.qualityProfile : '—',
+        added: item.added || null,
+        tmdbId: Number.isSafeInteger(tmdbId) && tmdbId > 0 ? tmdbId : null,
+        artworkSource: item.artworkSource || null,
+        genres: Array.isArray(item.genres) ? item.genres.filter(genre => typeof genre === 'string') : [],
+        artworkUrl: null,
+      };
+      if (movie.tmdbId) {
+        const artworkName = await movieFilename(filenameKey, 'artwork', movie.tmdbId, '.aged');
+        if (artworkFiles.has(artworkName)) movie.loadArtwork = async () => {
+          const encrypted = await fetchBytes(url(`/api/metadata/export/ciphertext/artwork/${encodeURIComponent(artworkName)}`));
+          const wrapped = await decrypt(identity, encrypted);
+          encrypted.fill(0);
+          const separator = wrapped.indexOf(10);
+          if (separator < 1) { wrapped.fill(0); throw new Error('Encrypted artwork has an invalid content-type header.'); }
+          const type = decoder.decode(wrapped.subarray(0, separator));
+          if (!['image/jpeg', 'image/png', 'image/webp'].includes(type)) { wrapped.fill(0); throw new Error('Encrypted artwork has an unsupported content type.'); }
+          const blob = new Blob([wrapped.slice(separator + 1)], { type });
+          wrapped.fill(0);
+          return URL.createObjectURL(blob);
+        };
+      }
+      movies.push(movie);
+      if ((position + 1) % 100 === 0) onProgress(`Decrypting movie ${position + 1} of ${library.length}…`);
+    }
+    return movies;
+  } finally { filenameKey.fill(0); }
+}
+
+window.rawrarrMiniExport = { runMiniExport, loadMiniMetadata, loadRadarrLibrary, saveDeviceName, loadDeviceNames, loadSharedConfig };

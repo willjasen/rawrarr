@@ -58,6 +58,7 @@ test('age identity creation and backup acknowledgement work in a real browser', 
   assert.equal(await continueButton.isDisabled(), true, 'Continue waits for the identity copy and backup acknowledgement');
 
   await copyButton.click();
+  await backupCheckbox.waitFor({ state: 'visible' });
   assert.equal(await backupCheckbox.isVisible(), true, 'copying the ID reveals the acknowledgement checkbox');
   assert.equal(await continueButton.isDisabled(), true, 'copying alone does not enable Continue');
   await backupCheckbox.check();

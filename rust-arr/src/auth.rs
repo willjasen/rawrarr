@@ -1,12 +1,10 @@
 //! Passkey-backed web authentication and PostgreSQL persistence.
 
 use axum::{
-    Json,
+    Extension, Json,
     body::Body,
-    extract::{Request, State},
     http::{HeaderMap, HeaderValue, StatusCode, header},
-    middleware::Next,
-    response::{IntoResponse, Redirect, Response},
+    response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -15,7 +13,6 @@ use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
 };
 use std::env;
-use url::Url;
 use uuid::Uuid;
 use webauthn_rs::prelude::*;
 use zeroize::Zeroizing;
@@ -23,12 +20,76 @@ use zeroize::Zeroizing;
 const SESSION_COOKIE: &str = "rawrarr_session";
 const SESSION_SECONDS: i64 = 8 * 60 * 60;
 const CHALLENGE_SECONDS: i64 = 5 * 60;
+const ACCOUNT_NAME_PREFIXES: &[&str] = &[
+    "jurassic",
+    "ancient",
+    "amber",
+    "fern",
+    "fossil",
+    "cretaceous",
+    "triassic",
+    "primeval",
+    "prehistoric",
+    "stone",
+    "mossy",
+    "resin",
+    "bone",
+    "tar",
+    "glacial",
+    "volcanic",
+    "paleo",
+    "swampy",
+    "prime",
+    "mesozoic",
+    "paleolithic",
+    "icebound",
+    "shale",
+    "obsidian",
+    "craggy",
+    "marshy",
+    "boggy",
+    "tundra",
+    "badlands",
+];
+const ACCOUNT_NAME_CREATURES: &[&str] = &[
+    "raptor",
+    "stegosaur",
+    "triceratops",
+    "pterosaur",
+    "dino",
+    "trex",
+    "brontosaur",
+    "spinosaur",
+    "ankylosaur",
+    "plesiosaur",
+    "allosaur",
+    "diplodocus",
+    "dimetrodon",
+    "iguanodon",
+    "tyrannosaur",
+    "velociraptor",
+    "brachiosaur",
+    "megalodon",
+    "mammoth",
+    "mosasaur",
+    "ichthyosaur",
+    "pterodactyl",
+    "oviraptor",
+    "hadrosaur",
+    "therizinosaur",
+    "parasaurolophus",
+    "ceratopsian",
+    "glyptodon",
+    "gorgonops",
+];
 
 #[derive(Clone)]
 pub(super) struct AuthState {
     pub pool: PgPool,
     pub webauthn: Webauthn,
-    secure_cookie: bool,
+    pub(super) secure_cookie: bool,
+    pub(super) node_id: String,
+    pub(super) next_path: &'static str,
 }
 
 #[derive(Serialize)]
@@ -51,15 +112,11 @@ pub(super) struct AuthComplete {
 }
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct RegistrationStart {
-    username: String,
-    display_name: String,
-}
+pub(super) struct RegistrationStart {}
 
 #[derive(Deserialize)]
 pub(super) struct AuthenticationStart {
-    username: String,
+    username: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -81,28 +138,7 @@ pub(super) struct AuthError {
     error: &'static str,
 }
 
-impl AuthState {
-    pub(super) async fn connect() -> Result<Self, Box<dyn std::error::Error>> {
-        let pool = database_pool().await?;
-        sqlx::migrate!("./migrations").run(&pool).await?;
-
-        let rp_id = env::var("RAWARR_WEBAUTHN_RP_ID").unwrap_or_else(|_| "localhost".to_owned());
-        let origin = env::var("RAWARR_WEBAUTHN_ORIGIN")
-            .unwrap_or_else(|_| "http://localhost:8080".to_owned());
-        let origin = Url::parse(&origin)?;
-        let secure_cookie = origin.scheme() == "https";
-        let webauthn = WebauthnBuilder::new(&rp_id, &origin)?
-            .rp_name("rawrarr")
-            .build()?;
-        Ok(Self {
-            pool,
-            webauthn,
-            secure_cookie,
-        })
-    }
-}
-
-async fn database_pool() -> Result<PgPool, Box<dyn std::error::Error>> {
+pub(super) async fn database_pool() -> Result<PgPool, Box<dyn std::error::Error>> {
     let pool = if let Ok(database_url) = env::var("RAWARR_DATABASE_URL") {
         PgPoolOptions::new()
             .max_connections(10)
@@ -150,6 +186,19 @@ fn normalize_username(input: &str) -> Result<String, (StatusCode, Json<AuthError
     Ok(username)
 }
 
+pub(crate) fn generated_account_name(id: Uuid) -> String {
+    let bytes = id.as_bytes();
+    let word_pairs = ACCOUNT_NAME_PREFIXES
+        .iter()
+        .flat_map(|prefix| ACCOUNT_NAME_CREATURES.iter().map(move |creature| (*prefix, *creature)))
+        // Leave room for the longest rendered color (turquoise) and trait (wingless).
+        .filter(|(prefix, creature)| prefix.len() + creature.len() + 3 + 9 + 8 <= 32)
+        .collect::<Vec<_>>();
+    let pair_index = u16::from_be_bytes([bytes[14], bytes[15]]) as usize % word_pairs.len();
+    let (prefix, creature) = word_pairs[pair_index];
+    format!("{prefix}-{creature}")
+}
+
 fn invalid_auth() -> (StatusCode, Json<AuthError>) {
     (
         StatusCode::UNAUTHORIZED,
@@ -160,7 +209,7 @@ fn invalid_auth() -> (StatusCode, Json<AuthError>) {
 }
 
 pub(super) async fn status(
-    State(auth): State<AuthState>,
+    Extension(auth): Extension<AuthState>,
 ) -> Result<Json<AuthStatus>, (StatusCode, Json<AuthError>)> {
     let _ = sqlx::query("DELETE FROM rawrarr_auth_challenges WHERE expires_at <= now()")
         .execute(&auth.pool)
@@ -178,19 +227,9 @@ pub(super) async fn status(
 }
 
 pub(super) async fn begin_registration(
-    State(auth): State<AuthState>,
-    Json(request): Json<RegistrationStart>,
+    Extension(auth): Extension<AuthState>,
+    Json(_request): Json<RegistrationStart>,
 ) -> Result<Json<ChallengeResponse<CreationChallengeResponse>>, (StatusCode, Json<AuthError>)> {
-    let username = normalize_username(&request.username)?;
-    let display_name = request.display_name.trim();
-    if display_name.is_empty() || display_name.chars().count() > 64 {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(AuthError {
-                error: "Enter a display name up to 64 characters",
-            }),
-        ));
-    }
     let exists = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM rawrarr_users)")
         .fetch_one(&auth.pool)
         .await
@@ -204,21 +243,24 @@ pub(super) async fn begin_registration(
         ));
     }
     let user_id = Uuid::new_v4();
+    let username = generated_account_name(user_id);
+    let display_name = username.clone();
     let (options, registration) = auth
         .webauthn
-        .start_passkey_registration(user_id, &username, display_name, None)
+        .start_passkey_registration(user_id, &username, &display_name, None)
         .map_err(|_| invalid_auth())?;
     let state = serde_json::to_value(registration).map_err(|_| invalid_auth())?;
     let challenge_id = Uuid::new_v4();
     sqlx::query(
-        "INSERT INTO rawrarr_auth_challenges (id, flow, user_id, username, display_name, state, expires_at) VALUES ($1, 'registration', $2, $3, $4, $5, now() + ($6 * interval '1 second'))",
+        "INSERT INTO rawrarr_auth_challenges (id, flow, user_id, username, display_name, state, expires_at, node_id) VALUES ($1, 'registration', $2, $3, $4, $5, now() + ($6 * interval '1 second'), $7)",
     )
     .bind(challenge_id)
     .bind(user_id)
     .bind(&username)
-    .bind(display_name)
+    .bind(&display_name)
     .bind(state)
     .bind(CHALLENGE_SECONDS)
+    .bind(&auth.node_id)
     .execute(&auth.pool)
     .await
     .map_err(|_| invalid_auth())?;
@@ -229,7 +271,7 @@ pub(super) async fn begin_registration(
 }
 
 pub(super) async fn finish_registration(
-    State(auth): State<AuthState>,
+    Extension(auth): Extension<AuthState>,
     Json(request): Json<RegistrationFinish>,
 ) -> Result<Response, (StatusCode, Json<AuthError>)> {
     let mut transaction = auth.pool.begin().await.map_err(|_| invalid_auth())?;
@@ -238,9 +280,10 @@ pub(super) async fn finish_registration(
         .await
         .map_err(|_| invalid_auth())?;
     let challenge = sqlx::query(
-        "SELECT user_id, username, display_name, state FROM rawrarr_auth_challenges WHERE id = $1 AND flow = 'registration' AND expires_at > now() FOR UPDATE",
+        "SELECT user_id, username, display_name, state FROM rawrarr_auth_challenges WHERE id = $1 AND flow = 'registration' AND expires_at > now() AND node_id = $2 FOR UPDATE",
     )
     .bind(request.challenge_id)
+    .bind(&auth.node_id)
     .fetch_optional(&mut *transaction)
     .await
     .map_err(|_| invalid_auth())?
@@ -278,6 +321,13 @@ pub(super) async fn finish_registration(
         .execute(&mut *transaction)
         .await
         .map_err(|_| invalid_auth())?;
+    // This deployment currently has one Rawrarr account per coordinator
+    // instance. Attach preconfigured nodes to that account at first setup.
+    sqlx::query("UPDATE rawrarr_nodes SET user_id = $1 WHERE user_id IS NULL")
+        .bind(user_id)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|_| invalid_auth())?;
     sqlx::query(
         "INSERT INTO rawrarr_passkeys (credential_id, user_id, passkey) VALUES ($1, $2, $3)",
     )
@@ -292,23 +342,30 @@ pub(super) async fn finish_registration(
         .execute(&mut *transaction)
         .await
         .map_err(|_| invalid_auth())?;
-    let token = issue_session(&mut transaction, user_id).await?;
+    let token = issue_session(&mut transaction, user_id, &auth.node_id).await?;
     transaction.commit().await.map_err(|_| invalid_auth())?;
-    Ok(session_response(token, auth.secure_cookie))
+    Ok(session_response(token, auth.secure_cookie, auth.next_path))
 }
 
 pub(super) async fn begin_authentication(
-    State(auth): State<AuthState>,
+    Extension(auth): Extension<AuthState>,
     Json(request): Json<AuthenticationStart>,
 ) -> Result<Json<ChallengeResponse<RequestChallengeResponse>>, (StatusCode, Json<AuthError>)> {
-    let username = normalize_username(&request.username)?;
-    let user = sqlx::query("SELECT id FROM rawrarr_users WHERE username = $1")
-        .bind(&username)
+    let username = request
+        .username
+        .as_deref()
+        .map(normalize_username)
+        .transpose()?;
+    let user = sqlx::query(
+        "SELECT id, username FROM rawrarr_users WHERE ($1::text IS NULL OR username = $1) ORDER BY created_at LIMIT 1",
+    )
+        .bind(username.as_deref())
         .fetch_optional(&auth.pool)
         .await
         .map_err(|_| invalid_auth())?
         .ok_or_else(invalid_auth)?;
     let user_id: Uuid = user.try_get("id").map_err(|_| invalid_auth())?;
+    let username: String = user.try_get("username").map_err(|_| invalid_auth())?;
     let rows = sqlx::query("SELECT passkey FROM rawrarr_passkeys WHERE user_id = $1")
         .bind(user_id)
         .fetch_all(&auth.pool)
@@ -329,13 +386,14 @@ pub(super) async fn begin_authentication(
     let state = serde_json::to_value(authentication).map_err(|_| invalid_auth())?;
     let challenge_id = Uuid::new_v4();
     sqlx::query(
-        "INSERT INTO rawrarr_auth_challenges (id, flow, user_id, username, state, expires_at) VALUES ($1, 'authentication', $2, $3, $4, now() + ($5 * interval '1 second'))",
+        "INSERT INTO rawrarr_auth_challenges (id, flow, user_id, username, state, expires_at, node_id) VALUES ($1, 'authentication', $2, $3, $4, now() + ($5 * interval '1 second'), $6)",
     )
     .bind(challenge_id)
     .bind(user_id)
     .bind(username)
     .bind(state)
     .bind(CHALLENGE_SECONDS)
+    .bind(&auth.node_id)
     .execute(&auth.pool)
     .await
     .map_err(|_| invalid_auth())?;
@@ -346,14 +404,15 @@ pub(super) async fn begin_authentication(
 }
 
 pub(super) async fn finish_authentication(
-    State(auth): State<AuthState>,
+    Extension(auth): Extension<AuthState>,
     Json(request): Json<AuthenticationFinish>,
 ) -> Result<Response, (StatusCode, Json<AuthError>)> {
     let mut transaction = auth.pool.begin().await.map_err(|_| invalid_auth())?;
     let challenge = sqlx::query(
-        "SELECT user_id, state FROM rawrarr_auth_challenges WHERE id = $1 AND flow = 'authentication' AND expires_at > now() FOR UPDATE",
+        "SELECT user_id, state FROM rawrarr_auth_challenges WHERE id = $1 AND flow = 'authentication' AND expires_at > now() AND node_id = $2 FOR UPDATE",
     )
     .bind(request.challenge_id)
+    .bind(&auth.node_id)
     .fetch_optional(&mut *transaction)
     .await
     .map_err(|_| invalid_auth())?
@@ -395,30 +454,32 @@ pub(super) async fn finish_authentication(
         .execute(&mut *transaction)
         .await
         .map_err(|_| invalid_auth())?;
-    let token = issue_session(&mut transaction, user_id).await?;
+    let token = issue_session(&mut transaction, user_id, &auth.node_id).await?;
     transaction.commit().await.map_err(|_| invalid_auth())?;
-    Ok(session_response(token, auth.secure_cookie))
+    Ok(session_response(token, auth.secure_cookie, auth.next_path))
 }
 
 async fn issue_session(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     user_id: Uuid,
+    node_id: &str,
 ) -> Result<Zeroizing<String>, (StatusCode, Json<AuthError>)> {
     let token = Zeroizing::new(Uuid::new_v4().simple().to_string());
     let token_hash = Sha256::digest(token.as_bytes()).to_vec();
     sqlx::query(
-        "INSERT INTO rawrarr_sessions (token_hash, user_id, expires_at) VALUES ($1, $2, now() + ($3 * interval '1 second'))",
+        "INSERT INTO rawrarr_sessions (token_hash, user_id, expires_at, node_id) VALUES ($1, $2, now() + ($3 * interval '1 second'), $4)",
     )
     .bind(token_hash)
     .bind(user_id)
     .bind(SESSION_SECONDS)
+    .bind(node_id)
     .execute(&mut **transaction)
     .await
     .map_err(|_| invalid_auth())?;
     Ok(token)
 }
 
-fn session_response(token: Zeroizing<String>, secure: bool) -> Response<Body> {
+fn session_response(token: Zeroizing<String>, secure: bool, next: &'static str) -> Response<Body> {
     let mut cookie = format!(
         "{SESSION_COOKIE}={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_SECONDS}",
         token.as_str()
@@ -426,7 +487,7 @@ fn session_response(token: Zeroizing<String>, secure: bool) -> Response<Body> {
     if secure {
         cookie.push_str("; Secure");
     }
-    let mut response = Json(AuthComplete { next: "/setup/age" }).into_response();
+    let mut response = Json(AuthComplete { next }).into_response();
     if let Ok(value) = HeaderValue::from_str(&cookie) {
         response.headers_mut().insert(header::SET_COOKIE, value);
     }
@@ -436,7 +497,7 @@ fn session_response(token: Zeroizing<String>, secure: bool) -> Response<Body> {
     response
 }
 
-fn cookie_token(headers: &HeaderMap) -> Option<&str> {
+pub(super) fn cookie_token(headers: &HeaderMap) -> Option<&str> {
     headers
         .get(header::COOKIE)?
         .to_str()
@@ -450,42 +511,11 @@ fn token_hash(token: &str) -> Vec<u8> {
     Sha256::digest(token.as_bytes()).to_vec()
 }
 
-pub(super) async fn require_session(
-    State(pool): State<PgPool>,
-    request: Request,
-    next: Next,
-) -> Response {
-    let authenticated = if let Some(hash) = cookie_token(request.headers()).map(token_hash) {
-        sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM rawrarr_sessions WHERE token_hash = $1 AND expires_at > now())",
-        )
-        .bind(hash)
-        .fetch_one(&pool)
-        .await
-        .unwrap_or(false)
-    } else {
-        false
-    };
-    if authenticated {
-        return next.run(request).await;
-    }
-    if request.uri().path() == "/" {
-        Redirect::to("/auth").into_response()
-    } else {
-        (
-            StatusCode::UNAUTHORIZED,
-            Json(AuthError {
-                error: "Sign in with your passkey to continue",
-            }),
-        )
-            .into_response()
-    }
-}
-
 pub(super) async fn end_session(auth: &AuthState, headers: &HeaderMap) -> Response<Body> {
     if let Some(token) = cookie_token(headers) {
-        let _ = sqlx::query("DELETE FROM rawrarr_sessions WHERE token_hash = $1")
+        let _ = sqlx::query("DELETE FROM rawrarr_sessions WHERE token_hash = $1 AND node_id = $2")
             .bind(token_hash(token))
+            .bind(&auth.node_id)
             .execute(&auth.pool)
             .await;
     }
@@ -498,17 +528,22 @@ pub(super) async fn end_session(auth: &AuthState, headers: &HeaderMap) -> Respon
     response
 }
 
-pub(super) async fn is_authenticated(pool: &PgPool, headers: &HeaderMap) -> bool {
+pub(super) async fn authenticated_user_id(auth: &AuthState, headers: &HeaderMap) -> Option<Uuid> {
     let Some(token) = cookie_token(headers) else {
-        return false;
+        return None;
     };
-    sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM rawrarr_sessions WHERE token_hash = $1 AND expires_at > now())",
+    sqlx::query_scalar::<_, Uuid>(
+        "SELECT user_id FROM rawrarr_sessions WHERE token_hash = $1 AND expires_at > now() AND node_id = $2",
     )
     .bind(token_hash(token))
-    .fetch_one(pool)
+    .bind(&auth.node_id)
+    .fetch_optional(&auth.pool)
     .await
-    .unwrap_or(false)
+    .unwrap_or(None)
+}
+
+pub(super) async fn is_authenticated(auth: &AuthState, headers: &HeaderMap) -> bool {
+    authenticated_user_id(auth, headers).await.is_some()
 }
 
 pub(super) fn auth_html() -> impl IntoResponse {
@@ -527,7 +562,10 @@ pub(super) fn age_setup_html() -> impl IntoResponse {
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_username;
+    use super::{
+        ACCOUNT_NAME_CREATURES, ACCOUNT_NAME_PREFIXES, generated_account_name, normalize_username,
+    };
+    use uuid::Uuid;
 
     #[test]
     fn usernames_are_normalized_and_restricted() {
@@ -535,5 +573,28 @@ mod tests {
         assert!(normalize_username("ab").is_err());
         assert!(normalize_username("contains space").is_err());
         assert!(normalize_username("contains/slash").is_err());
+    }
+
+    #[test]
+    fn account_names_are_dinosaur_themed_and_unique_per_account_id() {
+        let first = generated_account_name(Uuid::from_u128(1));
+        let second = generated_account_name(Uuid::from_u128(2));
+        assert!(ACCOUNT_NAME_PREFIXES
+            .iter()
+            .any(|prefix| first.starts_with(&format!("{prefix}-"))));
+        assert!(ACCOUNT_NAME_CREATURES
+            .iter()
+            .any(|creature| first.contains(creature)));
+        assert_ne!(first, second);
+        assert!(normalize_username(&first).is_ok());
+        for prefix in ACCOUNT_NAME_PREFIXES {
+            for creature in ACCOUNT_NAME_CREATURES {
+                let candidate = format!("turquoise-wingless-{prefix}-{creature}");
+                if candidate.len() <= 32 {
+                    assert!(normalize_username(&candidate).is_ok());
+                }
+            }
+        }
+        assert!(first.len() + 1 + 9 + 1 + 8 <= 32);
     }
 }

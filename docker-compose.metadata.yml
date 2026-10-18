@@ -1,0 +1,58 @@
+# Standalone subscriber deployment against an existing coordinator.
+services:
+  artwork-cache:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "2gb", "--maxmemory-policy", "allkeys-lru"]
+    mem_limit: 2560m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - metadata-private
+
+  metadata:
+    build:
+      context: ./rust-arr
+    image: rawrarr:local
+    environment:
+      RAWARR_ROLE: metadata
+      RUST_ARR_LISTEN_ADDR: 0.0.0.0:8080
+      RAWARR_DATA_DIR: /data
+      RAWARR_SHARED_DATA_DIR: /shared
+      RAWARR_METADATA_DIR: /metadata
+      RAWARR_NODE_ID: ${RAWARR_NODE_ID:?Set a stable, unique metadata node ID}
+      RAWARR_DEVICE_ID: ${RAWARR_NODE_ID:?Set a stable, unique metadata node ID}
+      RAWARR_DEVICE_NAME: ${RAWARR_DEVICE_NAME:-Metadata node}
+      RAWARR_COORDINATOR_URL: ${RAWARR_COORDINATOR_URL:-https://rawrarr.risk-mermaid.ts.net}
+      RAWARR_COORDINATOR_LOCAL_HTTP: ${RAWARR_COORDINATOR_LOCAL_HTTP:-false}
+      RAWARR_NODE_TOKEN_FILE: /run/secrets/rawrarr_node_token
+      RAWARR_NODE_ENROLLMENT_ENABLED: ${RAWARR_NODE_ENROLLMENT_ENABLED:-true}
+      RAWARR_WEBAUTHN_RP_ID: ${RAWARR_WEBAUTHN_RP_ID:-localhost}
+      RAWARR_WEBAUTHN_ORIGIN: ${RAWARR_WEBAUTHN_ORIGIN:-http://localhost:7297}
+      RAWARR_LOCAL_PLAINTEXT_CONFIG: "false"
+      RAWARR_ARTWORK_CACHE_ENABLED: ${RAWARR_ARTWORK_CACHE_ENABLED:-false}
+      RAWARR_ARTWORK_CACHE_URL: redis://artwork-cache:6379/
+      RAWARR_ARTWORK_CACHE_TTL_SECONDS: ${RAWARR_ARTWORK_CACHE_TTL_SECONDS:-86400}
+    volumes:
+      - rawrarr-data:/data
+      - type: bind
+        source: "${RAWARR_SHARED_DATA_PATH:-${HOME}/Library/Application Support/rawrarr/shared-data}"
+        target: /shared
+        bind:
+          create_host_path: false
+    restart: unless-stopped
+    networks:
+      - default
+      - metadata-private
+    depends_on:
+      artwork-cache:
+        condition: service_healthy
+
+networks:
+  metadata-private:
+    internal: true
+volumes:
+  rawrarr-data:

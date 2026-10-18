@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import hashlib
 import json
 import os
@@ -28,6 +29,30 @@ TEST_API_KEY = "rawrarr-configuration-test-key-do-not-log"
 SESSION_COOKIE: str | None = None
 
 
+class RadarrMockHandler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:
+        if self.path != "/api/v3/system/status" or self.headers.get("X-Api-Key") != TEST_API_KEY:
+            self.send_error(401)
+            return
+        body = json.dumps({"appName": "Radarr", "version": "5.0.0", "urlBase": ""}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, _format: str, *_args: object) -> None:
+        return
+
+
+def start_radarr_mock() -> tuple[ThreadingHTTPServer, str]:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), RadarrMockHandler)
+    import threading
+
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, f"http://127.0.0.1:{server.server_port}"
+
+
 def request_json(base_url: str, path: str, method: str = "GET", body: dict | None = None) -> dict:
     payload = None if body is None else json.dumps(body).encode()
     request = urllib.request.Request(
@@ -48,7 +73,8 @@ def request_bytes(base_url: str, path: str) -> tuple[bytes, str]:
 
 
 def start_server(
-    binary: Path, data_dir: Path, shared_dir: Path, media_dir: Path, port: int, database_url: str
+    binary: Path, data_dir: Path, shared_dir: Path, media_dir: Path, port: int, database_url: str,
+    plaintext_config: bool = False,
 ) -> subprocess.Popen:
     env = os.environ.copy()
     env["RAWARR_DATA_DIR"] = str(data_dir)
@@ -60,6 +86,7 @@ def start_server(
     env["RUST_ARR_LISTEN_ADDR"] = f"127.0.0.1:{port}"
     env["RAWARR_WEBAUTHN_RP_ID"] = "localhost"
     env["RAWARR_WEBAUTHN_ORIGIN"] = f"http://localhost:{port}"
+    env["RAWARR_LOCAL_PLAINTEXT_CONFIG"] = "true" if plaintext_config else "false"
     env.pop("RAWARR_AGE_IDENTITY_FILE", None)
     return subprocess.Popen(
         [str(binary)], cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
@@ -126,7 +153,10 @@ def main() -> int:
             listener.bind(("127.0.0.1", 0))
             port = listener.getsockname()[1]
         base_url = f"http://127.0.0.1:{port}"
-        process = start_server(binary, data_dir, shared_dir, media_dir, port, args.database_url)
+        process = start_server(
+            binary, data_dir, shared_dir, media_dir, port, args.database_url, plaintext_config=True
+        )
+        radarr_server, radarr_url = start_radarr_mock()
         user_id = str(uuid.uuid4())
         session_token = secrets.token_urlsafe(32)
         session_hash = hashlib.sha256(session_token.encode()).hexdigest()
@@ -171,7 +201,7 @@ def main() -> int:
             scan = request_json(base_url, "/api/library/scan", "POST")
             assert len(scan["items"]) == 2
             assert scan["sidecarsCreated"] == 2 and scan["sidecarErrors"] == 0
-            sidecar_paths = list((shared_dir / "metadata" / "library").glob("*.json.aged"))
+            sidecar_paths = list((shared_dir / "metadata" / "library" / "text").glob("*.json.aged"))
             assert len(sidecar_paths) == 2
             assert all(path.read_bytes().startswith(b"age-encryption.org/v1\n") for path in sidecar_paths)
             assert all(b"Example Film" not in path.read_bytes() for path in sidecar_paths)
@@ -198,6 +228,10 @@ def main() -> int:
                 }
             )
             storage_env.pop("RAWARR_AGE_IDENTITY_FILE", None)
+            ffprobe_stub = Path(temporary) / "ffprobe-fixture"
+            ffprobe_stub.write_text("#!/bin/sh\nprintf '%s\\n' '{\"format\":{\"format_name\":\"fixture\"},\"streams\":[{\"codec_type\":\"video\"}]}'\n")
+            ffprobe_stub.chmod(0o755)
+            storage_env["RAWARR_FFPROBE"] = str(ffprobe_stub)
             storage_run = subprocess.run(
                 [str(binary), "storage-scan-once"],
                 env=storage_env,
@@ -207,7 +241,7 @@ def main() -> int:
             )
             assert "2 media files; 2 encrypted sidecars saved" in storage_run.stdout
             storage_sidecars = []
-            for path in (shared_dir / "metadata" / "library").glob("*.json.aged"):
+            for path in (shared_dir / "metadata" / "library" / "text").glob("*.json.aged"):
                 decrypted_sidecar = subprocess.run(
                     ["age", "--decrypt", "--identity", "-", str(path)],
                     input=identity.encode(),
@@ -219,13 +253,41 @@ def main() -> int:
                     storage_sidecars.append(record)
             assert len(storage_sidecars) == 2
             assert all(record["libraryName"] == "Storage CLI fixture" for record in storage_sidecars)
-            print("PASS storage-only scan runs without web login, PostgreSQL, or a private age identity")
-            request_json(
-                base_url,
-                "/api/settings/radarr",
-                "PUT",
-                {"url": "http://127.0.0.1:7878", "apiKey": TEST_API_KEY},
+            assert all(set(record["hashes"]) == {"md5", "sha1", "sha256"} for record in storage_sidecars)
+            assert all(record["format"]["format_name"] == "fixture" for record in storage_sidecars)
+            assert all(record["streams"][0]["codec_type"] == "video" for record in storage_sidecars)
+            assert not list(media_dir.rglob("*.json"))
+            repeat_scan = subprocess.run(
+                [str(binary), "storage-scan-once"],
+                env=storage_env,
+                check=True,
+                capture_output=True,
+                text=True,
             )
+            assert "0 encrypted sidecars saved" in repeat_scan.stdout
+            assert "2 already complete" in repeat_scan.stdout
+            print("PASS storage-only scan runs without web login, PostgreSQL, or a private age identity")
+            try:
+                request_json(base_url, "/api/settings/radarr", "PUT", {
+                    "url": "http://127.0.0.1:1", "apiKey": TEST_API_KEY,
+                })
+            except urllib.error.HTTPError as error:
+                assert error.code == 400, f"HTTP Radarr URL returned {error.code}, expected 400"
+            else:
+                raise AssertionError("plaintext HTTP Radarr URL was unexpectedly accepted")
+            try:
+                request_json(base_url, "/api/settings/radarr", "PUT", {
+                    "url": "https://127.0.0.1:1", "apiKey": TEST_API_KEY,
+                })
+            except urllib.error.HTTPError as error:
+                assert error.code == 502
+            else:
+                raise AssertionError("unreachable Radarr was unexpectedly saved")
+            request_json(base_url, "/api/settings/radarr", "PUT", {
+                "url": radarr_url, "apiKey": TEST_API_KEY,
+            })
+            radarr_status = request_json(base_url, "/api/radarr/status")
+            assert radarr_status["appName"] == "Radarr"
             verified = request_json(base_url, "/api/configuration")
             assert verified["encryption"] == {
                 "status": "verified",
@@ -244,8 +306,12 @@ def main() -> int:
             assert ciphertext.startswith(b"age-encryption.org/v1\n")
             assert TEST_API_KEY.encode() not in ciphertext
             assert stat.S_IMODE(config_path.stat().st_mode) == 0o644
-            assert stat.S_IMODE(data_dir.stat().st_mode) == 0o755
-            print("PASS encrypted config is recognized, decryptable, and API key is redacted")
+            local_config_path = data_dir / "radarr-config.json"
+            local_config = json.loads(local_config_path.read_text())
+            assert local_config == {"radarr_url": radarr_url, "radarr_api_key": TEST_API_KEY}
+            assert stat.S_IMODE(local_config_path.stat().st_mode) == 0o600
+            assert stat.S_IMODE(data_dir.stat().st_mode) == 0o700
+            print("PASS local settings mirror the age-encrypted config with private file permissions")
 
             wrong_identity = subprocess.run(
                 ["age-keygen", "-pq"], check=True, capture_output=True, text=True
@@ -266,7 +332,7 @@ def main() -> int:
             print("PASS wrong age identity is rejected without locking the active vault")
 
             poster = b"disposable encrypted poster fixture"
-            artwork_dir = shared_dir / "metadata" / "movies"
+            artwork_dir = shared_dir / "metadata" / "movies" / "artwork"
             artwork_dir.mkdir(parents=True)
             artwork_path = artwork_dir / "12345.aged"
             subprocess.run(
@@ -286,7 +352,10 @@ def main() -> int:
             print("PASS .aged movie artwork is decrypted only through the unlocked API")
 
             stop_server(process)
-            process = start_server(binary, data_dir, shared_dir, media_dir, port, args.database_url)
+            process = start_server(
+                binary, data_dir, shared_dir, media_dir, port, args.database_url,
+                plaintext_config=True,
+            )
             wait_for_server(process, base_url)
             locked = request_json(base_url, "/api/configuration")
             assert locked["encryption"]["status"] == "locked"
@@ -295,6 +364,7 @@ def main() -> int:
             assert locked["encryption"]["decryptionVerified"] is False
             assert locked["configuration"] is None
             assert TEST_API_KEY not in json.dumps(locked)
+            assert request_json(base_url, "/api/radarr/status")["appName"] == "Radarr"
             try:
                 request_json(base_url, "/api/library/scan", "POST")
             except urllib.error.HTTPError as error:
@@ -307,8 +377,16 @@ def main() -> int:
                 assert error.code == 423
             else:
                 raise AssertionError("poster endpoint served artwork while the vault was locked")
-            print("PASS restart without identity reports locked and withholds configuration")
+            print("PASS restart without identity keeps local Radarr connected while encrypted features stay locked")
+
+            stop_server(process)
+            process = start_server(binary, data_dir, shared_dir, media_dir, port, args.database_url)
+            wait_for_server(process, base_url)
+            assert not local_config_path.exists()
+            print("PASS production mode removes the local plaintext mirror")
         finally:
+            radarr_server.shutdown()
+            radarr_server.server_close()
             stop_server(process)
             SESSION_COOKIE = None
             if seeded_session:

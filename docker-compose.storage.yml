@@ -1,0 +1,46 @@
+# Standalone subscriber deployment: no PostgreSQL and no coordinator process.
+services:
+  apex:
+    build:
+      context: ./rust-arr
+    image: rawrarr:local
+    environment:
+      RAWARR_ROLE: storage
+      RUST_ARR_LISTEN_ADDR: 127.0.0.1:8080
+      RAWARR_DATA_DIR: /data
+      RAWARR_SHARED_DATA_DIR: /shared
+      RAWARR_METADATA_DIR: /metadata
+      RAWARR_LIBRARY_PATH: /media
+      RAWARR_LIBRARY_NAME: ${RAWARR_LIBRARY_NAME:-Mac mini media}
+      RAWARR_DEVICE_NAME: ${RAWARR_DEVICE_NAME:-Mac mini}
+      RAWARR_COORDINATOR_URL: ${RAWARR_COORDINATOR_URL:-https://rawrarr.risk-mermaid.ts.net}
+      RAWARR_COORDINATOR_SOCKS5_URL: ${RAWARR_COORDINATOR_SOCKS5_URL:-socks5h://127.0.0.1:1055}
+      RAWARR_NODE_ID: ${RAWARR_NODE_ID:-mac-mini-storage}
+      RAWARR_DEVICE_ID: ${RAWARR_NODE_ID:-mac-mini-storage}
+      RAWARR_WEBAUTHN_RP_ID: localhost
+      RAWARR_WEBAUTHN_ORIGIN: http://localhost:7297
+      RAWARR_NODE_TOKEN_FILE: /data/node-token
+      RAWARR_NODE_ENROLLMENT_ENABLED: ${RAWARR_NODE_ENROLLMENT_ENABLED:-true}
+      RAWARR_STORAGE_SCAN_INTERVAL_SECONDS: ${RAWARR_STORAGE_SCAN_INTERVAL_SECONDS:-86400}
+      RUST_ARR_DIRECT_LISTEN_ADDR: 127.0.0.1:8083
+      RAWARR_DIRECT_ALLOWED_ORIGIN: https://rawrarr.risk-mermaid.ts.net
+      RAWARR_LOCAL_PLAINTEXT_CONFIG: "false"
+    volumes:
+      - rawrarr-data:/data
+      - type: bind
+        source: "${RAWARR_SHARED_DATA_PATH:-${HOME}/Library/Application Support/rawrarr/shared-data}"
+        target: /shared
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${RAWARR_HOST_MEDIA_PATH:?Set RAWARR_HOST_MEDIA_PATH to the verified media folder}
+        target: /media
+        read_only: true
+        bind:
+          create_host_path: false
+    network_mode: "container:${RAWARR_TAILSCALE_CONTAINER:-rawrarr-mini-tailscale}"
+    # The service shares the Tailscale sidecar namespace and binds loopback only.
+    # The coordinator can relay over Tailscale; the host cannot connect directly.
+    restart: unless-stopped
+volumes:
+  rawrarr-data:

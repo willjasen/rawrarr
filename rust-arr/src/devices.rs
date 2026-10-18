@@ -19,7 +19,8 @@ pub struct DeviceInfo {
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DeviceRole {
-    Scanner,
+    Storage,
+    Metadata,
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -45,13 +46,13 @@ impl DeviceInfo {
         Self {
             id: device_id.to_owned(),
             name,
-            role: DeviceRole::Scanner,
-            connection: DeviceConnection::Local,
-            status: if library_name.is_some() {
-                DeviceStatus::Ready
+            role: if library_name.is_some() {
+                DeviceRole::Storage
             } else {
-                DeviceStatus::NeedsConfiguration
+                DeviceRole::Metadata
             },
+            connection: DeviceConnection::Local,
+            status: DeviceStatus::Ready,
             library_name: library_name.map(str::to_owned),
             last_seen_unix_seconds: None,
         }
@@ -113,7 +114,7 @@ pub fn load_or_create_device_id() -> Result<String, io::Error> {
             } else {
                 Err(io::Error::new(
                     io::ErrorKind::InvalidData,
-                "saved rawrarr device ID is invalid",
+                    "saved rawrarr device ID is invalid",
                 ))
             }
         }

@@ -7,7 +7,7 @@ const html = await readFile(new URL('../../rust-arr/src/ui.html', import.meta.ur
 const source = await readFile(new URL('../../rust-arr/src/main.rs', import.meta.url), 'utf8');
 
 test('movie API preserves Radarr titleSlug for detail links', () => {
-  assert.match(source, /title_slug: movie.get\("titleSlug"\)/);
+  assert.match(source, /title_slug:\s*movie[\s\S]{0,200}?\.get\("titleSlug"\)/);
 });
 
 for (const scenario of ['reachable', 'blocked', 'timeout', 'missing-slug']) {
@@ -39,18 +39,26 @@ for (const scenario of ['reachable', 'blocked', 'timeout', 'missing-slug']) {
     await page.waitForFunction(() => !document.getElementById('refresh-movies').disabled);
     const row = page.locator('#radarr-movie-rows tr');
     assert.equal(await row.count(), 1);
+    if (scenario === 'reachable') await row.locator('a:not(.arr-external-link)').waitFor();
+    await page.waitForFunction(() => performance.getEntriesByType('resource').some(entry => entry.name.includes('/api/settings/radarr')));
+    // The probe is asynchronous; wait for its dispatch, not for movie rendering.
+    await new Promise(resolve => setTimeout(resolve, 100));
     assert.equal(probes.length, 1);
     assert.equal(probes[0].url(), 'https://radarr.test/radarr/');
     assert.equal(probes[0].headers()['x-api-key'], undefined);
     assert.equal(probes[0].headers().cookie, undefined);
     if (scenario !== 'reachable') {
       assert.equal(await row.locator('a').count(), 0);
+      assert.equal(await row.locator('.arr-external-link').count(), 0);
       assert.equal(await row.locator('img').count(), 1);
       assert.match(await row.textContent(), /Test Movie/);
       return;
     }
-    const link = row.locator('a');
+    const link = row.locator('a:not(.arr-external-link)');
     const expected = 'https://radarr.test/radarr/movie/test%20movie%2F%231';
+    const yearLink = row.locator('.arr-external-link');
+    assert.equal(await yearLink.getAttribute('href'), expected);
+    assert.equal(await yearLink.locator('svg').count(), 1);
     assert.equal(await link.getAttribute('href'), expected);
     assert.equal(await link.getAttribute('rel'), 'noopener noreferrer');
     for (const child of ['img', 'span']) {
@@ -65,6 +73,7 @@ for (const scenario of ['reachable', 'blocked', 'timeout', 'missing-slug']) {
     assert.equal(page.url(), 'http://rawrarr.test/#movies');
     await page.locator('#refresh-movies').click();
     await page.waitForFunction(() => !document.getElementById('refresh-movies').disabled);
+    await row.locator('a:not(.arr-external-link)').waitFor();
     assert.equal(probes.length, 2);
   });
 }

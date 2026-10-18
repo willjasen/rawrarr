@@ -16,40 +16,62 @@ services:
       retries: 12
     restart: unless-stopped
 
-  rawrarr:
+  roarlay:
     build:
       context: ./rust-arr
     image: rawrarr:local
-    ports:
-      - "127.0.0.1:${RAWARR_HOST_PORT:-8080}:8080"
     environment:
+      RAWARR_ROLE: coordinator
       RUST_ARR_LISTEN_ADDR: 0.0.0.0:8080
-      RAWARR_DATA_DIR: /data
-      RAWARR_SHARED_DATA_DIR: /shared
-      RAWARR_METADATA_DIR: /metadata
-      RAWARR_QUIET_LOGS: ${RAWARR_QUIET_LOGS:-false}
-      RAWARR_LIBRARY_PATH: ${RAWARR_LIBRARY_PATH:-}
-      RAWARR_LIBRARY_NAME: ${RAWARR_LIBRARY_NAME:-}
-      RAWARR_DEVICE_NAME: ${RAWARR_DEVICE_NAME:-}
-      RAWARR_SYNCTHING_API_URL: ${RAWARR_SYNCTHING_API_URL:-}
-      RAWARR_SYNCTHING_API_KEY: ${RAWARR_SYNCTHING_API_KEY:-}
-      RAWARR_SYNCTHING_API_KEY_FILE: ${RAWARR_SYNCTHING_API_KEY_FILE:-}
       RAWARR_PG_HOST: postgres
       RAWARR_PG_PORT: 5432
       RAWARR_PG_USER: rawrarr
       RAWARR_PG_DATABASE: rawrarr
       RAWARR_PG_PASSWORD_FILE: /run/secrets/rawrarr_postgres_password
-      RAWARR_WEBAUTHN_RP_ID: ${RAWARR_WEBAUTHN_RP_ID:-localhost}
-      RAWARR_WEBAUTHN_ORIGIN: ${RAWARR_WEBAUTHN_ORIGIN:-http://localhost:${RAWARR_HOST_PORT:-8080}}
+      RAWARR_APPROVED_NODES_FILE: /run/secrets/rawrarr_approved_nodes
+      RAWARR_COORDINATOR_WEB_RP_ID: ${RAWARR_COORDINATOR_WEB_RP_ID:-rawrarr.risk-mermaid.ts.net}
+      RAWARR_COORDINATOR_WEB_ORIGIN: ${RAWARR_COORDINATOR_WEB_ORIGIN:-https://rawrarr.risk-mermaid.ts.net}
+      RAWARR_NODE_RELAY_TARGETS: ${RAWARR_NODE_RELAY_TARGETS:-{"macbook-metadata":"http://metadata:8080","mac-mini-storage":"https://rawrarr-mini.risk-mermaid.ts.net"}}
+      RAWARR_NODE_RELAY_SOCKS5_URL: ${RAWARR_NODE_RELAY_SOCKS5_URL:-socks5h://127.0.0.1:1055}
     secrets:
       - rawrarr_postgres_password
+      - rawrarr_approved_nodes
+    ports:
+      - "127.0.0.1:7298:8080"
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
+
+  metadata:
+    build:
+      context: ./rust-arr
+    image: rawrarr:local
+    environment:
+      RUST_ARR_LISTEN_ADDR: 0.0.0.0:8080
+      RAWARR_DATA_DIR: /data
+      RAWARR_SHARED_DATA_DIR: /shared
+      RAWARR_METADATA_DIR: /metadata
+      RAWARR_LOCAL_PLAINTEXT_CONFIG: ${RAWARR_LOCAL_PLAINTEXT_CONFIG:-true}
+      RAWARR_QUIET_LOGS: ${RAWARR_QUIET_LOGS:-false}
+      RAWARR_LIBRARY_PATH: ${RAWARR_LIBRARY_PATH:-}
+      RAWARR_LIBRARY_NAME: ${RAWARR_LIBRARY_NAME:-}
+      RAWARR_DEVICE_NAME: ${RAWARR_DEVICE_NAME:-}
+      RAWARR_SYNCTHING_API_URL: http://rawrarr-local-syncthing-1:8384
+      RAWARR_SYNCTHING_API_KEY: ${RAWARR_SYNCTHING_API_KEY:-}
+      RAWARR_SYNCTHING_API_KEY_FILE: /run/secrets/rawrarr_syncthing_api_key
+      RAWARR_ROLE: metadata
+      RAWARR_COORDINATOR_URL: ${RAWARR_COORDINATOR_URL:-https://rawrarr.risk-mermaid.ts.net}
+      RAWARR_NODE_TOKEN_FILE: /run/secrets/rawrarr_node_token
+      RAWARR_WEBAUTHN_RP_ID: localhost
+      RAWARR_WEBAUTHN_ORIGIN: http://localhost:${RAWARR_HOST_PORT:-7297}
+    secrets:
+      - rawrarr_node_token
+      - rawrarr_syncthing_api_key
     volumes:
       - rawrarr-data:/data
       - type: bind
-        source: "${RAWARR_SHARED_DATA_PATH:-${HOME}/Library/Application Support/Rawrarr/shared-data}"
+        source: "${RAWARR_SHARED_DATA_PATH:-${HOME}/Library/Application Support/rawrarr/shared-data}"
         target: /shared
         bind:
           create_host_path: true
@@ -62,3 +84,9 @@ volumes:
 secrets:
   rawrarr_postgres_password:
     file: ${RAWARR_POSTGRES_PASSWORD_FILE:?Set RAWARR_POSTGRES_PASSWORD_FILE to a protected password file}
+  rawrarr_approved_nodes:
+    file: "${RAWARR_APPROVED_NODES_PATH:-${HOME}/Library/Application Support/rawrarr/coordinator/approved-nodes.json}"
+  rawrarr_node_token:
+    file: "${RAWARR_NODE_TOKEN_PATH:-${HOME}/Library/Application Support/rawrarr/nodes/macbook-metadata/token}"
+  rawrarr_syncthing_api_key:
+    file: "${RAWARR_SYNCTHING_API_KEY_SECRET_FILE:-${HOME}/Library/Application Support/rawrarr/syncthing-api-key}"

@@ -6,15 +6,23 @@ rust-version = "1.85"
 
 [dependencies]
 axum = "0.8"
+aes-gcm = "0.10"
 async-stream = "0.3"
 futures-util = "0.3"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
-reqwest = { version = "0.13", default-features = false, features = ["json", "query", "rustls", "stream"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "query", "rustls", "socks", "stream"] }
+redis = { version = "0.27", default-features = false, features = ["tokio-comp"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
+md-5 = "0.10"
+sha1 = "0.10"
+hmac = "0.12"
+getrandom = "0.3"
+hkdf = "0.12"
+p256 = { version = "0.13", features = ["ecdh"] }
 sqlx = { version = "0.8.6", default-features = false, features = ["json", "macros", "migrate", "postgres", "runtime-tokio-rustls", "uuid"] }
-tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync"] }
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 url = "2"
 uuid = { version = "1", features = ["serde", "v4"] }
 webauthn-rs = { version = "0.5.4", default-features = false, features = ["danger-allow-state-serialisation"] }

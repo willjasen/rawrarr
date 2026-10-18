@@ -40,10 +40,10 @@ def configure(raw):
         root.insert(0, folder)
     options = root.find('options')
     for key in ('globalAnnounceEnabled', 'localAnnounceEnabled', 'relaysEnabled', 'natEnabled'):
-        options.find(key).text = 'false'
+        options.find(key).text = 'true'
     for address in options.findall('listenAddress'):
         options.remove(address)
-    ET.SubElement(options, 'listenAddress').text = 'tcp://127.0.0.1:22000'
+    ET.SubElement(options, 'listenAddress').text = 'tcp://0.0.0.0:22000'
     options.find('urAccepted').text = '-1'
     return ET.tostring(root, encoding='utf-8', xml_declaration=True)
 
@@ -64,7 +64,7 @@ def main():
     raw = docker('exec', CONTAINER, 'cat', CONFIG)
     updated = configure(raw)
     print('Target: MacBook rawrarr-local Syncthing only; /shared send-and-receive, no peers.')
-    print('Disable discovery, relays, NAT traversal; bind sync listener to container loopback.')
+    print('Enable Syncthing discovery, public relays, and NAT traversal; no host sync port is published.')
     if not args.apply:
         print('Dry run. Use --apply to save configuration and restart this container.')
         return

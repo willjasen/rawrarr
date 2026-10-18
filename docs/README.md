@@ -1,10 +1,14 @@
 # Rawrarr documentation
 
+- [Container deployment](container-deployment.md) — implemented roarlay (coordinator), apex (storage), and metadata roles and Mac mini setup.
+- [Security](SECURITY.md) — trust boundaries, age encryption, browser-to-node encrypted transport through the coordinator, authentication, storage, and current limitations.
+- [Production deployment plan](production-deployment-plan.md) — start with coordinator-local PostgreSQL, production launch requirements, and a future managed-database migration path.
+
 Start here for the current project state and everyday use:
 
 - [Project roadmap](../ROADMAP.md) — completed work, outstanding work, and recommended next milestones.
 - [Technical boundaries](technical-status.md) — data placement, privacy, and security constraints.
-- [User guide](user-guide.md) — persistent local Compose usage, passkey and age setup, HTTPS Radarr connections, artwork, health checks, and local scanning.
+- [User guide](user-guide.md) — persistent local Compose usage, passkey and age setup, Radarr connections, Movies/TV summaries, artwork, health checks, and local scanning.
 
 ## Product design
 
@@ -13,14 +17,21 @@ Start here for the current project state and everyday use:
 ## Architecture and plans
 
 - [Product direction](product-direction.md) — long-term product scope, privacy goals, and compatibility.
-- [Node types](node-types.md) — operator service node, subscriber storage node, subscriber shard node, and SwarmSail enrollment.
+- [Shared cluster plan](shared-cluster-sharing-plan.md) — isolated/shared modes, owner-controlled membership, MLS evaluation over Syncthing, age-encrypted files, revocation cleanup, and implementation phases.
+- [Node types](node-types.md) — roarlay, apex, and metadata node roles, plus SwarmSail enrollment.
 - [Device signing design](device-signing-design.md) — proposed signed device enrollment and configuration integrity.
 - [Data domains](data-domains.md) — placement and synchronization boundaries for `/media`, `/metadata`, `/shared`, `/data`, and backups.
+- [Shared config schema v1](shared-config-v1.schema.json) — versioned age-encrypted config document with Radarr and Sonarr entries in `services`.
+- [Metadata export plan](metadata-export-plan.md) — browser-side age decryption and local ZIP export; includes the working three-record mini-export prototype and remaining production scope.
+- [Artwork cache plan](artwork-cache-plan.md) — node-local Redis cache for encrypted artwork, sizing, stale-entry handling, operations, and rollout acceptance criteria.
+- [Blind coordinator content flow](blind-coordinator-content.md) — keep metadata/storage content encrypted through the coordinator and decrypt it in the user's browser; documents the bounded implementation and remaining scope.
+- [Browser security test plan](security-test-plan.md) — plan Playwright integration evidence for metadata/storage confidentiality through the coordinator, including limits and malicious-coordinator caveats.
 - [Local backups](local-backups.md) — planned manual, age-encrypted backup of `/shared` to one node-local destination.
 - [Device architecture](device-architecture.md) — IDs, local/shared records, storage, and remote access boundaries.
 - [Cloud access](cloud-access-architecture.md) — passkey account service, blind relay, and subscriber-data boundary.
-- [Metadata export plan](metadata-export-plan.md) — browser-side age decryption and local ZIP export; includes the working three-record mini-export prototype and remaining production scope.
+- [Optional direct node connections](direct-node-connection-plan.md) — plan browser-to-node routing when reachable, with coordinator fallback, prerequisites, security requirements, and acceptance criteria.
 - [Subscription model](subscription-model.md) — proposed trial, hosted checkout, and signed entitlement model.
+- [Donation plan](donation-plan.md) — proposed optional one-time contributions, separate from subscription entitlements.
 - [Tailscale integration](tailscale-integration-plan.md) — optional overlay transport plan; SwarmSail will manage one tailnet per subscriber account.
 
 ## Tests and operational notes

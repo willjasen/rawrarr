@@ -16,7 +16,7 @@ const themeSeed = createHash('sha256').update(publicRecipient).digest('hex');
 function createElement() {
   return {
     value: '', textContent: '', disabled: false, hidden: true, checked: false, open: false, files: [], children: [],
-    handlers: new Map(), attributes: {},
+    handlers: new Map(), attributes: {}, dataset: {},
     focused: false,
     addEventListener(name, handler) { this.handlers.set(name, handler); },
     async click() { if (!this.disabled) await this.handlers.get('click')?.({ currentTarget: this }); },
@@ -45,17 +45,26 @@ test('generated private age identity has a short preview and full value is expos
   assert.match(page, /<dialog id="identity-copy-dialog"/);
   assert.match(page, /<span>I copied it and saved the private ID somewhere safe\.<\/span>/);
   assert.match(page, /Copy private identity/);
+  assert.match(page, /unlockButton\.textContent = generatedIdentity \? 'Continue' : 'Unlock vault'/);
   assert.match(page, /Create ID/);
   assert.match(page, /Public age recipient/);
-  assert.match(page, /Paste existing private identity/);
+  assert.match(page, /id="import-id" type="button">Import ID/);
+  assert.match(page, /<dialog id="import-dialog"/);
+  assert.match(page, /id="import-submit" type="button" disabled>Unlock vault/);
+  assert.match(page, /Paste a post-quantum age private ID beginning with AGE-SECRET-KEY-PQ-1/);
   assert.doesNotMatch(page, /identity-file|choose-file|Load identity from file|type="file"/);
   assert.match(page, />Unlock vault<\/button>/);
+  assert.doesNotMatch(page, />Close<\/button>/);
   assert.match(page, /rawrarr cannot recover this ID if it is lost/);
+  assert.match(page, /Keep this ID on this device/);
+  assert.match(page, /rememberOnDevice: document\.getElementById\('remember-on-device'\)\.checked/);
+  assert.match(page, /\.backup-warning \{[^}]*color:#f3d778/);
   assert.doesNotMatch(page, />Import and unlock<\/button>/);
 
   const ids = ['identity', 'message', 'public-card', 'public-recipient',
-    'private-preview-card', 'private-preview', 'fingerprint', 'copy', 'generate', 'unlock',
-    'backup-confirmation', 'backup-confirmed', 'identity-copy-status', 'identity-copy-dialog',
+    'private-preview-card', 'private-preview', 'fingerprint', 'copy', 'generate', 'unlock', 'import-id', 'import-submit', 'import-dialog', 'import-message', 'review-generated',
+    'backup-confirmation', 'backup-confirmed', 'remember-on-device',
+    'identity-copy-status', 'identity-copy-dialog',
     'identity-copy-instructions', 'copy-private-identity'];
   const elements = Object.fromEntries(ids.map(id => [id, createElement()]));
   const rootStyles = new Map();
@@ -136,34 +145,13 @@ test('generated private age identity has a short preview and full value is expos
 
   await elements.generate.click();
   assert.equal(elements.unlock.disabled, true, 'new generation resets acknowledgement');
-  const previousUnlockCount = fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length;
-  elements.identity.value = privateIdentity.replace(/\n/g, ' ');
+  await elements['import-id'].click();
+  assert.equal(elements['import-dialog'].open, true, 'Import ID opens the paste dialog');
+  elements.identity.value = privateKey;
   await elements.identity.input();
-  assert.equal(elements.identity.value, privateIdentity.replace(/\n/g, ' '), 'pasted age-file text remains masked in the password field');
-  await elements.copy.click();
-  await elements['copy-private-identity'].click();
-  assert.deepEqual(clipboard, [privateKey, privateKey], 'copying a pasted age file extracts only its private key');
-  assert.equal(elements['backup-confirmed'].checked, false, 'pasting an identity resets the backup confirmation');
-  assert.equal(elements.unlock.disabled, true, 'a pasted identity requires a fresh backup confirmation');
-  assert.equal(
-    fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length,
-    previousUnlockCount,
-    'pasting an identity does not unlock automatically'
-  );
-  elements['backup-confirmed'].checked = true;
-  await elements['backup-confirmed'].change();
-  await elements.unlock.click();
-  assert.equal(
-    fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length,
-    previousUnlockCount + 1,
-    'unlocking after paste submits the identity'
-  );
-  const pastedUnlock = fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').at(-1);
-  assert.equal(JSON.parse(pastedUnlock.options.body).identity, privateKey, 'flattened age-file paste submits only its private-key line');
-  assert.equal(rootStyles.get('--theme-hue'), String(Number.parseInt(themeSeed.slice(0, 8), 16) % 360));
-
-  assert.match(mainPage, /fetch\('\/api\/settings\/age'/);
-  assert.match(mainPage, /applyIdentityTheme\(age\.themeSeed\)/);
-  assert.match(mainPage, /--theme-hue/);
-  assert.doesNotMatch(mainPage, /themeSeed[^\n]*recipient/);
+  assert.equal(elements['import-submit'].disabled, false, 'pasting a post-quantum ID enables import');
+  await elements['import-submit'].click();
+  assert.equal(unlockCount(), 2, 'imported ID unlocks directly without creating a new ID');
+  const submitted = fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').at(-1);
+  assert.equal(JSON.parse(submitted.options.body).identity, privateKey);
 });

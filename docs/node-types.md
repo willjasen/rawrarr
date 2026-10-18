@@ -1,31 +1,32 @@
 # Rawrarr node types
 
-## Roles
+## Current roles
 
-Rawrarr has four named roles. This is the accepted target architecture; persistent role-specific startup and packaging remain planned. The current full application still requires PostgreSQL for authentication, while `storage-scan-once` already bypasses web/auth startup.
+The implemented roles are currently identified internally as `coordinator`, `storage`, and `metadata`. The user-facing names are **roarlay** for the coordinator role and **apex** for storage nodes. The user-facing name for metadata nodes is undecided; continue calling them **metadata nodes** until Brandon chooses one. These names do not change capabilities: the roarlay role handles central authentication, passkey persistence, and node coordination; apex and metadata nodes both run the subscriber UI, Radarr, and shared app-data functionality; only apex has local media access. Metadata replaces shard, and subscriber describes ownership rather than a container type. The former service role is retired. Compose services and containers use `roarlay` and `apex` for the renamed roles; metadata remains `metadata`. The Rust `RAWARR_ROLE` values, database role values, route paths, and stable node IDs remain `coordinator`, `storage`, and `metadata` for compatibility.
 
-| Role | Owner and purpose | Responsibilities | Required local state |
-| --- | --- | --- | --- |
-| **Coordinator** (`coordinator`) | Subscriber's control node; currently this MacBook's local deployment | Web UI/API, user/passkey authentication, catalog, device enrollment and task coordination | PostgreSQL, node-local state, authorized shared app data |
-| **Storage** (`storage`) | Subscriber's media worker; planned for the Mac mini | Read-only local scans, encrypted inventory/metadata publication, authenticated outbound coordinator communication | Device identity and scan/queue state; no PostgreSQL, user passkeys, or browser sessions required |
-| **Shard** (`shard`) | Subscriber's encrypted app-data replica | Retain and synchronize shared ciphertext; additional serving responsibilities remain undecided | Node-local identity and replica state; no implicit coordinator, PostgreSQL, or media access |
-| **Service** (`service`) | Operator-owned infrastructure | Hosted account/subscription services, SwarmSail/Headscale coordination, future blind relay | Operator state only; never subscriber private identities, plaintext app data, or media |
+See [container deployment](container-deployment.md) for the authoritative capability matrix, startup behavior, trust limitations, local migration, and Mac mini setup. The coordinator is the established central control plane. The MacBook metadata node is its seeded first participant; later metadata and storage nodes join that coordinator. No subscriber role connects directly to PostgreSQL.
 
-Roles describe capabilities, not user privileges. Coordinator and storage may run together on one machine; that combined deployment needs the coordinator's database. A storage-only deployment does not. The MacBook remains the coordinator and the Mac mini joins its instance as storage. A storage node may scan mixed media or category-specific libraries; multi-library and combined catalog behavior remain planned. The operator service remains outside the subscriber instance and its Syncthing folder.
-
-Storage needs device authentication, distinct from the owner's passkeys. Persist device keys and durable scan progress locally; files or SQLite are possible implementations, not a decision to add another database. A public age recipient can encrypt scan output without giving the worker the private age identity. Do not require private-key distribution merely to scan. See [coordinator linking](coordinator-linking-plan.md).
+Manual, account-scoped node approval and node-scoped central authentication are implemented for the coordinator's current single-owner setup. Browser device-code enrollment, multi-account invitations, public image distribution, and SwarmSail provisioning remain planned. The sections below retain future distribution/networking direction; references to the old service/shard packaging are superseded by the three-role deployment guide.
 
 ## Instance and enrollment model
 
 - A subscriber subscription is attached to the shared Rawrarr `instance_id`, not to a container. It covers that instance's coordinator, storage, and shard nodes under the agreed plan/device limits.
 - SwarmSail creates one isolated Headscale tailnet per subscriber account. The account's authorized Rawrarr nodes use that overlay, even if the account later has more than one Rawrarr instance; the precise instance/account subscription mapping remains a separate product decision.
-- Each subscriber Docker deployment runs a Tailscale container/sidecar. SwarmSail on the operator's service node communicates with authorized Rawrarr containers over that account's overlay and coordinates short-lived, single-use enrollment.
+- Tailscale is optional on subscriber deployments. The MacBook coordinator may use a Tailscale sidecar for private Serve; metadata and storage nodes can connect outbound to its HTTPS endpoint without a Tailscale identity. SwarmSail on the operator's service node may use an overlay for authorized control and short-lived enrollment.
 - A node keeps its own Headscale/Tailscale identity and state locally. Enrollment secrets are transient and must never enter Compose files, shared Syncthing data, age-encrypted app configuration, logs, or the service database after use.
 - Tailscale is an overlay transport only. It does not determine Rawrarr sharing membership or data permissions; Rawrarr's own authorization and age recipients determine which data a person can access or decrypt. Do not couple tailnet membership to data access in the initial design.
 - The Headscale network carries Rawrarr app access, control, and app-data traffic only. It must not carry media files or streams. Policies must explicitly allow only required Rawrarr endpoints; Headscale's empty/unconfigured policy can allow all node-to-node traffic.
 - SwarmSail can coordinate tailnet membership and device visibility. It does not make the service node a trusted Rawrarr application backend, database replica, or media proxy.
 
 ## Container configuration direction
+
+### Image distribution (planned)
+
+Publish versioned Rawrarr application images to a public OCI-compatible registry, with Git tags/releases as the source of immutable versions. A subscriber should receive a short, role-specific Compose file from the Rawrarr site or documentation, review its mounts and ports, then run `docker compose pull` and `docker compose up -d`. Compose should pin a release tag by default; provide an explicit update path that changes the tag and pulls the new image. Publish multi-architecture images for common self-hosted hosts, plus release notes and a cryptographic image digest/checksum for verification. Avoid asking subscribers to clone the source repository or build Rust locally for normal installation.
+
+Treat the application image as public and non-secret. Persist subscriber state only in the documented `/data` and `/shared` mounts, and media only in `/media`; upgrades replace the container while preserving those volumes. Do not bake private age identities, passkeys, credentials, media, or node-local databases into the image. Registry credentials should not be required for subscriber pulls. The operator's `service` role may share the published application image only if its entrypoint and dependencies remain role-isolated; otherwise publish a separate service image. The service node must never receive subscriber-node mounts through a shared deployment template.
+
+The current repository Compose file builds `rawrarr:local` from source and serves as a development/self-hosting example. Publishing, release automation, update notifications, and a subscriber install portal are not implemented. Keep the image name, release channel policy, support window, and signed provenance mechanism as implementation decisions until the first distributable release is prepared.
 
 The eventual Docker packaging should expose a validated role setting, with syntax still to be chosen for `coordinator`, `storage`, `shard`, and `service`, including coordinator + storage combinations, and reject unknown or incompatible settings at startup. Compose examples should make role-specific mounts and services explicit. In particular:
 

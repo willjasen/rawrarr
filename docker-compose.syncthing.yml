@@ -3,7 +3,7 @@
 services:
   syncthing:
     image: syncthing/syncthing:2.1.5@sha256:397aa00b92b48d65540ea3ae3cbf271b87bdccbe07a0b7bd7d2debc3a7b29138
-    hostname: rawrarr-macbook-syncthing
+    hostname: ${RAWARR_SYNCTHING_HOSTNAME:-rawrarr-macbook-syncthing}
     environment:
       PUID: "10001"
       PGID: "10001"
@@ -13,15 +13,18 @@ services:
     volumes:
       - rawrarr-syncthing-state:/var/syncthing
       - type: bind
-        source: "${HOME}/Library/Application Support/rawrarr/shared-data"
+        source: "${RAWARR_SHARED_DATA_PATH:-${HOME}/Library/Application Support/rawrarr/shared-data}"
         target: /shared
         bind:
           create_host_path: false
     networks:
       - syncthing-local-admin
+      - rawrarr-local_default
     restart: unless-stopped
 networks:
   syncthing-local-admin:
     driver: bridge
+  rawrarr-local_default:
+    external: true
 volumes:
   rawrarr-syncthing-state:

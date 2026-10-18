@@ -1,8 +1,11 @@
 //! Last successful list, scoped to the active Radarr client; never persisted.
 use crate::{AppState, RadarrMovie};
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 use serde::Serialize;
-use std::{sync::Arc, time::{SystemTime, UNIX_EPOCH}};
+use std::{
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tokio::sync::RwLock;
 
 #[derive(Clone, Default)]
@@ -19,7 +22,10 @@ impl Cache {
     pub(crate) async fn store(&self, movies: Vec<RadarrMovie>) {
         *self.0.write().await = Some(Snapshot {
             movies,
-            updated_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),
+            updated_at: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
         });
     }
 }
@@ -30,7 +36,10 @@ pub(crate) async fn get(State(state): State<Arc<AppState>>) -> impl axum::respon
         Some(client) => client.movie_snapshot.0.read().await.clone(),
         None => None,
     };
-    ([(axum::http::header::CACHE_CONTROL, "no-store")], Json(snapshot))
+    (
+        [(axum::http::header::CACHE_CONTROL, "no-store")],
+        Json(snapshot),
+    )
 }
 
 #[cfg(test)]

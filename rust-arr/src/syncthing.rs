@@ -23,6 +23,27 @@ pub struct Status {
     pub version: String,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PeerHealth {
+    pub device_id: String,
+    pub name: String,
+    pub connected: bool,
+    pub folder_state: Option<String>,
+    pub completion_percent: Option<f64>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedHealth {
+    pub folder_id: String,
+    pub state: String,
+    pub completion_percent: Option<f64>,
+    pub local_device_id: String,
+    pub local_device_name: String,
+    pub peers: Vec<PeerHealth>,
+}
+
 #[derive(Debug)]
 pub enum Error {
     InvalidConfiguration,
@@ -38,9 +59,11 @@ impl Client {
         else {
             return Ok(None);
         };
-        let key = match env::var("RAWARR_SYNCTHING_API_KEY") {
-            Ok(key) => key,
-            Err(_) => {
+        let key = match env::var("RAWARR_SYNCTHING_API_KEY")
+            .ok()
+            .filter(|key| !key.trim().is_empty()) {
+            Some(key) => key,
+            None => {
                 let path = env::var_os("RAWARR_SYNCTHING_API_KEY_FILE")
                     .ok_or(Error::InvalidConfiguration)?;
                 std::fs::read_to_string(Path::new(&path))
@@ -94,9 +117,13 @@ impl Client {
             .await
             .map_err(|_| Error::Request)?;
         if !response.status().is_success() {
+            eprintln!("Syncthing API request {path} returned HTTP {}", response.status());
             return Err(Error::Rejected);
         }
-        response.json().await.map_err(|_| Error::Rejected)
+        response.json().await.map_err(|_| {
+            eprintln!("Syncthing API request {path} returned invalid JSON");
+            Error::Rejected
+        })
     }
 
     async fn post(&self, path: &str, body: &Value) -> Result<(), Error> {
@@ -120,10 +147,73 @@ impl Client {
 
     pub async fn status(&self) -> Result<Status, Error> {
         let value = self.get("rest/system/status").await?;
-        serde_json::from_value(
-            json!({ "myId": value.get("myID"), "version": value.get("version") }),
-        )
-        .map_err(|_| Error::Rejected)
+        let Some(my_id) = value.get("myID").and_then(Value::as_str) else {
+            eprintln!("Syncthing status response omitted its device ID");
+            return Err(Error::Rejected);
+        };
+        let version_response = self.get("rest/system/version").await?;
+        let Some(version) = version_response.get("version").and_then(Value::as_str) else {
+            eprintln!("Syncthing status response omitted its version");
+            return Err(Error::Rejected);
+        };
+        Ok(Status { my_id: my_id.to_owned(), version: version.to_owned() })
+    }
+
+    /// Read local folder state and peer connectivity for one shared folder.
+    pub async fn shared_health(&self, folder_id: &str) -> Result<SharedHealth, Error> {
+        let local_status = self.status().await?;
+        let folders = self.get("rest/config/folders").await?;
+        let folder = folders.as_array().and_then(|all| all.iter().find(|f| f.get("id").and_then(Value::as_str) == Some(folder_id)))
+            .ok_or_else(|| { eprintln!("Syncthing folder {folder_id} was not found in its config response"); Error::Rejected })?;
+        let state_value = self.get(&format!("rest/db/status?folder={}", folder_id)).await?;
+        let state = state_value["state"].as_str().unwrap_or("unknown").to_owned();
+        let completion = self.get(&format!("rest/db/completion?folder={}", folder_id)).await.ok();
+        let completion_percent = completion.as_ref().and_then(|v| v["completion"].as_f64());
+        let connections = self.get("rest/system/connections").await?;
+        let devices = self.get("rest/config/devices").await?;
+        let local_device_name = devices.as_array().and_then(|all| all.iter().find(|d| d.get("deviceID").and_then(Value::as_str) == Some(local_status.my_id.as_str())))
+            .and_then(|d| d["name"].as_str()).unwrap_or("This device").to_owned();
+        let folder_devices = folder["devices"].as_array().cloned().unwrap_or_default();
+        let mut peers = Vec::new();
+        for fd in folder_devices {
+            let Some(id) = fd["deviceID"].as_str() else { continue };
+            if id == local_status.my_id { continue; }
+            let Some(configured) = devices.as_array().and_then(|all| all.iter().find(|d| d.get("deviceID").and_then(Value::as_str) == Some(id))) else { continue };
+            let connection = &connections["connections"][id];
+            let query = url::form_urlencoded::Serializer::new(String::new())
+                .append_pair("folder", folder_id).append_pair("device", id).finish();
+            let peer_completion = self.get(&format!("rest/db/completion?{query}")).await.ok()
+                .and_then(|value| value["completion"].as_f64());
+            peers.push(PeerHealth {
+                device_id: id.to_owned(),
+                name: configured["name"].as_str().unwrap_or(id).to_owned(),
+                connected: connection["connected"].as_bool().unwrap_or(false),
+                folder_state: connection["paused"].as_bool().map(|paused| if paused { "paused".into() } else { "connected".into() }),
+                completion_percent: peer_completion,
+            });
+        }
+        Ok(SharedHealth { folder_id: folder_id.to_owned(), state, completion_percent, local_device_id: local_status.my_id, local_device_name, peers })
+    }
+
+    pub async fn shared_health_all(&self) -> Result<Vec<SharedHealth>, Error> {
+        let folders = self.get("rest/config/folders").await?;
+        let Some(folders) = folders.as_array() else {
+            eprintln!("Syncthing folder config response was not a list");
+            return Err(Error::Rejected);
+        };
+        let ids = folders.iter()
+            .filter_map(|folder| folder["id"].as_str().map(str::to_owned)).collect::<Vec<_>>();
+        let mut result = Vec::new();
+        for id in ids {
+            match self.shared_health(&id).await {
+                Ok(health) => result.push(health),
+                Err(error) => {
+                    eprintln!("Syncthing shared-folder health query failed: {error:?}");
+                    return Err(error);
+                }
+            }
+        }
+        Ok(result)
     }
 
     async fn add_device(&self, id: &str, name: &str, address: &str) -> Result<(), Error> {

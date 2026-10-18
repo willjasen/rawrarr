@@ -100,7 +100,10 @@ def main() -> int:
                 raise RuntimeError("Rawrarr did not become ready")
 
             status, _, page = request(base_url, "/auth")
-            assert status == 200 and b"Create account with a passkey" in page
+            assert status == 200 and b"Sign in with passkey" in page
+            assert b'id="username"' not in page and b'id="new-username"' not in page
+            assert b'id="display-name"' not in page
+            assert b"status.userExists ? 'login-panel' : 'register-panel'" in page
             status, _, payload = request(base_url, "/api/auth/status")
             assert status == 200 and json.loads(payload) == {"userExists": False}
             status, headers, _ = request(base_url, "/")
@@ -112,14 +115,17 @@ def main() -> int:
                 base_url,
                 "/api/auth/register/start",
                 "POST",
-                {"username": "owner_test", "displayName": "Owner"},
+                {},
             )
             assert status == 200
             challenge = json.loads(payload)
             challenge_id = challenge["challengeId"]
             assert re.fullmatch(r"[0-9a-f-]{36}", challenge_id)
             assert challenge["options"]["publicKey"]["rp"]["id"] == "localhost"
-            assert challenge["options"]["publicKey"]["user"]["name"] == "owner_test"
+            assert re.fullmatch(
+                r"[a-z]+-[a-z]+",
+                challenge["options"]["publicKey"]["user"]["name"],
+            )
 
             status, _, _ = request(
                 base_url,

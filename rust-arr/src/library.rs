@@ -55,7 +55,7 @@ pub struct LibraryInfo {
     pub name: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MediaKind {
     Movie,
@@ -123,7 +123,9 @@ pub struct ScanSummary {
     pub issues: usize,
     pub truncated: bool,
     pub sidecars_created: usize,
+    pub sidecars_skipped: usize,
     pub sidecar_errors: usize,
+    pub cancelled: bool,
 }
 
 fn scan_root(root: &Path, name: &str) -> ScanSummary {
@@ -138,7 +140,9 @@ fn scan_root(root: &Path, name: &str) -> ScanSummary {
         issues: 0,
         truncated: false,
         sidecars_created: 0,
+        sidecars_skipped: 0,
         sidecar_errors: 0,
+        cancelled: false,
     };
     let mut pending = vec![(root.to_path_buf(), 0usize)];
     let mut visited = 0usize;

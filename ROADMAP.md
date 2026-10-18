@@ -4,18 +4,20 @@ This document is the single index of what the repository has completed and what 
 
 ## Recommended next work
 
-1. **Verify SSE through the intended Cloudflare/reverse-proxy route.** The app currently streams dashboard updates from `/api/events`, but the deployed path has not been tested. Confirm streaming, reconnect behavior, buffering, and connection timeouts using the exact planned proxy configuration.
-2. **Make coordinator + storage work.** Keep this MacBook as coordinator and add a PostgreSQL-free Mac mini worker. Build on `storage-scan-once`; implement persistent operation, device/library records, authenticated pairing, revocation, heartbeat/commands, and catalog ingestion.
-3. **Add private coordinator access and linking.** Expose the coordinator through Tailscale HTTPS, preferably a stable named Service. The worker logs `/devices/link` at that coordinator; the owner signs in, enters the short-lived code from local Docker logs, and approves a device-key-bound request. Verify WebAuthn origin migration and OrbStack-container reachability. Operator portal claims remain separate.
+1. **Verify Sonarr against a real instance.** The TV page now reads the configured Sonarr series inventory directly from metadata and displays series, episode, disk-usage, quality-profile, and TVDB data. Verify the deployed page against the configured live Sonarr instance; the sanitized browser fixture covers response rendering and refresh.
+2. **Verify SSE through the intended Cloudflare/reverse-proxy route.** The app currently streams dashboard updates from `/api/events`, but the deployed path has not been tested. Confirm streaming, reconnect behavior, buffering, and connection timeouts using the exact planned proxy configuration.
+3. **Make coordinator + storage work.** Keep this MacBook as coordinator and add a PostgreSQL-free Mac mini worker. Build on `storage-scan-once`; implement persistent operation, device/library records, authenticated pairing, revocation, heartbeat/commands, and catalog ingestion.
+4. **Add private coordinator access and linking.** Expose the coordinator through Tailscale HTTPS, preferably a stable named Service. The worker logs `/devices/link` at that coordinator; the owner signs in, enters the short-lived code from local Docker logs, and approves a device-key-bound request. Verify WebAuthn origin migration and OrbStack-container reachability. Operator portal claims remain separate.
 
-This sequence closes a known deployment question first, then builds the node coordination needed by the larger hosted design. Revisit it if product priorities change.
+This sequence closes the partially delivered Sonarr integration first, then verifies the existing transport and builds node coordination needed by the larger hosted design. Revisit it if product priorities change.
 
 ## Completed in the repository
 
 - **Standalone Rust application:** Axum web/API service, local PostgreSQL migrations and state, `/health`, Docker Compose, and container health checks.
 - **Local passkey onboarding:** first-account registration and sign-in use WebAuthn with passkeys and sessions stored in that node's PostgreSQL database.
-- **Age-encrypted shared settings:** create or paste a post-quantum age identity; encrypt configuration as `/shared/config.aged`. The private identity stays in browser memory and is never saved by the app. Generated IDs use a copy pop-up, copy acknowledgement, three consecutive character challenge starting at the 5th character after the fixed prefix, then automatic vault unlock and dashboard navigation. Pasted IDs use the same copy check, followed by **Unlock vault**.
+- **Age-encrypted shared settings:** create or paste a post-quantum age identity; encrypt configuration as `/shared/config.aged`. The private identity is sent to the subscriber web process for unlock and retained there while unlocked. An explicit **Keep this ID on this device** option saves it with owner-only permissions in node-local `/data/age-identity`; it never belongs in `/shared`, PostgreSQL, or the operator service. Generated IDs use a copy pop-up and copy acknowledgement, followed by an explicit **Continue** click before vault unlock and dashboard navigation. Pasted IDs unlock directly with **Unlock vault**, without copy acknowledgement. The dialog has no Close action. Character verification is temporarily disabled.
 - **Radarr and local library prototype:** configure Radarr, inspect movie inventory and connection status, scan a configured local media path, and create age-encrypted metadata and artwork. Media stays on its storage host.
+- **Initial Sonarr integration:** configure and validate an HTTPS Sonarr connection, store its settings in the subscriber's age-encrypted configuration, and read series inventory through authenticated APIs. The coordinator Settings form sends credentials directly from the browser to metadata; roarlay never receives the API key. Radarr and Sonarr share one library column schema and renderer. Focused browser and Rust tests pass; persistent deployment and direct routing are verified, while live Sonarr connectivity still needs verification (see [Sonarr delivery runbook](runbooks/2026-10-18-sonarr-shared-library.md) and [connection settings runbook](runbooks/2026-10-18-sonarr-settings-flow.md)).
 - **Syncthing and status foundation:** configure supported Syncthing peer/folder settings, expose per-node device identity and scan status, write compressed allowlisted shared logs, and stream dashboard updates using server-sent events.
 - **Local Docker data and test workflow:** persist shared data outside the source tree, retain PostgreSQL and node-local state in Docker-managed storage, and check web/PostgreSQL health. The `rawrarr-testing-base:local` image caches external tools and Rust dependencies; each test run creates a unique container from that base, copies in current source, and retains its log. The base is rebuilt only when missing or explicitly requested.
 - **Project foundations:** standalone Git repository, product and data-boundary documentation, design guide, user guide, and test suites for current Rust and browser behavior.
@@ -25,10 +27,21 @@ This sequence closes a known deployment question first, then builds the node coo
 ### Multi-node subscriber application
 
 - Durable device and library catalog with stale/offline state, scan generations, and reconciliation.
+- Define library configuration and scanning for mixed-media roots and category-specific roots distributed across multiple storage nodes; combine them in the instance catalog without moving media bytes.
 - Pairing, approval, revocation, device identity continuity, heartbeats, and a narrowly scoped remote command channel.
 - Keep user sign-in and PostgreSQL on the coordinator. Define separate device authentication for storage/shard nodes; multiple-coordinator auth/failover remains future work.
 - Implement role-specific startup and packaging: coordinator, database-free storage, encrypted-replica shard, and isolated operator service; allow coordinator + storage combinations.
 - Implement explicit per-user sharing grants. Syncthing peer/folder configuration does not currently implement invitations, trust decisions, or selective sharing.
+
+### Shared clusters and owner-controlled membership
+
+- Keep new clusters isolated by default; support an explicit one-way transition to shared mode. The owner alone may invite or remove members; invitees cannot extend membership.
+- Establish a genesis-anchored, append-only trust history for every cluster, including isolated-mode device enrollment/removal, role changes, shared-mode transition, member changes, root rotation, and recovery. Replicate and back up history, pin accepted heads locally, and detect gaps, forks, and rollback.
+- Define owner-managed loss handling: if the age identity is lost, original media remains and encrypted metadata/config must be rebuilt where possible; if the signing root is lost, the owner may explicitly re-enroll devices under a new genesis/trust chain. Rawrarr provides no secret recovery bypass, and a new signing root must never be trusted silently.
+- Decide whether MLS is warranted for group epochs over the eventually consistent Syncthing folder or whether an owner-signed append-only membership log is sufficient. Prototype single-writer commits, offline catch-up, conflicts, and stale-node quarantine before selecting a protocol.
+- Keep age as file encryption. Its per-file random key and recipient stanzas are part of each age file; every authorized recipient gets a stanza that can recover the same key, adding only modest header size while encrypting the payload once. Stanzas need not contain public recipient IDs verbatim; keep those IDs in authenticated membership records. Do not create a persistent cluster-wide pre-shared key. Validate multi-recipient age for new files and test a maintained implementation's ability to add recipients to existing ciphertext without re-encrypting payloads; otherwise choose a history migration policy.
+- Implement revocation so removed members lose future access, while explaining that they may retain previously received data. Request cooperative cleanup from their Rawrarr nodes and report pending, node-reported complete, or unconfirmed status without claiming secure erasure.
+- Define invitation history scope, per-person versus per-device membership, root-key recovery/succession, rollback resistance, and reconnect behavior before production implementation.
 
 ### Private access, operator service, and relay
 
@@ -48,7 +61,7 @@ This sequence closes a known deployment question first, then builds the node coo
 - Restore private-key character verification after fixing the reported rejection of correct answers and validating the full browser flow.
 
 - General-purpose file/folder sharing beyond media.
-- Sonarr, Lidarr, Readarr, and Bazarr integrations; Prowlarr-style indexer management and search; concrete download-client adapters and fulfillment. The current download-client abstraction has no concrete adapter.
+- Sonarr posters/artwork, snapshots, metadata lookup, and episode mutations; Lidarr, Readarr, and Bazarr integrations; Prowlarr-style indexer management and search; concrete download-client adapters and fulfillment. The current download-client abstraction has no concrete adapter.
 - Manual age-encrypted shared-folder backup to one node-local destination, including recovery verification and a retention policy.
 - Device signing, approval, signed shared configuration, and revocation/revision checks.
 - Static logo animation for selected moments, with reduced-motion behavior.
@@ -58,6 +71,7 @@ This sequence closes a known deployment question first, then builds the node coo
 - [Device and service architecture](docs/device-architecture.md) — current local prototype boundaries and target node model.
 - [Product direction](docs/product-direction.md) — long-term product goals and trust boundaries.
 - [Product and interface design](docs/DESIGN.md) — user-facing principles and flows.
+- [Shared cluster plan](docs/shared-cluster-sharing-plan.md) — planned isolated-to-shared transition, owner-controlled membership, MLS evaluation, age file handling, revocation cleanup, and phased work.
 - [Technical boundaries](docs/technical-status.md) — data placement and security boundaries.
 - [User guide](docs/user-guide.md) — current local prototype usage.
 - [Testing](TESTING.md) — reusable dependency image and isolated runner workflow.

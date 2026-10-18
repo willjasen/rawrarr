@@ -14,8 +14,9 @@ class Configuration(unittest.TestCase):
         self.assertEqual(root.find('folder').get('path'), '/shared')
         self.assertEqual(root.find('folder/device').get('id'), 'LOCAL')
         self.assertEqual(root.findtext('gui/apikey'), 'fixture-only')
-        self.assertEqual(root.findtext('options/listenAddress'), 'tcp://127.0.0.1:22000')
-        self.assertEqual(root.findtext('options/relaysEnabled'), 'false')
+        self.assertEqual(root.findtext('options/listenAddress'), 'tcp://0.0.0.0:22000')
+        for key in ('globalAnnounceEnabled', 'localAnnounceEnabled', 'relaysEnabled', 'natEnabled'):
+            self.assertEqual(root.findtext('options/' + key), 'true')
         self.assertEqual(setup.configure(result), result)
     def test_reject_remote_peer(self):
         with self.assertRaises(ValueError):

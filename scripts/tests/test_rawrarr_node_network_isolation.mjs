@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { readFile } from 'node:fs/promises';
+
+const root = new URL('../../', import.meta.url);
+const read = path => readFile(new URL(path, root), 'utf8');
+const [base, metadata, storage, macbookTailscale, miniRelays, proxyConfig] = await Promise.all([
+  read('docker-compose.yml'),
+  read('docker-compose.metadata.yml'),
+  read('docker-compose.storage.yml'),
+  read('docker-compose.tailscale-macbook.yml'),
+  read('docker-compose.mini-relays.yml'),
+  read('storage-proxy.Caddyfile'),
+]);
+
+test('metadata and storage have no host-published application ports', () => {
+  for (const compose of [base, metadata, storage]) {
+    assert.doesNotMatch(compose, /127\.0\.0\.1:\$?\{?RAWARR_HOST_PORT[^\n]*:8080/);
+    assert.doesNotMatch(compose, /127\.0\.0\.1:7297:8080/);
+  }
+});
+
+test('MacBook metadata is loopback-only in the coordinator Tailscale namespace', () => {
+  assert.match(macbookTailscale, /metadata:[\s\S]*?network_mode: "service:tailscale"/);
+  assert.match(macbookTailscale, /RUST_ARR_LISTEN_ADDR: 127\.0\.0\.1:8081/);
+  assert.match(macbookTailscale, /RAWARR_NODE_RELAY_TARGETS: .*127\.0\.0\.1:8081/);
+  assert.match(macbookTailscale, /127\.0\.0\.1:8081\/health/);
+});
+
+test('Mini storage and Serve proxy use only loopback in the Tailscale namespace', () => {
+  assert.match(storage, /network_mode: "container:\$\{RAWARR_TAILSCALE_CONTAINER:-rawrarr-mini-tailscale\}"/);
+  assert.match(storage, /RUST_ARR_LISTEN_ADDR: 127\.0\.0\.1:8080/);
+  assert.match(storage, /RAWARR_COORDINATOR_SOCKS5_URL: .*127\.0\.0\.1:1055/);
+  assert.match(miniRelays, /storage-proxy\.Caddyfile/);
+  assert.match(proxyConfig, /bind 127\.0\.0\.1/);
+  assert.match(proxyConfig, /reverse_proxy 127\.0\.0\.1:8080/);
+});

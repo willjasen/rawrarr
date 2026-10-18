@@ -27,18 +27,12 @@
   <main>
     <div class="brand">rawrarr</div>
     <h1>Sign in</h1>
-    <p>Use a passkey to continue to your private media workspace.</p>
+    <p id="intro">Use your passkey to continue to your private workspace.</p>
     <section id="register-panel" hidden>
-      <label for="new-username">Username</label>
-      <input id="new-username" autocomplete="username" maxlength="32" placeholder="Your account name">
-      <label for="display-name">Name</label>
-      <input id="display-name" autocomplete="name" maxlength="64" placeholder="How rawrarr should address you">
-      <button id="create-passkey" type="button">Create account with a passkey</button>
+      <button id="create-passkey" type="button">Create passkey</button>
     </section>
     <section id="login-panel" hidden>
-      <label for="username">Username</label>
-      <input id="username" autocomplete="username webauthn" maxlength="32" placeholder="Your account name">
-      <button id="sign-in" type="button">Continue with passkey</button>
+      <button id="sign-in" type="button">Sign in with passkey</button>
     </section>
     <div id="message" role="status" aria-live="polite"></div>
   </main>
@@ -78,15 +72,13 @@
       return data;
     }
     async function createPasskey() {
-      const username = document.getElementById('new-username').value;
-      const displayName = document.getElementById('display-name').value;
-      const start = await post('/api/auth/register/start', { username, displayName });
+      const start = await post('/api/auth/register/start', {});
       const credential = await navigator.credentials.create({ publicKey: decodeOptions(start.options) });
       const result = await post('/api/auth/register/finish', { challengeId: start.challengeId, credential: credentialJson(credential) });
       window.location.assign(result.next);
     }
     async function signIn() {
-      const start = await post('/api/auth/login/start', { username: document.getElementById('username').value });
+      const start = await post('/api/auth/login/start', {});
       const credential = await navigator.credentials.get({ publicKey: decodeOptions(start.options) });
       const result = await post('/api/auth/login/finish', { challengeId: start.challengeId, credential: credentialJson(credential) });
       window.location.assign(result.next);
@@ -109,6 +101,9 @@
         const response = await fetch('/api/auth/status', { headers: { Accept: 'application/json' } });
         const status = await response.json();
         document.getElementById(status.userExists ? 'login-panel' : 'register-panel').hidden = false;
+        document.getElementById('intro').textContent = status.userExists
+          ? 'Sign in with your passkey to continue.'
+          : 'Create your account with a passkey. rawrarr will give it a dinosaur-themed name.';
       } catch (_) { message.textContent = 'Could not connect to the account service.'; }
     })();
   </script>

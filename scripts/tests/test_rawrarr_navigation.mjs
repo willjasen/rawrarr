@@ -28,6 +28,14 @@ test('workspace navigation survives refresh and browser history', async t => {
   await expectView('Overview', 'overview');
   await page.locator('#movies-nav').click();
   await expectView('Movies', 'movies');
+  assert.equal(await page.locator('#series-nav .nav-text').textContent(), 'TV');
+  await page.locator('#series-nav').click();
+  await expectView('TV', 'series');
+  assert.equal(new URL(page.url()).hash, '#series');
+  await page.reload();
+  await expectView('TV', 'series');
+  await page.locator('#movies-nav').click();
+  await expectView('Movies', 'movies');
   assert.equal(new URL(page.url()).hash, '#movies');
   await page.reload();
   await expectView('Movies', 'movies');

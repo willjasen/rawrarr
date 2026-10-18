@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Rawrarr shared configuration",
+  "description": "Version 1 of the age-encrypted configuration shared among Rawrarr nodes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "device_names", "services", "metadata_filename_key"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "device_names": {
+      "type": "object",
+      "propertyNames": { "minLength": 1 },
+      "additionalProperties": { "type": "string", "maxLength": 80 }
+    },
+    "services": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/service" }
+    },
+    "metadata_filename_key": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  },
+  "$defs": {
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "url", "api_key"],
+      "properties": {
+      "type": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "format": "uri" },
+        "api_key": { "type": "string", "minLength": 1, "writeOnly": true }
+      }
+    }
+  }
+}

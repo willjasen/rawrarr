@@ -1,13 +1,16 @@
 {
   "private": true,
   "scripts": {
-    "build": "esbuild metadata-export.js --bundle --minify --target=es2022 --outfile=../src/assets/metadata-export.js"
+    "build": "esbuild metadata-export.js --bundle --minify --target=es2022 --outfile=../src/assets/metadata-export.js",
+    "build:device-signing": "esbuild device-signing-client.js --bundle --minify --format=esm --target=es2022 --outfile=../src/assets/device-signing-client.js"
   },
   "dependencies": {
+    "@noble/post-quantum": "0.5.4",
     "age-encryption": "0.3.1",
     "fflate": "0.8.2"
   },
   "devDependencies": {
     "esbuild": "0.25.5"
-  }
+  },
+  "type": "module"
 }

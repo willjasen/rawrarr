@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Add roarlay passkey · rawrarr</title>
+  <style>
+    :root { color-scheme: dark; --bg:#101411; --panel:#171d19; --line:#29332c; --text:#edf3ec; --muted:#96a397; --green:#a6e3a1; }
+    * { box-sizing:border-box }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
+    main { width:min(100% - 32px,440px); padding:30px; background:var(--panel); border:1px solid var(--line); border-radius:18px; box-shadow:0 24px 80px #0005 }
+    .brand { color:var(--green); font-size:13px; font-weight:750; letter-spacing:.08em; text-transform:uppercase }
+    h1 { margin:28px 0 5px; font-size:27px; letter-spacing:-.04em }
+    p { color:var(--muted); font-size:13px; margin:0 0 16px }
+    #message { min-height:24px; margin-top:22px; color:var(--muted); font-size:13px }
+    a { color:var(--green) }
+    button { border:1px solid #658968; border-radius:9px; padding:11px 13px; color:#101711; background:var(--green); font:650 13px system-ui; cursor:pointer }
+    button:disabled { opacity:.55; cursor:wait }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand">rawrarr · roarlay</div>
+    <h1>Add a passkey for this URL</h1>
+    <p>This creates a roarlay-site credential for the Rawrarr account you signed in to on your metadata node. Your existing passkey stays active.</p>
+    <div id="message" role="status" aria-live="polite">Preparing passkey registration… If this message stays here, reload the page or start a fresh link from your signed-in metadata node.</div>
+    <button id="create-passkey" type="button" hidden>Create roarlay passkey</button>
+    <a id="return-link" href="/" hidden>Return to Rawrarr</a>
+  </main>
+  <script type="module" src="/assets/coordinator-passkey.mjs"></script>
+</body>
+</html>
