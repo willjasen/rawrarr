@@ -1,6 +1,6 @@
 # rust-arr
 
-Initial Rust service skeleton for a Radarr-inspired application. It exposes `GET /health` and is packaged for Docker. No media paths, database, or credentials are configured yet.
+Initial Rust service skeleton for a Radarr-inspired application. It exposes `GET /health` and a read-only Radarr connection status endpoint. No media paths or database are configured.
 
 ## Local development
 
@@ -13,6 +13,8 @@ curl http://127.0.0.1:8080/health
 
 Set `RUST_ARR_LISTEN_ADDR` to change the listen address.
 
+Configure the optional Radarr integration with `RADARR_URL` (for example, `http://radarr:7878`) and `RADARR_API_KEY`. The key is read from the environment and never returned in responses or error messages. With Compose, set these in an untracked `.env` file in the repository root or in the shell environment. When configured, `GET /api/radarr/status` reads Radarr's `/api/v3/system/status` endpoint. The route returns `503` when Radarr is not configured and `502` if Radarr does not return a successful response.
+
 ## Docker
 
 From the repository root:
@@ -22,7 +24,7 @@ docker compose up --build
 curl http://127.0.0.1:8080/health
 ```
 
-The image uses a multi-stage build and runs the application as UID 10001. Persistent storage and application configuration will be added with later features.
+The image uses a multi-stage build and runs the application as UID 10001. Provide `RADARR_URL` and `RADARR_API_KEY` through the deployment environment. Persistent storage and application configuration will be added with later features.
 
 ## Memory safety policy
 
