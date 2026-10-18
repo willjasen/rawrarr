@@ -92,8 +92,10 @@
     .settings-form { padding: 17px 18px 19px; }
     .settings-form label { display: block; color: var(--muted); font-size: 10px; margin: 12px 0 5px; }
     .settings-form input { width: 100%; border: 1px solid var(--line); border-radius: 7px; background: #101613; color: var(--text); padding: 9px 10px; font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .settings-form textarea { width: 100%; min-height: 88px; resize: vertical; border: 1px solid var(--line); border-radius: 7px; background: #101613; color: var(--text); padding: 9px 10px; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
     .settings-actions { display: flex; gap: 14px; align-items: center; margin-top: 14px; }
     .settings-message { min-height: 16px; color: var(--muted); font-size: 10px; }
+    .settings-key-note { color: var(--muted); font-size: 10px; margin-top: 6px; }
     .device-list { padding: 14px 18px 18px; }
     .device-item { padding: 12px; border: 1px solid var(--line); background: var(--panel-raised); border-radius: 9px; margin-bottom: 10px; }
     .device-name { font-size: 11px; font-weight: 650; }
@@ -144,12 +146,20 @@
         </article>
         <article class="panel" id="radarr-settings-panel" style="grid-column: 1 / -1; scroll-margin-top: 24px">
           <div class="panel-head"><h2>Connect Radarr</h2><button id="refresh" class="refresh" type="button">Refresh status ↻</button></div>
+          <form id="age-settings" class="settings-form">
+            <p class="setup-intro">Radarr settings are saved as an age-encrypted file in Rawrarr’s data directory. Unlock it with a post-quantum age identity. The private identity stays in memory; for automatic unlock after a container restart, mount it as a Docker secret with <code>RAWARR_AGE_IDENTITY_FILE</code>.</p>
+            <label for="age-identity">Post-quantum age identity</label>
+            <textarea id="age-identity" name="identity" spellcheck="false" autocomplete="off" placeholder="AGE-SECRET-KEY-PQ-1…"></textarea>
+            <div class="settings-actions"><button id="generate-age" class="refresh" type="button">Create new identity</button><button id="copy-age" class="refresh" type="button" disabled>Copy identity</button><button id="unlock-age" class="refresh" type="submit">Import and unlock</button></div>
+            <div id="age-settings-message" class="settings-message" role="status" aria-live="polite"></div>
+          </form>
           <form id="radarr-settings" class="settings-form">
-            <p class="setup-intro">Settings apply to the running server immediately; no restart is needed. The API key stays in memory and must be entered again only if rawrarr itself restarts.</p>
+            <p class="setup-intro">Settings apply immediately and are saved encrypted. After a restart, unlock them with the age identity unless it is mounted as a Docker secret.</p>
             <label for="radarr-url">Radarr URL</label>
             <input id="radarr-url" name="url" type="url" placeholder="https://radarr.example.com" autocomplete="url" required>
             <label for="radarr-key">Radarr API key</label>
             <input id="radarr-key" name="apiKey" type="password" autocomplete="new-password" required>
+            <div id="radarr-key-note" class="settings-key-note">Required for the first encrypted save.</div>
             <div class="settings-actions"><button id="save-radarr" class="refresh" type="submit">Save and connect</button><button id="clear-radarr" class="refresh" type="button">Clear</button></div>
             <div id="radarr-settings-message" class="settings-message" role="status" aria-live="polite"></div>
           </form>
@@ -164,6 +174,7 @@
     const detail = document.getElementById('radarr-detail');
     const scanButton = document.getElementById('scan');
     const settingsForm = document.getElementById('radarr-settings');
+    const ageSettingsForm = document.getElementById('age-settings');
     function openRadarrSettings(event) {
       event.preventDefault();
       const panel = document.getElementById('radarr-settings-panel');
@@ -247,10 +258,78 @@
         const response = await fetch('/api/settings/radarr', { headers: { Accept: 'application/json' } });
         const settings = await response.json();
         if (settings.url) document.getElementById('radarr-url').value = settings.url;
+        const keyField = document.getElementById('radarr-key');
+        const canKeepSavedKey = settings.configured && settings.persisted;
+        keyField.required = !canKeepSavedKey;
+        keyField.placeholder = canKeepSavedKey ? 'Leave blank to keep the saved key' : 'Radarr API key';
+        document.getElementById('radarr-key-note').textContent = canKeepSavedKey
+          ? 'The saved key is loaded and will stay hidden. Leave this blank to keep it, or enter a replacement.'
+          : 'Required for the first encrypted save.';
       } catch (_) {
         document.getElementById('radarr-settings-message').textContent = 'Could not load Radarr settings.';
       }
     }
+
+    async function loadAgeSettings() {
+      try {
+        const response = await fetch('/api/settings/age', { headers: { Accept: 'application/json' } });
+        const settings = await response.json();
+        document.getElementById('age-settings-message').textContent = settings.unlocked
+          ? `Encrypted config unlocked${settings.encryptedConfigExists ? ' · saved config found' : ' · no saved config yet'}.`
+          : settings.encryptedConfigExists ? 'Saved config is locked. Import its age identity to unlock it.' : 'Create or import a post-quantum age identity to enable encrypted settings.';
+      } catch (_) {
+        document.getElementById('age-settings-message').textContent = 'Could not read encrypted config status.';
+      }
+    }
+
+    document.getElementById('generate-age').addEventListener('click', async () => {
+      const message = document.getElementById('age-settings-message');
+      message.textContent = 'Generating a post-quantum age identity…';
+      try {
+        const response = await fetch('/api/settings/age/generate', { method: 'POST', headers: { Accept: 'application/json' } });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Could not generate identity');
+        document.getElementById('age-identity').value = result.identity;
+        document.getElementById('copy-age').disabled = false;
+        message.textContent = 'Generated a post-quantum identity. Copy and securely back it up before unlocking; Rawrarr does not save the private identity.';
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
+
+    document.getElementById('copy-age').addEventListener('click', async () => {
+      const identity = document.getElementById('age-identity').value;
+      try {
+        await navigator.clipboard.writeText(identity);
+        document.getElementById('age-settings-message').textContent = 'Identity copied. Store it securely before you unlock settings.';
+      } catch (_) {
+        document.getElementById('age-settings-message').textContent = 'Clipboard unavailable. Select and copy the identity manually, then store it securely.';
+      }
+    });
+
+    ageSettingsForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const message = document.getElementById('age-settings-message');
+      const button = document.getElementById('unlock-age');
+      button.disabled = true;
+      message.textContent = 'Unlocking encrypted settings…';
+      try {
+        const response = await fetch('/api/settings/age', {
+          method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identity: document.getElementById('age-identity').value })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Could not unlock encrypted settings');
+        document.getElementById('age-identity').value = '';
+        document.getElementById('copy-age').disabled = true;
+        message.textContent = `Encrypted config unlocked${result.encryptedConfigExists ? ' · saved settings loaded' : ' · ready to save settings'}.`;
+        await Promise.all([loadRadarrSettings(), refreshStatus(), loadMetadataInfo()]);
+      } catch (error) {
+        message.textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    });
 
     settingsForm.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -270,8 +349,8 @@
         if (!response.ok) throw new Error(result.error || 'Could not save Radarr settings');
         document.getElementById('radarr-key').value = '';
         message.textContent = 'Applied immediately without restarting. Checking Radarr…';
-        await Promise.all([refreshStatus(), loadMetadataInfo()]);
-        message.textContent = `Applied without restart · Radarr: ${state.textContent}. The key stays in memory until rawrarr itself restarts.`;
+        await Promise.all([loadRadarrSettings(), refreshStatus(), loadMetadataInfo()]);
+        message.textContent = `Saved encrypted and applied without restart · Radarr: ${state.textContent}.`;
       } catch (error) {
         message.textContent = error.message;
       } finally {
@@ -283,8 +362,8 @@
       const response = await fetch('/api/settings/radarr', { method: 'DELETE', headers: { Accept: 'application/json' } });
       if (response.ok) {
         document.getElementById('radarr-key').value = '';
-        document.getElementById('radarr-settings-message').textContent = 'Radarr settings cleared from memory.';
-        await Promise.all([refreshStatus(), loadMetadataInfo()]);
+        document.getElementById('radarr-settings-message').textContent = 'Cleared active and encrypted settings. Environment settings may apply again after a restart.';
+        await Promise.all([loadRadarrSettings(), refreshStatus(), loadMetadataInfo()]);
       }
     });
 
@@ -501,6 +580,7 @@
     document.getElementById('refresh').addEventListener('click', refreshStatus);
     scanButton.addEventListener('click', scanLibrary);
     loadRadarrSettings();
+    loadAgeSettings();
   </script>
 </body>
 </html>

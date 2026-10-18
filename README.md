@@ -22,7 +22,9 @@ Set `RAWARR_DEVICE_NAME` to label this host in the Devices panel. The web API cu
 
 Configure the optional Radarr integration with `RADARR_URL` (for example, `http://radarr:7878`) and `RADARR_API_KEY`. The key is read from the environment and never returned in responses or error messages. With Compose, set these in an untracked `.env` file in the repository root or in the shell environment. When configured, `GET /api/radarr/status` reads Radarr's `/api/v3/system/status` endpoint. The route returns `503` when Radarr is not configured and `502` if Radarr does not return a successful response.
 
-Radarr can also be configured from the dashboard. `GET /api/settings/radarr` returns only whether the connection is configured and its URL. `PUT` accepts a URL and API key; `DELETE` clears the active connection. UI-entered credentials are held in process memory only and are discarded on restart. Environment configuration remains available for Docker deployments. Keep the web app bound to localhost because it does not yet have user authentication.
+Radarr can also be configured from the dashboard. First create or import a **post-quantum age identity** in Settings, then unlock the encrypted settings. `PUT /api/settings/radarr` accepts a URL and API key and writes them to `config.age` under `RAWARR_DATA_DIR` (default `./data`), while applying the new connection immediately. After unlocking an existing saved connection, leave the API key blank to preserve it; Rawrarr never returns the key to the UI. `GET` returns only whether the connection is configured, its URL, and whether encrypted settings exist. `DELETE` clears the active connection and encrypted file. If `RADARR_URL` or `RADARR_API_KEY` is set in the environment, those settings can reapply after restart until the environment values are removed. Rawrarr never stores the private identity in its config; after a process restart, import it in the UI to unlock saved settings.
+
+For unattended Docker startup, set `RAWARR_AGE_IDENTITY_PATH` to the identity file path and include the provided secret override: `RAWARR_AGE_IDENTITY_PATH=/secure/path/rawrarr.agekey docker compose -f docker-compose.yml -f docker-compose.age-identity.yml up --build -d`. The override mounts that secret at `/run/secrets/rawrarr_age_identity`; the base Compose file persists ciphertext in the `rawrarr-data` named volume at `/data`. Back up the private identity separately; loss of the identity makes the encrypted settings unrecoverable. Keep the web app bound to localhost because it does not yet have user authentication.
 
 Movie metadata lookup uses Radarr's `/api/v3/movie/lookup` endpoint and the configured Radarr connection. Each movie row offers an on-demand search using a cleaned filename and detected year; rawrarr displays up to five candidates for manual review. No match is automatically applied or saved. Lookup returns `503` until Radarr is configured. The UI includes TMDb's required attribution and an approved logo.
 
@@ -39,7 +41,7 @@ docker compose up --build
 curl http://127.0.0.1:8080/health
 ```
 
-The image uses a multi-stage build and runs the application as UID 10001. Compose publishes the web UI on host loopback only. Provide `RADARR_URL` and `RADARR_API_KEY` through the deployment environment.
+The image uses a multi-stage build, includes the age v1.3.2 CLI for hybrid post-quantum encryption, and runs the application as UID 10001. Compose publishes the web UI on host loopback only. The persistent named volume stores encrypted config. `RADARR_URL` and `RADARR_API_KEY` remain available for headless/bootstrap deployments; UI settings require an unlocked age identity.
 
 To scan a host folder from Docker, use the optional read-only media overlay. Set `RAWARR_HOST_MEDIA_PATH` to a folder on the Docker host and run:
 

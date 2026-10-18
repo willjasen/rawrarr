@@ -4,6 +4,7 @@ pub mod devices;
 pub mod download_clients;
 pub mod library;
 pub mod metadata;
+pub mod secure_config;
 
 use axum::{
     Json, Router,
@@ -20,10 +21,12 @@ use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::{env, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
+use zeroize::{Zeroize, Zeroizing};
 
 #[derive(Clone)]
 struct AppState {
     radarr: Arc<RwLock<Option<RadarrClient>>>,
+    vault: Arc<RwLock<Option<secure_config::AgeVault>>>,
     library: Option<library::LibraryRoot>,
 }
 
@@ -51,7 +54,15 @@ struct ApiError {
 #[serde(rename_all = "camelCase")]
 struct RadarrSettingsRequest {
     url: String,
-    api_key: String,
+    api_key: Option<String>,
+}
+
+impl Drop for RadarrSettingsRequest {
+    fn drop(&mut self) {
+        if let Some(api_key) = &mut self.api_key {
+            api_key.zeroize();
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -59,6 +70,38 @@ struct RadarrSettingsRequest {
 struct RadarrSettingsInfo {
     configured: bool,
     url: Option<String>,
+    persisted: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgeSettingsInfo {
+    unlocked: bool,
+    encrypted_config_exists: bool,
+}
+
+#[derive(Deserialize)]
+struct AgeIdentityRequest {
+    identity: String,
+}
+
+impl Drop for AgeIdentityRequest {
+    fn drop(&mut self) {
+        self.identity.zeroize();
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GeneratedAgeIdentity {
+    identity: String,
+    recipient: String,
+}
+
+impl Drop for GeneratedAgeIdentity {
+    fn drop(&mut self) {
+        self.identity.zeroize();
+    }
 }
 
 #[derive(Debug)]
@@ -94,6 +137,7 @@ impl RadarrClient {
     }
 
     fn new(base_url: String, api_key: String) -> Result<Self, RadarrConfigError> {
+        let api_key = Zeroizing::new(api_key);
         if base_url.trim().is_empty() || base_url.len() > 2048 {
             return Err(RadarrConfigError::InvalidUrl);
         }
@@ -372,42 +416,192 @@ async fn get_radarr_settings(State(state): State<Arc<AppState>>) -> Json<RadarrS
     Json(RadarrSettingsInfo {
         configured: radarr.is_some(),
         url: radarr.as_ref().map(|client| client.base_url.clone()),
+        persisted: secure_config::AgeVault::config_path().is_file(),
     })
+}
+
+async fn get_age_settings(State(state): State<Arc<AppState>>) -> Json<AgeSettingsInfo> {
+    Json(AgeSettingsInfo {
+        unlocked: state.vault.read().await.is_some(),
+        encrypted_config_exists: secure_config::AgeVault::config_path().is_file(),
+    })
+}
+
+async fn generate_age_identity() -> Result<Json<GeneratedAgeIdentity>, (StatusCode, Json<ApiError>)>
+{
+    let (identity, recipient) = secure_config::AgeVault::generate_identity().map_err(|_| {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ApiError {
+                error: "Post-quantum age tools are unavailable",
+            }),
+        )
+    })?;
+    Ok(Json(GeneratedAgeIdentity {
+        identity,
+        recipient,
+    }))
+}
+
+async fn unlock_age_settings(
+    State(state): State<Arc<AppState>>,
+    Json(mut request): Json<AgeIdentityRequest>,
+) -> Result<Json<AgeSettingsInfo>, (StatusCode, Json<ApiError>)> {
+    let vault = secure_config::AgeVault::from_identity(std::mem::take(&mut request.identity))
+        .map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ApiError {
+                    error: "Import a valid post-quantum age identity",
+                }),
+            )
+        })?;
+    let stored = vault.load().map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ApiError {
+                error: "Could not decrypt the saved config with this identity",
+            }),
+        )
+    })?;
+    if let Some(settings) = stored {
+        let client =
+            RadarrClient::new(settings.radarr_url.clone(), settings.radarr_api_key.clone())
+                .map_err(|_| {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        Json(ApiError {
+                            error: "Saved Radarr settings are invalid",
+                        }),
+                    )
+                })?;
+        *state.radarr.write().await = Some(client);
+    }
+    let exists = vault.config_exists();
+    *state.vault.write().await = Some(vault);
+    Ok(Json(AgeSettingsInfo {
+        unlocked: true,
+        encrypted_config_exists: exists,
+    }))
 }
 
 async fn put_radarr_settings(
     State(state): State<Arc<AppState>>,
-    Json(settings): Json<RadarrSettingsRequest>,
+    Json(mut settings): Json<RadarrSettingsRequest>,
 ) -> Result<Json<RadarrSettingsInfo>, (StatusCode, Json<ApiError>)> {
-    let client = RadarrClient::new(settings.url, settings.api_key).map_err(|error| {
-        let message = match error {
-            RadarrConfigError::InvalidUrl => "Enter a valid Radarr HTTP or HTTPS URL",
-            RadarrConfigError::InvalidApiKey => "Enter a valid Radarr API key",
-        };
-        (StatusCode::BAD_REQUEST, Json(ApiError { error: message }))
-    })?;
+    let vault = state.vault.read().await.clone().ok_or((
+        StatusCode::LOCKED,
+        Json(ApiError {
+            error: "Unlock the age-encrypted config before saving Radarr settings",
+        }),
+    ))?;
+    let supplied_api_key = settings
+        .api_key
+        .take()
+        .filter(|api_key| !api_key.trim().is_empty());
+    let api_key = match supplied_api_key {
+        Some(api_key) => api_key,
+        None => state
+            .radarr
+            .read()
+            .await
+            .as_ref()
+            .and_then(|radarr| radarr.api_key.to_str().ok().map(str::to_owned))
+            .ok_or((
+                StatusCode::BAD_REQUEST,
+                Json(ApiError {
+                    error: "Enter a Radarr API key for the first save",
+                }),
+            ))?,
+    };
+    let client =
+        RadarrClient::new(std::mem::take(&mut settings.url), api_key).map_err(|error| {
+            let message = match error {
+                RadarrConfigError::InvalidUrl => "Enter a valid Radarr HTTP or HTTPS URL",
+                RadarrConfigError::InvalidApiKey => "Enter a valid Radarr API key",
+            };
+            (StatusCode::BAD_REQUEST, Json(ApiError { error: message }))
+        })?;
     let url = client.base_url.clone();
+    let api_key = client.api_key.to_str().map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ApiError {
+                error: "Enter a valid Radarr API key",
+            }),
+        )
+    })?;
+    vault
+        .save(&secure_config::PersistedConfig {
+            radarr_url: url.clone(),
+            radarr_api_key: api_key.to_owned(),
+        })
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError {
+                    error: "Could not save the encrypted config",
+                }),
+            )
+        })?;
     *state.radarr.write().await = Some(client);
     Ok(Json(RadarrSettingsInfo {
         configured: true,
         url: Some(url),
+        persisted: true,
     }))
 }
 
-async fn delete_radarr_settings(State(state): State<Arc<AppState>>) -> Json<RadarrSettingsInfo> {
+async fn delete_radarr_settings(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<RadarrSettingsInfo>, (StatusCode, Json<ApiError>)> {
+    if let Some(vault) = state.vault.read().await.clone() {
+        vault.clear().map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError {
+                    error: "Could not remove the encrypted config",
+                }),
+            )
+        })?;
+    } else if secure_config::AgeVault::config_path().is_file() {
+        return Err((
+            StatusCode::LOCKED,
+            Json(ApiError {
+                error: "Unlock the age-encrypted config before clearing Radarr settings",
+            }),
+        ));
+    }
     *state.radarr.write().await = None;
-    Json(RadarrSettingsInfo {
+    Ok(Json(RadarrSettingsInfo {
         configured: false,
         url: None,
-    })
+        persisted: false,
+    }))
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let address = env::var("RUST_ARR_LISTEN_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".to_owned());
     let socket_address: SocketAddr = address.parse()?;
+    let mut radarr = RadarrClient::from_env()?;
+    let mut vault = None;
+    if let Some(identity_path) =
+        env::var_os("RAWARR_AGE_IDENTITY_FILE").filter(|path| !path.is_empty())
+    {
+        let identity = std::fs::read_to_string(identity_path)?;
+        let unlocked = secure_config::AgeVault::from_identity(identity)?;
+        if let Some(settings) = unlocked.load()? {
+            radarr = Some(RadarrClient::new(
+                settings.radarr_url.clone(),
+                settings.radarr_api_key.clone(),
+            )?);
+        }
+        vault = Some(unlocked);
+    }
     let state = Arc::new(AppState {
-        radarr: Arc::new(RwLock::new(RadarrClient::from_env()?)),
+        radarr: Arc::new(RwLock::new(radarr)),
+        vault: Arc::new(RwLock::new(vault)),
         library: library::LibraryRoot::from_env()?,
     });
 
@@ -428,6 +622,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(get_radarr_settings)
                 .put(put_radarr_settings)
                 .delete(delete_radarr_settings),
+        )
+        .route(
+            "/api/settings/age",
+            get(get_age_settings).post(unlock_age_settings),
+        )
+        .route(
+            "/api/settings/age/generate",
+            axum::routing::post(generate_age_identity),
         )
         .route("/api/radarr/status", get(radarr_status))
         .with_state(state);
