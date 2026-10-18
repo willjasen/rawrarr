@@ -15,7 +15,7 @@ services:
       RAWARR_LIBRARY_PATH: /media
       RAWARR_LIBRARY_NAME: MacBook music copy
       RAWARR_DEVICE_NAME: MacBook Pro media
-      RAWARR_COORDINATOR_URL: https://rawrarr.risk-mermaid.ts.net
+      RAWARR_COORDINATOR_URL: https://swarmsail.willjasen.net
       RAWARR_NODE_ID: macbook-storage
       RAWARR_DEVICE_ID: macbook-storage
       RAWARR_NODE_TOKEN_FILE: /data/node-token

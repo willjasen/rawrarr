@@ -17,7 +17,13 @@ User-facing names are roarlay (central role), apex (media storage role), and met
 | `/media` access | No | Read-only | No |
 | Private age identity | Never | Local opt-in | Local opt-in |
 
-“Subscriber” describes ownership, not a role. Metadata replaces shard. The former service role is superseded by the central coordinator; SwarmSail/Headscale and subscriptions remain future operator integrations. The coordinator does not hold media or private age identities. After roarlay-origin passkey sign-in, its workspace lists owner-authorized metadata and apex nodes, displays pending approvals, and shows a selected node's page through `/nodes/{node-id}/`. `localhost:7297` remains available for direct local access.
+“Subscriber” describes ownership, not a role. Metadata replaces shard. The former service role is superseded by the central coordinator; subscription eligibility and automatic Headscale provisioning remain future integrations. The coordinator does not hold media or private age identities. After roarlay-origin passkey sign-in, its workspace lists owner-authorized metadata and apex nodes, displays pending approvals, and shows a selected node's page through `/nodes/{node-id}/`. `localhost:7297` remains available for direct local access.
+
+## Swarmsail Headscale staging
+
+As of 2026-10-18, Swarmsail manages the private Headscale control plane at `https://rawrarr.willjasen.net` and Caddy routes `https://swarmsail.willjasen.net` to the MacBook coordinator over the LAN. Two separate Docker Tailscale clients in Compose project `rawrarr-headscale` are registered under the existing Rawrarr account user. Their state is kept in the node-local `tailscale/headscale-macbook` and `tailscale/headscale-mini` directories. The existing Rawrarr app sidecars remain on the prior Tailscale tailnet while their passkey origin and Syncthing TCP paths are migrated. The native Tailscale clients on both Macs are unchanged. The staged Headscale clients are not yet the transport used by Rawrarr app services.
+
+The companion definitions are `docker-compose.headscale-macbook.yml` and `docker-compose.headscale-mini.yml`. Enroll them with the focused procedure in [the Headscale client staging runbook](../runbooks/2026-10-18-headscale-container-client-staging.md). Passkeys remain scoped to the current `rawrarr.risk-mermaid.ts.net` relying-party ID; browser login at the new `swarmsail.willjasen.net` origin requires a separate passkey migration before the old route is retired.
 
 ## Authentication and current trust scope
 

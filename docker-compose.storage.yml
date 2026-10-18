@@ -13,8 +13,7 @@ services:
       RAWARR_LIBRARY_PATH: /media
       RAWARR_LIBRARY_NAME: ${RAWARR_LIBRARY_NAME:-Mac mini media}
       RAWARR_DEVICE_NAME: ${RAWARR_DEVICE_NAME:-Mac mini}
-      RAWARR_COORDINATOR_URL: ${RAWARR_COORDINATOR_URL:-https://rawrarr.risk-mermaid.ts.net}
-      RAWARR_COORDINATOR_SOCKS5_URL: ${RAWARR_COORDINATOR_SOCKS5_URL:-socks5h://127.0.0.1:1055}
+      RAWARR_COORDINATOR_URL: ${RAWARR_COORDINATOR_URL:-https://swarmsail.willjasen.net}
       RAWARR_NODE_ID: ${RAWARR_NODE_ID:-mac-mini-storage}
       RAWARR_DEVICE_ID: ${RAWARR_NODE_ID:-mac-mini-storage}
       RAWARR_WEBAUTHN_RP_ID: localhost

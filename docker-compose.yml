@@ -61,7 +61,7 @@ services:
       RAWARR_SYNCTHING_API_KEY: ${RAWARR_SYNCTHING_API_KEY:-}
       RAWARR_SYNCTHING_API_KEY_FILE: /run/secrets/rawrarr_syncthing_api_key
       RAWARR_ROLE: metadata
-      RAWARR_COORDINATOR_URL: ${RAWARR_COORDINATOR_URL:-https://rawrarr.risk-mermaid.ts.net}
+      RAWARR_COORDINATOR_URL: ${RAWARR_COORDINATOR_URL:-https://swarmsail.willjasen.net}
       RAWARR_NODE_TOKEN_FILE: /run/secrets/rawrarr_node_token
       RAWARR_WEBAUTHN_RP_ID: localhost
       RAWARR_WEBAUTHN_ORIGIN: http://localhost:${RAWARR_HOST_PORT:-7297}

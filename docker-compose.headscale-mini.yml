@@ -1,0 +1,17 @@
+# Separate Docker Tailscale client for the Swarmsail Headscale tailnet.
+# Deploy with project rawrarr-headscale; does not replace the current Rawrarr sidecar.
+services:
+  headscale-client:
+    image: tailscale/tailscale:stable
+    container_name: rawrarr-headscale-mini-tailscale
+    hostname: rawrarr-headscale-mini
+    environment:
+      TS_HOSTNAME: rawrarr-headscale-mini
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_AUTH_ONCE: "true"
+      TS_USERSPACE: "true"
+      TS_SOCKS5_SERVER: ":1055"
+      TS_EXTRA_ARGS: --login-server=https://rawrarr.willjasen.net
+    volumes:
+      - "${HOME}/Library/Application Support/rawrarr/tailscale/headscale-mini:/var/lib/tailscale"
+    restart: unless-stopped
