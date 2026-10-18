@@ -18,6 +18,8 @@ Configure one read-only scan root with `RAWARR_LIBRARY_PATH=/absolute/path/to/me
 
 Configure the optional Radarr integration with `RADARR_URL` (for example, `http://radarr:7878`) and `RADARR_API_KEY`. The key is read from the environment and never returned in responses or error messages. With Compose, set these in an untracked `.env` file in the repository root or in the shell environment. When configured, `GET /api/radarr/status` reads Radarr's `/api/v3/system/status` endpoint. The route returns `503` when Radarr is not configured and `502` if Radarr does not return a successful response.
 
+Radarr can also be configured from the dashboard. `GET /api/settings/radarr` returns only whether the connection is configured and its URL. `PUT` accepts a URL and API key; `DELETE` clears the active connection. UI-entered credentials are held in process memory only and are discarded on restart. Environment configuration remains available for Docker deployments. Keep the web app bound to localhost because it does not yet have user authentication.
+
 Movie metadata lookup uses Radarr's `/api/v3/movie/lookup` endpoint and the configured Radarr connection. Each movie row offers an on-demand search using a cleaned filename and detected year; rawrarr displays up to five candidates for manual review. No match is automatically applied or saved. Lookup returns `503` until Radarr is configured. The UI includes TMDb's required attribution and an approved logo.
 
 ## Download client architecture

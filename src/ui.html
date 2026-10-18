@@ -87,6 +87,11 @@
     .issue-note { color: var(--amber); padding: 0 18px 13px; font-size: 10px; }
     .footer { color: #647168; text-align: right; font-size: 9px; margin-top: 16px; }
     .metadata-note { color: var(--muted); font-size: 10px; line-height: 1.5; padding: 11px 16px; border-bottom: 1px solid var(--line); }
+    .settings-form { padding: 17px 18px 19px; }
+    .settings-form label { display: block; color: var(--muted); font-size: 10px; margin: 12px 0 5px; }
+    .settings-form input { width: 100%; border: 1px solid var(--line); border-radius: 7px; background: #101613; color: var(--text); padding: 9px 10px; font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .settings-actions { display: flex; gap: 14px; align-items: center; margin-top: 14px; }
+    .settings-message { min-height: 16px; color: var(--muted); font-size: 10px; }
     @media (max-width: 850px) { .app { grid-template-columns: 70px minmax(0, 1fr); } aside { padding: 22px 10px; } .brand { justify-content: center; padding: 0 0 32px; } .brand-copy, .section-label, .nav-text, .nav-soon, .sidebar-bottom { display: none; } .nav-item { justify-content: center; padding: 0; } main { padding: 30px 24px 50px; } .grid { grid-template-columns: 1fr 1fr; } .grid .card:last-child { grid-column: span 2; } }
     @media (max-width: 580px) { .app { display: block; } aside { position: sticky; z-index: 2; top: 0; height: 60px; display: flex; align-items: center; border-right: 0; border-bottom: 1px solid var(--line); padding: 0 14px; } .brand { padding: 0; margin-right: auto; } .brand-copy { display: block; } .nav-item { width: 40px; height: 40px; margin: 0 3px; } .nav-item.active { box-shadow: inset 0 -2px var(--green); } main { padding: 26px 16px 42px; } .topline { align-items: flex-start; margin-bottom: 22px; } .live-pill { font-size: 0; padding: 9px; } .welcome { align-items: flex-start; flex-direction: column; padding: 19px; } .grid { gap: 9px; } .card { padding: 14px; min-height: 116px; } .columns { grid-template-columns: 1fr; } }
   </style>
@@ -127,12 +132,15 @@
         </article>
         <article class="panel">
           <div class="panel-head"><h2>Connect Radarr</h2><button id="refresh" class="refresh" type="button">Refresh status ↻</button></div>
-          <div class="setup">
-            <p class="setup-intro">Add the connection details to the rawrarr service environment, then restart it. Your API key stays on the server and is never shown in this page.</p>
-            <div class="step"><span class="step-num">1</span><div class="step-copy">Set <code>RADARR_URL</code> to your Radarr address, for example <code>http://radarr:7878</code>.</div></div>
-            <div class="step"><span class="step-num">2</span><div class="step-copy">Set <code>RADARR_API_KEY</code> from Radarr’s General settings.</div></div>
-            <div class="step"><span class="step-num">3</span><div class="step-copy">Restart rawrarr. This dashboard will show the connection result.</div></div>
-          </div>
+          <form id="radarr-settings" class="settings-form">
+            <p class="setup-intro">Configure a Radarr URL and API key. The key is held in memory and never sent back to this page; enter it again after rawrarr restarts.</p>
+            <label for="radarr-url">Radarr URL</label>
+            <input id="radarr-url" name="url" type="url" placeholder="https://radarr.example.com" autocomplete="url" required>
+            <label for="radarr-key">Radarr API key</label>
+            <input id="radarr-key" name="apiKey" type="password" autocomplete="new-password" required>
+            <div class="settings-actions"><button id="save-radarr" class="refresh" type="submit">Save and connect</button><button id="clear-radarr" class="refresh" type="button">Clear</button></div>
+            <div id="radarr-settings-message" class="settings-message" role="status" aria-live="polite"></div>
+          </form>
         </article>
       </section>
       <div class="footer">Status refreshes automatically every 30 seconds · TMDb metadata provided by <a href="https://www.themoviedb.org/" target="_blank" rel="noreferrer"><img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg" alt="TMDb" width="18" height="18" style="vertical-align:middle"></a> The Movie Database. This product uses the TMDB API but is not endorsed or certified by TMDB.</div>
@@ -143,6 +151,7 @@
     const state = document.getElementById('radarr-state');
     const detail = document.getElementById('radarr-detail');
     const scanButton = document.getElementById('scan');
+    const settingsForm = document.getElementById('radarr-settings');
     const libraryEmpty = document.getElementById('library-empty');
     const libraryResults = document.getElementById('library-results');
     let libraryConfigured = false;
@@ -173,6 +182,52 @@
         detail.textContent = 'Could not read the service status';
       }
     }
+
+    async function loadRadarrSettings() {
+      try {
+        const response = await fetch('/api/settings/radarr', { headers: { Accept: 'application/json' } });
+        const settings = await response.json();
+        if (settings.url) document.getElementById('radarr-url').value = settings.url;
+      } catch (_) {
+        document.getElementById('radarr-settings-message').textContent = 'Could not load Radarr settings.';
+      }
+    }
+
+    settingsForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const message = document.getElementById('radarr-settings-message');
+      const saveButton = document.getElementById('save-radarr');
+      saveButton.disabled = true;
+      message.textContent = 'Connecting…';
+      try {
+        const response = await fetch('/api/settings/radarr', {
+          method: 'PUT', headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: document.getElementById('radarr-url').value,
+            apiKey: document.getElementById('radarr-key').value
+          })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Could not save Radarr settings');
+        document.getElementById('radarr-key').value = '';
+        message.textContent = 'Settings loaded in memory. Checking Radarr…';
+        await Promise.all([refreshStatus(), loadMetadataInfo()]);
+        message.textContent = 'Settings are active until rawrarr restarts.';
+      } catch (error) {
+        message.textContent = error.message;
+      } finally {
+        saveButton.disabled = false;
+      }
+    });
+
+    document.getElementById('clear-radarr').addEventListener('click', async () => {
+      const response = await fetch('/api/settings/radarr', { method: 'DELETE', headers: { Accept: 'application/json' } });
+      if (response.ok) {
+        document.getElementById('radarr-key').value = '';
+        document.getElementById('radarr-settings-message').textContent = 'Radarr settings cleared from memory.';
+        await Promise.all([refreshStatus(), loadMetadataInfo()]);
+      }
+    });
 
     async function loadLibraryInfo() {
       try {
@@ -338,6 +393,7 @@
     scanButton.addEventListener('click', scanLibrary);
     loadLibraryInfo();
     loadMetadataInfo();
+    loadRadarrSettings();
     refreshStatus();
     window.setInterval(refreshStatus, 30000);
   </script>

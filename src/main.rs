@@ -8,10 +8,11 @@ use axum::{Json, Router, extract::State, http::StatusCode, response::Html, routi
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::{env, net::SocketAddr, sync::Arc, time::Duration};
+use tokio::sync::RwLock;
 
 #[derive(Clone)]
 struct AppState {
-    radarr: Option<RadarrClient>,
+    radarr: Arc<RwLock<Option<RadarrClient>>>,
     library: Option<library::LibraryRoot>,
 }
 
@@ -35,6 +36,37 @@ struct ApiError {
     error: &'static str,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RadarrSettingsRequest {
+    url: String,
+    api_key: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RadarrSettingsInfo {
+    configured: bool,
+    url: Option<String>,
+}
+
+#[derive(Debug)]
+enum RadarrConfigError {
+    InvalidUrl,
+    InvalidApiKey,
+}
+
+impl std::fmt::Display for RadarrConfigError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::InvalidUrl => "Invalid Radarr URL",
+            Self::InvalidApiKey => "Invalid Radarr API key",
+        })
+    }
+}
+
+impl std::error::Error for RadarrConfigError {}
+
 impl RadarrClient {
     fn from_env() -> Result<Option<Self>, Box<dyn std::error::Error>> {
         let Some(base_url) = env::var_os("RADARR_URL") else {
@@ -47,21 +79,40 @@ impl RadarrClient {
             return Ok(None);
         }
         let api_key = env::var("RADARR_API_KEY")?;
-        if api_key.is_empty() {
-            return Err("RADARR_API_KEY must not be empty".into());
-        }
+        Ok(Some(Self::new(base_url, api_key)?))
+    }
 
-        let mut api_key_header = HeaderValue::from_str(&api_key)?;
+    fn new(base_url: String, api_key: String) -> Result<Self, RadarrConfigError> {
+        if base_url.trim().is_empty() || base_url.len() > 2048 {
+            return Err(RadarrConfigError::InvalidUrl);
+        }
+        let parsed =
+            reqwest::Url::parse(base_url.trim()).map_err(|_| RadarrConfigError::InvalidUrl)?;
+        if !matches!(parsed.scheme(), "http" | "https")
+            || parsed.host_str().is_none()
+            || !parsed.username().is_empty()
+            || parsed.password().is_some()
+            || parsed.query().is_some()
+            || parsed.fragment().is_some()
+        {
+            return Err(RadarrConfigError::InvalidUrl);
+        }
+        if api_key.trim().is_empty() || api_key.len() > 4096 {
+            return Err(RadarrConfigError::InvalidApiKey);
+        }
+        let mut api_key_header =
+            HeaderValue::from_str(api_key.trim()).map_err(|_| RadarrConfigError::InvalidApiKey)?;
         api_key_header.set_sensitive(true);
         let http = reqwest::Client::builder()
             .timeout(Duration::from_secs(5))
-            .build()?;
+            .build()
+            .map_err(|_| RadarrConfigError::InvalidUrl)?;
 
-        Ok(Some(Self {
-            base_url: base_url.trim_end_matches('/').to_owned(),
+        Ok(Self {
+            base_url: parsed.as_str().trim_end_matches('/').to_owned(),
             api_key: api_key_header,
             http,
-        }))
+        })
     }
 
     async fn status(&self) -> Result<RadarrStatus, reqwest::Error> {
@@ -155,7 +206,8 @@ async fn scan_library(
 async fn radarr_status(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<RadarrStatus>, (StatusCode, Json<ApiError>)> {
-    let Some(radarr) = &state.radarr else {
+    let radarr = state.radarr.read().await.clone();
+    let Some(radarr) = radarr else {
         return Err((
             StatusCode::SERVICE_UNAVAILABLE,
             Json(ApiError {
@@ -178,7 +230,8 @@ async fn search_movie_metadata(
     State(state): State<Arc<AppState>>,
     Json(request): Json<metadata::MovieSearchRequest>,
 ) -> Result<Json<metadata::MovieSearchResponse>, (StatusCode, Json<ApiError>)> {
-    let Some(provider) = &state.radarr else {
+    let provider = state.radarr.read().await.clone();
+    let Some(provider) = provider else {
         return Err((
             StatusCode::SERVICE_UNAVAILABLE,
             Json(ApiError {
@@ -210,7 +263,42 @@ struct MetadataStatus {
 
 async fn metadata_status(State(state): State<Arc<AppState>>) -> Json<MetadataStatus> {
     Json(MetadataStatus {
-        configured: state.radarr.is_some(),
+        configured: state.radarr.read().await.is_some(),
+    })
+}
+
+async fn get_radarr_settings(State(state): State<Arc<AppState>>) -> Json<RadarrSettingsInfo> {
+    let radarr = state.radarr.read().await;
+    Json(RadarrSettingsInfo {
+        configured: radarr.is_some(),
+        url: radarr.as_ref().map(|client| client.base_url.clone()),
+    })
+}
+
+async fn put_radarr_settings(
+    State(state): State<Arc<AppState>>,
+    Json(settings): Json<RadarrSettingsRequest>,
+) -> Result<Json<RadarrSettingsInfo>, (StatusCode, Json<ApiError>)> {
+    let client = RadarrClient::new(settings.url, settings.api_key).map_err(|error| {
+        let message = match error {
+            RadarrConfigError::InvalidUrl => "Enter a valid Radarr HTTP or HTTPS URL",
+            RadarrConfigError::InvalidApiKey => "Enter a valid Radarr API key",
+        };
+        (StatusCode::BAD_REQUEST, Json(ApiError { error: message }))
+    })?;
+    let url = client.base_url.clone();
+    *state.radarr.write().await = Some(client);
+    Ok(Json(RadarrSettingsInfo {
+        configured: true,
+        url: Some(url),
+    }))
+}
+
+async fn delete_radarr_settings(State(state): State<Arc<AppState>>) -> Json<RadarrSettingsInfo> {
+    *state.radarr.write().await = None;
+    Json(RadarrSettingsInfo {
+        configured: false,
+        url: None,
     })
 }
 
@@ -219,7 +307,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let address = env::var("RUST_ARR_LISTEN_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".to_owned());
     let socket_address: SocketAddr = address.parse()?;
     let state = Arc::new(AppState {
-        radarr: RadarrClient::from_env()?,
+        radarr: Arc::new(RwLock::new(RadarrClient::from_env()?)),
         library: library::LibraryRoot::from_env()?,
     });
 
@@ -233,6 +321,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             axum::routing::post(search_movie_metadata),
         )
         .route("/api/metadata/status", get(metadata_status))
+        .route(
+            "/api/settings/radarr",
+            get(get_radarr_settings)
+                .put(put_radarr_settings)
+                .delete(delete_radarr_settings),
+        )
         .route("/api/radarr/status", get(radarr_status))
         .with_state(state);
     let listener = tokio::net::TcpListener::bind(socket_address).await?;
