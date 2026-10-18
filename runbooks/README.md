@@ -106,3 +106,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [MacBook Syncthing container](2026-10-18-macbook-syncthing-container.md) — Local review companion, actual shared-folder scan, localhost GUI, and no remote peers.
 
 - [Sonarr integration and shared library layout](2026-10-18-sonarr-shared-library.md): encrypted Sonarr connections, read-only series, and common Arr columns.
+
+- [Route Rawrarr HTTPS to the coordinator](2026-10-18-coordinator-https-routing.md) — Correct the live Tailscale proxy target and verify coordinator-only HTTPS routing.
