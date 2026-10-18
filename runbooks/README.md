@@ -21,6 +21,8 @@
 # Rawrarr runbooks
 
 - [Subscriber node onboarding on roarlay](2026-10-18-subscriber-node-onboarding.md) — Guide passkey owners through local age/root backup and offer subscriber-only Compose deployment instructions.
+- [Limit trial AI chat to five daily questions](2026-10-18-trial-ai-chat-daily-limit.md) — Define a shared text-and-voice trial allowance, request counting, and reset behavior.
+
 - [Plan AI chat, voice, and request review](2026-10-18-plan-ai-chat-request-review.md) — Define library answers, a talking voice mode, a PostgreSQL review inbox, and owner-approved agent actions.
 
 - [Add three music albums to the MacBook replica](2026-10-18-add-three-music-albums.md) — Expand the existing Syncthing filter to three selected album directories and verify their transfer.
