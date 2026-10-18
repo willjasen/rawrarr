@@ -29,7 +29,7 @@ class MediaShareTests(unittest.TestCase):
             media.validate_url("http://example.test:8384")
         self.assertEqual(media.validate_url("http://127.0.0.1:8385"), "http://127.0.0.1:8385/")
 
-    def test_root_share_requires_exact_filter(self):
+    def test_root_share_requires_scoped_filter(self):
         with self.assertRaisesRegex(ValueError, "requires --docker-container"):
             media.check_a_filter(None, "source")
         with patch.object(media.shutil, "which", return_value="docker"), \
@@ -41,6 +41,8 @@ class MediaShareTests(unittest.TestCase):
              patch.object(media.subprocess, "check_call") as marker:
             media.check_a_filter("syncthing", "source")
             marker.assert_called_once()
+        self.assertTrue(media.valid_music_filter("!/[Aa]*\n!/[Aa]*/**\n!/Artist/Album\n*\n"))
+        self.assertFalse(media.valid_music_filter("!/[Aa]*\n!/[Aa]*/**\n!/Artist\n*\n"))
 
     def test_rejects_existing_or_overlapping_folder(self):
         def fake_api(_base, _key, path, _body=None):

@@ -20,6 +20,8 @@
 
 # Rawrarr runbooks
 
+- [Add three music albums to the MacBook replica](2026-10-18-add-three-music-albums.md) — Expand the existing Syncthing filter to three selected album directories and verify their transfer.
+
 - [Media `.ev` folder layout](2026-10-18-media-ev-folder-layout.md) — Rename the MacBook's media replica root and reserve a movies-only folder for future selective sync.
 
 - [Public Rawrarr landing page](2026-10-18-public-landing-page.md) — Serve a security-qualified product introduction before passkey sign-in while keeping the authenticated workspace at the coordinator root.

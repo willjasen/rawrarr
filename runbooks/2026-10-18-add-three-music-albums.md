@@ -1,0 +1,21 @@
+# Add three music albums to the MacBook replica
+
+## Objective and initial state
+
+Expand the existing Mini-to-MacBook `rawrarr-media` Syncthing share by three bounded album directories without opening the rest of the music tree. The source is the Mac mini's `/Volumes/silo/Media/data/music`; the MacBook destination is `~/Library/Application Support/rawrarr/media.ev/music`. The current filter on both hosts includes only top-level A/a artists, and the receive-only MacBook folder is idle with 117 local/global files, zero needed files/bytes, and zero errors. The MacBook has about 136 GiB free.
+
+Selected source albums, in three artist directories: `Mike Jourgensen/Rainy Landfill Music` (about 60 MiB, 13 files), `DU Records/Noise Tent 2K Spring Sampler` (about 74 MiB, 19 files), and `Longmont Potion Castle/Longmont Potion Castle 15` (about 117 MiB, 15 files). See [the original media replication runbook](2026-10-18-storage-media-replication.md) and [the media folder layout runbook](2026-10-18-media-ev-folder-layout.md).
+
+## Actions and verification
+
+- Added `scripts/add_music_sync_albums.py` with dry-run and explicit `--apply`, safe exact album paths, source existence checks, and atomic `.stignore` updates. Added focused tests and script indexes. The Mini and MacBook previews matched.
+- The first pattern attempt included each parent artist directory. Syncthing treats an included directory as including its descendants, so the Mini began indexing other Longmont Potion Castle albums. Immediately restored the prior filter on both hosts and paused only the MacBook's `rawrarr-media` folder. The source returned to 117 local files. The MacBook had begun copying about 59 MB of unintended files and temporary parts. Moved the 25 unselected Longmont album directories from this task into node-local `recovery/2026-10-18-unselected-longmont-albums` rather than deleting them.
+- Corrected the script to add only `!/Artist/Album` for each selected directory. [Syncthing's ignore rules](https://docs.syncthing.net/users/ignoring.html) say a directory pattern covers its contents and a deeper negated pattern can traverse an otherwise ignored parent. Both hosts now have identical corrected filters. After a Mini scan, the source indexed 164 files: the original 117 plus exactly 47 selected album files. The MacBook folder was resumed and copied exactly those 47 files.
+- Final MacBook status: receive-only, idle, 164 local/global files, zero needed files/bytes, and zero errors. Source and destination path/content SHA-256 checks matched for all three albums: Rainy Landfill Music (13 files, 63,096,869 bytes, `b4df1a34cdf7f83b2806ff9e98f04fc992381a55d99d6eaa6bae064b9d964dc3`), Noise Tent 2K Spring Sampler (19 files, 77,549,420 bytes, `d1cc972f7b9acc358c5d9092c1038aa53924261c1c3d99d24a9afdf48aa7cc16`), and Longmont Potion Castle 15 (15 files, 122,734,175 bytes, `756793cf4bd65bc770620f29a479956b093ddb1d59f70ae63a1f14ed85de09da`). No other artist or album remains in the active MacBook replica beyond the prior A/a folders and these three selections.
+- Final source status: send-only, idle, 164 local/global files, zero needed files/bytes, and zero errors. The two `.stignore` files have the same SHA-256, `ee2427b3498c5c0dffad62926eea4717db5c3e80ce4a96ffb36274318753bfa3`. Both Syncthing containers are healthy, and the MacBook's current filter passes the updated pairing preflight. Focused tests for the filter editor and pairing script passed. Released both task-owned Syncthing deployment locks.
+
+## Recovery and final state
+
+The previous filter was `!/[Aa]*`, `!/[Aa]*/**`, `*`, one pattern per line. If the new selection must be reversed, pause `rawrarr-media` on the destination, restore those three lines on both hosts, and inspect the copied album paths before moving only task-added files into node-local recovery. Never remove the existing A/a music or Syncthing state volume.
+
+The 25 unintended partial Longmont album directories remain outside the active replica in node-local `~/Library/Application Support/rawrarr/recovery/2026-10-18-unselected-longmont-albums/` as a recoverable task artifact. They are not in the Syncthing folder and are not mounted into Rawrarr. Cleanup can be done after review; they were not deleted as part of the sync correction.

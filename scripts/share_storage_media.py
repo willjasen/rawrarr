@@ -4,6 +4,7 @@
 import argparse
 import json
 from pathlib import Path, PurePosixPath
+import re
 import shutil
 import subprocess
 import sys
@@ -36,6 +37,14 @@ def validate_url(value):
 MUSIC_A_IGNORE = "!/[Aa]*\n!/[Aa]*/**\n*\n"
 
 
+def valid_music_filter(value):
+    lines = value.splitlines()
+    if lines[:2] != ["!/[Aa]*", "!/[Aa]*/**"] or not lines or lines[-1] != "*":
+        return False
+    return all(re.fullmatch(r"!/(?!\.)[^/*?\[\]!\\]+/(?!\.)[^/*?\[\]!\\]+", line)
+               for line in lines[2:-1])
+
+
 def media_path(value, include_a_folders=False):
     if value == "/media" and include_a_folders:
         return value
@@ -53,8 +62,8 @@ def check_a_filter(container, role):
     actual = subprocess.check_output([
         docker, "--context", "orbstack", "exec", container, "cat", "/media/.stignore",
     ], stderr=subprocess.DEVNULL).decode()
-    if actual != MUSIC_A_IGNORE:
-        raise ValueError("/media/.stignore must contain the documented A-folder filter")
+    if not valid_music_filter(actual):
+        raise ValueError("/media/.stignore must contain the documented A-folder filter and only exact album additions")
     if role == "source":
         subprocess.check_call([
             docker, "--context", "orbstack", "exec", container,
