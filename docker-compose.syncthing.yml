@@ -1,0 +1,27 @@
+# Standalone companion; does not recreate the Rawrarr app or PostgreSQL.
+# docker compose -p rawrarr-local -f docker-compose.syncthing.yml up -d
+services:
+  syncthing:
+    image: syncthing/syncthing:2.1.5@sha256:397aa00b92b48d65540ea3ae3cbf271b87bdccbe07a0b7bd7d2debc3a7b29138
+    hostname: rawrarr-macbook-syncthing
+    environment:
+      PUID: "10001"
+      PGID: "10001"
+      STGUIADDRESS: "0.0.0.0:8384"
+    ports:
+      - "127.0.0.1:8385:8384"
+    volumes:
+      - rawrarr-syncthing-state:/var/syncthing
+      - type: bind
+        source: "${HOME}/Library/Application Support/rawrarr/shared-data"
+        target: /shared
+        bind:
+          create_host_path: false
+    networks:
+      - syncthing-local-admin
+    restart: unless-stopped
+networks:
+  syncthing-local-admin:
+    driver: bridge
+volumes:
+  rawrarr-syncthing-state:

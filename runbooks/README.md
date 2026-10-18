@@ -100,3 +100,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Coordinator roles and storage device-code linking](2026-10-18-coordinator-storage-device-linking.md) — Define coordinator/storage/shard/service boundaries and plan Tailscale HTTPS with owner-approved device codes.
 
 - [Plan two-Mac Syncthing replication](2026-10-18-plan-two-mac-syncthing.md) — Explicit shared-folder containers, peer setup, exclusions, and verification for coordinator/storage deployment.
+
+- [MacBook Syncthing container](2026-10-18-macbook-syncthing-container.md) — Local review companion, actual shared-folder scan, localhost GUI, and no remote peers.

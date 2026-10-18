@@ -24,3 +24,5 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 - `test_rawrarr_movie_identifiers.mjs` — Chromium checks for clean movie titles, separate TMDb IDs, missing-ID placeholders, and column alignment. Run in the isolated Playwright test image.
 
 - `test_rawrarr_metadata_cache.rs` — vault-local ciphertext cache reuse, same-length replacement invalidation, missing files, identity isolation, and concurrent replacement safety. Run `cargo test metadata_cache`.
+
+- `test_setup_local_syncthing.py` — Sanitized local-review bootstrap tests: preserve API key, idempotent folder setup, loopback listener, reject remote peers/unrelated folders. Run `python3 scripts/tests/test_setup_local_syncthing.py`; no Docker required.
