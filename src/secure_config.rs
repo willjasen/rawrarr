@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{
     env, fs,
-    io::Write,
+    io::{Read, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
     time::{SystemTime, UNIX_EPOCH},
@@ -110,6 +110,15 @@ impl AgeVault {
 
     pub fn config_exists(&self) -> bool {
         self.config_path.is_file()
+    }
+
+    pub fn ciphertext_format_recognized() -> bool {
+        const AGE_CIPHERTEXT_MAGIC: &[u8] = b"age-encryption.org/v1\n";
+        let Ok(mut file) = fs::File::open(Self::config_path()) else {
+            return false;
+        };
+        let mut prefix = [0; AGE_CIPHERTEXT_MAGIC.len()];
+        file.read_exact(&mut prefix).is_ok() && prefix == AGE_CIPHERTEXT_MAGIC
     }
 
     pub fn load(&self) -> Result<Option<PersistedConfig>, VaultError> {

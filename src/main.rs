@@ -95,6 +95,46 @@ struct AgeSettingsInfo {
     encrypted_config_exists: bool,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ConfigurationView {
+    configuration: Option<SharedConfiguration>,
+    encryption: EncryptionVerification,
+    sharing: SharingStatus,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SharedConfiguration {
+    schema_version: u32,
+    source: &'static str,
+    radarr: Option<SharedRadarrConfig>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SharedRadarrConfig {
+    url: String,
+    api_key: &'static str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EncryptionVerification {
+    status: &'static str,
+    ciphertext_exists: bool,
+    age_format_recognized: bool,
+    identity_unlocked: bool,
+    decryption_verified: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SharingStatus {
+    enabled: bool,
+    status: &'static str,
+}
+
 #[derive(Deserialize)]
 struct AgeIdentityRequest {
     identity: String,
@@ -518,6 +558,79 @@ async fn get_age_settings(State(state): State<Arc<AppState>>) -> Json<AgeSetting
     })
 }
 
+async fn get_configuration(State(state): State<Arc<AppState>>) -> Json<ConfigurationView> {
+    let vault = state.vault.read().await.clone();
+    let active_radarr = state.radarr.read().await.clone();
+    let ciphertext_exists = secure_config::AgeVault::config_path().is_file();
+    let age_format_recognized = secure_config::AgeVault::ciphertext_format_recognized();
+    let mut decryption_verified = false;
+    let mut stored_config = None;
+    let mut verification_status = if ciphertext_exists {
+        "locked"
+    } else if active_radarr.is_some() {
+        "not_encrypted"
+    } else {
+        "not_configured"
+    };
+
+    if ciphertext_exists && !age_format_recognized {
+        verification_status = "unrecognized_ciphertext";
+    } else if let Some(vault) = &vault {
+        if ciphertext_exists {
+            match vault.load() {
+                Ok(Some(config)) => {
+                    decryption_verified = true;
+                    verification_status = "verified";
+                    stored_config = Some(config);
+                }
+                Ok(None) => verification_status = "not_encrypted",
+                Err(_) => verification_status = "verification_failed",
+            }
+        }
+    }
+
+    let source = if stored_config.is_some() {
+        "age_encrypted_config"
+    } else {
+        "runtime_settings"
+    };
+    let configuration = stored_config
+        .as_ref()
+        .map(|config| (config.radarr_url.clone(), !config.radarr_api_key.is_empty()))
+        .or_else(|| {
+            active_radarr
+                .as_ref()
+                .map(|client| (client.base_url.clone(), true))
+        })
+        .map(|(url, has_api_key)| SharedConfiguration {
+            schema_version: 1,
+            source,
+            radarr: Some(SharedRadarrConfig {
+                url,
+                api_key: if has_api_key {
+                    "[REDACTED]"
+                } else {
+                    "[NOT SET]"
+                },
+            }),
+        });
+
+    Json(ConfigurationView {
+        configuration,
+        encryption: EncryptionVerification {
+            status: verification_status,
+            ciphertext_exists,
+            age_format_recognized,
+            identity_unlocked: vault.is_some(),
+            decryption_verified,
+        },
+        sharing: SharingStatus {
+            enabled: false,
+            status: "peer synchronization is not implemented yet",
+        },
+    })
+}
+
 async fn generate_age_identity() -> Result<Json<GeneratedAgeIdentity>, (StatusCode, Json<ApiError>)>
 {
     let (identity, recipient) = secure_config::AgeVault::generate_identity().map_err(|_| {
@@ -722,6 +835,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/settings/age/generate",
             axum::routing::post(generate_age_identity),
         )
+        .route("/api/configuration", get(get_configuration))
         .route("/api/radarr/status", get(radarr_status))
         .route("/api/radarr/movies", get(radarr_movies))
         .with_state(state);

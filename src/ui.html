@@ -24,6 +24,7 @@
       color: var(--text);
     }
     * { box-sizing: border-box; }
+    *[hidden] { display: none !important; }
     body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at 82% -12%, #29402c 0, transparent 42%), var(--bg); }
     button { font: inherit; }
     .app { min-height: 100vh; display: grid; grid-template-columns: 240px minmax(0, 1fr); }
@@ -96,6 +97,7 @@
     .settings-actions { display: flex; gap: 14px; align-items: center; margin-top: 14px; }
     .settings-message { min-height: 16px; color: var(--muted); font-size: 10px; }
     .settings-key-note { color: var(--muted); font-size: 10px; margin-top: 6px; }
+    .config-json { margin: 0; padding: 18px; overflow: auto; color: #d1e1c9; background: #101613; font: 11px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
     .device-list { padding: 14px 18px 18px; }
     .device-item { padding: 12px; border: 1px solid var(--line); background: var(--panel-raised); border-radius: 9px; margin-bottom: 10px; }
     .device-name { font-size: 11px; font-weight: 650; }
@@ -112,12 +114,13 @@
       <div class="section-label">Workspace</div>
       <div class="nav-item active"><span class="nav-icon">⌂</span><span class="nav-text">Overview</span></div>
       <button class="nav-item" id="movies-nav" type="button" style="width:100%;border:0;background:transparent;text-align:left;cursor:pointer"><span class="nav-icon">▧</span><span class="nav-text">Movies</span></button>
+      <button class="nav-item" id="configuration-nav" type="button" style="width:100%;border:0;background:transparent;text-align:left;cursor:pointer"><span class="nav-icon">◇</span><span class="nav-text">Configuration</span></button>
       <a class="nav-item" href="#radarr-settings-panel" id="settings-nav" style="text-decoration:none"><span class="nav-icon">⚙</span><span class="nav-text">Settings</span></a>
       <div class="sidebar-bottom">Discovery, libraries, and fulfillment.<br>Early access · Radarr first</div>
     </aside>
     <main>
       <div class="topline">
-        <div><div class="eyebrow">Your workspace</div><h1>Overview</h1></div>
+        <div><div class="eyebrow">Your workspace</div><h1 id="page-title">Overview</h1></div>
         <div class="live-pill"><span class="pulse"></span>LOCAL INSTANCE</div>
       </div>
       <article class="panel" id="age-setup-panel" style="margin-bottom:22px">
@@ -180,6 +183,17 @@
           <div class="table-wrap"><table><thead><tr><th>Movie</th><th>Year</th><th>File</th><th>Monitored</th><th>Quality profile</th><th>Size</th><th>Path</th></tr></thead><tbody id="radarr-movie-rows"></tbody></table></div>
         </article>
       </section>
+      <section id="configuration-content" hidden>
+        <article class="panel" style="margin-bottom:14px">
+          <div class="panel-head"><h2>Shared configuration · decrypted view</h2><button id="refresh-configuration" class="refresh" type="button">Verify again ↻</button></div>
+          <div class="metadata-note">This is a readable preview of configuration intended for sharing between Rawrarr nodes. Secret values are redacted in the browser. Peer synchronization is not implemented yet.</div>
+          <pre id="configuration-json" class="config-json">Loading configuration…</pre>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><h2>Age encryption verification</h2><span id="encryption-badge" class="kind-tag">Checking…</span></div>
+          <div id="encryption-details" class="setup"></div>
+        </article>
+      </section>
       <div class="footer"><span id="live-status">Connecting to live updates…</span> · TMDb metadata provided by <a href="https://www.themoviedb.org/" target="_blank" rel="noreferrer"><img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg" alt="TMDb" width="18" height="18" style="vertical-align:middle"></a> The Movie Database. This product uses the TMDB API but is not endorsed or certified by TMDB.</div>
     </main>
   </div>
@@ -189,17 +203,27 @@
     const detail = document.getElementById('radarr-detail');
     const scanButton = document.getElementById('scan');
     const moviesNav = document.getElementById('movies-nav');
+    const configurationNav = document.getElementById('configuration-nav');
     const overviewNav = document.querySelector('.nav-item.active');
     function showView(view) {
       const movies = view === 'movies';
-      document.getElementById('overview-content').hidden = movies;
+      const configuration = view === 'configuration';
+      document.getElementById('page-title').textContent = configuration ? 'Configuration' : movies ? 'Movies' : 'Overview';
+      document.getElementById('overview-content').hidden = movies || configuration;
       document.getElementById('movies-content').hidden = !movies;
+      document.getElementById('configuration-content').hidden = !configuration;
+      document.querySelector('.welcome').hidden = movies || configuration;
+      document.querySelector('[aria-label="Library summary"]').hidden = movies || configuration;
       moviesNav.classList.toggle('active', movies);
-      overviewNav.classList.toggle('active', !movies);
+      configurationNav.classList.toggle('active', configuration);
+      overviewNav.classList.toggle('active', !movies && !configuration);
       moviesNav.setAttribute('aria-current', movies ? 'page' : 'false');
+      configurationNav.setAttribute('aria-current', configuration ? 'page' : 'false');
       if (movies) loadRadarrMovies();
+      if (configuration) loadConfiguration();
     }
     moviesNav.addEventListener('click', () => showView('movies'));
+    configurationNav.addEventListener('click', () => showView('configuration'));
     overviewNav.addEventListener('click', () => showView('overview'));
     const settingsForm = document.getElementById('radarr-settings');
     const ageSettingsForm = document.getElementById('age-settings');
@@ -531,6 +555,38 @@
       }
     }
     document.getElementById('refresh-movies').addEventListener('click', loadRadarrMovies);
+
+    async function loadConfiguration() {
+      const json = document.getElementById('configuration-json');
+      const badge = document.getElementById('encryption-badge');
+      const details = document.getElementById('encryption-details');
+      json.textContent = 'Loading configuration…';
+      try {
+        const response = await fetch('/api/configuration', { headers: { Accept: 'application/json' } });
+        const result = await response.json();
+        json.textContent = result.configuration
+          ? JSON.stringify(result.configuration, null, 2)
+          : 'No readable configuration is loaded yet.';
+        badge.textContent = ({
+          verified: 'AGE ENCRYPTION VERIFIED', locked: 'LOCKED', not_encrypted: 'NOT ENCRYPTED',
+          not_configured: 'NOT CONFIGURED', unrecognized_ciphertext: 'UNRECOGNIZED FILE',
+          verification_failed: 'VERIFICATION FAILED'
+        })[result.encryption.status] || result.encryption.status.toUpperCase();
+        const checks = [
+          `Ciphertext file exists: ${result.encryption.ciphertextExists ? 'yes' : 'no'}`,
+          `Age ciphertext format recognized: ${result.encryption.ageFormatRecognized ? 'yes' : 'no'}`,
+          `Age identity unlocked: ${result.encryption.identityUnlocked ? 'yes' : 'no'}`,
+          `Decryption and config parsing verified: ${result.encryption.decryptionVerified ? 'yes' : 'no'}`,
+          `Peer synchronization: ${result.sharing.enabled ? 'enabled' : 'not implemented'}`
+        ];
+        details.textContent = checks.join(' · ');
+      } catch (_) {
+        json.textContent = 'Could not load the configuration view.';
+        badge.textContent = 'UNAVAILABLE';
+        details.textContent = 'Could not verify the saved configuration.';
+      }
+    }
+    document.getElementById('refresh-configuration').addEventListener('click', loadConfiguration);
 
     function movieSearchTerms(filename) {
       const withoutExtension = filename.replace(/\.[^.]+$/, '');
