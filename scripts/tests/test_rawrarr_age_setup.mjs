@@ -25,6 +25,7 @@ function createElement() {
 }
 
 test('generated private age identity has a short preview and full value is exposed only through copy', async () => {
+  assert.match(page, /<h1>unlock your rawrchive<\/h1>/);
   assert.doesNotMatch(page, /<textarea\b/i);
   assert.match(page, /id="identity" type="password"/);
   assert.match(page, /Copy private identity/);
