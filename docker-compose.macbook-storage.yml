@@ -1,0 +1,50 @@
+# Additional MacBook apex node. Use with the existing rawrarr-local coordinator
+# network namespace after mounting a verified, synchronized local media folder.
+services:
+  apex-macbook:
+    build:
+      context: ./rust-arr
+    image: rawrarr:local
+    container_name: rawrarr-local-macbook-apex
+    environment:
+      RAWARR_ROLE: storage
+      RUST_ARR_LISTEN_ADDR: 127.0.0.1:8084
+      RAWARR_DATA_DIR: /data
+      RAWARR_SHARED_DATA_DIR: /shared
+      RAWARR_METADATA_DIR: /metadata
+      RAWARR_LIBRARY_PATH: /media
+      RAWARR_LIBRARY_NAME: MacBook music copy
+      RAWARR_DEVICE_NAME: MacBook Pro media
+      RAWARR_COORDINATOR_URL: https://rawrarr.risk-mermaid.ts.net
+      RAWARR_NODE_ID: macbook-storage
+      RAWARR_DEVICE_ID: macbook-storage
+      RAWARR_NODE_TOKEN_FILE: /data/node-token
+      RAWARR_NODE_ENROLLMENT_ENABLED: "true"
+      RAWARR_STORAGE_SCAN_INTERVAL_SECONDS: "86400"
+      RAWARR_LOCAL_PLAINTEXT_CONFIG: "false"
+      RAWARR_SYNCTHING_API_URL: http://rawrarr-local-syncthing-1:8384
+      RAWARR_SYNCTHING_API_KEY_FILE: /run/secrets/rawrarr_syncthing_api_key
+      RAWARR_WEBAUTHN_RP_ID: rawrarr.risk-mermaid.ts.net
+      RAWARR_WEBAUTHN_ORIGIN: https://rawrarr.risk-mermaid.ts.net
+    secrets:
+      - rawrarr_syncthing_api_key
+    volumes:
+      - rawrarr-macbook-storage-data:/data
+      - type: bind
+        source: "${RAWARR_SHARED_DATA_PATH:-${HOME}/Library/Application Support/rawrarr/shared-data}"
+        target: /shared
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${RAWARR_MACBOOK_MEDIA_PATH:?Set the verified MacBook media replica path}
+        target: /media
+        read_only: true
+        bind:
+          create_host_path: false
+    network_mode: container:rawrarr-macbook-tailscale
+    restart: unless-stopped
+volumes:
+  rawrarr-macbook-storage-data:
+secrets:
+  rawrarr_syncthing_api_key:
+    file: "${RAWARR_SYNCTHING_API_KEY_SECRET_FILE:-${HOME}/Library/Application Support/rawrarr/syncthing-api-key}"

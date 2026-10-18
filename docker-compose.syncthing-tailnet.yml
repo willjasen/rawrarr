@@ -1,0 +1,9 @@
+# Add to each host's existing Syncthing Compose file after Tailscale Serve TCP
+# forwarding is configured. Userspace Tailscale has no tun adapter in Syncthing.
+services:
+  syncthing:
+    environment:
+      ALL_PROXY: ${RAWARR_TAILSCALE_SOCKS5_URL:?Set the local Tailscale sidecar SOCKS5 URL}
+      ALL_PROXY_NO_FALLBACK: "1"
+      NO_PROXY: 127.0.0.1,localhost
+      no_proxy: 127.0.0.1,localhost

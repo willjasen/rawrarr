@@ -1,0 +1,11 @@
+# Add only a node-local media bind to an existing Syncthing Compose service.
+# Combine with that host's current Syncthing file and keep its project name.
+services:
+  syncthing:
+    volumes:
+      - type: bind
+        source: ${RAWARR_HOST_MEDIA_PATH:?Set the verified node-local media folder}
+        target: /media
+        read_only: ${RAWARR_MEDIA_SYNC_READ_ONLY:-true}
+        bind:
+          create_host_path: false

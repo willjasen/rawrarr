@@ -8,6 +8,8 @@ logs/
 rust-arr/target/
 target/
 node_modules/
+__pycache__/
+*.pyc
 *.db
 *.sqlite
 *.sqlite3

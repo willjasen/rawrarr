@@ -43,7 +43,7 @@ services:
     network_mode: "service:tailscale"
     ports: !reset []
     environment:
-      RAWARR_NODE_RELAY_TARGETS: '{"macbook-metadata":"http://127.0.0.1:8081","mac-mini-storage":"https://rawrarr-mini.risk-mermaid.ts.net"}'
+      RAWARR_NODE_RELAY_TARGETS: '{"macbook-metadata":"http://127.0.0.1:8081","mac-mini-storage":"https://rawrarr-mini.risk-mermaid.ts.net","macbook-storage":"http://127.0.0.1:8084"}'
       RAWARR_NODE_DIRECT_TARGETS: '{"macbook-metadata":"https://rawrarr.risk-mermaid.ts.net/direct-api/","mac-mini-storage":"https://rawrarr-mini.risk-mermaid.ts.net/direct-api/"}'
 
   metadata:
