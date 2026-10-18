@@ -79,3 +79,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Consolidate Rawrarr project status into the roadmap](2026-10-18-rawrarr-roadmap.md) — Create one prioritized completed/outstanding work list and replace duplicated status queues with links to it.
 - [Show the rawrarr logo on setup](2026-10-18-rawrarr-setup-logo.md) — Reuse the existing lowercase rawrarr logo asset on the age identity setup page.
 - [Serve the rawrarr logo as JPEG XL](2026-10-18-rawrarr-jpeg-xl-logo.md) — Add a lossless JPEG XL logo source for supported browsers, retain the PNG fallback, and record animation as future work.
+
+- [Resolve stale public age recipient](2026-10-18-age-recipient-conflict.md) — Preserve an unused setup recipient, unblock local onboarding, and distinguish identity conflicts from storage errors.

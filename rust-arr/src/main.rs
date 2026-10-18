@@ -1047,13 +1047,18 @@ async fn unlock_age_settings(
             }),
         )
     })?;
-    vault.persist_public_recipient().map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiError {
-                error: "Could not save the public age recipient for storage nodes",
-            }),
-        )
+    vault.persist_public_recipient().map_err(|error| {
+        let (status, message) = match error {
+            secure_config::VaultError::InvalidIdentity => (
+                StatusCode::CONFLICT,
+                "This shared folder already belongs to another age ID. Paste the original private identity to unlock it; creating a new ID does not recover existing encrypted data.",
+            ),
+            _ => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not save the public age recipient for storage nodes; check shared-folder write permissions",
+            ),
+        };
+        (status, Json(ApiError { error: message }))
     })?;
     if let Some(settings) = stored {
         let client =
