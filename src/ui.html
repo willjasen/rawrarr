@@ -92,6 +92,11 @@
     .settings-form input { width: 100%; border: 1px solid var(--line); border-radius: 7px; background: #101613; color: var(--text); padding: 9px 10px; font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
     .settings-actions { display: flex; gap: 14px; align-items: center; margin-top: 14px; }
     .settings-message { min-height: 16px; color: var(--muted); font-size: 10px; }
+    .device-list { padding: 14px 18px 18px; }
+    .device-item { padding: 12px; border: 1px solid var(--line); background: var(--panel-raised); border-radius: 9px; margin-bottom: 10px; }
+    .device-name { font-size: 11px; font-weight: 650; }
+    .device-meta { color: var(--muted); font-size: 10px; line-height: 1.6; margin-top: 5px; }
+    .device-status { color: var(--green); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; float: right; }
     @media (max-width: 850px) { .app { grid-template-columns: 70px minmax(0, 1fr); } aside { padding: 22px 10px; } .brand { justify-content: center; padding: 0 0 32px; } .brand-copy, .section-label, .nav-text, .nav-soon, .sidebar-bottom { display: none; } .nav-item { justify-content: center; padding: 0; } main { padding: 30px 24px 50px; } .grid { grid-template-columns: 1fr 1fr; } .grid .card:last-child { grid-column: span 2; } }
     @media (max-width: 580px) { .app { display: block; } aside { position: sticky; z-index: 2; top: 0; height: 60px; display: flex; align-items: center; border-right: 0; border-bottom: 1px solid var(--line); padding: 0 14px; } .brand { padding: 0; margin-right: auto; } .brand-copy { display: block; } .nav-item { width: 40px; height: 40px; margin: 0 3px; } .nav-item.active { box-shadow: inset 0 -2px var(--green); } main { padding: 26px 16px 42px; } .topline { align-items: flex-start; margin-bottom: 22px; } .live-pill { font-size: 0; padding: 9px; } .welcome { align-items: flex-start; flex-direction: column; padding: 19px; } .grid { gap: 9px; } .card { padding: 14px; min-height: 116px; } .columns { grid-template-columns: 1fr; } }
   </style>
@@ -111,7 +116,7 @@
         <div class="live-pill"><span class="pulse"></span>LOCAL INSTANCE</div>
       </div>
       <section class="welcome">
-        <div><h2>Welcome to rawrarr</h2><p>Your movie library workspace is ready. Connect Radarr to start bringing your movie setup into one place. This first build focuses on a clear foundation and safe, read-only connection checks.</p></div>
+        <div><h2>Welcome to rawrarr</h2><p>Your library can be scanned by a device that has the media mounted. The current scanner runs on the web app host; remote scanner agents will connect as separate devices.</p></div>
         <div class="welcome-tag">RADARR · FIRST INTEGRATION</div>
       </section>
       <section class="grid" aria-label="Library summary">
@@ -129,6 +134,10 @@
             <table><thead><tr><th>Type</th><th>Name</th><th>Relative path</th><th>Size</th><th>Metadata</th></tr></thead><tbody id="media-rows"></tbody></table>
             <div id="scan-issues" class="issue-note" hidden></div>
           </div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><h2>Devices</h2><span id="device-count">—</span></div>
+          <div id="device-list" class="device-list"><div class="device-meta">Loading scanner devices…</div></div>
         </article>
         <article class="panel">
           <div class="panel-head"><h2>Connect Radarr</h2><button id="refresh" class="refresh" type="button">Refresh status ↻</button></div>
@@ -241,6 +250,41 @@
         }
       } catch (_) {
         scanButton.disabled = true;
+      }
+    }
+
+    async function loadDevices() {
+      const list = document.getElementById('device-list');
+      try {
+        const response = await fetch('/api/devices', { headers: { Accept: 'application/json' } });
+        const devices = await response.json();
+        document.getElementById('device-count').textContent = `${devices.length} device${devices.length === 1 ? '' : 's'}`;
+        list.replaceChildren();
+        for (const device of devices) {
+          const card = document.createElement('div');
+          card.className = 'device-item';
+          const name = document.createElement('div');
+          name.className = 'device-name';
+          name.textContent = device.name;
+          const status = document.createElement('span');
+          status.className = 'device-status';
+          status.textContent = device.status === 'ready' ? 'Ready' : 'Needs setup';
+          name.append(status);
+          const meta = document.createElement('div');
+          meta.className = 'device-meta';
+          meta.textContent = device.libraryName
+            ? `Local scanner · ${device.libraryName} · scan runs on this host`
+            : 'Local scanner · configure RAWARR_LIBRARY_PATH on this host';
+          card.append(name, meta);
+          list.append(card);
+        }
+        const note = document.createElement('div');
+        note.className = 'device-meta';
+        note.textContent = 'Remote scanners will connect to this library as separate devices.';
+        list.append(note);
+      } catch (_) {
+        document.getElementById('device-count').textContent = 'Unavailable';
+        list.textContent = 'Could not load device status.';
       }
     }
 
@@ -392,6 +436,7 @@
     document.getElementById('refresh').addEventListener('click', refreshStatus);
     scanButton.addEventListener('click', scanLibrary);
     loadLibraryInfo();
+    loadDevices();
     loadMetadataInfo();
     loadRadarrSettings();
     refreshStatus();

@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod devices;
 pub mod download_clients;
 pub mod library;
 pub mod metadata;
@@ -178,6 +179,11 @@ async fn library_info(State(state): State<Arc<AppState>>) -> Json<library::Libra
     }
 }
 
+async fn list_devices(State(state): State<Arc<AppState>>) -> Json<Vec<devices::DeviceInfo>> {
+    let library_name = state.library.as_ref().map(library::LibraryRoot::name);
+    Json(vec![devices::DeviceInfo::local_scanner(library_name)])
+}
+
 async fn scan_library(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<library::ScanSummary>, (StatusCode, Json<ApiError>)> {
@@ -315,6 +321,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/", get(dashboard))
         .route("/health", get(health))
         .route("/api/library", get(library_info))
+        .route("/api/devices", get(list_devices))
         .route("/api/library/scan", axum::routing::post(scan_library))
         .route(
             "/api/metadata/movies/search",

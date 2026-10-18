@@ -1,6 +1,6 @@
 # rawrarr
 
-rawrarr is an early media-library application focused on Radarr first. The root route (`/`) serves a responsive dashboard, `/health` is a service health check, `/api/radarr/status` is a read-only Radarr connection status endpoint, `/api/library/scan` inventories a configured folder without changing files, and `/api/metadata/movies/search` searches Radarr for movie candidates. Library inventory and metadata matches are not persisted to a database yet.
+rawrarr is an early media-library application focused on Radarr first. The root route (`/`) serves a responsive dashboard, `/health` is a service health check, `/api/devices` reports scanner devices, `/api/radarr/status` is a read-only Radarr connection status endpoint, `/api/library/scan` inventories a configured folder without changing files, and `/api/metadata/movies/search` searches Radarr for movie candidates. The current scanner runs on the web host; remote scanner agents and durable catalog storage are not implemented yet. See [the device architecture](../docs/device-architecture.md).
 
 ## Local development
 
@@ -15,6 +15,8 @@ curl http://127.0.0.1:8080/health
 Set `RUST_ARR_LISTEN_ADDR` to change the listen address.
 
 Configure one read-only scan root with `RAWARR_LIBRARY_PATH=/absolute/path/to/media` and optionally set `RAWARR_LIBRARY_NAME`. Restart the service, then use **Scan folder** in the dashboard. The API also supports `GET /api/library` for configuration status and `POST /api/library/scan` to start a scan. Video files are classified as TV when the path contains a `Season N` directory or the filename contains an `SxxEyy` marker; other recognized video files are grouped as movies. Audio, books, subtitles, and disc images are listed separately. This is filename and size inventory only: it does not probe content, rename, move, or delete files. Symbolic links and hidden files/directories are skipped, and traversal has depth and entry caps.
+
+Set `RAWARR_DEVICE_NAME` to label this host in the Devices panel. The web API currently reports one local scanner device; configuring a separate remote device requires the future agent/pairing implementation described in the device architecture doc.
 
 Configure the optional Radarr integration with `RADARR_URL` (for example, `http://radarr:7878`) and `RADARR_API_KEY`. The key is read from the environment and never returned in responses or error messages. With Compose, set these in an untracked `.env` file in the repository root or in the shell environment. When configured, `GET /api/radarr/status` reads Radarr's `/api/v3/system/status` endpoint. The route returns `503` when Radarr is not configured and `502` if Radarr does not return a successful response.
 
