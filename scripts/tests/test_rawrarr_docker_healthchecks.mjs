@@ -31,6 +31,11 @@ test('Docker test containers have unique names in the rawrarr-testing group', ()
   assert.match(testRunner, /sh \/workspace\/scripts\/tests\/run-tests-in-container\.sh/);
   assert.doesNotMatch(testRunner, /build_context \/ "rust-arr"/);
   assert.match(testEntrypoint, /cargo clean --manifest-path \/workspace\/rust-arr\/Cargo\.toml -p rust-arr/);
+  assert.match(testEntrypoint, /={16,}[\s\S]*CONTAINER TEST SUMMARY[\s\S]*={16,}/);
+  assert.match(testEntrypoint, /print_result "Node\.js"/);
+  assert.match(testEntrypoint, /print_result "Rust"/);
+  assert.match(testEntrypoint, /not ok \[0-9\]\+/);
+  assert.match(testEntrypoint, /\\\.\\\.\\\. FAILED/);
   assert.match(syncthingTest, /BASE36 = "0123456789abcdefghijklmnopqrstuvwxyz"/);
   assert.match(syncthingTest, /suffix = timestamp_code\(\)/);
   assert.match(syncthingTest, /names = \[f"\{PROJECT\}-web-\{suffix\}", f"\{PROJECT\}-storage-\{suffix\}"\]/);

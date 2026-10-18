@@ -6,6 +6,8 @@
 
 Task records and operational procedures for this Rawrarr repository. Each entry links to the specific task; older records are retained as history.
 
+- [Summarize failed container tests](2026-10-18-rawrarr-test-failure-summary.md) — End retained container logs with pass/fail status and the names of failed Node.js or Rust tests.
+
 - [Test age setup in Chromium](2026-10-18-age-challenge-playwright.md) — Add real-browser coverage for the age identity backup and unlock flow inside the isolated Rawrarr Docker test environment.
 
 - [Speed up local development builds](2026-10-18-faster-local-development.md) — Persist Cargo registry and compiler artifacts through BuildKit caches, and keep the persistent local runtime user-updated.
