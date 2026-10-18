@@ -116,3 +116,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Fix coordinator health 502](2026-10-18-fix-coordinator-health-502.md) — Correct Tailscale Serve port 443 to the coordinator proxy.
 
 - [Temporarily disable age character verification](2026-10-18-disable-age-character-check.md) — Require copy and saved-ID acknowledgement, defer character verification, and refresh the local app.
+
+- [Keep the public coordinator URL on the coordinator](2026-10-18-coordinator-url-recurrence.md) — Repair Serve drift and record a required route read-back and HTTPS health check.
