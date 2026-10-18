@@ -390,6 +390,10 @@ async fn rawrarr_logo() -> Response<Body> {
     static_asset("image/png", include_bytes!("assets/rawrarr-logo.png"))
 }
 
+async fn rawrarr_logo_jxl() -> Response<Body> {
+    static_asset("image/jxl", include_bytes!("assets/rawrarr-logo.jxl"))
+}
+
 async fn rawrarr_favicon() -> Response<Body> {
     static_asset(
         "image/svg+xml",
@@ -1279,6 +1283,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/health", get(health))
         .route("/assets/rawrarr-logo.png", get(rawrarr_logo))
+        .route("/assets/rawrarr-logo.jxl", get(rawrarr_logo_jxl))
         .route("/assets/rawrarr-favicon.svg", get(rawrarr_favicon))
         .route("/assets/passkey-client.mjs", get(passkey_client_js))
         .route("/auth", get(auth_page))

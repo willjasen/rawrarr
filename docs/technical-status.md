@@ -14,6 +14,7 @@ This document separates implemented behavior from architecture that is still a p
 - **Syncthing:** configure supported peer/folder settings through the Syncthing REST API. Syncthing implements BEP for peer transfer; Rawrarr does not implement BitTorrent or BEP itself.
 - **Shared logs:** write compressed allowlisted JSONL logs beneath `/shared/logs/<device-id>/`.
 - **Docker:** the base Compose project runs Rawrarr and PostgreSQL; media and age-identity Compose overlays are available. Both containers have readiness health checks. `/shared` is a host bind mount, while `/data` and PostgreSQL use local Docker volumes.
+- **Brand assets:** the setup and workspace pages prefer a lossless JPEG XL logo and retain PNG fallback for browsers without JPEG XL decoding.
 
 ## Planned, not implemented
 
@@ -24,6 +25,7 @@ This document separates implemented behavior from architecture that is still a p
 - **Shared identity records:** passkeys and user data are still stored in each node's local PostgreSQL. Portable encrypted passkey sharing and a passkey-first bootstrap for a new node remain unsolved.
 - **Device signing:** per-device signing keys, enrollment approval, signatures over shared configuration, revocation, and revision checks are a future security feature. See [device signing design](device-signing-design.md).
 - **Local shared-folder backups:** the agreed design is a manual backup action on one designated node, stored outside `/shared`, with the archive age-encrypted to public recipient(s). Destination device/path lives in `config.aged`. Retention is undecided; automatic deletion is out of scope. No backup UI or archive implementation exists.
+- **Animated logo:** the JPEG XL format can carry animation, but the logo remains static. Occasional animation, timing, and reduced-motion behavior have not been implemented.
 
 ## Data and trust boundaries
 

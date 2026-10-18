@@ -6,6 +6,8 @@ import vm from 'node:vm';
 
 const page = await readFile(new URL('../../rust-arr/src/age_setup.html', import.meta.url), 'utf8');
 const mainPage = await readFile(new URL('../../rust-arr/src/ui.html', import.meta.url), 'utf8');
+const server = await readFile(new URL('../../rust-arr/src/main.rs', import.meta.url), 'utf8');
+const jxlLogo = await readFile(new URL('../../rust-arr/src/assets/rawrarr-logo.jxl', import.meta.url));
 const publicRecipient = 'age1pq1public-test-recipient';
 const privateKey = 'AGE-SECRET-KEY-PQ-1TESTPRIVATEDONOTPRINT';
 const privateIdentity = `# created: test fixture\n# public key: ${publicRecipient}\n${privateKey}`;
@@ -27,7 +29,13 @@ function createElement() {
 
 test('generated private age identity has a short preview and full value is exposed only through copy', async () => {
   assert.match(page, /<h1>unlock your rawrchive<\/h1>/);
+  assert.match(page, /<source srcset="\/assets\/rawrarr-logo\.jxl" type="image\/jxl">/);
   assert.match(page, /<img class="brand-logo" src="\/assets\/rawrarr-logo\.png" alt="rawrarr"/);
+  assert.match(mainPage, /<source srcset="\/assets\/rawrarr-logo\.jxl" type="image\/jxl">/);
+  assert.match(mainPage, /<img class="brand-logo" src="\/assets\/rawrarr-logo\.png" alt="rawrarr"/);
+  assert.match(server, /static_asset\("image\/jxl", include_bytes!\("assets\/rawrarr-logo\.jxl"\)\)/);
+  assert.match(server, /\.route\("\/assets\/rawrarr-logo\.jxl", get\(rawrarr_logo_jxl\)\)/);
+  assert.deepEqual([...jxlLogo.subarray(0, 2)], [0xff, 0x0a], 'logo asset is a JPEG XL codestream');
   assert.doesNotMatch(page, /<textarea\b/i);
   assert.match(page, /id="identity" type="password"/);
   assert.match(page, /Copy private identity/);
