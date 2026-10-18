@@ -83,3 +83,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Serve the rawrarr logo as JPEG XL](2026-10-18-rawrarr-jpeg-xl-logo.md) — Add a lossless JPEG XL logo source for supported browsers, retain the PNG fallback, and record animation as future work.
 
 - [Resolve stale public age recipient](2026-10-18-age-recipient-conflict.md) — Preserve an unused setup recipient, unblock local onboarding, and distinguish identity conflicts from storage errors.
+
+- [Preserve the current page on refresh](2026-10-18-preserve-page-on-refresh.md) — Keep workspace navigation through reloads and browser history.

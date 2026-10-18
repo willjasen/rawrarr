@@ -1,6 +1,6 @@
 # Testing Rawrarr
 
-This guide explains how to run Rawrarr's current tests, with the self-contained Node.js and Rust suites running inside the reusable Docker test base. The runner creates a fresh container for every invocation, prints the test output to its logs, and leaves the stopped container available for inspection.
+This guide explains how to run Rawrarr's current tests, with the self-contained Node.js, Playwright browser, and Rust suites running inside the reusable Docker test base. The runner creates a fresh container for every invocation, prints the test output to its logs, and leaves the stopped container available for inspection.
 
 ## Test environment
 
@@ -10,6 +10,7 @@ The local image `rawrarr-testing-base:local` is the reusable dependency base. Ea
 
 - Rust 1.85.
 - Node.js for the browser-side and source-structure tests.
+- Chromium and `playwright-core` 1.55.0 for the separate browser suite.
 - The locked Cargo crate cache and compiled dependency artifacts used by Rust tests.
 - The upstream `age` 1.3.2 binaries, including `age-keygen`, verified against the release archive's SHA-256 checksum.
 
@@ -25,7 +26,7 @@ From the repository root, run:
 python3 scripts/tests/run_rawrarr_tests_in_docker.py
 ```
 
-The script checks the selected Docker context, creates or reuses `rawrarr-testing-base:local`, creates a uniquely named container from that image, copies in the current project snapshot, and starts the runner. It then follows the container logs until the tests finish and returns the test container's exit status. A zero exit status means the included Node.js and Rust suites passed.
+The script checks the selected Docker context, creates or reuses `rawrarr-testing-base:local`, creates a uniquely named container from that image, copies in the current project snapshot, and starts the runner. It then follows the container logs until the tests finish and returns the test container's exit status. A zero exit status means the included Node.js, Playwright browser, and Rust suites passed.
 
 To use a different Docker context explicitly:
 
@@ -75,30 +76,27 @@ The human-readable service label also contains the base36 suffix. The persistent
 
 ## What the main container runs
 
-The entrypoint executes both suites and prints a summary at the end:
+The entrypoint executes three suites and prints a summary at the end:
 
-1. All `scripts/tests/*.mjs` Node.js tests, including setup UI behavior, lowercase product branding, passkey decoding, readiness health checks, and test-container naming.
-2. The locked Rust unit tests using `cargo test --locked --offline`.
+1. Node.js `scripts/tests/*.mjs` tests except the separate browser test, covering setup UI behavior, product branding, passkey decoding, health-check conventions, and test-container naming.
+2. `test_rawrarr_age_setup_browser.mjs` using Playwright and Chromium with a local fixture server and mocked API responses. This checks browser behavior, not real passkey authentication or a live backend.
+3. The locked Rust unit tests using `cargo test --locked --offline`. The runner first cleans the application package to avoid reusing the base image's placeholder application artifact.
+
+The final summary reports each suite's result and extracts failing test names or compiler errors while retaining detailed logs above it. Any failed suite produces a nonzero exit status.
 
 The runner reports database-backed Python integration tests and host-OrbStack peer synchronization as skipped. They need disposable external fixtures or a host Docker context, so they are separate procedures below. A skip message is not a passing result for those integrations.
 
-## Run focused tests inside the test base
+## Focused checks and source snapshots
 
-Once the test base has been built by the main runner, focused Node and Rust tests can also run in fresh, offline containers from the same image. These one-off commands use the image's dependency snapshot only; run the main script to copy the current checkout into a retained runner container:
+The dependency base contains a placeholder Rust application and no project test files. Do not run a project test directly from `rawrarr-testing-base:local`: a Node test path will be missing, and a Cargo invocation may test only the placeholder. Use the main runner above for container verification of the current checkout; it copies source into each fresh container before executing all three suites. The runner currently has no focused-test selector.
 
-```sh
-docker --context orbstack run --rm --network none \
-  --entrypoint node rawrarr-testing-base:local \
-  --test /workspace/scripts/tests/test_rawrarr_age_setup.mjs
-```
+For a quick focused check on a host with Node.js installed, run from the repository root:
 
 ```sh
-docker --context orbstack run --rm --network none \
-  --entrypoint cargo rawrarr-testing-base:local \
-  test --locked --offline --manifest-path /workspace/rust-arr/Cargo.toml
+node --test scripts/tests/test_rawrarr_age_setup.mjs
 ```
 
-These one-off focused containers are removed after completion and their output appears directly in the terminal. For retained output under the `rawrarr-testing` project, use the main runner.
+This command reads the current local source. The Playwright test has container-specific Chromium and module paths, so run it through the main container runner. If an older base lacks Chromium or Playwright, refresh it with `--rebuild-base`.
 
 ## Run the Syncthing peer-container integration
 

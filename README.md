@@ -12,7 +12,7 @@ Code changes are made and verified before updating the persistent `rawrarr-local
 
 ## Test
 
-Run the Node and Rust suites in a uniquely named container cloned from the reusable dependency image:
+Run the Node, Playwright browser, and Rust suites in a uniquely named container cloned from the reusable dependency image:
 
 ```sh
 python3 scripts/tests/run_rawrarr_tests_in_docker.py

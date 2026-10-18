@@ -4,7 +4,7 @@ Start here for the current project state and everyday use:
 
 - [Project roadmap](../ROADMAP.md) — completed work, outstanding work, and recommended next milestones.
 - [Technical boundaries](technical-status.md) — data placement, privacy, and security constraints.
-- [User guide](user-guide.md) — Docker startup, first login, age identity, Radarr setup, and local scanning.
+- [User guide](user-guide.md) — persistent local Compose usage, passkey and age setup, HTTPS Radarr connections, artwork, health checks, and local scanning.
 
 ## Product design
 
@@ -23,6 +23,8 @@ Start here for the current project state and everyday use:
 - [Tailscale integration](tailscale-integration-plan.md) — optional overlay transport plan; SwarmSail will manage one tailnet per subscriber account.
 
 ## Tests and operational notes
+
+- [Testing guide](../TESTING.md) — dependency-only test base, source snapshots, separate Node/Playwright/Rust suites, and integration-test limits.
 
 - [Script and integration test index](../scripts/tests/README.md) — isolated test commands and infrastructure requirements.
 - [Runbooks](../runbooks/README.md) — dated implementation and operations records.

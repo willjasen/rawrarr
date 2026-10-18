@@ -226,7 +226,11 @@
     const moviesNav = document.getElementById('movies-nav');
     const configurationNav = document.getElementById('configuration-nav');
     const overviewNav = document.querySelector('.nav-item.active');
-    function showView(view) {
+    function showView(view, updateUrl = true) {
+      if (!['overview', 'movies', 'configuration'].includes(view)) view = 'overview';
+      if (updateUrl && window.location.hash !== `#${view}`) {
+        window.history.pushState(null, '', `#${view}`);
+      }
       const movies = view === 'movies';
       const configuration = view === 'configuration';
       document.getElementById('page-title').textContent = configuration ? 'Configuration' : movies ? 'Movies' : 'Overview';
@@ -243,12 +247,17 @@
       if (movies) loadRadarrMovies();
       if (configuration) loadConfiguration();
     }
+    function restoreView() {
+      showView(window.location.hash.slice(1), false);
+    }
+    window.addEventListener('hashchange', restoreView);
     moviesNav.addEventListener('click', () => showView('movies'));
     configurationNav.addEventListener('click', () => showView('configuration'));
     overviewNav.addEventListener('click', () => showView('overview'));
     const settingsForm = document.getElementById('radarr-settings');
     function openRadarrSettings(event) {
       event.preventDefault();
+      showView('overview');
       const panel = document.getElementById('radarr-settings-panel');
       panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
       document.getElementById('radarr-url').focus({ preventScroll: true });
@@ -709,6 +718,7 @@
 
     document.getElementById('refresh').addEventListener('click', refreshStatus);
     scanButton.addEventListener('click', scanLibrary);
+    restoreView();
     loadIdentityTheme();
     loadRadarrSettings();
   </script>

@@ -78,6 +78,8 @@ Show synchronization states in user terms: up to date, syncing, waiting for devi
 - Do not rely on color alone to communicate identity or status.
 - Avoid displaying secrets in errors, notifications, logs, browser titles, or copied diagnostic output.
 
+- Preserve the selected workspace page in the URL so browser refresh and Back/Forward retain the expected view.
+
 ## Keeping this guide current
 
 When the user recommends or approves a change to how Rawrarr should look or behave, update this guide in the same task. Keep decisions here even when implementation is still pending, and track completion in the [roadmap](../ROADMAP.md) until the UI/service supports them. Do not silently turn an implementation detail into a product decision.
