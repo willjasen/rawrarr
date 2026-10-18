@@ -22,3 +22,11 @@ Deployed locally. Initial movie API latency remains; the optional connection che
 ## Recovery
 
 Reverse only this task's UI changes and rebuild the same Compose project with existing volumes preserved.
+
+## Chrome follow-up
+
+The user reported continued latency. Tested their existing Chrome Movies tab with 1,941 entries. A refresh failed after 5.4 seconds with a Radarr movie request error; other loads succeeded but remained slow. Source inspection found sequential per-movie age subprocesses for quality-profile metadata on every request. Added a bounded eight-worker cold read and a vault-local, bounded in-memory metadata cache keyed by ciphertext SHA-256. Each request still checks file content for synchronized replacements. New vaults never inherit another vault's entries. No plaintext files or browser caches are added. Seven focused Rust tests passed (two ciphertext cache tests and five quality-profile tests, including parallel ordering and empty libraries). Release build succeeded and the existing local app is healthy with `/health` HTTP 200.
+
+Chrome verified all 1,941 rows after deployment. A warm in-page refresh took approximately 3.1 seconds, and a full page reload took approximately 3.8 seconds, measured from browser action to completed status via automation (includes automation overhead). The first cold load also completed; its 13.3-second observation included time between tool calls, so it is not a precise load benchmark. Radarr request latency and intermittent upstream failures remain outside this cache fix. Screenshot: `/tmp/rawrarr-movies-chrome-verified.jpg`.
+
+The new cache module, parallel reads, tests, and documentation are task-owned commits. Integration edits inside `secure_config.rs` remain uncommitted because they wrap a metadata loader added by pre-existing uncommitted work; no unrelated implementation was staged. Existing UI and other uncommitted files remain preserved.

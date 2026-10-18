@@ -2,7 +2,7 @@
 use crate::{RadarrClient, secure_config::AgeVault};
 use serde_json::{Value, json};
 
-pub(crate) trait MovieCache {
+pub(crate) trait MovieCache: Sync {
     fn load(&self, id: u64) -> Result<Option<Value>, &'static str>;
     fn store(&self, id: u64, metadata: &Value) -> Result<(), &'static str>;
 }
@@ -46,16 +46,30 @@ fn cached_name<'a>(metadata: &'a Value, movie: &Value) -> Option<&'a str> {
 }
 
 fn read_cache(movies: &mut [Value], cache: &impl MovieCache) -> Result<Vec<Option<Value>>, &'static str> {
-    movies.iter_mut().map(|movie| {
-        let metadata = match movie.get("tmdbId").and_then(Value::as_u64).filter(|id| *id > 0) {
-            Some(id) => cache.load(id)?,
-            None => None,
-        };
-        if let Some(name) = metadata.as_ref().and_then(|metadata| cached_name(metadata, movie)) {
-            movie["qualityProfile"] = json!({"name": name});
+    // Bound cold-cache decryption to eight workers, rather than one process per
+    // movie in sequence or thousands of simultaneous subprocesses.
+    let chunk_size = movies.len().div_ceil(8).max(1);
+    std::thread::scope(|scope| {
+        let workers: Vec<_> = movies.chunks_mut(chunk_size).map(|chunk| scope.spawn(move || {
+            chunk.iter_mut().map(|movie| {
+                let metadata = match movie.get("tmdbId").and_then(Value::as_u64).filter(|id| *id > 0) {
+                    Some(id) => cache.load(id)?,
+                    None => None,
+                };
+                if let Some(name) = metadata.as_ref().and_then(|metadata| cached_name(metadata, movie)) {
+                    movie["qualityProfile"] = json!({"name": name});
+                }
+                Ok(metadata)
+            }).collect::<Result<Vec<_>, &'static str>>()
+        })).collect();
+        let mut result = Vec::with_capacity(workers.len() * chunk_size);
+        for worker in workers {
+            let values: Vec<Option<Value>> = worker.join()
+                .map_err(|_| "Could not read shared movie metadata")??;
+            result.extend(values);
         }
-        Ok(metadata)
-    }).collect()
+        Ok(result)
+    })
 }
 
 fn merge_profiles(

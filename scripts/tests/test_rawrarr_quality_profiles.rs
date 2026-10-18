@@ -91,3 +91,19 @@ fn legacy_metadata_and_invalid_ids_are_safe() {
     merge_profiles(&mut movies, &saved, &[json!({"id":7,"name":"HD"})], &cache).unwrap();
     assert_eq!(cache.0.lock().unwrap().len(), 1);
 }
+
+#[test]
+fn parallel_cache_reads_preserve_movie_order_and_empty_libraries() {
+    let cache = Cache::default();
+    let mut movies: Vec<_> = (1..=33).map(|id| {
+        cache.0.lock().unwrap().insert(id, json!({"qualityProfile":format!("Profile {id}")}));
+        json!({"tmdbId":id})
+    }).collect();
+    let saved = read_cache(&mut movies, &cache).unwrap();
+    for (index, movie) in movies.iter().enumerate() {
+        let expected = format!("Profile {}", index + 1);
+        assert_eq!(profile_name(movie), Some(expected.as_str()));
+        assert_eq!(profile_name(saved[index].as_ref().unwrap()), Some(expected.as_str()));
+    }
+    assert!(read_cache(&mut [], &cache).unwrap().is_empty());
+}
