@@ -45,16 +45,16 @@
       <span class="public-label">Private identity · shortened preview</span>
       <code id="private-preview"></code>
     </section>
-    <label for="identity">Import private age identity</label>
+    <label for="identity">Existing private identity (optional)</label>
     <input id="identity" type="password" spellcheck="false" autocomplete="off" placeholder="Paste identity (characters stay masked)">
     <input id="identity-file" type="file" accept=".agekey,.txt,text/plain">
     <div class="actions">
       <button class="secondary" id="generate" type="button">Create identity</button>
       <button class="secondary" id="copy" type="button" disabled>Copy private identity</button>
-      <button class="secondary" id="choose-file" type="button">Import from file</button>
-      <button id="unlock" type="button">Import and unlock</button>
+      <button class="secondary" id="choose-file" type="button">Load identity from file</button>
+      <button id="unlock" type="button">Unlock vault</button>
     </div>
-    <p class="privacy-note">Only a shortened preview is shown; the complete private identity is never displayed. Use Copy private identity to save the full value securely. It stays in page memory until you leave or unlock.</p>
+    <p class="privacy-note">Create identity makes a new key that is ready to unlock after you copy it. To use a saved key, paste it here or choose Load identity from file. Loading only fills this masked field; select Unlock vault to open your encrypted settings. Only shortened identity previews are shown.</p>
     <div id="message" role="status" aria-live="polite"></div>
   </main>
   <script>
@@ -127,7 +127,7 @@
       identity.value = await file.text();
       generatedIdentity = '';
       clearPrivatePreview();
-      message.textContent = 'Identity loaded into the masked field. Rawrarr does not display its contents.';
+      message.textContent = 'Identity loaded into the masked field. Select Unlock vault to validate it and open your encrypted settings.';
     });
 
     document.getElementById('generate').addEventListener('click', async event => {
@@ -164,7 +164,7 @@
       const button = event.currentTarget;
       const privateIdentity = generatedIdentity || identity.value;
       if (!privateIdentity) {
-        message.textContent = 'Create or import a private age identity first.';
+        message.textContent = 'Create a new identity or paste/load an existing one before unlocking.';
         return;
       }
       button.disabled = true;
