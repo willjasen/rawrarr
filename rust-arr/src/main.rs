@@ -1342,6 +1342,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if shared_logs.is_none() {
         eprintln!("rawrarr shared logging could not be initialized");
     }
+    if role == node_role::NodeRole::Storage {
+        if let Some(interval) = storage_node::scan_interval_from_env()? {
+            storage_node::start_periodic_scan(interval, shared_logs.clone());
+            println!(
+                "storage automatic scanning enabled; scans repeat every {} seconds",
+                interval.as_secs()
+            );
+        } else {
+            println!("storage automatic scanning disabled by configuration");
+        }
+    }
     let state = Arc::new(AppState {
         auth: auth.clone(),
         radarr: Arc::new(RwLock::new(radarr)),
