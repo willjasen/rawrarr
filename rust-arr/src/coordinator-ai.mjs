@@ -41,6 +41,39 @@ export function answerMovieQuery(intent, movies, series = null) {
   return `${header}\n${titles.join('\n')}${more}`;
 }
 
+export async function readAiStream(response, onDelta) {
+  if (!response.body) throw new Error('The response stream is unavailable.');
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let result = null;
+  const consume = frame => {
+    let event = '';
+    const data = [];
+    for (const line of frame.split('\n')) {
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      if (line.startsWith('data:')) data.push(line.slice(5).trimStart());
+    }
+    if (!data.length) return;
+    if (event === 'delta') onDelta(JSON.parse(data.join('\n')).text || '');
+    if (event === 'result') result = JSON.parse(data.join('\n'));
+  };
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer = (buffer + decoder.decode(value, { stream: !done })).replaceAll('\r\n', '\n');
+      let end;
+      while ((end = buffer.indexOf('\n\n')) !== -1) {
+        consume(buffer.slice(0, end));
+        buffer = buffer.slice(end + 2);
+      }
+      if (done) break;
+    }
+  } finally { reader.releaseLock(); }
+  if (!result) throw new Error('The answer stream ended before the result arrived.');
+  return result;
+}
+
 export function initAiChat({ getMovies, getSeries, loadSeries, openMovies }) {
   const form = document.getElementById('ai-form');
   if (!form) return { refresh: async () => {} };
@@ -105,9 +138,9 @@ export function initAiChat({ getMovies, getSeries, loadSeries, openMovies }) {
       const records = await listResponse.json();
       const reset = new Date(status.resetAt).toLocaleString();
       quota.textContent = status.available
-        ? `${status.remaining} of ${status.limit} questions left today. Resets ${reset}.`
+        ? status.unlimited ? 'Unlimited questions while you test.' : `${status.remaining} of ${status.limit} questions left today. Resets ${reset}.`
         : 'OpenAI is not configured on roarlay yet.';
-      submit.disabled = !status.available || status.remaining < 1;
+      submit.disabled = !status.available || (!status.unlimited && status.remaining < 1);
       if (talk) talk.disabled = submit.disabled;
       history.replaceChildren();
       for (const record of records) {
@@ -128,15 +161,22 @@ export function initAiChat({ getMovies, getSeries, loadSeries, openMovies }) {
       const response = await fetch('/api/ai/requests', {
         method: 'POST', cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: crypto.randomUUID(), question: askedQuestion.trim(), channel, cloudConsent: true }),
+        body: JSON.stringify({ id: crypto.randomUUID(), question: askedQuestion.trim(), channel, cloudConsent: true, stream: channel === 'text' }),
       });
       if (response.status === 429) throw new Error('You have used your five questions today.');
       if (!response.ok) throw new Error('Rawrarr could not interpret this question. The attempt was not counted.');
-      const result = await response.json();
+      let introduction = '';
+      const result = channel === 'text'
+        ? await readAiStream(response, delta => {
+            introduction += delta;
+            answer.textContent = introduction;
+          })
+        : await response.json();
       if (result.status === 'pending') answer.textContent = 'This question is still processing. Check the inbox in a moment.';
       else {
         if (result.intent?.kind === 'library_storage_share' && !getSeries()) await loadSeries();
-        answer.textContent = answerMovieQuery(result.intent, getMovies(), getSeries());
+        const groundedAnswer = answerMovieQuery(result.intent, getMovies(), getSeries());
+        answer.textContent = introduction ? `${introduction}\n\n${groundedAnswer}` : groundedAnswer;
         if (channel === 'voice') speak(answer.textContent);
       }
       if (channel === 'text' && result.status !== 'pending') form.reset();

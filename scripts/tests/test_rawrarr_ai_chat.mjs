@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { answerMovieQuery } from '../../rust-arr/src/coordinator-ai.mjs';
+import { answerMovieQuery, readAiStream } from '../../rust-arr/src/coordinator-ai.mjs';
 
 const movies = [
   { title: 'Autumn Sky', year: 1994, genres: ['Drama'] },
@@ -41,4 +41,16 @@ test('movie and TV file-size shares use the combined reported bytes', () => {
 test('missing TV sizes are explained without guessing a percentage', () => {
   assert.match(answerMovieQuery({ kind: 'library_storage_share' }, movies), /could not load TV sizes/);
   assert.match(answerMovieQuery({ kind: 'library_storage_share' }, [{ sizeOnDisk: 0 }], [{ sizeOnDisk: 0 }]), /could not find reported file sizes/);
+});
+
+test('streamed OpenAI text arrives across split frames before the grounded result', async () => {
+  const encoder = new TextEncoder();
+  const chunks = ['event: delta\ndata: {"text":"I’m cur', 'ious. "}\n\nevent: delta\ndata: {"text":"Let me check."}\n\n', 'event: result\ndata: {"status":"completed","intent":{"kind":"movie_filter"}}\n\n'];
+  const response = { body: new ReadableStream({
+    start(controller) { for (const chunk of chunks) controller.enqueue(encoder.encode(chunk)); controller.close(); },
+  }) };
+  let introduction = '';
+  const result = await readAiStream(response, delta => { introduction += delta; });
+  assert.equal(introduction, 'I’m curious. Let me check.');
+  assert.equal(result.intent.kind, 'movie_filter');
 });
