@@ -26,7 +26,7 @@ async fn server(fail: bool) -> (RadarrClient, Arc<AtomicUsize>, tokio::task::Joi
         }
     }));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let client = RadarrClient { base_url: format!("http://{}", listener.local_addr().unwrap()),
+    let client = RadarrClient { movie_snapshot: Default::default(), base_url: format!("http://{}", listener.local_addr().unwrap()),
         api_key: reqwest::header::HeaderValue::from_static("fixture"), http: reqwest::Client::new() };
     let task = tokio::spawn(async move { axum::serve(listener, app).await.unwrap(); });
     (client, requests, task)

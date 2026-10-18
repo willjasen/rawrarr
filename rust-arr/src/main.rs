@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+mod movie_snapshot;
+
 pub mod auth;
 pub mod devices;
 pub mod download_clients;
@@ -62,6 +64,7 @@ impl FromRef<Arc<AppState>> for auth::AuthState {
 
 #[derive(Clone)]
 struct RadarrClient {
+    movie_snapshot: movie_snapshot::Cache,
     base_url: String,
     api_key: HeaderValue,
     http: reqwest::Client,
@@ -75,7 +78,7 @@ struct RadarrStatus {
     url_base: String,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RadarrMovie {
     id: i64,
@@ -268,6 +271,7 @@ impl RadarrClient {
             .map_err(|_| RadarrConfigError::InvalidUrl)?;
 
         Ok(Self {
+            movie_snapshot: Default::default(),
             base_url: parsed.as_str().trim_end_matches('/').to_owned(),
             api_key: api_key_header,
             http,
@@ -662,14 +666,16 @@ async fn radarr_movies(
         ));
     };
     let vault = state.vault.read().await.clone();
-    radarr.list_movies(vault).await.map(Json).map_err(|error| {
+    let movies = radarr.list_movies(vault).await.map_err(|error| {
         (
             StatusCode::BAD_GATEWAY,
             Json(ApiError {
                 error,
             }),
         )
-    })
+    })?;
+    radarr.movie_snapshot.store(movies.clone()).await;
+    Ok(Json(movies))
 }
 
 async fn search_movie_metadata(
@@ -1284,6 +1290,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/configuration", get(get_configuration))
         .route("/api/radarr/status", get(radarr_status))
         .route("/api/radarr/movies", get(radarr_movies))
+        .route("/api/radarr/movies/snapshot", get(movie_snapshot::get))
         .route_layer(middleware::from_fn_with_state(
             auth.pool.clone(),
             auth::require_session,

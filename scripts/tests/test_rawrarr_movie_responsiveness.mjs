@@ -47,3 +47,41 @@ test('movies render while link checks are pending and survive a failed refresh',
   assert.equal(await page.locator('#radarr-movie-rows tr').count(), 1);
   releaseSettings();
 });
+
+test('reload shows server snapshot before slow live results and never lets a late snapshot overwrite them', async t => {
+  const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  let finishLive;
+  let liveGate = new Promise(resolve => { finishLive = resolve; });
+  let finishSnapshot;
+  let snapshotGate = Promise.resolve();
+  const snapshot = { movies: [{ title: 'Saved Movie' }], updatedAt: 1700000000 };
+  await page.route('http://rawrarr.test/**', async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/') return route.fulfill({ body: html, contentType: 'text/html' });
+    if (path === '/api/radarr/movies/snapshot') {
+      await snapshotGate;
+      return route.fulfill({ json: snapshot });
+    }
+    if (path === '/api/radarr/movies') {
+      await liveGate;
+      return route.fulfill({ json: [{ title: 'Fresh Movie' }] });
+    }
+    return route.fulfill({ status: 503, json: {} });
+  });
+  await page.goto('http://rawrarr.test/#movies');
+  await page.getByText('Saved Movie', { exact: true }).waitFor();
+  assert.match(await page.locator('#movies-message').textContent(), /last updated.*Updating/);
+  assert.equal(await page.locator('#refresh-movies').isEnabled(), false);
+  finishLive();
+  await page.getByText('Fresh Movie', { exact: true }).waitFor();
+  snapshotGate = new Promise(resolve => { finishSnapshot = resolve; });
+  await page.reload();
+  await page.getByText('Fresh Movie', { exact: true }).waitFor();
+  const response = page.waitForResponse('**/api/radarr/movies/snapshot');
+  finishSnapshot();
+  await response;
+  await page.waitForFunction(() => document.getElementById('movies-message').textContent.includes('live data'));
+  assert.equal(await page.getByText('Saved Movie', { exact: true }).count(), 0);
+});

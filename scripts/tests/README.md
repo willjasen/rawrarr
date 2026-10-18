@@ -26,3 +26,5 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 - `test_rawrarr_metadata_cache.rs` — vault-local ciphertext cache reuse, same-length replacement invalidation, missing files, identity isolation, and concurrent replacement safety. Run `cargo test metadata_cache`.
 
 - `test_setup_local_syncthing.py` — Sanitized local-review bootstrap tests: preserve API key, idempotent folder setup, loopback listener, reject remote peers/unrelated folders. Run `python3 scripts/tests/test_setup_local_syncthing.py`; no Docker required.
+
+- `test_rawrarr_movie_snapshot.rs` — snapshot lifetime, empty libraries, shared client clones, and replacement-client isolation. Run `cargo test movie_snapshot`. The responsiveness browser tests also cover immediate snapshot display and late-response ordering.

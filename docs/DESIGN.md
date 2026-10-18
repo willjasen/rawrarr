@@ -107,3 +107,5 @@ The worker displays the coordinator Tailscale HTTPS URL at `/devices/link` and a
 Age private-ID provisioning for the Mac mini is a separate local setup step with hidden terminal input and a protected read-only secret mount. Do not request or transfer it through the web UI or device-linking process. Device approval and local vault readiness are separate statuses; neither implies the other.
 
 Movie metadata decryption is memoized only in the unlocked subscriber vault process. Ciphertext content changes invalidate entries; cold reads use bounded concurrency. Shared encrypted files remain authoritative.
+
+Movies reloads show the active subscriber connection’s last successful list immediately, labeled with its update time while a live request runs. This memory-only snapshot is discarded when the connection is replaced or cleared. Live results always take precedence over late snapshots.
