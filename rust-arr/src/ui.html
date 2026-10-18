@@ -184,8 +184,8 @@
         </section>
         <article class="panel">
           <div class="panel-head"><h2>Radarr movie library</h2><button id="refresh-movies" class="refresh" type="button">Refresh movies ↻</button></div>
-          <div id="movies-message" class="scan-summary">Select refresh to load your Radarr library.</div>
-          <div class="table-wrap"><table><thead><tr><th>Movie</th><th>Year</th><th>File</th><th>Monitored</th><th>Quality profile</th><th>Size</th></tr></thead><tbody id="radarr-movie-rows"></tbody></table></div>
+          <div id="movies-message" class="scan-summary" role="status">Select refresh to load your Radarr library.</div>
+          <div class="table-wrap"><table><thead><tr><th>Movie</th><th>Load time</th><th>Artwork source</th><th>TMDb ID</th><th>Year</th><th>File</th><th>Monitored</th><th>Quality profile</th><th>Size</th></tr></thead><tbody id="radarr-movie-rows"></tbody></table></div>
         </article>
       </section>
       <section id="configuration-content" hidden>
@@ -478,46 +478,127 @@
       return `${size.toFixed(1)} ${units[unit]}`;
     }
 
+    let movieLoadGeneration = 0;
+
+    async function reachableRadarrUrl() {
+      try {
+        const response = await fetch('/api/settings/radarr', {
+          headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(3000)
+        });
+        if (!response.ok) return null;
+        const settings = await response.json();
+        const url = new URL(settings.url);
+        if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) return null;
+        await fetch(url.href, {
+          mode: 'no-cors', credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer',
+          signal: AbortSignal.timeout(3000)
+        });
+        return url.href.replace(/\/$/, '');
+      } catch (_) { return null; }
+    }
+
     async function loadRadarrMovies() {
       const message = document.getElementById('movies-message');
       const button = document.getElementById('refresh-movies');
+      const rows = document.getElementById('radarr-movie-rows');
+      if (button.disabled) return;
+      const generation = ++movieLoadGeneration;
+      const hasMovies = rows.childElementCount > 0;
+      let liveReceived = false;
       button.disabled = true;
-      message.textContent = 'Loading movies from Radarr…';
+      message.textContent = hasMovies ? 'Updating movies…' : 'Loading movies…';
+      if (!hasMovies) {
+        void fetch('/api/radarr/movies/snapshot', {
+          cache: 'no-store', headers: { Accept: 'application/json' }
+        }).then(response => response.ok ? response.json() : null).then(snapshot => {
+          if (snapshot && !liveReceived && generation === movieLoadGeneration) {
+            renderRadarrMovies(snapshot.movies, generation, snapshot.updatedAt);
+          }
+        }).catch(() => {});
+      }
       try {
         const response = await fetch('/api/radarr/movies', { headers: { Accept: 'application/json' } });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Could not load Radarr movies');
-        const rows = document.getElementById('radarr-movie-rows');
-        rows.replaceChildren();
-        let size = 0;
-        let withFiles = 0;
-        for (const movie of result) {
-          size += movie.sizeOnDisk || 0;
-          if (movie.hasFile) withFiles += 1;
-          const row = document.createElement('tr');
-          const values = [
-            `${movie.title}${movie.tmdbId ? ` · TMDb ${movie.tmdbId}` : ''}`,
-            movie.year || '—', movie.hasFile ? 'Present' : 'Missing', movie.monitored ? 'Yes' : 'No',
-            movie.qualityProfile || '—', formatBytes(movie.sizeOnDisk || 0)
-          ];
-          for (const [index, value] of values.entries()) {
-            const cell = document.createElement('td');
-            cell.textContent = value;
-            if (index === 5) cell.className = 'size';
-            row.append(cell);
-          }
-          rows.append(row);
-        }
-        document.getElementById('movie-count').textContent = result.length.toLocaleString();
-        document.getElementById('movie-files').textContent = `${withFiles.toLocaleString()} / ${result.length.toLocaleString()}`;
-        document.getElementById('movie-size').textContent = formatBytes(size);
-        message.textContent = `${result.length.toLocaleString()} movies · live data from Radarr`;
-        if (!result.length) message.textContent = 'Radarr is connected, but its movie library is empty.';
+        liveReceived = true;
+        renderRadarrMovies(result, generation);
       } catch (error) {
-        message.textContent = error.message;
+        liveReceived = true;
+        message.textContent = rows.childElementCount
+          ? `Could not update movies. Showing the previous list. ${error.message}` : error.message;
       } finally {
         button.disabled = false;
       }
+    }
+
+    function renderRadarrMovies(result, generation, snapshotTime = null) {
+      const rows = document.getElementById('radarr-movie-rows');
+      rows.replaceChildren();
+      let size = 0;
+      let withFiles = 0;
+      const links = [];
+      for (const movie of result) {
+        size += movie.sizeOnDisk || 0;
+        if (movie.hasFile) withFiles += 1;
+        const row = document.createElement('tr');
+        const titleCell = document.createElement('td');
+        const titleContent = document.createElement('div');
+        titleContent.style.cssText = 'display:flex;align-items:center;gap:10px';
+        if (movie.posterUrl) {
+          const poster = document.createElement('img');
+          const startedAt = performance.now();
+          poster.src = movie.posterUrl;
+          poster.alt = `${movie.title} poster`;
+          poster.loading = 'lazy';
+          poster.decoding = 'async';
+          poster.referrerPolicy = 'no-referrer';
+          poster.style.cssText = 'width:48px;height:72px;object-fit:cover;border-radius:5px;background:var(--panel-strong)';
+          poster.addEventListener('load', () => {
+            const elapsed = performance.now() - startedAt;
+            row.cells[1].textContent = elapsed < 1000 ? `${Math.round(elapsed)} ms` : `${(elapsed / 1000).toFixed(2)} s`;
+          }, { once: true });
+          poster.addEventListener('error', () => { poster.remove(); row.cells[2].textContent = 'Unavailable'; }, { once: true });
+          titleContent.append(poster);
+        }
+        const title = document.createElement('span');
+        title.textContent = movie.title;
+        titleContent.append(title);
+        titleCell.append(titleContent);
+        const values = [
+          titleCell, movie.posterUrl ? 'Loading…' : '—', movie.artworkSource === 'shared' ? 'Shared folder' : movie.posterUrl ? 'Radarr' : 'Unavailable',
+          movie.tmdbId || '—', movie.year || '—', movie.hasFile ? 'Present' : 'Missing',
+          movie.monitored ? 'Yes' : 'No', movie.qualityProfile || '—', formatBytes(movie.sizeOnDisk || 0)
+        ];
+        for (const [index, value] of values.entries()) {
+          const cell = document.createElement('td');
+          if (index === 0) cell.replaceWith(titleCell);
+          else cell.textContent = value;
+          if (index === 8) cell.className = 'size';
+          row.append(index === 0 ? titleCell : cell);
+        }
+        rows.append(row);
+        links.push({ movie, titleContent });
+      }
+      document.getElementById('movie-count').textContent = result.length.toLocaleString();
+      document.getElementById('movie-files').textContent = `${withFiles.toLocaleString()} / ${result.length.toLocaleString()}`;
+      document.getElementById('movie-size').textContent = formatBytes(size);
+      document.getElementById('movies-message').textContent = snapshotTime
+        ? `${result.length.toLocaleString()} movies · last updated ${new Date(snapshotTime * 1000).toLocaleTimeString()} · Updating…`
+        : result.length ? `${result.length.toLocaleString()} movies · live data from Radarr` : 'Radarr is connected, but its movie library is empty.';
+      if (result.length) void reachableRadarrUrl().then(base => {
+        if (!base || generation !== movieLoadGeneration) return;
+        for (const { movie, titleContent } of links) {
+          if (!titleContent.isConnected || !movie.titleSlug || ['.', '..'].includes(movie.titleSlug)) continue;
+          const link = document.createElement('a');
+          link.href = `${base}/movie/${encodeURIComponent(movie.titleSlug)}`;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.title = `Open ${movie.title} in Radarr (new tab)`;
+          link.style.cssText = titleContent.style.cssText;
+          link.append(...titleContent.childNodes);
+          titleContent.replaceWith(link);
+        }
+      });
     }
     document.getElementById('refresh-movies').addEventListener('click', loadRadarrMovies);
 
