@@ -1,5 +1,7 @@
 # Rawrarr tests
 
+- `test_rawrarr_storage_node.rs` — validates automatic storage scan interval defaults, opt-out, bounds, and invalid configuration. Runs through the Rust test suite.
+
 - `test_rawrarr_mini_export.mjs` — headless Chromium mini-export test using real post-quantum ciphertext from the `age` CLI; verifies browser decryption, HMAC filename matching, local ZIP contents, wrong-key handling, and that the private ID is never sent. Run in the isolated Playwright test image.
 
 The tests below cover Rawrarr application behavior. Some require a disposable PostgreSQL database or Docker with OrbStack; read each test's prerequisites before running it.

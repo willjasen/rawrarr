@@ -1,5 +1,7 @@
 # Rawrarr runbooks
 
+- [Automatic scanning on storage nodes](2026-10-18-storage-automatic-scanning.md) — Run bounded age-encrypted library scans after storage-node registration and repeat on a configurable interval.
+
 - [Rename the workspace menu label](2026-10-18-rename-workspace-menu.md) — Change the left navigation section label to “rawrchive”.
 
 - [Remove Movies Path column](2026-10-18-remove-movies-path-column.md) — Remove filesystem paths from the movie table.
