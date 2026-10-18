@@ -108,3 +108,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Sonarr integration and shared library layout](2026-10-18-sonarr-shared-library.md): encrypted Sonarr connections, read-only series, and common Arr columns.
 
 - [Route Rawrarr HTTPS to the coordinator](2026-10-18-coordinator-https-routing.md) — Correct the live Tailscale proxy target and verify coordinator-only HTTPS routing.
+
+- [Per-poster request timing](2026-10-18-per-poster-request-timing.md) — Exclude scrolling and browser queue waits from artwork durations.

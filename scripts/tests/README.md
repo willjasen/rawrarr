@@ -32,3 +32,6 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 - `test_rawrarr_sonarr.rs`: Sonarr series normalization and legacy config compatibility; `cargo test sonarr`.
 - `test_rawrarr_arr_settings.rs`: encrypted cross-app save/clear isolation and filename-key preservation; `cargo test arr_settings` (age required).
 - `test_rawrarr_shared_library.mjs`: Chromium fixture test proving column changes propagate across Radarr and Sonarr, provider-specific values, and navigation; `node --test scripts/tests/test_rawrarr_shared_library.mjs` in the test image.
+
+- `test_rawrarr_artwork_timing.mjs` — Per-request durations, lazy wait exclusion, missing timing and resource observer collection; run with Node.
+- `test_rawrarr_artwork_timing_browser.mjs` — Chromium regression for scrolling to a deferred poster after a wait; run in the isolated Playwright image.
