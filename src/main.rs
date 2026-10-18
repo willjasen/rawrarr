@@ -46,6 +46,21 @@ struct RadarrStatus {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RadarrMovie {
+    id: i64,
+    title: String,
+    year: Option<i64>,
+    monitored: bool,
+    has_file: bool,
+    size_on_disk: u64,
+    path: String,
+    quality_profile: Option<String>,
+    added: Option<String>,
+    tmdb_id: Option<i64>,
+}
+
+#[derive(Serialize)]
 struct ApiError {
     error: &'static str,
 }
@@ -210,6 +225,60 @@ impl RadarrClient {
             candidates: results.into_iter().map(Into::into).collect(),
         })
     }
+
+    async fn list_movies(&self) -> Result<Vec<RadarrMovie>, reqwest::Error> {
+        let movies: Vec<serde_json::Value> = self
+            .http
+            .get(format!("{}/api/v3/movie", self.base_url))
+            .header("X-Api-Key", self.api_key.clone())
+            .header(ACCEPT, "application/json")
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        Ok(movies
+            .into_iter()
+            .map(|movie| {
+                let profile = movie.get("qualityProfile");
+                RadarrMovie {
+                    id: movie.get("id").and_then(|v| v.as_i64()).unwrap_or_default(),
+                    title: movie
+                        .get("title")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Unknown title")
+                        .to_owned(),
+                    year: movie.get("year").and_then(|v| v.as_i64()),
+                    monitored: movie
+                        .get("monitored")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
+                    has_file: movie
+                        .get("hasFile")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
+                    size_on_disk: movie
+                        .get("sizeOnDisk")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or_default(),
+                    path: movie
+                        .get("path")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_owned(),
+                    quality_profile: profile
+                        .and_then(|v| v.get("name"))
+                        .and_then(|v| v.as_str())
+                        .map(str::to_owned),
+                    added: movie
+                        .get("added")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_owned),
+                    tmdb_id: movie.get("tmdbId").and_then(|v| v.as_i64()),
+                }
+            })
+            .collect())
+    }
 }
 
 async fn health() -> &'static str {
@@ -365,6 +434,28 @@ async fn radarr_status(
             StatusCode::BAD_GATEWAY,
             Json(ApiError {
                 error: "Radarr status request failed",
+            }),
+        )
+    })
+}
+
+async fn radarr_movies(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<RadarrMovie>>, (StatusCode, Json<ApiError>)> {
+    let radarr = state.radarr.read().await.clone();
+    let Some(radarr) = radarr else {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ApiError {
+                error: "Radarr is not configured",
+            }),
+        ));
+    };
+    radarr.list_movies().await.map(Json).map_err(|_| {
+        (
+            StatusCode::BAD_GATEWAY,
+            Json(ApiError {
+                error: "Radarr movie library request failed",
             }),
         )
     })
@@ -632,6 +723,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             axum::routing::post(generate_age_identity),
         )
         .route("/api/radarr/status", get(radarr_status))
+        .route("/api/radarr/movies", get(radarr_movies))
         .with_state(state);
     let listener = tokio::net::TcpListener::bind(socket_address).await?;
 

@@ -1,6 +1,6 @@
 # rawrarr
 
-rawrarr is an early media-library application focused on Radarr first. The root route (`/`) serves a responsive dashboard, `/health` is a service health check, `/api/events` streams dashboard snapshots over server-sent events, `/api/devices` reports scanner devices, `/api/radarr/status` is a read-only Radarr connection status endpoint, `/api/library/scan` inventories a configured folder without changing files, and `/api/metadata/movies/search` searches Radarr for movie candidates. The current scanner runs on the web host; remote scanner agents and durable catalog storage are not implemented yet. See [the device architecture](../docs/device-architecture.md).
+rawrarr is an early media-library application focused on Radarr first. The root route (`/`) serves a responsive dashboard, `/health` is a service health check, `/api/events` streams dashboard snapshots over server-sent events, `/api/devices` reports scanner devices, `/api/radarr/status` reports Radarr connectivity, `/api/radarr/movies` reads Radarr movie inventory, `/api/library/scan` inventories a configured folder without changing files, and `/api/metadata/movies/search` searches Radarr for movie candidates. The current scanner runs on the web host; remote scanner agents and durable catalog storage are not implemented yet. See [the device architecture](../docs/device-architecture.md).
 
 ## Local development
 
