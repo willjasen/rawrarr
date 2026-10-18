@@ -45,8 +45,6 @@ test('generated private age identity has a short preview and full value is expos
   assert.match(page, /<dialog id="identity-copy-dialog"/);
   assert.match(page, /<span>I copied it and saved the private ID somewhere safe\.<\/span>/);
   assert.match(page, /Copy private identity/);
-  assert.match(page, /Enter those three characters to continue/);
-  assert.match(page, /#identity-challenge-input \{ display:block; width:100%/);
   assert.match(page, /Create ID/);
   assert.match(page, /Public age recipient/);
   assert.match(page, /Paste existing private identity/);
@@ -57,9 +55,8 @@ test('generated private age identity has a short preview and full value is expos
 
   const ids = ['identity', 'message', 'public-card', 'public-recipient',
     'private-preview-card', 'private-preview', 'fingerprint', 'copy', 'generate', 'unlock',
-    'backup-confirmation', 'backup-confirmed', 'identity-challenge',
-    'identity-challenge-prompt', 'identity-challenge-input', 'identity-copy-dialog',
-    'identity-copy-instructions', 'copy-private-identity', 'close-identity-copy'];
+    'backup-confirmation', 'backup-confirmed', 'identity-copy-status', 'identity-copy-dialog',
+    'identity-copy-instructions', 'copy-private-identity'];
   const elements = Object.fromEntries(ids.map(id => [id, createElement()]));
   const rootStyles = new Map();
   const fetchCalls = [];
@@ -117,58 +114,35 @@ test('generated private age identity has a short preview and full value is expos
   assert.deepEqual(clipboard, [privateKey]);
   assert.ok(!clipboard[0].includes(publicRecipient), 'copy excludes the public recipient header');
   assert.equal(elements['backup-confirmation'].hidden, false, 'successful copy reveals the acknowledgement checkbox');
-  assert.equal(elements['identity-challenge'].hidden, true, 'character challenge waits for acknowledgement');
-  elements['backup-confirmed'].checked = true;
-  await elements['backup-confirmed'].change();
-  assert.equal(elements['identity-challenge'].hidden, false, 'acknowledgement reveals the character challenge');
-  assert.equal(elements['identity-challenge-input'].focused, true, 'revealing the challenge focuses the text field');
-  const challengeStart = Number(elements['identity-challenge-prompt'].textContent.match(/character (\d+) of the whole key/)?.[1]);
-  const prefixLength = 'AGE-SECRET-KEY-PQ-1'.length;
-  assert.equal(challengeStart, 24, 'prompt gives the absolute starting position in the whole key');
-  assert.equal(challengeStart, prefixLength + 5, 'challenge always starts at the 5th character after the fixed prefix');
-  assert.match(elements['identity-challenge-prompt'].textContent, /three consecutive characters/);
-  assert.match(elements['identity-challenge-prompt'].textContent, /character 5 after the AGE header/);
-  assert.ok(!JSON.stringify(elements).includes(privateIdentity), 'copy does not render the private identity');
-
-  const beforeUnconfirmedUnlock = fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length;
+  assert.equal(elements.unlock.disabled, true, 'copy alone does not acknowledge backup');
+  assert.equal(elements.unlock.hidden, false, 'Continue is visible');
+  const unlockCount = () => fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length;
   await elements.unlock.click();
-  assert.equal(fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length, beforeUnconfirmedUnlock);
-  assert.equal(elements.unlock.hidden, true, 'generated identity continues automatically after the challenge');
-  elements['identity-challenge-input'].value = 'XXX';
-  await elements['identity-challenge-input'].input();
-  assert.equal(elements.unlock.disabled, true, 'incorrect characters keep unlock disabled');
-  elements['identity-challenge-input'].value = [0, 1, 2]
-    .map(offset => privateKey[challengeStart - 1 + offset]).join('');
-  await elements['identity-challenge-input'].input();
-  assert.equal(fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length, beforeUnconfirmedUnlock + 1, 'matching characters unlock the generated identity automatically');
-  assert.equal(elements['identity-copy-dialog'].open, false, 'successful unlock closes the pop-up');
-  assert.deepEqual(context.window.location.replaced, ['/'], 'successful unlock navigates to the main site');
-  await elements['close-identity-copy'].click();
-  await elements.generate.click();
-  assert.equal(elements['identity-challenge'].hidden, true, 'creating a new identity clears the previous challenge');
-  assert.equal(elements.unlock.disabled, true, 'creating a new identity resets unlock confirmation');
-  await elements.copy.click();
-  await elements['copy-private-identity'].click();
-  assert.deepEqual(clipboard, [privateKey, privateKey]);
+  assert.equal(unlockCount(), 0);
   elements['backup-confirmed'].checked = true;
   await elements['backup-confirmed'].change();
-  const regeneratedChallengeStart = Number(elements['identity-challenge-prompt'].textContent.match(/character (\d+) of the whole key/)?.[1]);
-  assert.equal(regeneratedChallengeStart, prefixLength + 5);
-  elements['identity-challenge-input'].value = [0, 1, 2]
-    .map(offset => privateKey[regeneratedChallengeStart - 1 + offset]).join('');
-  await elements['identity-challenge-input'].input();
-  assert.equal(fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length, 2, 'regenerated ID also unlocks after the challenge');
-  const unlock = fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').at(-1);
-  assert.equal(JSON.parse(unlock.options.body).identity, privateIdentity);
-  assert.equal(elements.identity.value, '');
+  assert.equal(elements.unlock.disabled, false, 'acknowledgement enables Continue without a character check');
+  assert.equal(unlockCount(), 0, 'acknowledgement does not auto-submit');
+  elements['backup-confirmed'].checked = false;
+  await elements['backup-confirmed'].change();
+  assert.equal(elements.unlock.disabled, true, 'removing acknowledgement disables Continue');
+  elements['backup-confirmed'].checked = true;
+  await elements['backup-confirmed'].change();
+  await elements.unlock.click();
+  assert.equal(unlockCount(), 1);
+  assert.equal(elements['identity-copy-dialog'].open, false);
+  assert.deepEqual(context.window.location.replaced, ['/']);
+  assert.doesNotMatch(page, /identity-challenge-input|identity-backup-check/);
 
+  await elements.generate.click();
+  assert.equal(elements.unlock.disabled, true, 'new generation resets acknowledgement');
   const previousUnlockCount = fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length;
   elements.identity.value = privateIdentity.replace(/\n/g, ' ');
   await elements.identity.input();
   assert.equal(elements.identity.value, privateIdentity.replace(/\n/g, ' '), 'pasted age-file text remains masked in the password field');
   await elements.copy.click();
   await elements['copy-private-identity'].click();
-  assert.deepEqual(clipboard, [privateKey, privateKey, privateKey], 'copying a pasted age file extracts only its private key');
+  assert.deepEqual(clipboard, [privateKey, privateKey], 'copying a pasted age file extracts only its private key');
   assert.equal(elements['backup-confirmed'].checked, false, 'pasting an identity resets the backup confirmation');
   assert.equal(elements.unlock.disabled, true, 'a pasted identity requires a fresh backup confirmation');
   assert.equal(
@@ -178,12 +152,6 @@ test('generated private age identity has a short preview and full value is expos
   );
   elements['backup-confirmed'].checked = true;
   await elements['backup-confirmed'].change();
-  const pastedChallengeStart = Number(elements['identity-challenge-prompt'].textContent.match(/character (\d+) of the whole key/)?.[1]);
-  assert.equal(pastedChallengeStart, prefixLength + 5);
-  assert.equal(elements.unlock.disabled, true, 'pasted identity also requires the character challenge');
-  elements['identity-challenge-input'].value = [0, 1, 2]
-    .map(offset => privateKey[pastedChallengeStart - 1 + offset]).join('');
-  await elements['identity-challenge-input'].input();
   await elements.unlock.click();
   assert.equal(
     fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length,

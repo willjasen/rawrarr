@@ -45,6 +45,8 @@ This sequence closes a known deployment question first, then builds the node coo
 
 ### Product capabilities and durability
 
+- Restore private-key character verification after fixing the reported rejection of correct answers and validating the full browser flow.
+
 - General-purpose file/folder sharing beyond media.
 - Sonarr, Lidarr, Readarr, and Bazarr integrations; Prowlarr-style indexer management and search; concrete download-client adapters and fulfillment. The current download-client abstraction has no concrete adapter.
 - Manual age-encrypted shared-folder backup to one node-local destination, including recovery verification and a retention policy.

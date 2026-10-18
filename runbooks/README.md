@@ -112,3 +112,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Per-poster request timing](2026-10-18-per-poster-request-timing.md) — Exclude scrolling and browser queue waits from artwork durations.
 
 - [Fix coordinator health 502](2026-10-18-fix-coordinator-health-502.md) — Correct Tailscale Serve port 443 to the coordinator proxy.
+
+- [Temporarily disable age character verification](2026-10-18-disable-age-character-check.md) — Require copy and saved-ID acknowledgement, defer character verification, and refresh the local app.

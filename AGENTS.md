@@ -7,3 +7,5 @@
 - For substantive implementation or operations work, create a dated task runbook in `runbooks/` and update its index. Keep design decisions in `docs/DESIGN.md`, architecture in the relevant technical document, and mark unimplemented behavior as planned.
 - Maintain tests for meaningful behavior changes under `scripts/tests/`; update their index. Run focused checks for the affected behavior and state clearly what was not verified.
 - Keep Rawrarr-specific project work in this repository. Do not import unrelated Arr-services scripts, operational runbooks, service configuration, or media files.
+
+- After UI changes, update the persistent `rawrarr-local` web service on port 7297 and check its health. Preserve its existing data, configuration, and the user’s browser windows.

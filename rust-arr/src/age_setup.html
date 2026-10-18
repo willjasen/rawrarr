@@ -16,8 +16,6 @@
     p { color:var(--muted); font-size:13px; margin:0 0 18px }
     label { display:block; margin:14px 0 6px; color:#c8d3c9; font-size:12px }
     input[type="password"] { width:100%; border:1px solid var(--line); border-radius:9px; padding:12px; color:var(--text); background:#111712; font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace }
-    #identity-challenge-input { display:block; width:100%; border:1px solid var(--line); border-radius:9px; padding:12px; color:var(--text); background:#111712; font:16px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.18em; text-transform:uppercase }
-    #identity-challenge-input:focus { outline:2px solid var(--green); outline-offset:2px }
     .backup-confirmation { display:flex; align-items:flex-start; gap:10px; margin:16px 0 8px; padding:12px; border:1px solid var(--line); border-radius:10px; background:#111712; color:var(--text); font-size:12px }
     .backup-confirmation input { width:16px; height:16px; flex:none; margin:2px 0 0; accent-color:var(--green) }
     .backup-warning { margin:0; font-size:11px }
@@ -64,7 +62,7 @@
       <button class="secondary" id="generate" type="button">Create ID</button>
       <button class="secondary" id="copy" type="button" disabled>Copy and verify ID</button>
     </div>
-    <p class="privacy-note">After creating an ID, copy it from the pop-up, confirm that you copied and safely saved it, then enter the requested characters. rawrarr cannot recover a lost private identity.</p>
+    <p class="privacy-note">After creating an ID, copy it from the pop-up, confirm that you copied and safely saved it, then select Continue. rawrarr cannot recover a lost private identity.</p>
     <div id="message" role="status" aria-live="polite"></div>
     <dialog id="identity-copy-dialog" aria-labelledby="identity-copy-title">
       <h2 id="identity-copy-title">Copy your private ID</h2>
@@ -79,14 +77,9 @@
         </label>
         <p class="backup-warning">rawrarr cannot recover this ID if it is lost. Without it, your encrypted shared configuration cannot be unlocked.</p>
       </section>
-      <section id="identity-challenge" hidden>
-        <p id="identity-challenge-prompt"></p>
-        <label for="identity-challenge-input">Enter those three characters to continue</label>
-        <input id="identity-challenge-input" type="text" maxlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false">
-      </section>
+      <p id="identity-copy-status" role="status" aria-live="polite"></p>
       <div class="actions">
         <button id="unlock" type="button" disabled>Unlock vault</button>
-        <button class="secondary" id="close-identity-copy" type="button">Close</button>
       </div>
     </dialog>
   </main>
@@ -97,29 +90,18 @@
     const identityCopyDialog = document.getElementById('identity-copy-dialog');
     const backupConfirmation = document.getElementById('backup-confirmation');
     const backupConfirmed = document.getElementById('backup-confirmed');
-    const identityChallengeSection = document.getElementById('identity-challenge');
-    const identityChallengePrompt = document.getElementById('identity-challenge-prompt');
-    const identityChallengeInput = document.getElementById('identity-challenge-input');
+    const identityCopyStatus = document.getElementById('identity-copy-status');
     let generatedIdentity = '';
-    let identityChallenge = null;
     let identityCopied = false;
     let unlockInProgress = false;
-
-    function clearIdentityChallenge() {
-      identityChallenge = null;
-      identityChallengeSection.hidden = true;
-      identityChallengePrompt.textContent = '';
-      identityChallengeInput.value = '';
-    }
 
     function updateBackupConfirmation() {
       const identityAvailable = Boolean(generatedIdentity || privateIdentityKey(identity.value));
       backupConfirmation.hidden = !identityCopied;
       document.getElementById('copy-private-identity').disabled = !identityAvailable;
-      const challengePassed = identityChallenge
-        && identityChallengeInput.value.trim().toUpperCase() === identityChallenge.response;
-      unlockButton.hidden = Boolean(generatedIdentity);
-      unlockButton.disabled = !identityAvailable || !identityCopied || !backupConfirmed.checked || !challengePassed;
+      unlockButton.hidden = false;
+      unlockButton.textContent = generatedIdentity ? 'Continue' : 'Unlock vault';
+      unlockButton.disabled = unlockInProgress || !identityAvailable || !identityCopied || !backupConfirmed.checked;
     }
 
     function shortenedIdentityPreview(value) {
@@ -134,30 +116,6 @@
         .find(line => line.startsWith('AGE-SECRET-KEY-PQ-1'));
       if (line) return line;
       return value.match(/AGE-SECRET-KEY-PQ-1[A-Z0-9]+/i)?.[0] || '';
-    }
-
-    function createIdentityChallenge(privateKey) {
-      const prefix = 'AGE-SECRET-KEY-PQ-1';
-      if (!privateKey.startsWith(prefix)) return null;
-      if (privateKey.length < prefix.length + 9) return null;
-      const startIndex = prefix.length + 4;
-      const indexes = [startIndex, startIndex + 1, startIndex + 2];
-      return {
-        positions: indexes.map(index => index + 1),
-        response: indexes.map(index => privateKey[index]).join('')
-      };
-    }
-
-    function promptIdentityChallenge(privateKey) {
-      const challenge = createIdentityChallenge(privateKey);
-      if (!challenge) return false;
-      identityChallenge = challenge;
-      identityChallengeInput.value = '';
-      identityChallengePrompt.textContent = `Enter the three consecutive characters beginning at character ${challenge.positions[0]} of the whole key (character 5 after the AGE header).`;
-      identityChallengeSection.hidden = false;
-      identityChallengeInput.focus();
-      updateBackupConfirmation();
-      return true;
     }
 
     function clearPrivatePreview() {
@@ -220,36 +178,19 @@
       generatedIdentity = '';
       identityCopied = false;
       backupConfirmed.checked = false;
-      clearIdentityChallenge();
+      identityCopyStatus.textContent = '';
       clearPrivatePreview();
       document.getElementById('copy').disabled = !privateIdentityKey(identity.value);
       updateBackupConfirmation();
     });
-    identityChallengeInput.addEventListener('input', async () => {
-      updateBackupConfirmation();
-      const challengePassed = identityChallenge
-        && identityChallengeInput.value.trim().toUpperCase() === identityChallenge.response;
-      if (generatedIdentity && backupConfirmed.checked && challengePassed) await unlockIdentity();
-    });
-    backupConfirmed.addEventListener('change', () => {
-      if (backupConfirmed.checked) {
-        const privateKey = privateIdentityKey(generatedIdentity || identity.value);
-        if (!privateKey || !promptIdentityChallenge(privateKey)) {
-          message.textContent = 'Could not create a character check for this private identity.';
-          backupConfirmed.checked = false;
-        }
-      } else {
-        clearIdentityChallenge();
-      }
-      updateBackupConfirmation();
-    });
+    backupConfirmed.addEventListener('change', updateBackupConfirmation);
     document.getElementById('generate').addEventListener('click', async event => {
       const button = event.currentTarget;
       button.disabled = true;
       generatedIdentity = '';
       identityCopied = false;
       backupConfirmed.checked = false;
-      clearIdentityChallenge();
+      identityCopyStatus.textContent = '';
       document.getElementById('copy').disabled = !privateIdentityKey(identity.value);
       updateBackupConfirmation();
       message.textContent = 'Creating a post-quantum identity…';
@@ -268,7 +209,7 @@
         updateBackupConfirmation();
         await showPublicFingerprint(result.recipient);
         identityCopyDialog.showModal();
-        message.textContent = 'ID created. Copy it in the pop-up, confirm that you copied it, then enter the requested characters.';
+        message.textContent = 'ID created. Copy it in the pop-up, confirm that you copied it, then select Continue.';
       } catch (error) { message.textContent = error.message; }
       finally { button.disabled = false; }
     });
@@ -295,12 +236,12 @@
         await navigator.clipboard.writeText(privateKey);
         identityCopied = true;
         backupConfirmed.checked = false;
-        clearIdentityChallenge();
+        identityCopyStatus.textContent = '';
         backupConfirmation.hidden = false;
         updateBackupConfirmation();
         message.textContent = 'Private identity copied. Confirm that you copied and safely saved it to continue.';
       } catch (_) {
-        message.textContent = 'Clipboard access is unavailable. Allow clipboard access, then try Copy private identity again.';
+        identityCopyStatus.textContent = 'Clipboard access is unavailable. Allow clipboard access, then try Copy private identity again.';
       }
     });
 
@@ -308,10 +249,8 @@
       if (unlockInProgress) return;
       const button = unlockButton;
       const privateIdentity = generatedIdentity || privateIdentityKey(identity.value) || identity.value;
-      const challengePassed = identityChallenge
-        && identityChallengeInput.value.trim().toUpperCase() === identityChallenge.response;
-      if (!identityCopied || !backupConfirmed.checked || !challengePassed) {
-        message.textContent = 'Copy the private ID, confirm that you saved it, and enter the requested characters before continuing.';
+      if (!identityCopied || !backupConfirmed.checked) {
+        message.textContent = 'Copy the private ID and confirm that you saved it before continuing.';
         return;
       }
       if (!privateIdentity) {
@@ -320,7 +259,7 @@
       }
       unlockInProgress = true;
       button.disabled = true;
-      message.textContent = 'Unlocking encrypted configuration…';
+      identityCopyStatus.textContent = 'Unlocking encrypted configuration…';
       try {
         const response = await fetch('/api/settings/age', {
           method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -334,22 +273,21 @@
         identityCopied = false;
         backupConfirmed.checked = false;
         updateBackupConfirmation();
-        clearIdentityChallenge();
+        identityCopyStatus.textContent = '';
         clearPrivatePreview();
         message.textContent = 'Vault unlocked. Opening your workspace…';
         identityCopyDialog.close();
         window.location.replace('/');
-      } catch (error) { message.textContent = error.message; }
-      finally { unlockInProgress = false; button.disabled = false; }
+      } catch (error) { identityCopyStatus.textContent = error.message; }
+      finally { unlockInProgress = false; updateBackupConfirmation(); }
     }
     unlockButton.addEventListener('click', unlockIdentity);
-    document.getElementById('close-identity-copy').addEventListener('click', () => identityCopyDialog.close());
     window.addEventListener('pagehide', () => {
       generatedIdentity = '';
       identity.value = '';
       identityCopied = false;
       backupConfirmed.checked = false;
-      clearIdentityChallenge();
+      identityCopyStatus.textContent = '';
       clearPrivatePreview();
     });
     loadStatus();
