@@ -120,6 +120,16 @@
         <div><div class="eyebrow">Your workspace</div><h1>Overview</h1></div>
         <div class="live-pill"><span class="pulse"></span>LOCAL INSTANCE</div>
       </div>
+      <article class="panel" id="age-setup-panel" style="margin-bottom:22px">
+        <div class="panel-head"><h2 id="age-setup-title">Set up encrypted configuration</h2><span>FIRST RUN</span></div>
+        <form id="age-settings" class="settings-form">
+          <p class="setup-intro" id="age-setup-copy">Create a post-quantum age identity or import one you already have. Rawrarr uses it to unlock your encrypted settings. Your private identity stays in memory; copy and securely back up a new identity before continuing.</p>
+          <label for="age-identity">Post-quantum age identity</label>
+          <textarea id="age-identity" name="identity" spellcheck="false" autocomplete="off" placeholder="Generate a new identity or paste an existing AGE-SECRET-KEY-PQ-1…"></textarea>
+          <div class="settings-actions"><button id="generate-age" class="refresh" type="button">Create new identity</button><button id="copy-age" class="refresh" type="button" disabled>Copy identity</button><button id="unlock-age" class="refresh" type="submit">Import and unlock</button></div>
+          <div id="age-settings-message" class="settings-message" role="status" aria-live="polite"></div>
+        </form>
+      </article>
       <section class="welcome">
         <div><h2>Welcome to rawrarr</h2><p>Your library can be scanned by a device that has the media mounted. The current scanner runs on the web app host; remote scanner agents will connect as separate devices.</p></div>
         <div class="welcome-tag">RADARR · FIRST INTEGRATION</div>
@@ -146,13 +156,6 @@
         </article>
         <article class="panel" id="radarr-settings-panel" style="grid-column: 1 / -1; scroll-margin-top: 24px">
           <div class="panel-head"><h2>Connect Radarr</h2><button id="refresh" class="refresh" type="button">Refresh status ↻</button></div>
-          <form id="age-settings" class="settings-form">
-            <p class="setup-intro">Radarr settings are saved as an age-encrypted file in Rawrarr’s data directory. Unlock it with a post-quantum age identity. The private identity stays in memory; for automatic unlock after a container restart, mount it as a Docker secret with <code>RAWARR_AGE_IDENTITY_FILE</code>.</p>
-            <label for="age-identity">Post-quantum age identity</label>
-            <textarea id="age-identity" name="identity" spellcheck="false" autocomplete="off" placeholder="AGE-SECRET-KEY-PQ-1…"></textarea>
-            <div class="settings-actions"><button id="generate-age" class="refresh" type="button">Create new identity</button><button id="copy-age" class="refresh" type="button" disabled>Copy identity</button><button id="unlock-age" class="refresh" type="submit">Import and unlock</button></div>
-            <div id="age-settings-message" class="settings-message" role="status" aria-live="polite"></div>
-          </form>
           <form id="radarr-settings" class="settings-form">
             <p class="setup-intro">Settings apply immediately and are saved encrypted. After a restart, unlock them with the age identity unless it is mounted as a Docker secret.</p>
             <label for="radarr-url">Radarr URL</label>
@@ -299,6 +302,12 @@
       try {
         const response = await fetch('/api/settings/age', { headers: { Accept: 'application/json' } });
         const settings = await response.json();
+        document.getElementById('age-setup-panel').hidden = settings.unlocked;
+        if (settings.encryptedConfigExists && !settings.unlocked) {
+          document.getElementById('age-setup-title').textContent = 'Unlock your encrypted configuration';
+          document.getElementById('age-setup-copy').textContent = 'Import the post-quantum age identity that protects your saved settings. Rawrarr never stores the private identity.';
+          document.getElementById('unlock-age').textContent = 'Import and unlock';
+        }
         document.getElementById('age-settings-message').textContent = settings.unlocked
           ? `Encrypted config unlocked${settings.encryptedConfigExists ? ' · saved config found' : ' · no saved config yet'}.`
           : settings.encryptedConfigExists ? 'Saved config is locked. Import its age identity to unlock it.' : 'Create or import a post-quantum age identity to enable encrypted settings.';
