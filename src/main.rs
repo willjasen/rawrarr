@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+pub mod download_clients;
+
 use axum::{Json, Router, extract::State, http::StatusCode, response::Html, routing::get};
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
