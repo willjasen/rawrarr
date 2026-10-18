@@ -1,3 +1,5 @@
+- [Update Mac mini Rawrarr containers](2026-10-18-update-mac-mini-containers.md) — Refresh the Mac mini storage image and relay proxies, verifying all preserved mounts and routes.
+
 # Rawrarr runbooks
 
 - [Automatic scanning on storage nodes](2026-10-18-storage-automatic-scanning.md) — Run bounded age-encrypted library scans after storage-node registration and repeat on a configurable interval.
