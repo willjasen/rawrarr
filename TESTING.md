@@ -6,17 +6,16 @@ This guide explains how to run Rawrarr's current tests, with the self-contained 
 
 Testing containers belong to the Docker project group `rawrarr-testing`. Keep them separate from `rawrarr-local`, which is the persistent local application environment. The runner uses the Docker context `orbstack` by default.
 
-The local image `rawrarr-testing-base:local` is the reusable test base. It contains:
+The local image `rawrarr-testing-base:local` is the reusable dependency base. Each run clones it into a newly named container using Docker's copy-on-write image layers, copies the current project source into that container, and then starts the tests. The base contains:
 
-- Rust 1.85 and the Rawrarr Rust source and migrations.
+- Rust 1.85.
 - Node.js for the browser-side and source-structure tests.
-- The locked Cargo crate cache and precompiled Rust test executable.
+- The locked Cargo crate cache and compiled dependency artifacts used by Rust tests.
 - The upstream `age` 1.3.2 binaries, including `age-keygen`, verified against the release archive's SHA-256 checksum.
-- The test files and the test entrypoint.
 
-The Dockerfile downloads the Rust crates once in a layer based on `Cargo.toml` and `Cargo.lock`. Application files and tests are added in later layers. Docker reuses the unchanged layers on later builds; after the first complete build, a test run can usually start from the local base without downloading or compiling dependencies again. If the crate manifest or lockfile changes, Docker refreshes the dependency layer. If Rust source changes, Docker rebuilds the Rust test artifact layer. Changes to the test scripts do not invalidate those earlier Rust layers.
+The base downloads the Rust crates and compiles dependency artifacts from a placeholder application. It does not contain Rawrarr source or project tests. The runner builds the base only when it is missing. It does not refresh an existing base when project source or tests change. Use `--rebuild-base` deliberately after changing the Rust toolchain, Cargo lockfile, or base-image dependencies. The current Rust source, migrations, Compose file, and test files (including the runner script) are copied into each new container before it starts, so each run tests the current checkout.
 
-This works like a linked clone: Docker stores and shares the base's immutable image layers, while each test container gets a separate writable layer. Every run uses the same base tag but has its own generated name, timestamp-derived identifier, and `rawrarr-testing` service label. The identifier is the current Unix timestamp in milliseconds encoded in lowercase base36. The container has no network and does not mount the live repository, so it runs from the source snapshot baked into its image.
+Each runner works like a linked clone: Docker stores and shares the base's immutable image layers, while each test container gets a separate writable layer. Every run has its own generated name, timestamp-derived identifier, and `rawrarr-testing` service label. The identifier is the current Unix timestamp in milliseconds encoded in lowercase base36. The container has no network and does not mount the live repository; it tests the source snapshot copied into its own writable layer.
 
 ## Run the main test suite
 
@@ -26,7 +25,7 @@ From the repository root, run:
 python3 scripts/tests/run_rawrarr_tests_in_docker.py
 ```
 
-The script checks the selected Docker context, prepares a small temporary build context, builds or reuses `rawrarr-testing-base:local`, and creates and starts one uniquely named container. It then follows the container logs until the tests finish and returns the test container's exit status. A zero exit status means the included Node.js and Rust suites passed.
+The script checks the selected Docker context, creates or reuses `rawrarr-testing-base:local`, creates a uniquely named container from that image, copies in the current project snapshot, and starts the runner. It then follows the container logs until the tests finish and returns the test container's exit status. A zero exit status means the included Node.js and Rust suites passed.
 
 To use a different Docker context explicitly:
 
@@ -40,7 +39,13 @@ To display all output and then remove that run's stopped container:
 python3 scripts/tests/run_rawrarr_tests_in_docker.py --remove-after
 ```
 
-By default, completed containers are retained so their output can be reviewed later. The base image remains tagged `rawrarr-testing-base:local`; no test runner container needs to download Rust crates when launched. The first base build does need network access to fetch OS packages, the age release archive, and locked Cargo crates. Test execution itself has networking disabled.
+To refresh the reusable base after changing its dependencies or toolchain:
+
+```sh
+python3 scripts/tests/run_rawrarr_tests_in_docker.py --rebuild-base
+```
+
+By default, completed containers are retained so their output can be reviewed later. The base image remains tagged `rawrarr-testing-base:local`; source changes never rebuild it, and runner containers do not download dependencies. The first base build does need network access to fetch OS packages, the age release archive, and locked Cargo crates. Test execution itself has networking disabled.
 
 ## Inspect a run
 
@@ -79,7 +84,7 @@ The runner reports database-backed Python integration tests and host-OrbStack pe
 
 ## Run focused tests inside the test base
 
-Once the test base has been built by the main runner, focused Node and Rust tests can also run in fresh, offline containers from the same image:
+Once the test base has been built by the main runner, focused Node and Rust tests can also run in fresh, offline containers from the same image. These one-off commands use the image's dependency snapshot only; run the main script to copy the current checkout into a retained runner container:
 
 ```sh
 docker --context orbstack run --rm --network none \

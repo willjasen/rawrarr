@@ -6,15 +6,12 @@ RUN apt-get update \
 
 WORKDIR /workspace
 
-# Keep the expensive crate download layer stable while application/test files change.
+# This image is the reusable dependency base. Project source is copied into each
+# uniquely named test container after creation, so source edits never rebuild it.
 COPY rust-arr/Cargo.toml rust-arr/Cargo.lock /workspace/rust-arr/
 RUN mkdir -p /workspace/rust-arr/src \
     && printf 'fn main() {}\n' > /workspace/rust-arr/src/main.rs \
     && cargo fetch --locked --manifest-path /workspace/rust-arr/Cargo.toml
-
-COPY rust-arr/src /workspace/rust-arr/src
-COPY rust-arr/migrations /workspace/rust-arr/migrations
-COPY docker-compose.yml /workspace/docker-compose.yml
 
 ENV CARGO_TARGET_DIR=/opt/rawrarr-test-target
 RUN cargo test --locked --offline --no-run --manifest-path /workspace/rust-arr/Cargo.toml
@@ -26,9 +23,4 @@ RUN curl -fsSL https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v
     && install -m 0755 /tmp/age/age-keygen /usr/local/bin/age-keygen \
     && rm -rf /tmp/age /tmp/age.tar.gz
 
-COPY rust-arr/Dockerfile /workspace/rust-arr/Dockerfile
-COPY scripts/tests /workspace/scripts/tests
-COPY scripts/tests/run-tests-in-container.sh /usr/local/bin/run-tests-in-container
-RUN chmod 0755 /usr/local/bin/run-tests-in-container
-
-ENTRYPOINT ["/usr/local/bin/run-tests-in-container"]
+RUN mkdir -p /workspace/scripts/tests

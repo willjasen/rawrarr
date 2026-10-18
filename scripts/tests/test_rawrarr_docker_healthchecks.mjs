@@ -5,6 +5,7 @@ import test from 'node:test';
 const dockerfile = await readFile(new URL('../../rust-arr/Dockerfile', import.meta.url), 'utf8');
 const compose = await readFile(new URL('../../docker-compose.yml', import.meta.url), 'utf8');
 const testRunner = await readFile(new URL('./run_rawrarr_tests_in_docker.py', import.meta.url), 'utf8');
+const testEntrypoint = await readFile(new URL('./run-tests-in-container.sh', import.meta.url), 'utf8');
 const syncthingTest = await readFile(new URL('./test_rawrarr_syncthing_orbstack.py', import.meta.url), 'utf8');
 
 test('Rawrarr and PostgreSQL containers define readiness health checks', () => {
@@ -21,6 +22,15 @@ test('Docker test containers have unique names in the rawrarr-testing group', ()
   assert.match(testRunner, /name = f"\{PROJECT\}-tests-\{run_id\}"/);
   assert.match(testRunner, /com\.docker\.compose\.service=tests-\{run_id\}/);
   assert.match(testRunner, /com\.docker\.compose\.project=\{PROJECT\}/);
+  assert.match(testRunner, /if args\.rebuild_base or not image_exists:/);
+  assert.match(testRunner, /copy_project_into_container\(args\.context, name/);
+  assert.match(testRunner, /f"\{rust_source\}\/\."/);
+  assert.match(testRunner, /f"\{tests_source\}\/\."/);
+  assert.match(testRunner, /--rebuild-base/);
+  assert.match(testRunner, /--entrypoint", "\/bin\/sh"/);
+  assert.match(testRunner, /sh \/workspace\/scripts\/tests\/run-tests-in-container\.sh/);
+  assert.doesNotMatch(testRunner, /build_context \/ "rust-arr"/);
+  assert.match(testEntrypoint, /cargo clean --manifest-path \/workspace\/rust-arr\/Cargo\.toml -p rust-arr/);
   assert.match(syncthingTest, /BASE36 = "0123456789abcdefghijklmnopqrstuvwxyz"/);
   assert.match(syncthingTest, /suffix = timestamp_code\(\)/);
   assert.match(syncthingTest, /names = \[f"\{PROJECT\}-web-\{suffix\}", f"\{PROJECT\}-storage-\{suffix\}"\]/);

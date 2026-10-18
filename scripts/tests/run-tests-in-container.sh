@@ -10,6 +10,7 @@ node --test /workspace/scripts/tests/*.mjs
 node_status=$?
 
 echo "=== Rust unit tests ==="
+cargo clean --manifest-path /workspace/rust-arr/Cargo.toml -p rust-arr
 cargo test --locked --offline --manifest-path /workspace/rust-arr/Cargo.toml
 rust_status=$?
 

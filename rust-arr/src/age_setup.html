@@ -23,6 +23,10 @@
     button { border:1px solid #658968; border-radius:9px; padding:11px 13px; color:#101711; background:var(--green); font:650 12px system-ui; cursor:pointer }
     button.secondary { color:#dbe8dc; border-color:var(--line); background:#202821 }
     button:disabled { opacity:.55; cursor:wait }
+    dialog { width:min(100% - 32px,480px); padding:24px; border:1px solid var(--line); border-radius:16px; background:var(--panel); color:var(--text); box-shadow:0 24px 80px #0009 }
+    dialog::backdrop { background:#000b; backdrop-filter:blur(3px) }
+    dialog h2 { margin:0 0 8px; font-size:21px; letter-spacing:-.03em }
+    dialog p { margin-bottom:12px }
     #message { min-height:24px; margin-top:15px; color:var(--muted); font-size:12px }
     #public-card { display:flex; align-items:center; gap:14px; margin:20px 0; padding:12px; border:1px solid var(--line); border-radius:12px; background:#111712 }
     #public-card[hidden] { display:none }
@@ -43,7 +47,7 @@
     </picture>
     <div class="brand">rawrarr · private setup</div>
     <h1>unlock your rawrchive</h1>
-    <p>Create a post-quantum age identity or import one you already have. A shortened preview helps identify a newly created private identity; the full value is available only through the copy button.</p>
+    <p>Create a post-quantum age identity or paste one you already have. A shortened preview helps identify a newly created identity; the full private key is only available through the copy pop-up.</p>
     <section id="public-card" aria-label="Public age identity" hidden>
       <svg id="fingerprint" viewBox="0 0 5 5" role="img" aria-label="Public identity fingerprint"></svg>
       <div><span class="public-label">Public age recipient</span><code id="public-recipient"></code></div>
@@ -55,29 +59,40 @@
     <label for="identity">Paste existing private identity (optional)</label>
     <input id="identity" type="password" spellcheck="false" autocomplete="off" placeholder="Paste identity (characters stay masked)">
     <div class="actions">
-      <button class="secondary" id="generate" type="button">Create identity</button>
-      <button class="secondary" id="copy" type="button" disabled>Copy private identity</button>
-      <button id="unlock" type="button" disabled>Unlock vault</button>
+      <button class="secondary" id="generate" type="button">Create ID</button>
+      <button class="secondary" id="copy" type="button" disabled>Copy and verify ID</button>
     </div>
-    <section id="backup-confirmation" hidden>
-      <label class="backup-confirmation" for="backup-confirmed">
-        <input id="backup-confirmed" type="checkbox">
-        <span>I have saved my private age identity somewhere safe and can retrieve it later.</span>
-      </label>
-      <p class="backup-warning">rawrarr cannot recover this identity if it is lost. Without it, your encrypted shared configuration cannot be unlocked.</p>
-    </section>
-    <section id="identity-challenge" hidden>
-      <p id="identity-challenge-prompt"></p>
-      <label for="identity-challenge-input">Enter those three characters to continue</label>
-      <input id="identity-challenge-input" type="text" maxlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false">
-    </section>
-    <p class="privacy-note">Create identity makes a new key that is ready to unlock after you copy it. To use a saved key, paste it into the masked field. Select Unlock vault to open your encrypted settings. Only shortened identity previews are shown.</p>
+    <p class="privacy-note">After creating an ID, copy it from the pop-up, confirm that you copied and safely saved it, then enter the requested characters. rawrarr cannot recover a lost private identity.</p>
     <div id="message" role="status" aria-live="polite"></div>
+    <dialog id="identity-copy-dialog" aria-labelledby="identity-copy-title">
+      <h2 id="identity-copy-title">Copy your private ID</h2>
+      <p id="identity-copy-instructions">Copy the private identity and save it somewhere safe. The complete key will not be shown on this page.</p>
+      <div class="actions">
+        <button id="copy-private-identity" type="button" disabled>Copy private identity</button>
+      </div>
+      <section id="backup-confirmation" hidden>
+        <label class="backup-confirmation" for="backup-confirmed">
+          <input id="backup-confirmed" type="checkbox">
+          <span>I copied it and saved the private ID somewhere safe.</span>
+        </label>
+        <p class="backup-warning">rawrarr cannot recover this ID if it is lost. Without it, your encrypted shared configuration cannot be unlocked.</p>
+      </section>
+      <section id="identity-challenge" hidden>
+        <p id="identity-challenge-prompt"></p>
+        <label for="identity-challenge-input">Enter those three characters to continue</label>
+        <input id="identity-challenge-input" type="text" maxlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      </section>
+      <div class="actions">
+        <button id="unlock" type="button" disabled>Unlock vault</button>
+        <button class="secondary" id="close-identity-copy" type="button">Close</button>
+      </div>
+    </dialog>
   </main>
   <script>
     const identity = document.getElementById('identity');
     const message = document.getElementById('message');
     const unlockButton = document.getElementById('unlock');
+    const identityCopyDialog = document.getElementById('identity-copy-dialog');
     const backupConfirmation = document.getElementById('backup-confirmation');
     const backupConfirmed = document.getElementById('backup-confirmed');
     const identityChallengeSection = document.getElementById('identity-challenge');
@@ -85,6 +100,8 @@
     const identityChallengeInput = document.getElementById('identity-challenge-input');
     let generatedIdentity = '';
     let identityChallenge = null;
+    let identityCopied = false;
+    let unlockInProgress = false;
 
     function clearIdentityChallenge() {
       identityChallenge = null;
@@ -94,12 +111,13 @@
     }
 
     function updateBackupConfirmation() {
-      const identityAvailable = Boolean(generatedIdentity || identity.value.trim());
-      backupConfirmation.hidden = !identityAvailable;
-      if (!identityAvailable) backupConfirmed.checked = false;
+      const identityAvailable = Boolean(generatedIdentity || privateIdentityKey(identity.value));
+      backupConfirmation.hidden = !identityCopied;
+      document.getElementById('copy-private-identity').disabled = !identityAvailable;
       const challengePassed = identityChallenge
         && identityChallengeInput.value.trim().toUpperCase() === identityChallenge.response;
-      unlockButton.disabled = !identityAvailable || !backupConfirmed.checked || !challengePassed;
+      unlockButton.hidden = Boolean(generatedIdentity);
+      unlockButton.disabled = !identityAvailable || !identityCopied || !backupConfirmed.checked || !challengePassed;
     }
 
     function shortenedIdentityPreview(value) {
@@ -206,18 +224,36 @@
 
     identity.addEventListener('input', () => {
       generatedIdentity = '';
+      identityCopied = false;
       backupConfirmed.checked = false;
       clearIdentityChallenge();
       clearPrivatePreview();
       document.getElementById('copy').disabled = !privateIdentityKey(identity.value);
       updateBackupConfirmation();
     });
-    identityChallengeInput.addEventListener('input', updateBackupConfirmation);
-    backupConfirmed.addEventListener('change', updateBackupConfirmation);
+    identityChallengeInput.addEventListener('input', async () => {
+      updateBackupConfirmation();
+      const challengePassed = identityChallenge
+        && identityChallengeInput.value.trim().toUpperCase() === identityChallenge.response;
+      if (generatedIdentity && backupConfirmed.checked && challengePassed) await unlockIdentity();
+    });
+    backupConfirmed.addEventListener('change', () => {
+      if (backupConfirmed.checked) {
+        const privateKey = privateIdentityKey(generatedIdentity || identity.value);
+        if (!privateKey || !promptIdentityChallenge(privateKey)) {
+          message.textContent = 'Could not create a character check for this private identity.';
+          backupConfirmed.checked = false;
+        }
+      } else {
+        clearIdentityChallenge();
+      }
+      updateBackupConfirmation();
+    });
     document.getElementById('generate').addEventListener('click', async event => {
       const button = event.currentTarget;
       button.disabled = true;
       generatedIdentity = '';
+      identityCopied = false;
       backupConfirmed.checked = false;
       clearIdentityChallenge();
       document.getElementById('copy').disabled = !privateIdentityKey(identity.value);
@@ -234,9 +270,11 @@
         document.getElementById('private-preview').textContent = shortenedIdentityPreview(generatedIdentity);
         document.getElementById('private-preview-card').hidden = false;
         document.getElementById('copy').disabled = false;
+        document.getElementById('identity-copy-instructions').textContent = 'Your ID is ready. Copy the private identity and save it somewhere safe. The complete key will not be shown on this page.';
         updateBackupConfirmation();
         await showPublicFingerprint(result.recipient);
-        message.textContent = 'Identity created. Copy and securely back up the private identity before unlocking.';
+        identityCopyDialog.showModal();
+        message.textContent = 'ID created. Copy it in the pop-up, confirm that you copied it, then enter the requested characters.';
       } catch (error) { message.textContent = error.message; }
       finally { button.disabled = false; }
     });
@@ -244,32 +282,49 @@
     document.getElementById('copy').addEventListener('click', async () => {
       const privateKey = privateIdentityKey(generatedIdentity || identity.value);
       if (!privateKey) {
+        message.textContent = 'Create an ID or paste a private identity before continuing.';
+        return;
+      }
+      document.getElementById('identity-copy-instructions').textContent = generatedIdentity
+        ? 'Copy the private identity and save it somewhere safe. The complete key will not be shown on this page.'
+        : 'Copy the private identity you pasted and save it somewhere safe. The complete key will not be shown on this page.';
+      identityCopyDialog.showModal();
+    });
+
+    document.getElementById('copy-private-identity').addEventListener('click', async () => {
+      const privateKey = privateIdentityKey(generatedIdentity || identity.value);
+      if (!privateKey) {
         message.textContent = 'No private identity found to copy.';
         return;
       }
       try {
         await navigator.clipboard.writeText(privateKey);
-        if (!promptIdentityChallenge(privateKey)) {
-          message.textContent = 'The private identity is too short to verify.';
-          return;
-        }
-        message.textContent = 'Private identity copied. Store it securely, then enter the requested characters.';
+        identityCopied = true;
+        backupConfirmed.checked = false;
+        clearIdentityChallenge();
+        backupConfirmation.hidden = false;
+        updateBackupConfirmation();
+        message.textContent = 'Private identity copied. Confirm that you copied and safely saved it to continue.';
       } catch (_) {
-        message.textContent = 'Clipboard access is unavailable. Allow clipboard access, then use Copy private identity.';
+        message.textContent = 'Clipboard access is unavailable. Allow clipboard access, then try Copy private identity again.';
       }
     });
 
-    document.getElementById('unlock').addEventListener('click', async event => {
-      const button = event.currentTarget;
+    async function unlockIdentity() {
+      if (unlockInProgress) return;
+      const button = unlockButton;
       const privateIdentity = generatedIdentity || privateIdentityKey(identity.value) || identity.value;
-      if (!backupConfirmed.checked) {
-        message.textContent = 'Confirm that you saved your private age identity somewhere safe before continuing.';
+      const challengePassed = identityChallenge
+        && identityChallengeInput.value.trim().toUpperCase() === identityChallenge.response;
+      if (!identityCopied || !backupConfirmed.checked || !challengePassed) {
+        message.textContent = 'Copy the private ID, confirm that you saved it, and enter the requested characters before continuing.';
         return;
       }
       if (!privateIdentity) {
-        message.textContent = 'Create a new identity or paste an existing one before unlocking.';
+        message.textContent = 'Create a new ID or paste an existing one before unlocking.';
         return;
       }
+      unlockInProgress = true;
       button.disabled = true;
       message.textContent = 'Unlocking encrypted configuration…';
       try {
@@ -282,17 +337,23 @@
         applyIdentityTheme(result.themeSeed);
         generatedIdentity = '';
         identity.value = '';
+        identityCopied = false;
+        backupConfirmed.checked = false;
         updateBackupConfirmation();
         clearIdentityChallenge();
         clearPrivatePreview();
         message.textContent = 'Vault unlocked. Opening your workspace…';
+        identityCopyDialog.close();
         window.location.replace('/');
       } catch (error) { message.textContent = error.message; }
-      finally { button.disabled = false; }
-    });
+      finally { unlockInProgress = false; button.disabled = false; }
+    }
+    unlockButton.addEventListener('click', unlockIdentity);
+    document.getElementById('close-identity-copy').addEventListener('click', () => identityCopyDialog.close());
     window.addEventListener('pagehide', () => {
       generatedIdentity = '';
       identity.value = '';
+      identityCopied = false;
       backupConfirmed.checked = false;
       clearIdentityChallenge();
       clearPrivatePreview();
