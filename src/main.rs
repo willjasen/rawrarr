@@ -367,6 +367,13 @@ async fn rawrarr_favicon() -> Response<Body> {
     )
 }
 
+async fn passkey_client_js() -> Response<Body> {
+    static_asset(
+        "text/javascript; charset=utf-8",
+        include_str!("passkey-client.mjs").as_bytes(),
+    )
+}
+
 async fn auth_page(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response<Body> {
     if auth::is_authenticated(&state.auth.pool, &headers).await {
         if state.vault.read().await.is_some() {
@@ -1127,6 +1134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/health", get(health))
         .route("/assets/rawrarr-logo.png", get(rawrarr_logo))
         .route("/assets/rawrarr-favicon.svg", get(rawrarr_favicon))
+        .route("/assets/passkey-client.mjs", get(passkey_client_js))
         .route("/auth", get(auth_page))
         .route("/api/auth/status", get(auth::status))
         .route("/api/auth/register/start", post(auth::begin_registration))

@@ -42,21 +42,12 @@
     </section>
     <div id="message" role="status" aria-live="polite"></div>
   </main>
-  <script>
+  <script type="module">
+    import { decodeOptions } from '/assets/passkey-client.mjs';
+
     const message = document.getElementById('message');
-    function decodeBase64Url(value) {
-      const padded = value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - value.length % 4) % 4);
-      return Uint8Array.from(atob(padded), character => character.charCodeAt(0));
-    }
     function encodeBase64Url(buffer) {
       return btoa(String.fromCharCode(...new Uint8Array(buffer))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-    }
-    function decodeOptions(options) {
-      const decoded = structuredClone(options);
-      decoded.challenge = decodeBase64Url(decoded.challenge);
-      if (decoded.user) decoded.user.id = decodeBase64Url(decoded.user.id);
-      for (const item of [...(decoded.allowCredentials || []), ...(decoded.excludeCredentials || [])]) item.id = decodeBase64Url(item.id);
-      return decoded;
     }
     function credentialJson(credential) {
       const response = credential.response;
