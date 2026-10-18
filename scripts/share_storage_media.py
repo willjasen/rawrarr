@@ -33,12 +33,33 @@ def validate_url(value):
     return value.rstrip("/") + "/"
 
 
-def media_path(value):
+MUSIC_A_IGNORE = "!/[Aa]*\n!/[Aa]*/**\n*\n"
+
+
+def media_path(value, include_a_folders=False):
+    if value == "/media" and include_a_folders:
+        return value
     path = PurePosixPath(value)
     if (not value.startswith("/media/") or path.as_posix() != value or
             len(path.parts) < 3 or any(part in (".", "..") for part in value.split("/"))):
         raise ValueError("folder path must be a canonical subfolder beneath /media")
     return value
+
+
+def check_a_filter(container, role):
+    if not container:
+        raise ValueError("the filtered /media share requires --docker-container for a mount preflight")
+    docker = shutil.which("docker") or "/usr/local/bin/docker"
+    actual = subprocess.check_output([
+        docker, "--context", "orbstack", "exec", container, "cat", "/media/.stignore",
+    ], stderr=subprocess.DEVNULL).decode()
+    if actual != MUSIC_A_IGNORE:
+        raise ValueError("/media/.stignore must contain the documented A-folder filter")
+    if role == "source":
+        subprocess.check_call([
+            docker, "--context", "orbstack", "exec", container,
+            "test", "-d", "/media/.stfolder",
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def overlaps(left, right):
@@ -95,6 +116,8 @@ def main():
     parser.add_argument("--folder-id")
     parser.add_argument("--label")
     parser.add_argument("--path", help="existing folder inside the Syncthing /media bind")
+    parser.add_argument("--include-a-folders", action="store_true",
+                        help="share one /media root, limited by a preinstalled A/a top-level folder filter")
     parser.add_argument("--confirm-empty-destination", action="store_true",
                         help="required on destination after checking its host folder is empty")
     parser.add_argument("--apply", action="store_true", help="write Syncthing configuration")
@@ -141,7 +164,11 @@ def main():
                               "globalFiles": status.get("globalFiles"), "needFiles": status.get("needFiles"),
                               "needBytes": status.get("needBytes"), "errors": status.get("errors")}))
             return 0
-        media_path(args.path)
+        media_path(args.path, args.include_a_folders)
+        if args.include_a_folders:
+            if args.path != "/media":
+                raise ValueError("--include-a-folders requires --path /media")
+            check_a_filter(args.docker_container, args.role)
         if not args.folder_id or len(args.folder_id) > 128 or "/" in args.folder_id:
             raise ValueError("folder ID must be a nonempty Syncthing ID without slashes")
         if not args.label.strip() or len(args.label) > 128 or not args.peer_name.strip():
