@@ -7,12 +7,10 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
-import secrets
 import shutil
 import socket
 import subprocess
 import sys
-import shutil
 import tempfile
 import time
 import urllib.parse
@@ -23,6 +21,16 @@ import xml.etree.ElementTree as ET
 CONTEXT = "orbstack"
 IMAGE = "syncthing/syncthing:2.1.5"
 PROJECT = "rawrarr-testing"
+BASE36 = "0123456789abcdefghijklmnopqrstuvwxyz"
+
+
+def timestamp_code() -> str:
+    value = time.time_ns() // 1_000_000
+    encoded = ""
+    while value:
+        value, digit = divmod(value, len(BASE36))
+        encoded = BASE36[digit] + encoded
+    return encoded or BASE36[0]
 
 
 def free_port() -> int:
@@ -73,7 +81,7 @@ def main() -> int:
     docker("info", "--format", "{{.ServerVersion}}")
     docker("pull", IMAGE)
 
-    suffix = secrets.token_hex(4)
+    suffix = timestamp_code()
     network = f"{PROJECT}-net-{suffix}"
     names = [f"{PROJECT}-web-{suffix}", f"{PROJECT}-storage-{suffix}"]
     ports = [free_port(), free_port()]
@@ -109,7 +117,8 @@ def main() -> int:
         encrypted_config = (shares[0] / "config.aged").read_bytes()
         if not encrypted_config.startswith(b"age-encryption.org/v1\n") or config_plaintext in encrypted_config:
             raise RuntimeError("Rawrarr config fixture was not age-encrypted before sync")
-        for name, service, home, share, port in zip(names, ("web", "storage"), homes, shares, ports):
+        services = [f"web-{suffix}", f"storage-{suffix}"]
+        for name, service, home, share, port in zip(names, services, homes, shares, ports):
             docker("run", "-d", "--name", name,
                    "--label", f"com.docker.compose.project={PROJECT}",
                    "--label", f"com.docker.compose.service={service}",
@@ -120,7 +129,7 @@ def main() -> int:
                    IMAGE, "serve", "--no-browser", "--no-restart", "--no-upgrade",
                    "--gui-address", "0.0.0.0:8384")
 
-        for name, service in zip(names, ("web", "storage")):
+        for name, service in zip(names, services):
             labels = json.loads(docker("inspect", "--format", "{{json .Config.Labels}}", name))
             if labels.get("com.docker.compose.project") != PROJECT or labels.get("com.docker.compose.service") != service:
                 raise RuntimeError(f"{name} is not labeled as {PROJECT}/{service}")
