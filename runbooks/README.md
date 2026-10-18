@@ -2,6 +2,8 @@
 
 Task records and operational procedures for this Rawrarr repository. Each entry links to the specific task; older records are retained as history.
 
+- [Rebuild rawrarr-local from the current checkout](2026-10-18-rebuild-rawrarr-local.md) — Rebuild and recreate only the local app service with its current configuration, then verify health and the served setup page.
+
 - [Make the age identity challenge input visible](2026-10-18-rawrarr-visible-identity-challenge-input.md) — Style the three-character entry field and focus it when the copy acknowledgement reveals the challenge.
 
 - [Use a sequential age identity challenge](2026-10-18-rawrarr-sequential-age-challenge.md) — Verify copied identity text with three consecutive characters starting randomly from the 4th–7th character after its fixed prefix.
