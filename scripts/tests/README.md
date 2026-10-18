@@ -20,3 +20,5 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 - `test_rawrarr_quality_profiles.rs` — Rust cache-first quality-profile tests: batch fetch, persistence, warm cache with offline upstream, preserved fields, changed assignments, and failure handling. Run `cargo test --locked --offline --manifest-path rust-arr/Cargo.toml quality_profiles` in the isolated testing image.
 
 - `test_rawrarr_movie_responsiveness.mjs` — Chromium checks that pending Radarr probes do not block rows, refresh, or posters, and failed refreshes retain the previous list. Run in the existing isolated Playwright test image.
+
+- `test_rawrarr_movie_identifiers.mjs` — Chromium checks for clean movie titles, separate TMDb IDs, missing-ID placeholders, and column alignment. Run in the isolated Playwright test image.

@@ -95,3 +95,7 @@ The Mac mini will run a subscriber storage node in OrbStack, joining the current
 ## Responsive movie loading
 
 Render movie rows and begin loading posters as soon as the movie API responds. Check browser access to Radarr independently and enable detail links afterward. Keep the previous list visible during an in-page refresh and explicitly label it as previous data if updating fails. Do not persist movie metadata in browser storage.
+
+## Movie identifiers
+
+The Movies table displays the movie title without appended identifiers. Its existing TMDb identifier appears in a dedicated TMDb ID column; missing IDs display an em dash.

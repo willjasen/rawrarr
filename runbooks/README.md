@@ -95,3 +95,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Movie quality profile cache](2026-10-18-movie-quality-profile-cache.md) — Resolve quality names from shared metadata, fetch missing Radarr profiles, and persist encrypted updates.
 
 - [Responsive movies refresh](2026-10-18-responsive-movies-refresh.md) — remove link-probe delays from movie rendering and retain visible rows during updates.
+
+- [Separate movie identifiers](2026-10-18-separate-movie-identifiers.md) — keep titles clean and display TMDb IDs in their own column.
