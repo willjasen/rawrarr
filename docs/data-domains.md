@@ -29,3 +29,5 @@ The local Compose example bind-mounts `$HOME/Library/Application Support/Rawrarr
 This registry defines placement and sync boundaries. It does not imply that a web node can remotely read a storage node's `/media` tree or that a metadata reader, catalog projection, or remote scan-command channel already exists.
 
 The planned [local backup feature](local-backups.md) stores a target device ID and its local destination in the shared encrypted configuration. Only that node writes backup archives, and the destination must remain outside `/shared` so backups do not sync back into the instance.
+
+Movie text metadata also caches `qualityProfileId` and `qualityProfile.name`. Movies reads these encrypted shared values first, resolves missing names in one Radarr quality-profile request, and merges updates without replacing other metadata. A changed assigned ID invalidates the cached name. Reading existing ciphertext requires the unlocked subscriber vault; unreadable metadata is not overwritten.

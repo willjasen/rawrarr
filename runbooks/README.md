@@ -91,3 +91,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Browser-reachable Radarr movie links](2026-10-18-radarr-movie-links.md) — Link posters and titles only after a browser reachability check.
 
 - [Plan the Mac mini storage node](2026-10-18-mac-mini-storage-node-plan.md) — Plan OrbStack, read-only silo media access, and joining the current instance.
+
+- [Movie quality profile cache](2026-10-18-movie-quality-profile-cache.md) — Resolve quality names from shared metadata, fetch missing Radarr profiles, and persist encrypted updates.

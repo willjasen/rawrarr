@@ -16,3 +16,5 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 - `test_rawrarr_navigation.mjs` — Chromium regression coverage for Movies/Configuration reload, in-page refresh, history, direct links, fallback, and Settings. Uses the existing isolated test image with Playwright and Chromium; run `node --test /workspace/scripts/tests/test_rawrarr_navigation.mjs` inside it.
 
 - `test_rawrarr_movie_links.mjs` — Chromium checks for reachable, blocked, timed-out, missing-slug and reverse-proxy movie links, including poster/title clicks. Run in the existing isolated test image with Node.js, Playwright, and Chromium.
+
+- `test_rawrarr_quality_profiles.rs` — Rust cache-first quality-profile tests: batch fetch, persistence, warm cache with offline upstream, preserved fields, changed assignments, and failure handling. Run `cargo test --locked --offline --manifest-path rust-arr/Cargo.toml quality_profiles` in the isolated testing image.

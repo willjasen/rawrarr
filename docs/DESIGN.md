@@ -89,3 +89,5 @@ When the user recommends or approves a change to how Rawrarr should look or beha
 ## Mac mini storage-node deployment direction
 
 The Mac mini will run a subscriber storage node in OrbStack, joining the current instance and scanning `/Volumes/silo/Media/data` read-only. Keep media local, give the node independent operational/authentication storage, and preserve the existing shared instance and age recipient. Present drive unavailability separately from an empty library; combined cross-node catalogs and portable authentication remain planned. See the [deployment plan](mac-mini-storage-node-plan.md) for bootstrap gaps, verification, and recovery.
+
+- Movie quality-profile names come from shared metadata first. Resolve missing names from Radarr and persist them in encrypted movie metadata; refresh the cached name when the assigned profile ID changes.

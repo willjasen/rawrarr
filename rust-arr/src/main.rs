@@ -5,6 +5,7 @@ pub mod devices;
 pub mod download_clients;
 pub mod library;
 pub mod metadata;
+mod quality_profiles;
 pub mod secure_config;
 pub mod shared_logs;
 pub mod storage_node;
@@ -314,17 +315,18 @@ impl RadarrClient {
         })
     }
 
-    async fn list_movies(&self) -> Result<Vec<RadarrMovie>, reqwest::Error> {
+    async fn list_movies(&self, vault: Option<secure_config::AgeVault>) -> Result<Vec<RadarrMovie>, &'static str> {
         let movies: Vec<serde_json::Value> = self
             .http
             .get(format!("{}/api/v3/movie", self.base_url))
             .header("X-Api-Key", self.api_key.clone())
             .header(ACCEPT, "application/json")
             .send()
-            .await?
-            .error_for_status()?
+            .await.map_err(|_| "Radarr movie library request failed")?
+            .error_for_status().map_err(|_| "Radarr movie library request failed")?
             .json()
-            .await?;
+            .await.map_err(|_| "Radarr movie library request failed")?;
+        let movies = quality_profiles::enrich(self, vault, movies).await?;
         Ok(movies
             .into_iter()
             .map(|movie| {
@@ -659,11 +661,12 @@ async fn radarr_movies(
             }),
         ));
     };
-    radarr.list_movies().await.map(Json).map_err(|_| {
+    let vault = state.vault.read().await.clone();
+    radarr.list_movies(vault).await.map(Json).map_err(|error| {
         (
             StatusCode::BAD_GATEWAY,
             Json(ApiError {
-                error: "Radarr movie library request failed",
+                error,
             }),
         )
     })
