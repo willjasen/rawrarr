@@ -2,6 +2,14 @@
 
 Every subscriber Rawrarr node is intended to run the full web/API service. Storage is an optional node capability: a **shard** omits `/media`, while a **storage node** runs the same service with its local media root. The operator-owned **service node** is a separate deployment role that will eventually run SwarmSail and coordinate subscriber tailnets; it is not part of a subscriber instance. See [node types](node-types.md) and the [Tailscale integration plan](tailscale-integration-plan.md).
 
+## Current prototype boundary
+
+The current deployment is one local Rawrarr web/API process with its own PostgreSQL database. PostgreSQL holds that node's passkey credentials, WebAuthn ceremony state, and sessions. A successful passkey registration/sign-in sends the browser to age setup when the encrypted config is still locked. Creating an ID happens in the browser-facing setup flow: the server returns the new identity for client-side copying, but the app does not save it in PostgreSQL, `/shared`, logs, or a service-node component. A generated identity opens the copy pop-up; the user copies it, confirms the copy, and enters three random characters after the fixed key prefix. A correct response unlocks the vault and navigates to the dashboard. Pasted identities use the same copy and verification steps, then require the user to select **Unlock vault**.
+
+The unlocked configuration is saved as age ciphertext in `/shared/config.aged`. Dashboard snapshots are sent over the web process's `/api/events` server-sent events route. The `/health` route reports service health for the container health check. Current local Compose is a development/self-hosting shape; it does not provision subscriber instances or run the future operator service, claim protocol, Headscale automation, or public relay. Public-domain/proxy behavior for long-lived dashboard event streams still requires end-to-end deployment verification.
+
+This local prototype boundary is distinct from the intended deployment roles below. The target storage and shard nodes, service node, and enrollment model are product architecture, not a claim that those systems are currently deployed.
+
 ## Ownership boundaries
 
 - **Shard node:** runs the dashboard/API, local database, device coordination, metadata providers, and future download/import orchestration. It keeps a replica of the shared folder and has no `/media` mount.

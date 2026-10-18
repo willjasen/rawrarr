@@ -65,5 +65,6 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Report Rawrarr container health](2026-10-18-rawrarr-docker-healthchecks.md) — Add an HTTP health check to the application image alongside PostgreSQL's existing readiness check.
 - [Verify private age key copy](2026-10-18-rawrarr-private-key-copy-verification.md) — Gate vault unlock on a random three-character check from the copied key and backup confirmation.
 - [Guide new ID creation in a pop-up](2026-10-18-rawrarr-identity-creation-wizard.md) — Guide generated ID creation through copy, acknowledgement, and a three-character check before automatically opening the main workspace.
+- [Refresh Rawrarr project documentation](2026-10-18-rawrarr-documentation-refresh.md) — Update the README, architecture, and design docs with current capabilities and separate them from planned hosted and multi-node behavior.
 - [Show the rawrarr logo on setup](2026-10-18-rawrarr-setup-logo.md) — Reuse the existing lowercase rawrarr logo asset on the age identity setup page.
 - [Serve the rawrarr logo as JPEG XL](2026-10-18-rawrarr-jpeg-xl-logo.md) — Add a lossless JPEG XL logo source for supported browsers, retain the PNG fallback, and record animation as future work.
