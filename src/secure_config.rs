@@ -12,7 +12,7 @@ use zeroize::{Zeroize, Zeroizing};
 pub struct AgeVault {
     identity: String,
     recipient: String,
-    data_dir: PathBuf,
+    shared_dir: PathBuf,
     config_path: PathBuf,
 }
 
@@ -67,18 +67,18 @@ impl std::fmt::Display for VaultError {
 impl std::error::Error for VaultError {}
 
 impl AgeVault {
-    pub fn data_dir() -> PathBuf {
-        env::var_os("RAWARR_DATA_DIR")
+    pub fn shared_dir() -> PathBuf {
+        env::var_os("RAWARR_SHARED_DATA_DIR")
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("data"))
+            .unwrap_or_else(|| PathBuf::from("data/shared"))
     }
 
     pub fn config_path() -> PathBuf {
-        Self::data_dir().join("config.age")
+        Self::shared_dir().join("config.aged")
     }
 
     fn artwork_path(&self, tmdb_id: u64) -> PathBuf {
-        self.data_dir
+        self.shared_dir
             .join("metadata")
             .join("movies")
             .join(format!("{tmdb_id}.aged"))
@@ -106,9 +106,9 @@ impl AgeVault {
         let directory = path.parent().ok_or(VaultError::StorageFailed)?;
         fs::create_dir_all(directory).map_err(|_| VaultError::StorageFailed)?;
         if let Some(metadata_directory) = directory.parent() {
-            set_private_directory_permissions(metadata_directory)?;
+            set_shared_directory_permissions(metadata_directory)?;
         }
-        set_private_directory_permissions(directory)?;
+        set_shared_directory_permissions(directory)?;
         let temporary = temporary_path(&path);
         let mut plaintext =
             Zeroizing::new(Vec::with_capacity(content_type.len() + 1 + bytes.len()));
@@ -143,7 +143,7 @@ impl AgeVault {
                 return Err(VaultError::EncryptionFailed);
             }
         }
-        if let Err(error) = set_private_permissions(&temporary) {
+        if let Err(error) = set_shared_ciphertext_permissions(&temporary) {
             let _ = fs::remove_file(&temporary);
             return Err(error);
         }
@@ -191,10 +191,13 @@ impl AgeVault {
     }
 
     pub fn from_identity(identity: String) -> Result<Self, VaultError> {
-        Self::from_identity_in_data_dir(identity, Self::data_dir())
+        Self::from_identity_in_shared_dir(identity, Self::shared_dir())
     }
 
-    fn from_identity_in_data_dir(identity: String, data_dir: PathBuf) -> Result<Self, VaultError> {
+    fn from_identity_in_shared_dir(
+        identity: String,
+        shared_dir: PathBuf,
+    ) -> Result<Self, VaultError> {
         if !identity
             .lines()
             .any(|line| line.trim().starts_with("AGE-SECRET-KEY-PQ-1"))
@@ -214,8 +217,8 @@ impl AgeVault {
         Ok(Self {
             identity,
             recipient,
-            config_path: data_dir.join("config.age"),
-            data_dir,
+            config_path: shared_dir.join("config.aged"),
+            shared_dir,
         })
     }
 
@@ -268,7 +271,7 @@ impl AgeVault {
             Zeroizing::new(serde_json::to_vec(config).map_err(|_| VaultError::InvalidConfig)?);
         let directory = self.config_path.parent().ok_or(VaultError::StorageFailed)?;
         fs::create_dir_all(directory).map_err(|_| VaultError::StorageFailed)?;
-        set_private_directory_permissions(directory)?;
+        set_shared_directory_permissions(directory)?;
         let temporary = temporary_path(&self.config_path);
         let output = Command::new("age")
             .args(["--recipient", &self.recipient, "--output"])
@@ -298,7 +301,7 @@ impl AgeVault {
                 return Err(VaultError::EncryptionFailed);
             }
         }
-        if let Err(error) = set_private_permissions(&temporary) {
+        if let Err(error) = set_shared_ciphertext_permissions(&temporary) {
             let _ = fs::remove_file(&temporary);
             return Err(error);
         }
@@ -359,21 +362,23 @@ fn temporary_path(path: &Path) -> PathBuf {
     path.with_file_name(format!(".{filename}.{}.{}.tmp", std::process::id(), nonce))
 }
 
-fn set_private_permissions(path: &Path) -> Result<(), VaultError> {
+// Syncthing must be able to read replicated files. Shared files contain age
+// ciphertext only; plaintext is kept in memory while encrypting/decrypting.
+fn set_shared_ciphertext_permissions(path: &Path) -> Result<(), VaultError> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+        fs::set_permissions(path, fs::Permissions::from_mode(0o644))
             .map_err(|_| VaultError::StorageFailed)?;
     }
     Ok(())
 }
 
-fn set_private_directory_permissions(path: &Path) -> Result<(), VaultError> {
+fn set_shared_directory_permissions(path: &Path) -> Result<(), VaultError> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755))
             .map_err(|_| VaultError::StorageFailed)?;
     }
     Ok(())
@@ -384,7 +389,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn artwork_is_stored_as_age_ciphertext_and_round_trips() {
+    fn encrypted_config_and_artwork_are_shareable_age_ciphertexts() {
         let keygen = Command::new("age-keygen")
             .arg("-pq")
             .output()
@@ -395,19 +400,51 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("clock after epoch")
             .as_nanos();
-        let data_dir = env::temp_dir().join(format!(
+        let shared_dir = env::temp_dir().join(format!(
             "rawrarr-artwork-test-{}-{unique}",
             std::process::id()
         ));
-        fs::create_dir_all(&data_dir).expect("create isolated test directory");
-        let vault = AgeVault::from_identity_in_data_dir(identity, data_dir.clone())
+        fs::create_dir_all(&shared_dir).expect("create isolated shared directory");
+        let vault = AgeVault::from_identity_in_shared_dir(identity, shared_dir.clone())
             .expect("valid PQ age identity");
+        let config = PersistedConfig {
+            radarr_url: "http://radarr.example:7878".into(),
+            radarr_api_key: "disposable encrypted config fixture".into(),
+        };
+        vault.save(&config).expect("save age-encrypted config");
+        let config_path = shared_dir.join("config.aged");
+        let encrypted_config = fs::read(&config_path).expect("read encrypted config");
+        assert!(encrypted_config.starts_with(b"age-encryption.org/v1\n"));
+        assert!(shared_dir.join("config.aged").is_file());
+        assert!(!encrypted_config
+            .windows(config.radarr_api_key.len())
+            .any(|window| window == config.radarr_api_key.as_bytes()));
+        assert_eq!(
+            vault.load().expect("decrypt config").unwrap().radarr_url,
+            config.radarr_url
+        );
+        assert!(vault.config_exists());
+
+        let wrong_identity_output = Command::new("age-keygen")
+            .arg("-pq")
+            .output()
+            .expect("generate unrelated PQ age identity");
+        assert!(wrong_identity_output.status.success());
+        let wrong_identity =
+            String::from_utf8(wrong_identity_output.stdout).expect("wrong identity is UTF-8");
+        let wrong_vault = AgeVault::from_identity_in_shared_dir(wrong_identity, shared_dir.clone())
+            .expect("second valid PQ age identity");
+        assert!(matches!(
+            wrong_vault.load(),
+            Err(VaultError::DecryptionFailed)
+        ));
+
         let image = b"disposable test poster bytes";
         vault
             .store_artwork(12345, "image/jpeg", image)
             .expect("encrypt poster into .aged file");
 
-        let encrypted_path = data_dir.join("metadata/movies/12345.aged");
+        let encrypted_path = shared_dir.join("metadata/movies/12345.aged");
         let encrypted = fs::read(&encrypted_path).expect("read encrypted poster");
         assert!(encrypted.starts_with(b"age-encryption.org/v1\n"));
         assert!(!encrypted.windows(image.len()).any(|window| window == image));
@@ -415,20 +452,16 @@ mod tests {
         {
             use std::os::unix::fs::PermissionsExt;
             assert_eq!(
-                fs::metadata(&encrypted_path)
-                    .expect("poster metadata")
-                    .permissions()
-                    .mode()
-                    & 0o777,
-                0o600
+                fs::metadata(&config_path).unwrap().permissions().mode() & 0o777,
+                0o644
             );
             assert_eq!(
-                fs::metadata(data_dir.join("metadata"))
+                fs::metadata(shared_dir.join("metadata"))
                     .expect("metadata directory")
                     .permissions()
                     .mode()
                     & 0o777,
-                0o700
+                0o755
             );
         }
         let decrypted = vault
@@ -437,6 +470,6 @@ mod tests {
             .expect("poster exists");
         assert_eq!(decrypted.content_type, "image/jpeg");
         assert_eq!(decrypted.bytes, image);
-        fs::remove_dir_all(data_dir).expect("remove test data");
+        fs::remove_dir_all(shared_dir).expect("remove test data");
     }
 }

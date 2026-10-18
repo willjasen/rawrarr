@@ -14,31 +14,74 @@
     h1 { margin:28px 0 5px; font-size:26px; letter-spacing:-.04em }
     p { color:var(--muted); font-size:13px; margin:0 0 18px }
     label { display:block; margin:14px 0 6px; color:#c8d3c9; font-size:12px }
-    textarea { width:100%; min-height:145px; resize:vertical; border:1px solid var(--line); border-radius:9px; padding:12px; color:var(--text); background:#111712; font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace }
+    input[type="password"] { width:100%; border:1px solid var(--line); border-radius:9px; padding:12px; color:var(--text); background:#111712; font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace }
+    input[type="file"] { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap }
     .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px }
     button { border:1px solid #658968; border-radius:9px; padding:11px 13px; color:#101711; background:var(--green); font:650 12px system-ui; cursor:pointer }
     button.secondary { color:#dbe8dc; border-color:var(--line); background:#202821 }
     button:disabled { opacity:.55; cursor:wait }
     #message { min-height:24px; margin-top:15px; color:var(--muted); font-size:12px }
+    #public-card { display:flex; align-items:center; gap:14px; margin:20px 0; padding:12px; border:1px solid var(--line); border-radius:12px; background:#111712 }
+    #public-card[hidden] { display:none }
+    #fingerprint { width:64px; height:64px; flex:none; image-rendering:pixelated }
+    .public-label { display:block; margin-bottom:4px; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em }
+    #public-recipient { display:block; color:var(--text); overflow-wrap:anywhere; font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace }
+    .privacy-note { margin-top:12px; font-size:12px }
   </style>
 </head>
 <body>
   <main>
     <div class="brand">rawrarr · private setup</div>
     <h1>Unlock your age vault</h1>
-    <p>Create a post-quantum age identity or import one you already have. Back up a newly created identity before continuing; Rawrarr does not store the private identity.</p>
-    <label for="identity">Post-quantum age identity</label>
-    <textarea id="identity" spellcheck="false" autocomplete="off" placeholder="AGE-SECRET-KEY-PQ-1…"></textarea>
+    <p>Create a post-quantum age identity or import one you already have. A new private identity is never displayed; copy it to your password manager or another secure backup before continuing.</p>
+    <section id="public-card" aria-label="Public age identity" hidden>
+      <svg id="fingerprint" viewBox="0 0 5 5" role="img" aria-label="Public identity fingerprint"></svg>
+      <div><span class="public-label">Public age recipient</span><code id="public-recipient"></code></div>
+    </section>
+    <label for="identity">Import private age identity</label>
+    <input id="identity" type="password" spellcheck="false" autocomplete="off" placeholder="Paste identity (characters stay masked)">
+    <input id="identity-file" type="file" accept=".agekey,.txt,text/plain">
     <div class="actions">
       <button class="secondary" id="generate" type="button">Create identity</button>
-      <button class="secondary" id="copy" type="button" disabled>Copy identity</button>
+      <button class="secondary" id="copy" type="button" disabled>Copy private identity</button>
+      <button class="secondary" id="choose-file" type="button">Import from file</button>
       <button id="unlock" type="button">Import and unlock</button>
     </div>
+    <p class="privacy-note">Rawrarr never prints the private identity on this page. For a new identity, use the copy button; the value stays in page memory until you leave or unlock.</p>
     <div id="message" role="status" aria-live="polite"></div>
   </main>
   <script>
     const identity = document.getElementById('identity');
+    const privateFile = document.getElementById('identity-file');
     const message = document.getElementById('message');
+    let generatedIdentity = '';
+
+    async function showPublicFingerprint(recipient) {
+      const card = document.getElementById('public-card');
+      document.getElementById('public-recipient').textContent = recipient;
+      const svg = document.getElementById('fingerprint');
+      svg.replaceChildren();
+      const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(recipient)));
+      let bit = 0;
+      for (let y = 0; y < 5; y += 1) {
+        for (let x = 0; x < 3; x += 1) {
+          const enabled = (digest[Math.floor(bit / 8)] & (1 << (bit % 8))) !== 0;
+          bit += 1;
+          if (!enabled) continue;
+          for (const mirroredX of x === 2 ? [x] : [x, 4 - x]) {
+            const square = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            square.setAttribute('x', String(mirroredX));
+            square.setAttribute('y', String(y));
+            square.setAttribute('width', '1');
+            square.setAttribute('height', '1');
+            square.setAttribute('fill', '#a6e3a1');
+            svg.append(square);
+          }
+        }
+      }
+      card.hidden = false;
+    }
+
     async function loadStatus() {
       try {
         const response = await fetch('/api/settings/age', { headers: { Accept: 'application/json' } });
@@ -50,6 +93,16 @@
           : 'This is a new vault. Create or import your age identity to continue.';
       } catch (error) { message.textContent = error.message; }
     }
+
+    document.getElementById('choose-file').addEventListener('click', () => privateFile.click());
+    privateFile.addEventListener('change', async () => {
+      const file = privateFile.files && privateFile.files[0];
+      if (!file) return;
+      identity.value = await file.text();
+      generatedIdentity = '';
+      message.textContent = 'Identity loaded into the masked field. Rawrarr does not display its contents.';
+    });
+
     document.getElementById('generate').addEventListener('click', async event => {
       const button = event.currentTarget;
       button.disabled = true;
@@ -58,32 +111,52 @@
         const response = await fetch('/api/settings/age/generate', { method: 'POST', headers: { Accept: 'application/json' } });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Could not create identity');
-        identity.value = result.identity;
+        generatedIdentity = result.identity;
+        identity.value = '';
         document.getElementById('copy').disabled = false;
-        message.textContent = 'Identity created. Copy and securely back it up before unlocking.';
+        await showPublicFingerprint(result.recipient);
+        message.textContent = 'Identity created. Copy and securely back up the private identity before unlocking.';
       } catch (error) { message.textContent = error.message; }
       finally { button.disabled = false; }
     });
+
     document.getElementById('copy').addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText(identity.value); message.textContent = 'Identity copied. Store it securely before continuing.'; }
-      catch (_) { message.textContent = 'Clipboard unavailable. Select and copy the identity manually.'; }
+      const privateIdentity = generatedIdentity || identity.value;
+      if (!privateIdentity) return;
+      try {
+        await navigator.clipboard.writeText(privateIdentity);
+        message.textContent = 'Private identity copied. Store it securely before continuing.';
+      } catch (_) {
+        message.textContent = 'Clipboard access is unavailable. Allow clipboard access, then use Copy private identity.';
+      }
     });
+
     document.getElementById('unlock').addEventListener('click', async event => {
       const button = event.currentTarget;
+      const privateIdentity = generatedIdentity || identity.value;
+      if (!privateIdentity) {
+        message.textContent = 'Create or import a private age identity first.';
+        return;
+      }
       button.disabled = true;
       message.textContent = 'Unlocking encrypted configuration…';
       try {
         const response = await fetch('/api/settings/age', {
           method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identity: identity.value })
+          body: JSON.stringify({ identity: privateIdentity })
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Could not unlock the age vault');
+        generatedIdentity = '';
         identity.value = '';
         message.textContent = 'Vault unlocked. Opening your workspace…';
         window.location.replace('/');
       } catch (error) { message.textContent = error.message; }
       finally { button.disabled = false; }
+    });
+    window.addEventListener('pagehide', () => {
+      generatedIdentity = '';
+      identity.value = '';
     });
     loadStatus();
   </script>

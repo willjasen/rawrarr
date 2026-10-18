@@ -21,5 +21,6 @@ USER 10001:10001
 EXPOSE 8080
 ENV RUST_ARR_LISTEN_ADDR=0.0.0.0:8080
 ENV RAWARR_DATA_DIR=/data
-VOLUME ["/data"]
+ENV RAWARR_SHARED_DATA_DIR=/shared
+VOLUME ["/data", "/shared"]
 ENTRYPOINT ["/usr/local/bin/rust-arr"]

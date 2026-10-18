@@ -195,20 +195,6 @@ impl std::fmt::Display for RadarrConfigError {
 impl std::error::Error for RadarrConfigError {}
 
 impl RadarrClient {
-    fn from_env() -> Result<Option<Self>, Box<dyn std::error::Error>> {
-        let Some(base_url) = env::var_os("RADARR_URL") else {
-            return Ok(None);
-        };
-        let base_url = base_url
-            .into_string()
-            .map_err(|_| "RADARR_URL must be valid UTF-8")?;
-        if base_url.trim().is_empty() {
-            return Ok(None);
-        }
-        let api_key = env::var("RADARR_API_KEY")?;
-        Ok(Some(Self::new(base_url, api_key)?))
-    }
-
     fn new(base_url: String, api_key: String) -> Result<Self, RadarrConfigError> {
         let api_key = Zeroizing::new(api_key);
         if base_url.trim().is_empty() || base_url.len() > 2048 {
@@ -1066,7 +1052,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let address = env::var("RUST_ARR_LISTEN_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".to_owned());
     let socket_address: SocketAddr = address.parse()?;
     let auth = auth::AuthState::connect().await?;
-    let mut radarr = RadarrClient::from_env()?;
+    let mut radarr = None;
     let mut vault = None;
     if let Some(identity_path) =
         env::var_os("RAWARR_AGE_IDENTITY_FILE").filter(|path| !path.is_empty())
