@@ -8,6 +8,7 @@ Connect Rawrarr account eligibility to dedicated Swarmsail tailnets, with a one-
 
 - Provision one isolated Headscale instance per person only after a verified active trial or subscription. Sign-in alone does not create one.
 - The person's tailnet may move to shared, never back to private. A new private tailnet requires a new network identity and device reenrollment.
+- Treat sharing as an explicit pairwise device/service grant. Apply and verify the route and narrow access policy before showing a grant as active. A small subnet may address a bridge link, but it does not authorize devices or cap tailnet membership.
 - Tailnet mode is separate from Rawrarr's encrypted-data cluster mode. Network reachability does not grant Rawrarr access or age decryption.
 - Swarmsail now has a local one-way organization transition. No owner-facing control is exposed until authorization and network access can be applied together. It is not deployed or connected to Rawrarr sign-in.
 
