@@ -28,7 +28,17 @@ docker compose ps
 docker compose down
 ```
 
-`docker compose down` stops the services but preserves named volumes and the host `shared-data` folder. Do not use `docker compose down -v` unless you intend to delete the local PostgreSQL and Rawrarr data volumes.
+The container logs request method, path, status, and duration by default. Request paths are logged without query parameters, and headers and bodies are never logged. Set `RAWARR_QUIET_LOGS=true` in the Compose environment to suppress routine request lines; server errors remain visible. Successful library scans also log numeric summary counts.
+
+Compose stores the shared Rawrarr data in `~/Library/Application Support/Rawrarr/shared-data` by default, outside the source repository. Open it in Finder with:
+
+```sh
+open "$HOME/Library/Application Support/Rawrarr/shared-data"
+```
+
+To place it elsewhere, set `RAWARR_SHARED_DATA_PATH` to a persistent host directory before starting Compose. The PostgreSQL and `/data` state remain in Docker-managed volumes.
+
+`docker compose down` stops the services but preserves named volumes and the host shared-data folder. Do not use `docker compose down -v` unless you intend to delete the local PostgreSQL and Rawrarr data volumes.
 
 ## First login and age identity
 

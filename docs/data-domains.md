@@ -24,6 +24,8 @@ Rawrarr uses stable container paths to describe where each kind of data belongs.
 
 The Docker image sets `RAWARR_METADATA_DIR=/metadata` and makes `/metadata` a symlink to `/shared/metadata`. Native runs can omit that variable; Rawrarr then uses `$RAWARR_SHARED_DATA_DIR/metadata`. Keep an override inside the shared folder if setting it manually. Compressed operational logs are stored under `$RAWARR_SHARED_DATA_DIR/logs/<device-id>/` and synced as application data. `RAWARR_LIBRARY_PATH` identifies the media root and should be `/media` in a storage container.
 
+The local Compose example bind-mounts `$HOME/Library/Application Support/Rawrarr/shared-data` at `/shared` by default so the shared data is persistent and directly accessible in Finder. Override the host directory with `RAWARR_SHARED_DATA_PATH` when needed. Keep this directory outside the source checkout and never place private age identities or PostgreSQL data in it.
+
 This registry defines placement and sync boundaries. It does not imply that a web node can remotely read a storage node's `/media` tree or that a metadata reader, catalog projection, or remote scan-command channel already exists.
 
 The planned [local backup feature](local-backups.md) stores a target device ID and its local destination in the shared encrypted configuration. Only that node writes backup archives, and the destination must remain outside `/shared` so backups do not sync back into the instance.

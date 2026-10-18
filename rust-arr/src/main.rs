@@ -10,10 +10,11 @@ pub mod shared_logs;
 pub mod storage_node;
 pub mod syncthing;
 
+use axum::middleware::Next;
 use axum::{
     Json, Router,
     body::Body,
-    extract::{FromRef, Path as AxumPath, State},
+    extract::{FromRef, Path as AxumPath, Request, State},
     http::{StatusCode, header},
     middleware,
     response::{
@@ -26,7 +27,12 @@ use futures_util::Stream;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{env, net::SocketAddr, sync::Arc, time::Duration};
+use std::{
+    env,
+    net::SocketAddr,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tokio::sync::RwLock;
 use zeroize::{Zeroize, Zeroizing};
 
@@ -176,6 +182,37 @@ struct GeneratedAgeIdentity {
     identity: String,
     recipient: String,
     theme_seed: String,
+}
+
+fn quiet_logs_enabled(value: Option<&str>) -> bool {
+    value.is_some_and(|value| {
+        matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        )
+    })
+}
+
+async fn log_request(request: Request<Body>, next: Next) -> Response<Body> {
+    let method = request.method().clone();
+    // Deliberately exclude query parameters, which can contain sensitive values.
+    let path = request.uri().path().to_owned();
+    let started = Instant::now();
+    let response = next.run(request).await;
+    let status = response.status();
+    let elapsed_ms = started.elapsed().as_millis();
+    if !quiet_logs_enabled(env::var("RAWARR_QUIET_LOGS").ok().as_deref()) {
+        println!(
+            "request {method} {path} -> {} ({elapsed_ms} ms)",
+            status.as_u16()
+        );
+    } else if status.is_server_error() {
+        eprintln!(
+            "request {method} {path} -> {} ({elapsed_ms} ms)",
+            status.as_u16()
+        );
+    }
+    response
 }
 
 impl Drop for GeneratedAgeIdentity {
@@ -572,6 +609,14 @@ async fn scan_library(
             summary.truncated,
         );
     }
+    println!(
+        "library scan completed: {} files; {} encrypted sidecars; {} sidecar errors; {} issues; truncated={}",
+        summary.items.len(),
+        summary.sidecars_created,
+        summary.sidecar_errors,
+        summary.issues,
+        summary.truncated
+    );
     Ok(Json(summary))
 }
 
@@ -793,7 +838,9 @@ async fn get_age_settings(State(state): State<Arc<AppState>>) -> Json<AgeSetting
     Json(AgeSettingsInfo {
         unlocked: vault.is_some(),
         encrypted_config_exists: secure_config::AgeVault::config_path().is_file(),
-        theme_seed: vault.as_ref().map(|vault| age_theme_seed(vault.recipient())),
+        theme_seed: vault
+            .as_ref()
+            .map(|vault| age_theme_seed(vault.recipient())),
     })
 }
 
@@ -1241,11 +1288,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/auth/login/start", post(auth::begin_authentication))
         .route("/api/auth/login/finish", post(auth::finish_authentication))
         .merge(protected)
+        .layer(middleware::from_fn(log_request))
         .with_state(state);
     let listener = tokio::net::TcpListener::bind(socket_address).await?;
 
     if let Some(logger) = shared_logs {
         logger.application_started();
+    }
+    if quiet_logs_enabled(env::var("RAWARR_QUIET_LOGS").ok().as_deref()) {
+        println!("Rawrarr request logging is quiet; server errors remain visible");
+    } else {
+        println!("Rawrarr verbose request logging enabled");
     }
     println!("rawrarr listening on {socket_address}");
     axum::serve(listener, app).await?;
@@ -1270,5 +1323,22 @@ mod metadata_image_tests {
             validated_tmdb_image_url("https://user@image.tmdb.org/t/p/original/poster.jpg")
                 .is_err()
         );
+    }
+}
+
+#[cfg(test)]
+mod logging_tests {
+    use super::quiet_logs_enabled;
+
+    #[test]
+    fn quiet_logging_is_opt_in_and_accepts_common_boolean_values() {
+        assert!(!quiet_logs_enabled(None));
+        assert!(!quiet_logs_enabled(Some("false")));
+        for value in ["true", "TRUE", "1", "yes", "on"] {
+            assert!(
+                quiet_logs_enabled(Some(value)),
+                "expected {value} to enable quiet logging"
+            );
+        }
     }
 }

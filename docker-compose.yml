@@ -27,6 +27,7 @@ services:
       RAWARR_DATA_DIR: /data
       RAWARR_SHARED_DATA_DIR: /shared
       RAWARR_METADATA_DIR: /metadata
+      RAWARR_QUIET_LOGS: ${RAWARR_QUIET_LOGS:-false}
       RAWARR_LIBRARY_PATH: ${RAWARR_LIBRARY_PATH:-}
       RAWARR_LIBRARY_NAME: ${RAWARR_LIBRARY_NAME:-}
       RAWARR_DEVICE_NAME: ${RAWARR_DEVICE_NAME:-}
@@ -47,7 +48,11 @@ services:
         condition: service_healthy
     volumes:
       - rawrarr-data:/data
-      - "${RAWARR_SHARED_DATA_PATH:-./shared-data}:/shared"
+      - type: bind
+        source: "${RAWARR_SHARED_DATA_PATH:-${HOME}/Library/Application Support/Rawrarr/shared-data}"
+        target: /shared
+        bind:
+          create_host_path: true
     restart: unless-stopped
 
 volumes:
