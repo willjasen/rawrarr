@@ -40,6 +40,12 @@ This layout should be documented as an export format version so later schema cha
 - Which browsers and maximum archive sizes are in scope? Large libraries may need a file-streaming API such as the File System Access API where supported, with a portable ZIP-download fallback.
 - Should users optionally include encrypted `config.aged` in a separate ciphertext backup workflow? It must remain outside this plaintext metadata export.
 
+## Mini-export proof of concept
+
+The current prototype exports at most the first three sorted movie text ciphertexts and their matching artwork. It uses the pinned `age-encryption` 0.3.1 TypeScript package; the mini-export is an interoperability proof, not a formal security audit or production-scale review. The browser fetches encrypted `config.aged`, decrypts it with the pasted post-quantum age ID, reads `metadata_filename_key`, and independently recomputes each text and artwork HMAC filename from the decrypted TMDb ID. It checks that the text filename matches its decrypted record, decrypts matched artwork, and saves a ZIP assembled in browser memory. The authenticated API exposes only a bounded file-name index and ciphertext bytes; it never receives the age ID or HMAC key.
+
+The age identity is pasted into a one-use dialog and cleared from the input after the attempt. Wrong-key errors are deliberately generic so crypto-library diagnostics cannot echo the supplied identity. JavaScript cannot guarantee zeroization of internal crypto-library strings or garbage-collected copies; byte buffers are cleared on completion where practical.
+
 ## Status
 
-Planned. No endpoint, browser decryption, or archive export is implemented by this plan.
+A three-record mini-export proof of concept is implemented. The scalable full metadata export, other media classes, cancellation, bounded streaming ZIP output, and complete/partial failure-report workflow remain planned.

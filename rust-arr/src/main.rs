@@ -414,6 +414,18 @@ async fn passkey_client_js() -> Response<Body> {
     )
 }
 
+async fn metadata_export_js() -> Response<Body> {
+    let mut response = static_asset(
+        "text/javascript; charset=utf-8",
+        include_bytes!("assets/metadata-export.js"),
+    );
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        axum::http::HeaderValue::from_static("private, no-cache"),
+    );
+    response
+}
+
 async fn auth_page(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response<Body> {
     if auth::is_authenticated(&state.auth.pool, &headers).await {
         if state.vault.read().await.is_some() {
@@ -824,6 +836,93 @@ async fn get_movie_poster(
                 }),
             )
         })
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MiniMetadataExportIndex {
+    text_files: Vec<String>,
+    artwork_files: Vec<String>,
+}
+
+fn valid_export_filename(kind: &str, filename: &str) -> bool {
+    let stem = match kind {
+        "text" => filename.strip_suffix(".json.aged"),
+        "artwork" => filename.strip_suffix(".aged"),
+        _ => None,
+    }.unwrap_or("");
+    !stem.is_empty()
+        && (stem.bytes().all(|byte| byte.is_ascii_digit())
+            || (stem.len() == 64 && stem.bytes().all(|byte| byte.is_ascii_hexdigit())))
+}
+
+fn list_export_files(kind: &str) -> Result<Vec<String>, std::io::Error> {
+    let directory = secure_config::AgeVault::metadata_dir().join("movies").join(kind);
+    let entries = match std::fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(error),
+    };
+    let mut names = Vec::new();
+    for entry in entries {
+        let entry = entry?;
+        if !entry.file_type()?.is_file() { continue; }
+        let Some(name) = entry.file_name().to_str().map(str::to_owned) else { continue; };
+        if valid_export_filename(kind, &name) { names.push(name); }
+    }
+    names.sort();
+    if kind == "text" { names.truncate(3); }
+    if names.len() > 10_000 { names.truncate(10_000); }
+    Ok(names)
+}
+
+async fn mini_metadata_export_index() -> Result<Json<MiniMetadataExportIndex>, StatusCode> {
+    let text_files = tokio::task::spawn_blocking(|| list_export_files("text"))
+        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let artwork_files = tokio::task::spawn_blocking(|| list_export_files("artwork"))
+        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(MiniMetadataExportIndex { text_files, artwork_files }))
+}
+
+async fn export_ciphertext(
+    AxumPath((kind, filename)): AxumPath<(String, String)>,
+) -> Result<Response<Body>, StatusCode> {
+    if !valid_export_filename(&kind, &filename) { return Err(StatusCode::BAD_REQUEST); }
+    let path = secure_config::AgeVault::metadata_dir().join("movies").join(&kind).join(&filename);
+    let bytes = tokio::task::spawn_blocking(move || {
+        let metadata = std::fs::symlink_metadata(&path)?;
+        let max_bytes = if kind == "artwork" { 10 * 1024 * 1024 } else { 2 * 1024 * 1024 };
+        if !metadata.file_type().is_file() || metadata.len() > max_bytes {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "unsupported export entry"));
+        }
+        std::fs::read(path)
+    }).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|error| if error.kind() == std::io::ErrorKind::NotFound { StatusCode::NOT_FOUND } else { StatusCode::INTERNAL_SERVER_ERROR })?;
+    Response::builder()
+        .header(header::CONTENT_TYPE, "application/octet-stream")
+        .header(header::CACHE_CONTROL, "private, no-store")
+        .body(Body::from(bytes))
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+async fn export_config_ciphertext() -> Result<Response<Body>, StatusCode> {
+    let path = secure_config::AgeVault::config_path();
+    let bytes = tokio::task::spawn_blocking(move || {
+        let metadata = std::fs::symlink_metadata(&path)?;
+        if !metadata.file_type().is_file() || metadata.len() > 2 * 1024 * 1024 {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "unsupported config ciphertext"));
+        }
+        std::fs::read(path)
+    })
+        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|error| if error.kind() == std::io::ErrorKind::NotFound { StatusCode::NOT_FOUND } else { StatusCode::INTERNAL_SERVER_ERROR })?;
+    Response::builder()
+        .header(header::CONTENT_TYPE, "application/octet-stream")
+        .header(header::CACHE_CONTROL, "private, no-store")
+        .body(Body::from(bytes))
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 #[derive(Serialize)]
@@ -1273,6 +1372,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(get_movie_poster),
         )
         .route("/api/metadata/status", get(metadata_status))
+        .route("/api/metadata/export/mini", get(mini_metadata_export_index))
+        .route("/api/metadata/export/config", get(export_config_ciphertext))
+        .route("/api/metadata/export/ciphertext/{kind}/{filename}", get(export_ciphertext))
         .route(
             "/api/settings/radarr",
             get(get_radarr_settings)
@@ -1301,6 +1403,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/assets/rawrarr-logo.jxl", get(rawrarr_logo_jxl))
         .route("/assets/rawrarr-favicon.svg", get(rawrarr_favicon))
         .route("/assets/passkey-client.mjs", get(passkey_client_js))
+        .route("/assets/metadata-export.js", get(metadata_export_js))
         .route("/auth", get(auth_page))
         .route("/api/auth/status", get(auth::status))
         .route("/api/auth/register/start", post(auth::begin_registration))
@@ -1372,5 +1475,22 @@ mod logging_tests {
                 "expected {value} to enable quiet logging"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod metadata_export_tests {
+    use super::valid_export_filename;
+
+    #[test]
+    fn export_names_accept_only_legacy_ids_or_opaque_hmac_names() {
+        assert!(valid_export_filename("text", "123.json.aged"));
+        assert!(valid_export_filename("artwork", "123.aged"));
+        assert!(valid_export_filename("text", &format!("{}.json.aged", "a".repeat(64))));
+        assert!(valid_export_filename("artwork", &format!("{}.aged", "f".repeat(64))));
+        for name in ["../secret.aged", "x.json.aged", "a/b.aged", &format!("{}.aged", "g".repeat(64))] {
+            assert!(!valid_export_filename("artwork", name));
+        }
+        assert!(!valid_export_filename("unknown", "123.aged"));
     }
 }

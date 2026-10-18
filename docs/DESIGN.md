@@ -117,3 +117,7 @@ Radarr and Sonarr use one `libraryColumns` schema and `renderArrLibrary` rendere
 Sonarr uses the shared Arr HTTPS transport, validates service identity before saving, and stores its connection in the subscriber age-encrypted config. Locked read-modify-write operations preserve other app connections and the metadata filename key. Sonarr artwork caching, metadata search, and episode mutations remain planned.
 
 Artwork load times measure each image request from browser `requestStart` through `responseEnd`, excluding lazy-loading wait, browser queueing, and decoding. Missing or restricted timing is shown as unavailable, never as elapsed time since rendering.
+
+## Metadata export
+
+Let an owner export the shared metadata tree as useful plaintext files, with artwork as the primary expected use. Decrypt age files in the user's browser and build the archive there; the server may authorize and deliver ciphertext, but must not receive the age secret or decrypted payload for this feature. Require an unlocked age identity in browser memory, keep passkey authentication distinct from decryption, and clearly report corrupt or unsupported files. Keep this export separate from a full Rawrchive backup and exclude configuration, logs, databases, node-local state, and media. The detailed format, security boundaries, and implementation sequence are in the [metadata export plan](metadata-export-plan.md). A three-record browser proof of concept is implemented; production export scale, broader metadata classes, cancellation, and full failure reporting remain planned.

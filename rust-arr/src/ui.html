@@ -183,7 +183,7 @@
           <article class="card"><div class="card-head"><span>Disk usage</span></div><div class="card-value" id="movie-size">—</div><div class="card-sub">Size reported by Radarr</div></article>
         </section>
         <article class="panel">
-          <div class="panel-head"><h2>Radarr movie library</h2><button id="refresh-movies" class="refresh" type="button">Refresh movies ↻</button></div>
+          <div class="panel-head"><h2>Radarr movie library</h2><div style="display:flex;gap:8px"><button id="mini-export" class="refresh" type="button">Try mini export</button><button id="refresh-movies" class="refresh" type="button">Refresh movies ↻</button></div></div>
           <div id="movies-message" class="scan-summary" role="status">Select refresh to load your Radarr library.</div>
           <div class="table-wrap"><table><thead><tr><th>Movie</th><th>Load time</th><th>Artwork source</th><th>TMDb ID</th><th>Year</th><th>File</th><th>Monitored</th><th>Quality profile</th><th>Size</th></tr></thead><tbody id="radarr-movie-rows"></tbody></table></div>
         </article>
@@ -244,6 +244,17 @@
       overviewNav.classList.toggle('active', !movies && !configuration);
       moviesNav.setAttribute('aria-current', movies ? 'page' : 'false');
       configurationNav.setAttribute('aria-current', configuration ? 'page' : 'false');
+  <dialog id="mini-export-dialog" style="width:min(520px,calc(100% - 28px));border:1px solid #39463d;border-radius:14px;background:#151b18;color:#e7eee8;padding:22px">
+    <form id="mini-export-form">
+      <h2 style="margin:0 0 8px;font-size:18px">Try a mini metadata export</h2>
+      <p class="setup-intro">This prototype exports up to three movie records and matching artwork. Your browser decrypts the shared config and metadata, then builds a ZIP locally. The age ID is used only in this tab and is not sent to Rawrarr.</p>
+      <label for="mini-export-identity" class="settings-form" style="display:block;padding:0;color:var(--muted);font-size:10px">Post-quantum age private ID</label>
+      <textarea id="mini-export-identity" autocomplete="off" spellcheck="false" required style="width:100%;min-height:92px;margin-top:6px;border:1px solid var(--line);border-radius:7px;background:#101613;color:var(--text);padding:9px;font:10px ui-monospace,monospace"></textarea>
+      <div class="settings-actions"><button id="mini-export-start" class="refresh" type="submit">Decrypt and download ZIP</button><button id="mini-export-cancel" class="refresh" type="button">Cancel</button></div>
+      <div id="mini-export-status" class="settings-message" role="status" aria-live="polite"></div>
+    </form>
+  </dialog>
+  <script src="/assets/metadata-export.js"></script>
       if (movies) loadRadarrMovies();
       if (configuration) loadConfiguration();
     }
@@ -804,3 +815,42 @@
   </script>
 </body>
 </html>
+    const miniExportDialog = document.getElementById('mini-export-dialog');
+    const miniExportForm = document.getElementById('mini-export-form');
+    const miniExportInput = document.getElementById('mini-export-identity');
+    const miniExportStatus = document.getElementById('mini-export-status');
+    let miniExportInProgress = false;
+    document.getElementById('mini-export').addEventListener('click', () => {
+      miniExportStatus.textContent = '';
+      miniExportInput.value = '';
+      miniExportDialog.showModal();
+      miniExportInput.focus();
+    });
+    document.getElementById('mini-export-cancel').addEventListener('click', () => miniExportDialog.close());
+    miniExportDialog.addEventListener('cancel', event => { if (miniExportInProgress) event.preventDefault(); });
+    miniExportDialog.addEventListener('close', () => { miniExportInput.value = ''; miniExportStatus.textContent = ''; });
+    miniExportForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = document.getElementById('mini-export-start');
+      const cancelButton = document.getElementById('mini-export-cancel');
+      let identity = miniExportInput.value;
+      miniExportInProgress = true;
+      button.disabled = true;
+      cancelButton.disabled = true;
+      miniExportInput.disabled = true;
+      try {
+        const count = await window.rawrarrMiniExport.runMiniExport(identity, message => { miniExportStatus.textContent = message; });
+        miniExportStatus.textContent = `Downloaded ${count} movie record(s). The ZIP was built in this browser.`;
+        miniExportInput.value = '';
+      } catch (error) {
+        miniExportStatus.textContent = error instanceof Error ? error.message : 'Mini export failed.';
+      } finally {
+        identity = '';
+        miniExportInput.value = '';
+        miniExportInProgress = false;
+        button.disabled = false;
+        cancelButton.disabled = false;
+        miniExportInput.disabled = false;
+      }
+    });
+    for (const app of Object.values(libraryApps)) renderArrLibrary([], 0, null, app);

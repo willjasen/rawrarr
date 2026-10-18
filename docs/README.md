@@ -19,6 +19,7 @@ Start here for the current project state and everyday use:
 - [Local backups](local-backups.md) — planned manual, age-encrypted backup of `/shared` to one node-local destination.
 - [Device architecture](device-architecture.md) — IDs, local/shared records, storage, and remote access boundaries.
 - [Cloud access](cloud-access-architecture.md) — passkey account service, blind relay, and subscriber-data boundary.
+- [Metadata export plan](metadata-export-plan.md) — browser-side age decryption and local ZIP export; includes the working three-record mini-export prototype and remaining production scope.
 - [Subscription model](subscription-model.md) — proposed trial, hosted checkout, and signed entitlement model.
 - [Tailscale integration](tailscale-integration-plan.md) — optional overlay transport plan; SwarmSail will manage one tailnet per subscriber account.
 

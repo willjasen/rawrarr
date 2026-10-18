@@ -1,0 +1,13 @@
+{
+  "private": true,
+  "scripts": {
+    "build": "esbuild metadata-export.js --bundle --minify --target=es2022 --outfile=../src/assets/metadata-export.js"
+  },
+  "dependencies": {
+    "age-encryption": "0.3.1",
+    "fflate": "0.8.2"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.5"
+  }
+}
