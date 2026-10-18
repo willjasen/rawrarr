@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
-use axum::{extract::State, http::StatusCode, routing::get, Json, Router};
-use reqwest::header::{HeaderMap, HeaderValue, ACCEPT};
+use axum::{Json, Router, extract::State, http::StatusCode, routing::get};
+use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::{env, net::SocketAddr, sync::Arc, time::Duration};
 
@@ -94,15 +94,16 @@ async fn radarr_status(
     radarr.status().await.map(Json).map_err(|_| {
         (
             StatusCode::BAD_GATEWAY,
-            Json(ApiError { error: "Radarr status request failed" }),
+            Json(ApiError {
+                error: "Radarr status request failed",
+            }),
         )
     })
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let address = env::var("RUST_ARR_LISTEN_ADDR")
-        .unwrap_or_else(|_| "0.0.0.0:8080".to_owned());
+    let address = env::var("RUST_ARR_LISTEN_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".to_owned());
     let socket_address: SocketAddr = address.parse()?;
     let state = Arc::new(AppState {
         radarr: RadarrClient::from_env()?,
