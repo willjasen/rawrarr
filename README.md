@@ -1,15 +1,23 @@
 # rawrarr
 
-Rawrarr is an early unified media automation prototype, starting with Radarr integration. Its intended direction includes Prowlarr-class discovery alongside library management, fulfillment, and remote devices; indexer management and provider search are not implemented yet. The root route (`/`) serves a responsive dashboard, `/health` is a service health check, `/api/events` streams dashboard snapshots over server-sent events, `/api/devices` reports scanner devices, `/api/configuration` shows the redacted decrypted configuration and its age-encryption verification state, `/api/radarr/status` reports Radarr connectivity, `/api/radarr/movies` reads Radarr movie inventory, `/api/library/scan` inventories a configured folder without changing files, and `/api/metadata/movies/search` searches Radarr for movie candidates. See [product direction](../docs/product-direction.md) and [the device architecture](../docs/device-architecture.md).
+Rawrarr is an early unified media automation prototype, starting with Radarr integration. Its intended direction includes Prowlarr-class discovery alongside library management, fulfillment, and remote devices; indexer management and provider search are not implemented yet. The root route (`/`) serves the authenticated dashboard, `/auth` starts passkey onboarding/sign-in, `/setup/age` prompts for age identity creation/import, `/health` is a service health check, `/api/events` streams dashboard snapshots over server-sent events, `/api/devices` reports scanner devices, `/api/configuration` shows the redacted decrypted configuration and its age-encryption verification state, `/api/radarr/status` reports Radarr connectivity, `/api/radarr/movies` reads Radarr movie inventory, `/api/library/scan` inventories a configured folder without changing files, and `/api/metadata/movies/search` searches Radarr for movie candidates. See [product direction](../docs/product-direction.md) and [the device architecture](../docs/device-architecture.md).
+
+## Passkey sign-in and first run
+
+PostgreSQL is required. Rawrarr applies SQL migrations at startup and stores user records, WebAuthn passkeys, short-lived ceremony state, and hashed session tokens there. Passkeys are validated by `webauthn-rs`; the browser receives only an opaque HttpOnly session cookie. The first visitor creates the owner account with a passkey. Later users cannot self-register yet; account invitation and multi-user account management are future work. After passkey sign-in, Rawrarr directs the user to the separate age identity setup screen, then opens the existing dashboard.
+
+WebAuthn requires HTTPS or a browser-recognized localhost origin. Configure `RAWARR_WEBAUTHN_RP_ID` to the host name users enter and `RAWARR_WEBAUTHN_ORIGIN` to the full origin (scheme, host, and port). For the default local Compose deployment, open `http://localhost:8080` (not `127.0.0.1`) so the configured origin matches. For a reverse proxy, use its public HTTPS origin and domain. The age identity is not stored in PostgreSQL; it remains client-provided and unlocks the existing encrypted Rawrarr configuration.
 
 ## Local development
 
 Requires Rust 1.85 or newer.
 
+Start PostgreSQL and set `RAWARR_DATABASE_URL` (or `RAWARR_PG_HOST`, `RAWARR_PG_USER`, `RAWARR_PG_DATABASE`, and `RAWARR_PG_PASSWORD` / `RAWARR_PG_PASSWORD_FILE`) before running Rawrarr:
+
 ```sh
 cargo run --manifest-path rust-arr/Cargo.toml
-open http://127.0.0.1:8080/
-curl http://127.0.0.1:8080/health
+open http://localhost:8080/
+curl http://localhost:8080/health
 ```
 
 Set `RUST_ARR_LISTEN_ADDR` to change the listen address.
@@ -34,14 +42,14 @@ Movie metadata lookup uses Radarr's `/api/v3/movie/lookup` endpoint and the conf
 
 ## Docker
 
-From the repository root:
+Create a protected password file outside the repository and point `RAWARR_POSTGRES_PASSWORD_FILE` to it. For example, create `/secure/path/rawrarr-postgres-password` with a random value, set its permissions to owner-only, and export `RAWARR_POSTGRES_PASSWORD_FILE=/secure/path/rawrarr-postgres-password`. From the repository root:
 
 ```sh
 docker compose up --build
-curl http://127.0.0.1:8080/health
+curl http://localhost:8080/health
 ```
 
-The image uses a multi-stage build, includes the age v1.3.2 CLI for hybrid post-quantum encryption, and runs the application as UID 10001. Compose publishes the web UI on host loopback only. The persistent named volume stores encrypted config. `RADARR_URL` and `RADARR_API_KEY` remain available for headless/bootstrap deployments; UI settings require an unlocked age identity.
+The image uses a multi-stage build, includes the age v1.3.2 CLI for hybrid post-quantum encryption, and runs the application as UID 10001. Compose runs PostgreSQL on the private Compose network without publishing its port, persists the database in `rawrarr-postgres-data`, and mounts the supplied password file as a Docker secret. It publishes the web UI on host loopback only. The Rawrarr data volume stores encrypted config. Set `RAWARR_WEBAUTHN_RP_ID` and `RAWARR_WEBAUTHN_ORIGIN` in the environment when using a domain or non-default origin. `RADARR_URL` and `RADARR_API_KEY` remain available for headless/bootstrap deployments; UI settings require an unlocked age identity.
 
 To scan a host folder from Docker, use the optional read-only media overlay. Set `RAWARR_HOST_MEDIA_PATH` to a folder on the Docker host and run:
 
@@ -49,7 +57,7 @@ To scan a host folder from Docker, use the optional read-only media overlay. Set
 docker compose -f docker-compose.yml -f docker-compose.media.yml up --build
 ```
 
-The overlay mounts that host folder read-only at `/media` in the container. The app scans `/media` and returns relative paths only. Do not publish the unauthenticated dashboard/API to a LAN or tailnet yet; access control is a later milestone.
+The overlay mounts that host folder read-only at `/media` in the container. The app scans `/media` and returns relative paths only. Do not expose the dashboard directly to the public internet; deploy behind HTTPS and configure the WebAuthn origin and relying-party ID for the chosen domain.
 
 ## Memory safety policy
 

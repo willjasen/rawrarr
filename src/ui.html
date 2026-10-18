@@ -121,18 +121,8 @@
     <main>
       <div class="topline">
         <div><div class="eyebrow">Your workspace</div><h1 id="page-title">Overview</h1></div>
-        <div class="live-pill"><span class="pulse"></span>LOCAL INSTANCE</div>
+        <div style="display:flex;align-items:center;gap:12px"><div class="live-pill"><span class="pulse"></span>LOCAL INSTANCE</div><button id="sign-out" class="refresh" type="button">Sign out</button></div>
       </div>
-      <article class="panel" id="age-setup-panel" style="margin-bottom:22px">
-        <div class="panel-head"><h2 id="age-setup-title">Set up encrypted configuration</h2><span>FIRST RUN</span></div>
-        <form id="age-settings" class="settings-form">
-          <p class="setup-intro" id="age-setup-copy">Create a post-quantum age identity or import one you already have. Rawrarr uses it to unlock your encrypted settings. Your private identity stays in memory; copy and securely back up a new identity before continuing.</p>
-          <label for="age-identity">Post-quantum age identity</label>
-          <textarea id="age-identity" name="identity" spellcheck="false" autocomplete="off" placeholder="Generate a new identity or paste an existing AGE-SECRET-KEY-PQ-1…"></textarea>
-          <div class="settings-actions"><button id="generate-age" class="refresh" type="button">Create new identity</button><button id="copy-age" class="refresh" type="button" disabled>Copy identity</button><button id="unlock-age" class="refresh" type="submit">Import and unlock</button></div>
-          <div id="age-settings-message" class="settings-message" role="status" aria-live="polite"></div>
-        </form>
-      </article>
       <section class="welcome">
         <div><h2>Welcome to rawrarr</h2><p>Your library can be scanned by a device that has the media mounted. The current scanner runs on the web app host; remote scanner agents will connect as separate devices.</p></div>
         <div class="welcome-tag">RADARR · FIRST INTEGRATION</div>
@@ -226,7 +216,6 @@
     configurationNav.addEventListener('click', () => showView('configuration'));
     overviewNav.addEventListener('click', () => showView('overview'));
     const settingsForm = document.getElementById('radarr-settings');
-    const ageSettingsForm = document.getElementById('age-settings');
     function openRadarrSettings(event) {
       event.preventDefault();
       const panel = document.getElementById('radarr-settings-panel');
@@ -235,6 +224,10 @@
     }
     document.getElementById('configure-radarr-link').addEventListener('click', openRadarrSettings);
     document.getElementById('settings-nav').addEventListener('click', openRadarrSettings);
+    document.getElementById('sign-out').addEventListener('click', async () => {
+      await fetch('/api/auth/logout', { method: 'POST', headers: { Accept: 'application/json' } });
+      window.location.replace('/auth');
+    });
     const libraryEmpty = document.getElementById('library-empty');
     const libraryResults = document.getElementById('library-results');
     let libraryConfigured = false;
@@ -321,73 +314,6 @@
         document.getElementById('radarr-settings-message').textContent = 'Could not load Radarr settings.';
       }
     }
-
-    async function loadAgeSettings() {
-      try {
-        const response = await fetch('/api/settings/age', { headers: { Accept: 'application/json' } });
-        const settings = await response.json();
-        document.getElementById('age-setup-panel').hidden = settings.unlocked;
-        if (settings.encryptedConfigExists && !settings.unlocked) {
-          document.getElementById('age-setup-title').textContent = 'Unlock your encrypted configuration';
-          document.getElementById('age-setup-copy').textContent = 'Import the post-quantum age identity that protects your saved settings. Rawrarr never stores the private identity.';
-          document.getElementById('unlock-age').textContent = 'Import and unlock';
-        }
-        document.getElementById('age-settings-message').textContent = settings.unlocked
-          ? `Encrypted config unlocked${settings.encryptedConfigExists ? ' · saved config found' : ' · no saved config yet'}.`
-          : settings.encryptedConfigExists ? 'Saved config is locked. Import its age identity to unlock it.' : 'Create or import a post-quantum age identity to enable encrypted settings.';
-      } catch (_) {
-        document.getElementById('age-settings-message').textContent = 'Could not read encrypted config status.';
-      }
-    }
-
-    document.getElementById('generate-age').addEventListener('click', async () => {
-      const message = document.getElementById('age-settings-message');
-      message.textContent = 'Generating a post-quantum age identity…';
-      try {
-        const response = await fetch('/api/settings/age/generate', { method: 'POST', headers: { Accept: 'application/json' } });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'Could not generate identity');
-        document.getElementById('age-identity').value = result.identity;
-        document.getElementById('copy-age').disabled = false;
-        message.textContent = 'Generated a post-quantum identity. Copy and securely back it up before unlocking; Rawrarr does not save the private identity.';
-      } catch (error) {
-        message.textContent = error.message;
-      }
-    });
-
-    document.getElementById('copy-age').addEventListener('click', async () => {
-      const identity = document.getElementById('age-identity').value;
-      try {
-        await navigator.clipboard.writeText(identity);
-        document.getElementById('age-settings-message').textContent = 'Identity copied. Store it securely before you unlock settings.';
-      } catch (_) {
-        document.getElementById('age-settings-message').textContent = 'Clipboard unavailable. Select and copy the identity manually, then store it securely.';
-      }
-    });
-
-    ageSettingsForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const message = document.getElementById('age-settings-message');
-      const button = document.getElementById('unlock-age');
-      button.disabled = true;
-      message.textContent = 'Unlocking encrypted settings…';
-      try {
-        const response = await fetch('/api/settings/age', {
-          method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identity: document.getElementById('age-identity').value })
-        });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'Could not unlock encrypted settings');
-        document.getElementById('age-identity').value = '';
-        document.getElementById('copy-age').disabled = true;
-        message.textContent = `Encrypted config unlocked${result.encryptedConfigExists ? ' · saved settings loaded' : ' · ready to save settings'}.`;
-        await Promise.all([loadRadarrSettings(), refreshStatus(), loadMetadataInfo()]);
-      } catch (error) {
-        message.textContent = error.message;
-      } finally {
-        button.disabled = false;
-      }
-    });
 
     settingsForm.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -729,7 +655,6 @@
     document.getElementById('refresh').addEventListener('click', refreshStatus);
     scanButton.addEventListener('click', scanLibrary);
     loadRadarrSettings();
-    loadAgeSettings();
   </script>
 </body>
 </html>

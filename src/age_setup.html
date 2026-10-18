@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Unlock your vault · rawrarr</title>
+  <style>
+    :root { color-scheme:dark; --bg:#101411; --panel:#171d19; --line:#29332c; --text:#edf3ec; --muted:#96a397; --green:#a6e3a1 }
+    * { box-sizing:border-box }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
+    main { width:min(100% - 32px,520px); padding:30px; background:var(--panel); border:1px solid var(--line); border-radius:18px; box-shadow:0 24px 80px #0005 }
+    .brand { color:var(--green); font-size:13px; font-weight:750; letter-spacing:.08em; text-transform:uppercase }
+    h1 { margin:28px 0 5px; font-size:26px; letter-spacing:-.04em }
+    p { color:var(--muted); font-size:13px; margin:0 0 18px }
+    label { display:block; margin:14px 0 6px; color:#c8d3c9; font-size:12px }
+    textarea { width:100%; min-height:145px; resize:vertical; border:1px solid var(--line); border-radius:9px; padding:12px; color:var(--text); background:#111712; font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace }
+    .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px }
+    button { border:1px solid #658968; border-radius:9px; padding:11px 13px; color:#101711; background:var(--green); font:650 12px system-ui; cursor:pointer }
+    button.secondary { color:#dbe8dc; border-color:var(--line); background:#202821 }
+    button:disabled { opacity:.55; cursor:wait }
+    #message { min-height:24px; margin-top:15px; color:var(--muted); font-size:12px }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand">rawrarr · private setup</div>
+    <h1>Unlock your age vault</h1>
+    <p>Create a post-quantum age identity or import one you already have. Back up a newly created identity before continuing; Rawrarr does not store the private identity.</p>
+    <label for="identity">Post-quantum age identity</label>
+    <textarea id="identity" spellcheck="false" autocomplete="off" placeholder="AGE-SECRET-KEY-PQ-1…"></textarea>
+    <div class="actions">
+      <button class="secondary" id="generate" type="button">Create identity</button>
+      <button class="secondary" id="copy" type="button" disabled>Copy identity</button>
+      <button id="unlock" type="button">Import and unlock</button>
+    </div>
+    <div id="message" role="status" aria-live="polite"></div>
+  </main>
+  <script>
+    const identity = document.getElementById('identity');
+    const message = document.getElementById('message');
+    async function loadStatus() {
+      try {
+        const response = await fetch('/api/settings/age', { headers: { Accept: 'application/json' } });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Could not read vault status');
+        if (result.unlocked) window.location.replace('/');
+        message.textContent = result.encryptedConfigExists
+          ? 'This account has an encrypted config. Import its identity to unlock it.'
+          : 'This is a new vault. Create or import your age identity to continue.';
+      } catch (error) { message.textContent = error.message; }
+    }
+    document.getElementById('generate').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      message.textContent = 'Creating a post-quantum identity…';
+      try {
+        const response = await fetch('/api/settings/age/generate', { method: 'POST', headers: { Accept: 'application/json' } });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Could not create identity');
+        identity.value = result.identity;
+        document.getElementById('copy').disabled = false;
+        message.textContent = 'Identity created. Copy and securely back it up before unlocking.';
+      } catch (error) { message.textContent = error.message; }
+      finally { button.disabled = false; }
+    });
+    document.getElementById('copy').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(identity.value); message.textContent = 'Identity copied. Store it securely before continuing.'; }
+      catch (_) { message.textContent = 'Clipboard unavailable. Select and copy the identity manually.'; }
+    });
+    document.getElementById('unlock').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      message.textContent = 'Unlocking encrypted configuration…';
+      try {
+        const response = await fetch('/api/settings/age', {
+          method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identity: identity.value })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Could not unlock the age vault');
+        identity.value = '';
+        message.textContent = 'Vault unlocked. Opening your workspace…';
+        window.location.replace('/');
+      } catch (error) { message.textContent = error.message; }
+      finally { button.disabled = false; }
+    });
+    loadStatus();
+  </script>
+</body>
+</html>

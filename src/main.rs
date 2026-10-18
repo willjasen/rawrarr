@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod auth;
 pub mod devices;
 pub mod download_clients;
 pub mod library;
@@ -9,13 +10,14 @@ pub mod secure_config;
 use axum::{
     Json, Router,
     body::Body,
-    extract::{Path as AxumPath, State},
+    extract::{FromRef, Path as AxumPath, State},
     http::{StatusCode, header},
+    middleware,
     response::{
-        Html, Response, Sse,
+        Html, IntoResponse, Redirect, Response, Sse,
         sse::{Event, KeepAlive},
     },
-    routing::get,
+    routing::{get, post},
 };
 use futures_util::Stream;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
@@ -26,9 +28,22 @@ use zeroize::{Zeroize, Zeroizing};
 
 #[derive(Clone)]
 struct AppState {
+    auth: auth::AuthState,
     radarr: Arc<RwLock<Option<RadarrClient>>>,
     vault: Arc<RwLock<Option<secure_config::AgeVault>>>,
     library: Option<library::LibraryRoot>,
+}
+
+impl FromRef<AppState> for auth::AuthState {
+    fn from_ref(state: &AppState) -> Self {
+        state.auth.clone()
+    }
+}
+
+impl FromRef<Arc<AppState>> for auth::AuthState {
+    fn from_ref(state: &Arc<AppState>) -> Self {
+        state.auth.clone()
+    }
 }
 
 #[derive(Clone)]
@@ -326,8 +341,37 @@ async fn health() -> &'static str {
     "ok"
 }
 
-async fn dashboard() -> Html<&'static str> {
-    Html(include_str!("ui.html"))
+async fn auth_page(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response<Body> {
+    if auth::is_authenticated(&state.auth.pool, &headers).await {
+        if state.vault.read().await.is_some() {
+            return Redirect::to("/").into_response();
+        }
+        return Redirect::to("/setup/age").into_response();
+    }
+    auth::auth_html().into_response()
+}
+
+async fn dashboard(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response<Body> {
+    if !auth::is_authenticated(&state.auth.pool, &headers).await {
+        return Redirect::to("/auth").into_response();
+    }
+    if state.vault.read().await.is_none() {
+        return Redirect::to("/setup/age").into_response();
+    }
+    Html(include_str!("ui.html")).into_response()
+}
+
+async fn age_setup_page(State(state): State<Arc<AppState>>) -> Response<Body> {
+    if state.vault.read().await.is_some() {
+        return Redirect::to("/").into_response();
+    }
+    auth::age_setup_html().into_response()
+}
+
+async fn logout(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response<Body> {
+    *state.vault.write().await = None;
+    *state.radarr.write().await = None;
+    auth::end_session(&state.auth, &headers).await
 }
 
 #[derive(Serialize)]
@@ -907,6 +951,7 @@ async fn delete_radarr_settings(
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let address = env::var("RUST_ARR_LISTEN_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".to_owned());
     let socket_address: SocketAddr = address.parse()?;
+    let auth = auth::AuthState::connect().await?;
     let mut radarr = RadarrClient::from_env()?;
     let mut vault = None;
     if let Some(identity_path) =
@@ -923,15 +968,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         vault = Some(unlocked);
     }
     let state = Arc::new(AppState {
+        auth: auth.clone(),
         radarr: Arc::new(RwLock::new(radarr)),
         vault: Arc::new(RwLock::new(vault)),
         library: library::LibraryRoot::from_env()?,
     });
 
-    let app = Router::new()
+    let protected = Router::new()
         .route("/", get(dashboard))
+        .route("/setup/age", get(age_setup_page))
+        .route("/api/auth/logout", post(logout))
         .route("/api/events", get(dashboard_events))
-        .route("/health", get(health))
         .route("/api/library", get(library_info))
         .route("/api/devices", get(list_devices))
         .route("/api/library/scan", axum::routing::post(scan_library))
@@ -961,6 +1008,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/configuration", get(get_configuration))
         .route("/api/radarr/status", get(radarr_status))
         .route("/api/radarr/movies", get(radarr_movies))
+        .route_layer(middleware::from_fn_with_state(
+            auth.pool.clone(),
+            auth::require_session,
+        ));
+    let app = Router::new()
+        .route("/health", get(health))
+        .route("/auth", get(auth_page))
+        .route("/api/auth/status", get(auth::status))
+        .route("/api/auth/register/start", post(auth::begin_registration))
+        .route("/api/auth/register/finish", post(auth::finish_registration))
+        .route("/api/auth/login/start", post(auth::begin_authentication))
+        .route("/api/auth/login/finish", post(auth::finish_authentication))
+        .merge(protected)
         .with_state(state);
     let listener = tokio::net::TcpListener::bind(socket_address).await?;
 
