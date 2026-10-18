@@ -120,8 +120,10 @@ test('generated private age identity has a short preview and full value is expos
   assert.equal(elements['identity-challenge'].hidden, false, 'acknowledgement reveals the character challenge');
   const challengePositions = [...elements['identity-challenge-prompt'].textContent.matchAll(/\d+/g)]
     .map(match => Number(match[0]));
-  assert.equal(challengePositions.length, 3);
-  assert.ok(challengePositions.every(position => position > 'AGE-SECRET-KEY-PQ-1'.length), 'challenge positions skip the fixed prefix');
+  const prefixLength = 'AGE-SECRET-KEY-PQ-1'.length;
+  assert.equal(challengePositions.length, 1, 'prompt gives the first position in the sequence');
+  assert.ok(challengePositions[0] >= prefixLength + 4 && challengePositions[0] <= prefixLength + 7, 'challenge starts at a random position from 4th to 7th after the fixed prefix');
+  assert.match(elements['identity-challenge-prompt'].textContent, /three consecutive characters/);
   assert.ok(!JSON.stringify(elements).includes(privateIdentity), 'copy does not render the private identity');
 
   const beforeUnconfirmedUnlock = fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length;
@@ -131,8 +133,8 @@ test('generated private age identity has a short preview and full value is expos
   elements['identity-challenge-input'].value = 'XXX';
   await elements['identity-challenge-input'].input();
   assert.equal(elements.unlock.disabled, true, 'incorrect characters keep unlock disabled');
-  elements['identity-challenge-input'].value = challengePositions
-    .map(position => privateKey[position - 1]).join('');
+  elements['identity-challenge-input'].value = [0, 1, 2]
+    .map(offset => privateKey[challengePositions[0] - 1 + offset]).join('');
   await elements['identity-challenge-input'].input();
   assert.equal(fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length, beforeUnconfirmedUnlock + 1, 'matching characters unlock the generated identity automatically');
   assert.equal(elements['identity-copy-dialog'].open, false, 'successful unlock closes the pop-up');
@@ -148,8 +150,9 @@ test('generated private age identity has a short preview and full value is expos
   await elements['backup-confirmed'].change();
   const regeneratedChallengePositions = [...elements['identity-challenge-prompt'].textContent.matchAll(/\d+/g)]
     .map(match => Number(match[0]));
-  elements['identity-challenge-input'].value = regeneratedChallengePositions
-    .map(position => privateKey[position - 1]).join('');
+  assert.ok(regeneratedChallengePositions[0] >= prefixLength + 4 && regeneratedChallengePositions[0] <= prefixLength + 7);
+  elements['identity-challenge-input'].value = [0, 1, 2]
+    .map(offset => privateKey[regeneratedChallengePositions[0] - 1 + offset]).join('');
   await elements['identity-challenge-input'].input();
   assert.equal(fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length, 2, 'regenerated ID also unlocks after the challenge');
   const unlock = fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').at(-1);
@@ -174,9 +177,10 @@ test('generated private age identity has a short preview and full value is expos
   await elements['backup-confirmed'].change();
   const pastedChallengePositions = [...elements['identity-challenge-prompt'].textContent.matchAll(/\d+/g)]
     .map(match => Number(match[0]));
+  assert.ok(pastedChallengePositions[0] >= prefixLength + 4 && pastedChallengePositions[0] <= prefixLength + 7);
   assert.equal(elements.unlock.disabled, true, 'pasted identity also requires the character challenge');
-  elements['identity-challenge-input'].value = pastedChallengePositions
-    .map(position => privateKey[position - 1]).join('');
+  elements['identity-challenge-input'].value = [0, 1, 2]
+    .map(offset => privateKey[pastedChallengePositions[0] - 1 + offset]).join('');
   await elements['identity-challenge-input'].input();
   await elements.unlock.click();
   assert.equal(

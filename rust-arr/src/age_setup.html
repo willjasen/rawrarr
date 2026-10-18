@@ -137,18 +137,12 @@
     function createIdentityChallenge(privateKey) {
       const prefix = 'AGE-SECRET-KEY-PQ-1';
       if (!privateKey.startsWith(prefix)) return null;
-      const candidates = [];
-      for (let index = prefix.length; index < privateKey.length; index += 1) {
-        if (/[A-Z0-9]/.test(privateKey[index])) candidates.push(index);
-      }
-      if (candidates.length < 3) return null;
-      const selected = new Set();
-      while (selected.size < 3) {
-        const random = new Uint32Array(1);
-        crypto.getRandomValues(random);
-        selected.add(candidates[random[0] % candidates.length]);
-      }
-      const indexes = [...selected].sort((left, right) => left - right);
+      if (privateKey.length < prefix.length + 9) return null;
+      const random = new Uint32Array(1);
+      crypto.getRandomValues(random);
+      const startOffset = 3 + (random[0] % 4);
+      const startIndex = prefix.length + startOffset;
+      const indexes = [startIndex, startIndex + 1, startIndex + 2];
       return {
         positions: indexes.map(index => index + 1),
         response: indexes.map(index => privateKey[index]).join('')
@@ -160,7 +154,7 @@
       if (!challenge) return false;
       identityChallenge = challenge;
       identityChallengeInput.value = '';
-      identityChallengePrompt.textContent = `Enter the characters at positions ${challenge.positions.join(', ')} in your private key.`;
+      identityChallengePrompt.textContent = `Enter the three consecutive characters starting at position ${challenge.positions[0]} in your private key.`;
       identityChallengeSection.hidden = false;
       updateBackupConfirmation();
       return true;
