@@ -110,3 +110,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Route Rawrarr HTTPS to the coordinator](2026-10-18-coordinator-https-routing.md) — Correct the live Tailscale proxy target and verify coordinator-only HTTPS routing.
 
 - [Per-poster request timing](2026-10-18-per-poster-request-timing.md) — Exclude scrolling and browser queue waits from artwork durations.
+
+- [Fix coordinator health 502](2026-10-18-fix-coordinator-health-502.md) — Correct Tailscale Serve port 443 to the coordinator proxy.
