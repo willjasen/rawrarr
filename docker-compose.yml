@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: rawrarr
+      POSTGRES_USER: rawrarr
+      POSTGRES_PASSWORD_FILE: /run/secrets/rawrarr_postgres_password
+    secrets:
+      - rawrarr_postgres_password
+    volumes:
+      - rawrarr-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rawrarr -d rawrarr"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  rawrarr:
+    build:
+      context: ./rust-arr
+    image: rawrarr:local
+    ports:
+      - "127.0.0.1:${RAWARR_HOST_PORT:-8080}:8080"
+    environment:
+      RUST_ARR_LISTEN_ADDR: 0.0.0.0:8080
+      RAWARR_DATA_DIR: /data
+      RAWARR_SHARED_DATA_DIR: /shared
+      RAWARR_METADATA_DIR: /metadata
+      RAWARR_LIBRARY_PATH: ${RAWARR_LIBRARY_PATH:-}
+      RAWARR_LIBRARY_NAME: ${RAWARR_LIBRARY_NAME:-}
+      RAWARR_DEVICE_NAME: ${RAWARR_DEVICE_NAME:-}
+      RAWARR_SYNCTHING_API_URL: ${RAWARR_SYNCTHING_API_URL:-}
+      RAWARR_SYNCTHING_API_KEY: ${RAWARR_SYNCTHING_API_KEY:-}
+      RAWARR_SYNCTHING_API_KEY_FILE: ${RAWARR_SYNCTHING_API_KEY_FILE:-}
+      RAWARR_PG_HOST: postgres
+      RAWARR_PG_PORT: 5432
+      RAWARR_PG_USER: rawrarr
+      RAWARR_PG_DATABASE: rawrarr
+      RAWARR_PG_PASSWORD_FILE: /run/secrets/rawrarr_postgres_password
+      RAWARR_WEBAUTHN_RP_ID: ${RAWARR_WEBAUTHN_RP_ID:-localhost}
+      RAWARR_WEBAUTHN_ORIGIN: ${RAWARR_WEBAUTHN_ORIGIN:-http://localhost:${RAWARR_HOST_PORT:-8080}}
+    secrets:
+      - rawrarr_postgres_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - rawrarr-data:/data
+      - "${RAWARR_SHARED_DATA_PATH:-./shared-data}:/shared"
+    restart: unless-stopped
+
+volumes:
+  rawrarr-data:
+  rawrarr-postgres-data:
+
+secrets:
+  rawrarr_postgres_password:
+    file: ${RAWARR_POSTGRES_PASSWORD_FILE:?Set RAWARR_POSTGRES_PASSWORD_FILE to a protected password file}

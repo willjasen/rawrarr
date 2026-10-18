@@ -1,0 +1,12 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+shared-data/
+logs/
+rust-arr/target/
+target/
+node_modules/
+*.db
+*.sqlite
+*.sqlite3

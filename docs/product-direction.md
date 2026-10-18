@@ -1,0 +1,42 @@
+# Rawrarr product direction
+
+Rawrarr should be understood as an extension of Synkpieces: at its core, it is a way to organize and share files between a user's devices. The shared files do not have to be media or belong to Radarr, Sonarr, or another *arr service. Media automation is Rawrarr's first focused use case, and the existing *arr integrations are important capabilities within that broader device-to-device sharing system.
+
+Over time, Rawrarr can also become a unified media automation system. A useful way to think about that part is **Prowlarr's discovery and indexer-management role, expanded into a broader system for managing media libraries and fulfillment**. This is a product direction, not a claim that the current prototype already provides general-purpose file sharing or Prowlarr parity.
+
+## Product areas
+
+- **Discovery:** manage search sources and indexer integrations, normalize search results, and make discovery available to Rawrarr and connected *arr services.
+- **Library management:** track movies, television, music, books, subtitles, metadata, files, quality preferences, and wanted state.
+- **Fulfillment:** route approved requests through provider-neutral download adapters for BitTorrent, Usenet, and future methods, then coordinate import and file placement.
+- **Devices:** let web/database services coordinate with remote devices that can access media paths or download clients, without exposing those paths to the web host.
+- **Shared state:** replicate age-encrypted configuration (`config.aged`), user/passkey records, metadata/artwork (`.aged`), and portable catalog events in a Syncthing folder between peers with eventual convergence when peers reconnect; always-on quorum is not required. The web/control node can have no media mounts yet keep and serve a local replica of this shared app-data folder. PostgreSQL datadirs, sessions, and transient authentication challenges stay local; Rawrarr synchronizes portable records rather than a running database directory. Syncthing receives ciphertext, never the private age identity or plaintext config. Passkey-first bootstrap on a new node is preferred, but requires a secure way to verify a passkey before the node can decrypt the shared passkey records.
+- **General file sharing (future):** let users choose folders or files to share between their own devices, independent of media types and *arr integrations. Define visibility, trust, encryption, and synchronization behavior explicitly for each shared collection; a transport connection alone must not grant content access. Reuse Rawrarr's device and sharing model where practical rather than making every future feature assume a media-library schema.
+
+## Compatibility and boundaries
+
+Rawrarr should be able to serve its own discovery and library workflows while also integrating with existing Radarr, Sonarr, Lidarr, Readarr, and Bazarr installations during migration or for functions not yet implemented. Provider and service adapters should be replaceable so users are not locked to one discovery source or transfer protocol. Keep the core device, folder, sharing, and sync concepts general enough to support non-media files without requiring an Arr installation.
+
+## Ownership, trust, and distribution
+
+The initial product should be self-hosted: each owner can run Rawrarr from a packaged Docker image and keep the web/database service and media devices under their control. The code can remain closed source for an initial release, with open sourcing considered later. The owner who completes first-run setup gets a 24-hour trial; after it expires, Rawrarr is locked until a subscription is active. The selected billing direction is hosted checkout with a signed license/entitlement. The proposed model bills the shared `instance_id` and allows participating nodes to validate a license offline; pricing, tiers, grace period, provider, and final lock behavior remain undecided. See the [subscription model](subscription-model.md).
+
+One Rawrarr installation starts as a private workspace for one owner. An owner may invite another person by pairing their device through Syncthing, but a peer connection grants no trust or content access by itself. Invitees start as untrusted. The owner selects which folders or data sets to share, and private identity material, credentials, and unshared configuration stay outside those grants. Age-encrypted data is readable only by identities included as recipients when it is encrypted. The current Syncthing integration configures peers and folder roles; it does not yet implement invitations, per-person trust, or selective encrypted sharing.
+
+The future cloud portal should help an owner reach a self-hosted Rawrarr through a Rawrarr domain without becoming the node's controller. It can authenticate portal access, find an authorized online device, and broker a connection. The node should make an authenticated outbound connection; an optional relay should route by opaque device/instance IDs and forward end-to-end encrypted traffic without terminating TLS. The relay/subscription account database may link public age recipients to passkey-authenticated accounts, but private age identities must never reach that service. The relay must not encrypt, decrypt, or store subscriber app-data payloads. The cloud will still see limited account, routing, and connection metadata, so minimize and expire it. Passkey authentication and application authorization stay on the subscriber's node. See the [cloud access architecture](cloud-access-architecture.md) and [device architecture](device-architecture.md#cloud-portal-and-public-relay-boundary-future).
+
+Each shared folder has one stable Rawrarr `instance_id` shared by every participating node. A `device_id` identifies an individual node and remains distinct. Keep `instance_id` separate from Syncthing folder IDs and other transport IDs so the logical shared instance survives transport changes. See the [shared instance identity model](device-architecture.md#shared-instance-identity). Every node is intended to run the full web/API service; media storage is optional. A web-only node omits `/media`, while a storage-capable node runs the same web service and mounts its own media at `/media`.
+
+Proposed entitlement behavior: start one trial for the Rawrarr shared instance when its owner finishes first-run setup, persist the start time so restarts do not reset it, and have all devices sharing that `instance_id` use the same remaining trial/subscription state. At expiry, keep sign-in and subscription recovery available and preserve all local data, while locking product features until a valid subscription entitlement is verified. The licensing service should be separate from the blind data relay and receive only the minimum instance and subscription identifiers/status required; it may receive public age recipients linked to passkey accounts, but must never receive private age identities, media, or Rawrarr configuration. This is a product rule, not implemented behavior.
+
+## Current state
+
+The project is an early Radarr-focused prototype. It has a Radarr connection, read-only movie inventory, metadata lookup, local scanning, a download-client abstraction, device model, and age-encrypted settings. It does not yet manage indexers, search across providers, maintain a durable media catalog, submit downloads through a concrete adapter, or synchronize peers. Those are future capabilities; the current integration is not Prowlarr parity.
+
+## Architectural direction
+
+Keep search-source adapters, metadata providers, download clients, media catalog, and remote device transport as separate interfaces. Store normalized results and catalog events in Rawrarr's own data model, with source provenance and stable IDs. Define explicit capability and compatibility boundaries for optional Arr integrations rather than making Radarr's API the internal system of record.
+
+## Near-term implementation queue
+
+**Next networking milestone: make every node a full web node, then add optional Tailscale sidecars and a tailnet-scoped `rawrarr` Tailscale Service.** Preserve the web-only and web+storage deployment shapes, keep Tailscale optional, and prove auth/session/catalog behavior across eligible web backends before advertising multiple Service hosts. See the [Tailscale integration plan](tailscale-integration-plan.md). This is planned work, not implemented behavior.

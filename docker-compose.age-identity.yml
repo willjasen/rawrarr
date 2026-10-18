@@ -1,0 +1,10 @@
+services:
+  rawrarr:
+    environment:
+      RAWARR_AGE_IDENTITY_FILE: /run/secrets/rawrarr_age_identity
+    secrets:
+      - rawrarr_age_identity
+
+secrets:
+  rawrarr_age_identity:
+    file: ${RAWARR_AGE_IDENTITY_PATH:?Set RAWARR_AGE_IDENTITY_PATH to the local PQ age identity file}

@@ -1,0 +1,10 @@
+services:
+  rawrarr:
+    environment:
+      RAWARR_LIBRARY_PATH: /media
+      RAWARR_LIBRARY_NAME: ${RAWARR_LIBRARY_NAME:-Media library}
+    volumes:
+      - type: bind
+        source: ${RAWARR_HOST_MEDIA_PATH:?Set RAWARR_HOST_MEDIA_PATH to a host media folder}
+        target: /media
+        read_only: true
