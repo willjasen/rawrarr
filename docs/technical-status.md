@@ -8,12 +8,12 @@ This document separates implemented behavior from architecture that is still a p
 
 - **Rust web application:** Axum-based web/API application, PostgreSQL-backed local passkey authentication, and Docker Compose packaging. The Rust crate forbids unsafe code. PostgreSQL data and runtime state remain node-local.
 - **Passkey onboarding:** first account registration and sign-in use WebAuthn passkeys stored in the local PostgreSQL database. A new local account is not yet a cloud relay account.
-- **Age vault:** create or import a post-quantum age identity; persist Rawrarr configuration as `config.aged` in `/shared`; unlock it in the app. The private identity is not persisted by the app. The setup UI now shows only an abbreviated preview for a generated key and copies the full value only through the copy button.
+- **Age vault:** create or import a post-quantum age identity; persist Rawrarr configuration as `config.aged` in `/shared`; unlock it in the app. The private identity is not persisted by the app. The setup UI shows only an abbreviated preview, copies only the private key line, and requires a random three-character check plus backup confirmation before unlocking.
 - **Radarr:** configure URL/API key in the UI, save settings age-encrypted, apply changes without restarting, show connection state and movies.
 - **Local scanning and metadata:** scan an explicitly mounted media root; search Radarr metadata and cache artwork as age-encrypted `.aged` files. Scans can create age-encrypted JSON sidecars from a public age recipient without needing the private identity in the scanner process.
 - **Syncthing:** configure supported peer/folder settings through the Syncthing REST API. Syncthing implements BEP for peer transfer; Rawrarr does not implement BitTorrent or BEP itself.
 - **Shared logs:** write compressed allowlisted JSONL logs beneath `/shared/logs/<device-id>/`.
-- **Docker:** the base Compose project runs Rawrarr and PostgreSQL; media and age-identity Compose overlays are available. `/shared` is a host bind mount, while `/data` and PostgreSQL use local Docker volumes.
+- **Docker:** the base Compose project runs Rawrarr and PostgreSQL; media and age-identity Compose overlays are available. Both containers have readiness health checks. `/shared` is a host bind mount, while `/data` and PostgreSQL use local Docker volumes.
 
 ## Planned, not implemented
 

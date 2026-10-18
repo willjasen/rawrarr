@@ -60,3 +60,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Display rawrarr in lowercase](2026-10-18-rawrarr-lowercase-brand-copy.md) — Keep the product name lowercase in user-facing interface copy, errors, and logs, with a regression test for displayed text.
 - [Copy only the private age identity](2026-10-18-rawrarr-copy-private-identity-only.md) — Make the clipboard button extract the private key line and omit the public-recipient comment from an age identity file.
 - [Report Rawrarr container health](2026-10-18-rawrarr-docker-healthchecks.md) — Add an HTTP health check to the application image alongside PostgreSQL's existing readiness check.
+- [Verify private age key copy](2026-10-18-rawrarr-private-key-copy-verification.md) — Gate vault unlock on a random three-character check from the copied key and backup confirmation.
+- [Show the rawrarr logo on setup](2026-10-18-rawrarr-setup-logo.md) — Reuse the existing lowercase rawrarr logo asset on the age identity setup page.

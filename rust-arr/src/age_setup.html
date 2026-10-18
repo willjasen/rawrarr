@@ -11,6 +11,7 @@
     body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
     main { width:min(100% - 32px,520px); padding:30px; background:var(--panel); border:1px solid var(--line); border-radius:18px; box-shadow:0 24px 80px #0005 }
     .brand { color:var(--green); font-size:13px; font-weight:750; letter-spacing:.08em; text-transform:uppercase }
+    .brand-logo { display:block; width:180px; height:60px; max-width:100%; object-fit:contain; padding:2px; margin-bottom:18px; border-radius:8px; background:#dff4bd }
     h1 { margin:28px 0 5px; font-size:26px; letter-spacing:-.04em }
     p { color:var(--muted); font-size:13px; margin:0 0 18px }
     label { display:block; margin:14px 0 6px; color:#c8d3c9; font-size:12px }
@@ -36,6 +37,7 @@
 </head>
 <body>
   <main>
+    <img class="brand-logo" src="/assets/rawrarr-logo.png" alt="rawrarr" width="180" height="60">
     <div class="brand">rawrarr · private setup</div>
     <h1>unlock your rawrchive</h1>
     <p>Create a post-quantum age identity or import one you already have. A shortened preview helps identify a newly created private identity; the full value is available only through the copy button.</p>
@@ -61,6 +63,11 @@
       </label>
       <p class="backup-warning">rawrarr cannot recover this identity if it is lost. Without it, your encrypted shared configuration cannot be unlocked.</p>
     </section>
+    <section id="identity-challenge" hidden>
+      <p id="identity-challenge-prompt"></p>
+      <label for="identity-challenge-input">Enter those three characters to continue</label>
+      <input id="identity-challenge-input" type="text" maxlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false">
+    </section>
     <p class="privacy-note">Create identity makes a new key that is ready to unlock after you copy it. To use a saved key, paste it into the masked field. Select Unlock vault to open your encrypted settings. Only shortened identity previews are shown.</p>
     <div id="message" role="status" aria-live="polite"></div>
   </main>
@@ -70,13 +77,26 @@
     const unlockButton = document.getElementById('unlock');
     const backupConfirmation = document.getElementById('backup-confirmation');
     const backupConfirmed = document.getElementById('backup-confirmed');
+    const identityChallengeSection = document.getElementById('identity-challenge');
+    const identityChallengePrompt = document.getElementById('identity-challenge-prompt');
+    const identityChallengeInput = document.getElementById('identity-challenge-input');
     let generatedIdentity = '';
+    let identityChallenge = null;
+
+    function clearIdentityChallenge() {
+      identityChallenge = null;
+      identityChallengeSection.hidden = true;
+      identityChallengePrompt.textContent = '';
+      identityChallengeInput.value = '';
+    }
 
     function updateBackupConfirmation() {
       const identityAvailable = Boolean(generatedIdentity || identity.value.trim());
       backupConfirmation.hidden = !identityAvailable;
       if (!identityAvailable) backupConfirmed.checked = false;
-      unlockButton.disabled = !identityAvailable || !backupConfirmed.checked;
+      const challengePassed = identityChallenge
+        && identityChallengeInput.value.trim().toUpperCase() === identityChallenge.response;
+      unlockButton.disabled = !identityAvailable || !backupConfirmed.checked || !challengePassed;
     }
 
     function shortenedIdentityPreview(value) {
@@ -87,8 +107,42 @@
     }
 
     function privateIdentityKey(value) {
-      return value.split(/\r?\n/).map(line => line.trim())
-        .find(line => line.startsWith('AGE-SECRET-KEY-PQ-1')) || '';
+      const line = value.split(/\r?\n/).map(line => line.trim())
+        .find(line => line.startsWith('AGE-SECRET-KEY-PQ-1'));
+      if (line) return line;
+      return value.match(/AGE-SECRET-KEY-PQ-1[A-Z0-9]+/i)?.[0] || '';
+    }
+
+    function createIdentityChallenge(privateKey) {
+      const prefix = 'AGE-SECRET-KEY-PQ-1';
+      if (!privateKey.startsWith(prefix)) return null;
+      const candidates = [];
+      for (let index = prefix.length; index < privateKey.length; index += 1) {
+        if (/[A-Z0-9]/.test(privateKey[index])) candidates.push(index);
+      }
+      if (candidates.length < 3) return null;
+      const selected = new Set();
+      while (selected.size < 3) {
+        const random = new Uint32Array(1);
+        crypto.getRandomValues(random);
+        selected.add(candidates[random[0] % candidates.length]);
+      }
+      const indexes = [...selected].sort((left, right) => left - right);
+      return {
+        positions: indexes.map(index => index + 1),
+        response: indexes.map(index => privateKey[index]).join('')
+      };
+    }
+
+    function promptIdentityChallenge(privateKey) {
+      const challenge = createIdentityChallenge(privateKey);
+      if (!challenge) return false;
+      identityChallenge = challenge;
+      identityChallengeInput.value = '';
+      identityChallengePrompt.textContent = `Enter the characters at positions ${challenge.positions.join(', ')} in your private key.`;
+      identityChallengeSection.hidden = false;
+      updateBackupConfirmation();
+      return true;
     }
 
     function clearPrivatePreview() {
@@ -150,13 +204,21 @@
     identity.addEventListener('input', () => {
       generatedIdentity = '';
       backupConfirmed.checked = false;
+      clearIdentityChallenge();
       clearPrivatePreview();
+      document.getElementById('copy').disabled = !privateIdentityKey(identity.value);
       updateBackupConfirmation();
     });
+    identityChallengeInput.addEventListener('input', updateBackupConfirmation);
     backupConfirmed.addEventListener('change', updateBackupConfirmation);
     document.getElementById('generate').addEventListener('click', async event => {
       const button = event.currentTarget;
       button.disabled = true;
+      generatedIdentity = '';
+      backupConfirmed.checked = false;
+      clearIdentityChallenge();
+      document.getElementById('copy').disabled = !privateIdentityKey(identity.value);
+      updateBackupConfirmation();
       message.textContent = 'Creating a post-quantum identity…';
       try {
         const response = await fetch('/api/settings/age/generate', { method: 'POST', headers: { Accept: 'application/json' } });
@@ -184,7 +246,11 @@
       }
       try {
         await navigator.clipboard.writeText(privateKey);
-        message.textContent = 'Private identity copied. Store it securely before continuing.';
+        if (!promptIdentityChallenge(privateKey)) {
+          message.textContent = 'The private identity is too short to verify.';
+          return;
+        }
+        message.textContent = 'Private identity copied. Store it securely, then enter the requested characters.';
       } catch (_) {
         message.textContent = 'Clipboard access is unavailable. Allow clipboard access, then use Copy private identity.';
       }
@@ -192,7 +258,7 @@
 
     document.getElementById('unlock').addEventListener('click', async event => {
       const button = event.currentTarget;
-      const privateIdentity = generatedIdentity || identity.value;
+      const privateIdentity = generatedIdentity || privateIdentityKey(identity.value) || identity.value;
       if (!backupConfirmed.checked) {
         message.textContent = 'Confirm that you saved your private age identity somewhere safe before continuing.';
         return;
@@ -214,6 +280,7 @@
         generatedIdentity = '';
         identity.value = '';
         updateBackupConfirmation();
+        clearIdentityChallenge();
         clearPrivatePreview();
         message.textContent = 'Vault unlocked. Opening your workspace…';
         window.location.replace('/');
@@ -224,6 +291,7 @@
       generatedIdentity = '';
       identity.value = '';
       backupConfirmed.checked = false;
+      clearIdentityChallenge();
       clearPrivatePreview();
     });
     loadStatus();

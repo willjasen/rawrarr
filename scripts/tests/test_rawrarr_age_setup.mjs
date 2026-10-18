@@ -7,7 +7,7 @@ import vm from 'node:vm';
 const page = await readFile(new URL('../../rust-arr/src/age_setup.html', import.meta.url), 'utf8');
 const mainPage = await readFile(new URL('../../rust-arr/src/ui.html', import.meta.url), 'utf8');
 const publicRecipient = 'age1pq1public-test-recipient';
-const privateKey = 'AGE-SECRET-KEY-PQ-1-TEST-PRIVATE-DO-NOT-PRINT';
+const privateKey = 'AGE-SECRET-KEY-PQ-1TESTPRIVATEDONOTPRINT';
 const privateIdentity = `# created: test fixture\n# public key: ${publicRecipient}\n${privateKey}`;
 const themeSeed = createHash('sha256').update(publicRecipient).digest('hex');
 
@@ -27,6 +27,7 @@ function createElement() {
 
 test('generated private age identity has a short preview and full value is exposed only through copy', async () => {
   assert.match(page, /<h1>unlock your rawrchive<\/h1>/);
+  assert.match(page, /<img class="brand-logo" src="\/assets\/rawrarr-logo\.png" alt="rawrarr"/);
   assert.doesNotMatch(page, /<textarea\b/i);
   assert.match(page, /id="identity" type="password"/);
   assert.match(page, /Copy private identity/);
@@ -41,11 +42,13 @@ test('generated private age identity has a short preview and full value is expos
 
   const ids = ['identity', 'message', 'public-card', 'public-recipient',
     'private-preview-card', 'private-preview', 'fingerprint', 'copy', 'generate', 'unlock',
-    'backup-confirmation', 'backup-confirmed'];
+    'backup-confirmation', 'backup-confirmed', 'identity-challenge',
+    'identity-challenge-prompt', 'identity-challenge-input'];
   const elements = Object.fromEntries(ids.map(id => [id, createElement()]));
   const rootStyles = new Map();
   const fetchCalls = [];
   const clipboard = [];
+  let randomValue = 0;
   const document = {
     documentElement: { style: { setProperty(name, value) { rootStyles.set(name, value); } } },
     getElementById(id) { return elements[id]; },
@@ -54,11 +57,14 @@ test('generated private age identity has a short preview and full value is expos
   const context = {
     document,
     navigator: { clipboard: { async writeText(value) { clipboard.push(value); } } },
-    crypto: { subtle: { async digest(_algorithm, bytes) {
-      const input = Buffer.from(bytes);
-      const digest = createHash('sha256').update(input).digest();
-      return digest.buffer.slice(digest.byteOffset, digest.byteOffset + digest.byteLength);
-    } } },
+    crypto: {
+      getRandomValues(array) { array[0] = randomValue++; return array; },
+      subtle: { async digest(_algorithm, bytes) {
+        const input = Buffer.from(bytes);
+        const digest = createHash('sha256').update(input).digest();
+        return digest.buffer.slice(digest.byteOffset, digest.byteOffset + digest.byteLength);
+      } }
+    },
     TextEncoder,
     fetch: async (url, options = {}) => {
       fetchCalls.push({ url, options });
@@ -91,6 +97,11 @@ test('generated private age identity has a short preview and full value is expos
   await elements.copy.click();
   assert.deepEqual(clipboard, [privateKey]);
   assert.ok(!clipboard[0].includes(publicRecipient), 'copy excludes the public recipient header');
+  assert.equal(elements['identity-challenge'].hidden, false, 'copying the identity reveals a character challenge');
+  const challengePositions = [...elements['identity-challenge-prompt'].textContent.matchAll(/\d+/g)]
+    .map(match => Number(match[0]));
+  assert.equal(challengePositions.length, 3);
+  assert.ok(challengePositions.every(position => position > 'AGE-SECRET-KEY-PQ-1'.length), 'challenge positions skip the fixed prefix');
   assert.ok(!JSON.stringify(elements).includes(privateIdentity), 'copy does not render the private identity');
 
   const beforeUnconfirmedUnlock = fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length;
@@ -98,18 +109,40 @@ test('generated private age identity has a short preview and full value is expos
   assert.equal(fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length, beforeUnconfirmedUnlock);
   elements['backup-confirmed'].checked = true;
   await elements['backup-confirmed'].change();
-  assert.equal(elements.unlock.disabled, false);
+  assert.equal(elements.unlock.disabled, true, 'backup acknowledgement alone does not pass the character challenge');
+  elements['identity-challenge-input'].value = 'XXX';
+  await elements['identity-challenge-input'].input();
+  assert.equal(elements.unlock.disabled, true, 'incorrect characters keep unlock disabled');
+  elements['identity-challenge-input'].value = challengePositions
+    .map(position => privateKey[position - 1]).join('');
+  await elements['identity-challenge-input'].input();
+  assert.equal(elements.unlock.disabled, false, 'matching characters enable unlock');
+  await elements.generate.click();
+  assert.equal(elements['identity-challenge'].hidden, true, 'creating a new identity clears the previous challenge');
+  assert.equal(elements.unlock.disabled, true, 'creating a new identity resets unlock confirmation');
+  await elements.copy.click();
+  assert.deepEqual(clipboard, [privateKey, privateKey]);
+  const regeneratedChallengePositions = [...elements['identity-challenge-prompt'].textContent.matchAll(/\d+/g)]
+    .map(match => Number(match[0]));
+  elements['backup-confirmed'].checked = true;
+  await elements['backup-confirmed'].change();
+  elements['identity-challenge-input'].value = regeneratedChallengePositions
+    .map(position => privateKey[position - 1]).join('');
+  await elements['identity-challenge-input'].input();
+  assert.equal(elements.unlock.disabled, false, 'a new challenge can be completed after regenerating');
   await elements.unlock.click();
   const unlock = fetchCalls.find(call => call.url === '/api/settings/age' && call.options.method === 'POST');
   assert.equal(JSON.parse(unlock.options.body).identity, privateIdentity);
   assert.equal(elements.identity.value, '');
 
   const previousUnlockCount = fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length;
-  elements.identity.value = privateIdentity;
+  elements.identity.value = privateIdentity.replace(/\n/g, ' ');
   await elements.identity.input();
-  assert.equal(elements.identity.value, privateIdentity, 'a pasted identity remains in the masked password field');
+  assert.equal(elements.identity.value, privateIdentity.replace(/\n/g, ' '), 'pasted age-file text remains masked in the password field');
   await elements.copy.click();
-  assert.deepEqual(clipboard, [privateKey, privateKey], 'copying a pasted age file extracts only its private key');
+  assert.deepEqual(clipboard, [privateKey, privateKey, privateKey], 'copying a pasted age file extracts only its private key');
+  const pastedChallengePositions = [...elements['identity-challenge-prompt'].textContent.matchAll(/\d+/g)]
+    .map(match => Number(match[0]));
   assert.equal(elements['backup-confirmed'].checked, false, 'pasting an identity resets the backup confirmation');
   assert.equal(elements.unlock.disabled, true, 'a pasted identity requires a fresh backup confirmation');
   assert.equal(
@@ -119,12 +152,18 @@ test('generated private age identity has a short preview and full value is expos
   );
   elements['backup-confirmed'].checked = true;
   await elements['backup-confirmed'].change();
+  assert.equal(elements.unlock.disabled, true, 'pasted identity also requires the character challenge');
+  elements['identity-challenge-input'].value = pastedChallengePositions
+    .map(position => privateKey[position - 1]).join('');
+  await elements['identity-challenge-input'].input();
   await elements.unlock.click();
   assert.equal(
     fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length,
     previousUnlockCount + 1,
     'unlocking after paste submits the identity'
   );
+  const pastedUnlock = fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').at(-1);
+  assert.equal(JSON.parse(pastedUnlock.options.body).identity, privateKey, 'flattened age-file paste submits only its private-key line');
   assert.equal(rootStyles.get('--theme-hue'), String(Number.parseInt(themeSeed.slice(0, 8), 16) % 360));
 
   assert.match(mainPage, /fetch\('\/api\/settings\/age'/);
