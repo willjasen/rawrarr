@@ -9,6 +9,7 @@ const privateKey = 'AGE-SECRET-KEY-PQ-1ABCDXYZ0123456789';
 const recipient = 'age1pq1browser-test-recipient';
 const themeSeed = '0123456789abcdef'.repeat(4);
 let unlockRequests = 0;
+let generateRequests = 0;
 
 const server = createServer((request, response) => {
   if (request.method === 'GET' && (request.url === '/age-setup' || request.url === '/')) {
@@ -20,6 +21,7 @@ const server = createServer((request, response) => {
   if (request.url === '/api/settings/age' && request.method === 'GET') {
     response.end(JSON.stringify({ unlocked: false, encryptedConfigExists: false }));
   } else if (request.url === '/api/settings/age/generate' && request.method === 'POST') {
+    generateRequests += 1;
     response.end(JSON.stringify({ identity: `# public key: ${recipient}\n${privateKey}`, recipient, themeSeed }));
   } else if (request.url === '/api/settings/age' && request.method === 'POST') {
     unlockRequests += 1;
@@ -44,13 +46,20 @@ test('age identity creation and backup acknowledgement work in a real browser', 
 
   await page.getByRole('button', { name: 'Create ID' }).click();
   await page.getByRole('dialog').waitFor({ state: 'visible' });
+  assert.equal(generateRequests, 1, 'Create ID calls the generation endpoint');
   assert.equal(await page.locator('#private-preview').textContent(), 'AGE-SECRET-K…56789');
   assert.equal(await page.locator('body').textContent().then(text => text.includes(privateKey)), false, 'the complete private key is not displayed');
-  const continueButton = page.getByRole('button', { name: 'Continue' });
+  const copyButton = page.getByRole('button', { name: 'Copy private identity' });
+  assert.equal(await copyButton.isEnabled(), true, 'the generated ID can be copied');
+  const backupCheckbox = page.locator('#backup-confirmed');
+  assert.equal(await backupCheckbox.isVisible(), false, 'the acknowledgement checkbox appears after copying');
+  const continueButton = page.locator('#unlock');
+  assert.equal(await continueButton.textContent(), 'Continue');
   assert.equal(await continueButton.isDisabled(), true, 'Continue waits for the identity copy and backup acknowledgement');
 
-  await page.getByRole('button', { name: 'Copy private identity' }).click();
-  const backupCheckbox = page.locator('#backup-confirmed');
+  await copyButton.click();
+  assert.equal(await backupCheckbox.isVisible(), true, 'copying the ID reveals the acknowledgement checkbox');
+  assert.equal(await continueButton.isDisabled(), true, 'copying alone does not enable Continue');
   await backupCheckbox.check();
   assert.equal(await backupCheckbox.isChecked(), true, 'backup acknowledgement is checked');
   assert.equal(await continueButton.isEnabled(), true, 'the backup acknowledgement enables Continue');
