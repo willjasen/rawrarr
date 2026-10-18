@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod download_clients;
+pub mod library;
 
 use axum::{Json, Router, extract::State, http::StatusCode, response::Html, routing::get};
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
@@ -10,6 +11,7 @@ use std::{env, net::SocketAddr, sync::Arc, time::Duration};
 #[derive(Clone)]
 struct AppState {
     radarr: Option<RadarrClient>,
+    library: Option<library::LibraryRoot>,
 }
 
 #[derive(Clone)]
@@ -85,6 +87,44 @@ async fn dashboard() -> Html<&'static str> {
     Html(include_str!("ui.html"))
 }
 
+async fn library_info(State(state): State<Arc<AppState>>) -> Json<library::LibraryInfo> {
+    match &state.library {
+        Some(root) => Json(library::LibraryInfo {
+            configured: true,
+            name: Some(root.name().to_owned()),
+        }),
+        None => Json(library::LibraryInfo {
+            configured: false,
+            name: None,
+        }),
+    }
+}
+
+async fn scan_library(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<library::ScanSummary>, (StatusCode, Json<ApiError>)> {
+    let Some(root) = state.library.clone() else {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ApiError {
+                error: "Local media folder is not configured",
+            }),
+        ));
+    };
+
+    tokio::task::spawn_blocking(move || root.scan())
+        .await
+        .map(Json)
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError {
+                    error: "Local media scan failed",
+                }),
+            )
+        })
+}
+
 async fn radarr_status(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<RadarrStatus>, (StatusCode, Json<ApiError>)> {
@@ -109,15 +149,18 @@ async fn radarr_status(
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let address = env::var("RUST_ARR_LISTEN_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".to_owned());
+    let address = env::var("RUST_ARR_LISTEN_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".to_owned());
     let socket_address: SocketAddr = address.parse()?;
     let state = Arc::new(AppState {
         radarr: RadarrClient::from_env()?,
+        library: library::LibraryRoot::from_env()?,
     });
 
     let app = Router::new()
         .route("/", get(dashboard))
         .route("/health", get(health))
+        .route("/api/library", get(library_info))
+        .route("/api/library/scan", axum::routing::post(scan_library))
         .route("/api/radarr/status", get(radarr_status))
         .with_state(state);
     let listener = tokio::net::TcpListener::bind(socket_address).await?;

@@ -75,6 +75,16 @@
     code { color: #d1e1c9; background: #101613; border: 1px solid #29352e; border-radius: 5px; padding: 2px 5px; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
     .refresh { color: var(--green); background: none; border: 0; font-size: 10px; cursor: pointer; padding: 4px 0 4px 8px; }
     .refresh:hover { color: #d4ff9e; }
+    .refresh:disabled { color: #627066; cursor: not-allowed; }
+    .table-wrap { overflow-x: auto; }
+    .scan-summary { padding: 12px 18px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 10px; }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th { color: #77867b; font-size: 9px; text-transform: uppercase; letter-spacing: .09em; font-weight: 650; padding: 10px 16px; }
+    td { border-top: 1px solid #26312b; padding: 10px 16px; font-size: 10px; color: #d6dfd7; vertical-align: top; }
+    td.path { color: var(--muted); overflow-wrap: anywhere; }
+    td.size { text-align: right; white-space: nowrap; color: var(--muted); }
+    .kind-tag { display: inline-block; border: 1px solid #3a493e; background: #202923; color: #c6d4c8; border-radius: 5px; padding: 3px 6px; font-size: 9px; white-space: nowrap; }
+    .issue-note { color: var(--amber); padding: 0 18px 13px; font-size: 10px; }
     .footer { color: #647168; text-align: right; font-size: 9px; margin-top: 16px; }
     @media (max-width: 850px) { .app { grid-template-columns: 70px minmax(0, 1fr); } aside { padding: 22px 10px; } .brand { justify-content: center; padding: 0 0 32px; } .brand-copy, .section-label, .nav-text, .nav-soon, .sidebar-bottom { display: none; } .nav-item { justify-content: center; padding: 0; } main { padding: 30px 24px 50px; } .grid { grid-template-columns: 1fr 1fr; } .grid .card:last-child { grid-column: span 2; } }
     @media (max-width: 580px) { .app { display: block; } aside { position: sticky; z-index: 2; top: 0; height: 60px; display: flex; align-items: center; border-right: 0; border-bottom: 1px solid var(--line); padding: 0 14px; } .brand { padding: 0; margin-right: auto; } .brand-copy { display: block; } .nav-item { width: 40px; height: 40px; margin: 0 3px; } .nav-item.active { box-shadow: inset 0 -2px var(--green); } main { padding: 26px 16px 42px; } .topline { align-items: flex-start; margin-bottom: 22px; } .live-pill { font-size: 0; padding: 9px; } .welcome { align-items: flex-start; flex-direction: column; padding: 19px; } .grid { gap: 9px; } .card { padding: 14px; min-height: 116px; } .columns { grid-template-columns: 1fr; } }
@@ -99,14 +109,19 @@
         <div class="welcome-tag">RADARR · FIRST INTEGRATION</div>
       </section>
       <section class="grid" aria-label="Library summary">
-        <article class="card"><div class="card-head"><span>Movies tracked</span><span class="card-symbol">▧</span></div><div class="card-value">—</div><div class="card-sub">Movie library view is coming next</div></article>
+        <article class="card"><div class="card-head"><span>Media files found</span><span class="card-symbol">▧</span></div><div id="media-total" class="card-value">—</div><div id="media-detail" class="card-sub">Configure a folder, then scan</div></article>
         <article class="card"><div class="card-head"><span>Download providers</span><span class="card-symbol">⇩</span></div><div class="card-value">0</div><div class="card-sub">Provider-neutral adapter interface is in place</div></article>
         <article class="card"><div class="card-head"><span>Radarr connection</span><span class="card-symbol">↗</span></div><div class="card-value status-value"><span id="radarr-dot" class="status-dot"></span><span id="radarr-state">Checking…</span></div><div id="radarr-detail" class="card-sub">Checking configured Radarr endpoint</div></article>
       </section>
       <section class="columns">
         <article class="panel">
-          <div class="panel-head"><h2>Movie library</h2><span>Overview</span></div>
-          <div class="empty"><div class="empty-icon">✳</div><h3>Your library will show up here</h3><p>The movie list and library tools are the next step. First, connect this app to Radarr so it can confirm the service and load your movie collection.</p></div>
+          <div class="panel-head"><h2>Local media</h2><button id="scan" class="refresh" type="button" disabled>Scan folder ↻</button></div>
+          <div id="library-empty" class="empty"><div class="empty-icon">⌕</div><h3 id="library-empty-title">Configure a local folder</h3><p id="library-empty-copy">Set <code>RAWARR_LIBRARY_PATH</code> to a folder available to the rawrarr process, then restart it. Scanning is read-only and never follows symbolic links.</p></div>
+          <div id="library-results" class="table-wrap" hidden>
+            <div id="scan-summary" class="scan-summary"></div>
+            <table><thead><tr><th>Type</th><th>Name</th><th>Relative path</th><th>Size</th></tr></thead><tbody id="media-rows"></tbody></table>
+            <div id="scan-issues" class="issue-note" hidden></div>
+          </div>
         </article>
         <article class="panel">
           <div class="panel-head"><h2>Connect Radarr</h2><button id="refresh" class="refresh" type="button">Refresh status ↻</button></div>
@@ -125,6 +140,10 @@
     const dot = document.getElementById('radarr-dot');
     const state = document.getElementById('radarr-state');
     const detail = document.getElementById('radarr-detail');
+    const scanButton = document.getElementById('scan');
+    const libraryEmpty = document.getElementById('library-empty');
+    const libraryResults = document.getElementById('library-results');
+    let libraryConfigured = false;
 
     async function refreshStatus() {
       state.textContent = 'Checking…';
@@ -152,7 +171,91 @@
       }
     }
 
+    async function loadLibraryInfo() {
+      try {
+        const response = await fetch('/api/library', { headers: { Accept: 'application/json' } });
+        const info = await response.json();
+        libraryConfigured = info.configured;
+        scanButton.disabled = !info.configured;
+        if (info.configured) {
+          document.getElementById('library-empty-title').textContent = `${info.name} is ready to scan`;
+          document.getElementById('library-empty-copy').textContent = 'Choose Scan folder to inventory recognized media files. This scan reads file names and sizes only.';
+        }
+      } catch (_) {
+        scanButton.disabled = true;
+      }
+    }
+
+    function formatBytes(value) {
+      if (value < 1024) return `${value} B`;
+      const units = ['KB', 'MB', 'GB', 'TB'];
+      let size = value;
+      let unit = -1;
+      do { size /= 1024; unit += 1; } while (size >= 1024 && unit < units.length - 1);
+      return `${size.toFixed(1)} ${units[unit]}`;
+    }
+
+    async function scanLibrary() {
+      scanButton.disabled = true;
+      scanButton.textContent = 'Scanning…';
+      try {
+        const response = await fetch('/api/library/scan', { method: 'POST', headers: { Accept: 'application/json' } });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Scan failed');
+
+        document.getElementById('media-total').textContent = result.counts.movies + result.counts.television + result.counts.music + result.counts.books + result.counts.subtitles + result.counts.other;
+        document.getElementById('media-detail').textContent = `${result.counts.movies} movies · ${result.counts.television} TV · ${result.counts.music} music`;
+        document.getElementById('scan-summary').textContent = `${result.libraryName} · ${result.items.length}${result.truncated ? '+' : ''} media files · ${result.counts.books} books · ${result.counts.subtitles} subtitles · ${result.counts.other} other`;
+
+        const rows = document.getElementById('media-rows');
+        rows.replaceChildren();
+        for (const file of result.items.slice(0, 250)) {
+          const row = document.createElement('tr');
+          const kindCell = document.createElement('td');
+          const tag = document.createElement('span');
+          tag.className = 'kind-tag';
+          tag.textContent = ({ television: 'TV' })[file.kind] || file.kind[0].toUpperCase() + file.kind.slice(1);
+          kindCell.append(tag);
+          const nameCell = document.createElement('td');
+          nameCell.textContent = file.name;
+          const pathCell = document.createElement('td');
+          pathCell.className = 'path';
+          pathCell.textContent = file.path;
+          const sizeCell = document.createElement('td');
+          sizeCell.className = 'size';
+          sizeCell.textContent = formatBytes(file.sizeBytes);
+          row.append(kindCell, nameCell, pathCell, sizeCell);
+          rows.append(row);
+        }
+        if (result.items.length === 0) {
+          const row = document.createElement('tr');
+          const cell = document.createElement('td');
+          cell.colSpan = 4;
+          cell.textContent = 'No recognized media files found in this folder.';
+          row.append(cell);
+          rows.append(row);
+        }
+        libraryEmpty.hidden = true;
+        libraryResults.hidden = false;
+        const issues = document.getElementById('scan-issues');
+        issues.hidden = result.issues === 0 && !result.truncated;
+        issues.textContent = result.truncated ? 'Scan reached a safety limit; results may be incomplete.' : `${result.issues} folders or files could not be read.`;
+        if (result.items.length > 250) issues.hidden = false;
+        if (result.items.length > 250) issues.textContent += ` Showing the first 250 entries of ${result.items.length}.`;
+      } catch (error) {
+        libraryResults.hidden = true;
+        libraryEmpty.hidden = false;
+        document.getElementById('library-empty-title').textContent = 'Scan could not complete';
+        document.getElementById('library-empty-copy').textContent = error.message;
+      } finally {
+        scanButton.textContent = 'Scan folder ↻';
+        scanButton.disabled = !libraryConfigured;
+      }
+    }
+
     document.getElementById('refresh').addEventListener('click', refreshStatus);
+    scanButton.addEventListener('click', scanLibrary);
+    loadLibraryInfo();
     refreshStatus();
     window.setInterval(refreshStatus, 30000);
   </script>
