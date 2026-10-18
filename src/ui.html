@@ -145,7 +145,7 @@
         <article class="panel" id="radarr-settings-panel" style="grid-column: 1 / -1; scroll-margin-top: 24px">
           <div class="panel-head"><h2>Connect Radarr</h2><button id="refresh" class="refresh" type="button">Refresh status ↻</button></div>
           <form id="radarr-settings" class="settings-form">
-            <p class="setup-intro">Configure a Radarr URL and API key. The key is held in memory and never sent back to this page; enter it again after rawrarr restarts.</p>
+            <p class="setup-intro">Settings apply to the running server immediately; no restart is needed. The API key stays in memory and must be entered again only if rawrarr itself restarts.</p>
             <label for="radarr-url">Radarr URL</label>
             <input id="radarr-url" name="url" type="url" placeholder="https://radarr.example.com" autocomplete="url" required>
             <label for="radarr-key">Radarr API key</label>
@@ -190,7 +190,7 @@
           detail.textContent = `${body.appName} ${body.version}${body.urlBase ? ` · ${body.urlBase}` : ''}`;
         } else if (response.status === 503) {
           state.textContent = 'Not configured';
-          detail.textContent = 'Add the Radarr URL and API key to the service environment';
+          detail.textContent = 'Configure Radarr below to connect';
         } else {
           dot.className = 'status-dot error';
           state.textContent = 'Unavailable';
@@ -269,9 +269,9 @@
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Could not save Radarr settings');
         document.getElementById('radarr-key').value = '';
-        message.textContent = 'Settings loaded in memory. Checking Radarr…';
+        message.textContent = 'Applied immediately without restarting. Checking Radarr…';
         await Promise.all([refreshStatus(), loadMetadataInfo()]);
-        message.textContent = 'Settings are active until rawrarr restarts.';
+        message.textContent = `Applied without restart · Radarr: ${state.textContent}. The key stays in memory until rawrarr itself restarts.`;
       } catch (error) {
         message.textContent = error.message;
       } finally {
