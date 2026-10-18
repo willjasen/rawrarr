@@ -22,6 +22,7 @@ import xml.etree.ElementTree as ET
 
 CONTEXT = "orbstack"
 IMAGE = "syncthing/syncthing:2.1.5"
+PROJECT = "rawrarr-testing"
 
 
 def free_port() -> int:
@@ -73,13 +74,13 @@ def main() -> int:
     docker("pull", IMAGE)
 
     suffix = secrets.token_hex(4)
-    network = f"rawrarr-sync-test-{suffix}"
-    names = [f"rawrarr-web-test-{suffix}", f"rawrarr-storage-test-{suffix}"]
+    network = f"{PROJECT}-net-{suffix}"
+    names = [f"{PROJECT}-web-{suffix}", f"{PROJECT}-storage-{suffix}"]
     ports = [free_port(), free_port()]
     root = Path(tempfile.mkdtemp(prefix="rawrarr-orbstack-sync-"))
     passed = False
     try:
-        docker("network", "create", network)
+        docker("network", "create", "--label", f"com.docker.compose.project={PROJECT}", network)
         homes = [root / "web-home", root / "storage-home"]
         shares = [root / "web-share", root / "storage-share"]
         for home, share in zip(homes, shares):
@@ -108,13 +109,24 @@ def main() -> int:
         encrypted_config = (shares[0] / "config.aged").read_bytes()
         if not encrypted_config.startswith(b"age-encryption.org/v1\n") or config_plaintext in encrypted_config:
             raise RuntimeError("Rawrarr config fixture was not age-encrypted before sync")
-        for name, home, share, port in zip(names, homes, shares, ports):
-            docker("run", "-d", "--name", name, "--network", network,
+        for name, service, home, share, port in zip(names, ("web", "storage"), homes, shares, ports):
+            docker("run", "-d", "--name", name,
+                   "--label", f"com.docker.compose.project={PROJECT}",
+                   "--label", f"com.docker.compose.service={service}",
+                   "--network", network,
                    "-p", f"127.0.0.1:{port}:8384",
                    "-v", f"{home}:/var/syncthing",
                    "-v", f"{share}:/shared",
                    IMAGE, "serve", "--no-browser", "--no-restart", "--no-upgrade",
                    "--gui-address", "0.0.0.0:8384")
+
+        for name, service in zip(names, ("web", "storage")):
+            labels = json.loads(docker("inspect", "--format", "{{json .Config.Labels}}", name))
+            if labels.get("com.docker.compose.project") != PROJECT or labels.get("com.docker.compose.service") != service:
+                raise RuntimeError(f"{name} is not labeled as {PROJECT}/{service}")
+        network_labels = json.loads(docker("network", "inspect", "--format", "{{json .Labels}}", network))
+        if network_labels.get("com.docker.compose.project") != PROJECT:
+            raise RuntimeError(f"{network} is not labeled as part of {PROJECT}")
 
         nodes: list[tuple[str, str]] = []
         deadline = time.monotonic() + 45
@@ -175,7 +187,7 @@ def main() -> int:
             raise RuntimeError("Syncthing did not replicate the encrypted config.aged artifact exactly")
         if config_plaintext in copied_config.read_bytes():
             raise RuntimeError("Syncthing storage peer received plaintext config contents")
-        print(f"PASS OrbStack Docker context {context}; {IMAGE}")
+        print(f"PASS OrbStack Docker context {context}; project {PROJECT}; {IMAGE}")
         print("PASS separate web/storage containers connected and configured send-only/receive-only sharing")
         print("PASS nested metadata/movies folder and sample-metadata.json synced with matching SHA-256")
         print("PASS age-encrypted config.aged synced byte-for-byte; plaintext absent from shared folder")
