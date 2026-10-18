@@ -1,5 +1,7 @@
 # Rawrarr runbooks
 
+- [Rename the workspace menu label](2026-10-18-rename-workspace-menu.md) — Change the left navigation section label to “rawrchive”.
+
 - [Remove Movies Path column](2026-10-18-remove-movies-path-column.md) — Remove filesystem paths from the movie table.
 
 - [Review current Rawrarr documentation](2026-10-18-documentation-review.md) — Align local setup, identity handling, artwork, health semantics, and testing instructions with the current source.
