@@ -111,6 +111,7 @@ test('coordinator root selects passkey sign-in or an owner workspace while healt
   assert.match(coordinator, /is_authenticated\(&state\.coordinator_auth, &headers\)/);
   assert.match(auth, /next_path: &'static str/);
   assert.match(coordinator, /next_path: "\/"/);
+  assert.match(auth, /auth\.node_id == "coordinator" \{\s*"\/setup\/node"/);
   assert.match(workspace, /id="age-id"/);
   assert.match(workspace, /id="age-id-entry"/);
   assert.match(workspace, /id="remember-age-id" type="checkbox"/);

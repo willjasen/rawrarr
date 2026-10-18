@@ -344,7 +344,12 @@ pub(super) async fn finish_registration(
         .map_err(|_| invalid_auth())?;
     let token = issue_session(&mut transaction, user_id, &auth.node_id).await?;
     transaction.commit().await.map_err(|_| invalid_auth())?;
-    Ok(session_response(token, auth.secure_cookie, auth.next_path))
+    let next = if auth.node_id == "coordinator" {
+        "/setup/node"
+    } else {
+        auth.next_path
+    };
+    Ok(session_response(token, auth.secure_cookie, next))
 }
 
 pub(super) async fn begin_authentication(

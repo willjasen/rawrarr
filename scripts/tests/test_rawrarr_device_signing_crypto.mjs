@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Decrypter, armor, generateHybridIdentity, identityToRecipient } from '../../rust-arr/web-export/node_modules/age-encryption/dist/index.js';
-import { createEncryptedRootBackup, publicKeyFingerprint, signDeviceApproval, verifyDeviceApproval } from '../../rust-arr/web-export/device-signing-client.js';
+import { createEncryptedRootBackup, inspectEncryptedRootBackup, publicKeyFingerprint, signDeviceApproval, verifyDeviceApproval } from '../../rust-arr/web-export/device-signing-client.js';
 
 function decodeBase64(value) {
   return Uint8Array.from(atob(value), character => character.charCodeAt(0));
@@ -14,6 +14,9 @@ test('age-encrypted ML-DSA root backup signs and verifies a device approval', as
   assert.equal(root.algorithm, 'ML-DSA-65');
   assert.match(root.fingerprint, /^[0-9a-f]{64}$/);
   assert.match(root.encryptedBackup, /^-----BEGIN AGE ENCRYPTED FILE-----/);
+  assert.deepEqual(await inspectEncryptedRootBackup(root.encryptedBackup, ageIdentity), {
+    algorithm: root.algorithm, publicKey: root.publicKey, fingerprint: root.fingerprint,
+  });
 
   const request = {
     instanceId: 'instance-fixture',
@@ -33,6 +36,7 @@ test('age-encrypted ML-DSA root backup signs and verifies a device approval', as
   );
 
   const wrongIdentity = await generateHybridIdentity();
+  await assert.rejects(inspectEncryptedRootBackup(root.encryptedBackup, wrongIdentity), /Could not unlock/);
   await assert.rejects(
     signDeviceApproval(root.encryptedBackup, wrongIdentity, root.fingerprint, request),
     /Could not unlock or validate/,

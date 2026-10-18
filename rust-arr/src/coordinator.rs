@@ -224,6 +224,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/assets/coordinator-device-routes.mjs", get(coordinator_device_routes_script))
         .route("/assets/profile-color.mjs", get(coordinator_profile_color_script))
         .route("/assets/metadata-export.js", get(coordinator_metadata_export_js))
+        .route("/assets/subscriber-onboarding.js", get(coordinator_subscriber_onboarding_script))
         .route("/nodes/{node_id}", any(node_proxy_root))
         .route("/nodes/{node_id}/", any(node_proxy_root))
         .route("/nodes/{node_id}/{*path}", any(node_proxy))
@@ -248,6 +249,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/api/nodes/enroll/status", post(enrollment_status))
         .with_state(state.clone());
     let coordinator_browser = Router::new()
+        .route("/setup/node", get(coordinator_subscriber_onboarding_page))
         .route("/api/auth/status", get(crate::auth::status))
         .route(
             "/api/auth/register/start",
@@ -780,6 +782,33 @@ async fn coordinator_auth_page(
     } else {
         crate::auth::auth_html().into_response()
     }
+}
+
+async fn coordinator_subscriber_onboarding_page(
+    State(state): State<CoordinatorState>,
+    headers: HeaderMap,
+) -> Response {
+    if !crate::auth::is_authenticated(&state.coordinator_auth, &headers).await {
+        return axum::response::Redirect::to("/auth").into_response();
+    }
+    let mut response = axum::response::Html(include_str!("subscriber_onboarding.html"))
+        .into_response();
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+async fn coordinator_subscriber_onboarding_script() -> Response {
+    let mut response = Response::new(Body::from(include_str!("assets/subscriber-onboarding.js")));
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("text/javascript; charset=utf-8"),
+    );
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
 }
 
 #[derive(Serialize)]

@@ -20,6 +20,8 @@
 
 # Rawrarr runbooks
 
+- [Subscriber node onboarding on roarlay](2026-10-18-subscriber-node-onboarding.md) — Guide passkey owners through local age/root backup and offer subscriber-only Compose deployment instructions.
+
 - [Add three music albums to the MacBook replica](2026-10-18-add-three-music-albums.md) — Expand the existing Syncthing filter to three selected album directories and verify their transfer.
 
 - [Media `.ev` folder layout](2026-10-18-media-ev-folder-layout.md) — Rename the MacBook's media replica root and reserve a movies-only folder for future selective sync.

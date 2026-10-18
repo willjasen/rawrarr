@@ -19,9 +19,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg libssl3 librsvg2-bin libjxl-tools \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin rustarr \
-    && mkdir -p /data \
+    && mkdir -p /data /shared \
     && ln -s /shared/metadata /metadata \
-    && chown 10001:10001 /data
+    && chown 10001:10001 /data /shared
 COPY --from=builder /rust-arr /usr/local/bin/rust-arr
 COPY --from=age-builder /go/bin/age /go/bin/age-keygen /usr/local/bin/
 USER 10001:10001

@@ -80,6 +80,37 @@ export async function createEncryptedRootBackup(ageRecipient) {
   }
 }
 
+export async function inspectEncryptedRootBackup(encryptedBackup, ageIdentity) {
+  if (typeof encryptedBackup !== 'string' || !encryptedBackup.trim().startsWith('-----BEGIN AGE ENCRYPTED FILE-----')) throw new Error('Paste an encrypted root-key backup.');
+  if (typeof ageIdentity !== 'string' || !ageIdentity.trim().startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('Import the matching age identity first.');
+  let ciphertext;
+  let plaintext;
+  let root;
+  let secretKey;
+  let publicKey;
+  try {
+    ciphertext = armor.decode(encryptedBackup.trim());
+    const decryptor = new Decrypter();
+    decryptor.addIdentity(ageIdentity.trim());
+    plaintext = await decryptor.decrypt(ciphertext);
+    root = JSON.parse(decoder.decode(plaintext));
+    if (root.format !== 'rawrarr-encrypted-instance-root' || root.version !== ROOT_BACKUP_VERSION || root.algorithm !== 'ML-DSA-65') throw new Error('Unsupported encrypted root-key backup format.');
+    secretKey = fromBase64(root.secretKey, ml_dsa65.lengths.secretKey, 'root private key');
+    publicKey = fromBase64(root.publicKey, ml_dsa65.lengths.publicKey, 'root public key');
+    if (!ml_dsa65.getPublicKey(secretKey).every((byte, index) => byte === publicKey[index])) throw new Error('The encrypted root backup contains mismatched keys.');
+    return { algorithm: root.algorithm, publicKey: root.publicKey, fingerprint: await publicKeyFingerprint(publicKey) };
+  } catch (error) {
+    if (error instanceof Error && /^(Paste|Import|Unsupported|The encrypted)/.test(error.message)) throw error;
+    throw new Error('Could not unlock the encrypted root-key backup with this age identity.');
+  } finally {
+    ciphertext?.fill(0);
+    plaintext?.fill(0);
+    secretKey?.fill(0);
+    publicKey?.fill(0);
+    if (root && typeof root.secretKey === 'string') root.secretKey = '';
+  }
+}
+
 export async function signDeviceApproval(encryptedBackup, ageIdentity, pinnedFingerprint, approval) {
   if (typeof encryptedBackup !== 'string' || !encryptedBackup.startsWith('-----BEGIN AGE ENCRYPTED FILE-----')) throw new Error('Paste the saved encrypted root-key backup.');
   if (typeof ageIdentity !== 'string' || !ageIdentity.trim().startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('Unlock the instance age identity first.');

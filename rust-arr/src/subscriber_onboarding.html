@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Set up your node · rawrarr</title>
+  <style>
+    :root { color-scheme:dark; --bg:#101411; --panel:#171d19; --line:#344136; --text:#edf3ec; --muted:#a9b6aa; --green:#a6e3a1 }
+    * { box-sizing:border-box }
+    body { margin:0; background:var(--bg); color:var(--text); font:15px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
+    main { width:min(780px,100% - 32px); margin:32px auto 72px }
+    a { color:var(--green) }
+    h1 { font-size:clamp(28px,5vw,40px); line-height:1.15; margin:12px 0 }
+    h2 { font-size:20px; margin:0 0 6px }
+    p,li { color:var(--muted) }
+    .eyebrow { color:var(--green); text-transform:uppercase; font-size:12px; font-weight:700; letter-spacing:.1em }
+    .step { margin:20px 0; padding:24px; background:var(--panel); border:1px solid var(--line); border-radius:14px }
+    .step[hidden], [hidden] { display:none !important }
+    .actions { display:flex; flex-wrap:wrap; gap:9px; margin:14px 0 }
+    button { min-height:42px; padding:9px 14px; border:1px solid #6b916f; border-radius:8px; color:#101711; background:var(--green); font:650 14px system-ui; cursor:pointer }
+    button.secondary { color:var(--text); background:#243126 }
+    button:disabled { opacity:.5; cursor:not-allowed }
+    label { display:block; margin:12px 0 5px; font-weight:600 }
+    input,textarea,select { display:block; width:100%; padding:11px; border:1px solid #5d705f; border-radius:8px; color:var(--text); background:#101411; font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace }
+    textarea { min-height:115px; resize:vertical }
+    .check { display:flex; align-items:flex-start; gap:9px; font-weight:400 }
+    .check input { width:18px; flex:none; margin:3px 0 0 }
+    .warning { padding:12px; border:1px solid #a27e35; border-radius:8px; color:#f1d582; background:#322a17 }
+    .notice { padding:12px; border:1px solid var(--line); border-radius:8px; background:#101711 }
+    .status { min-height:20px; color:var(--green) }
+    code,pre { overflow-wrap:anywhere }
+    pre { white-space:pre-wrap; max-height:320px; overflow:auto; padding:14px; background:#0d120e; border:1px solid var(--line); border-radius:8px; font-size:12px }
+  </style>
+</head>
+<body>
+<main>
+  <a href="/">← Workspace</a>
+  <div class="eyebrow">Your equipment · subscriber setup</div>
+  <h1>Set up a rawrarr node</h1>
+  <p>Sign-in uses your passkey. Your age private ID and encrypted signing-root backup stay in this browser while you work through these steps; they are never sent to roarlay. Save both backups somewhere you control.</p>
+
+  <section class="step" id="age-step" aria-labelledby="age-title">
+    <h2 id="age-title">1. Create or import your age ID</h2>
+    <p>This ID unlocks encrypted rawrarr data. Keep a recoverable copy outside this browser.</p>
+    <div class="actions"><button id="create-age" type="button">Create age ID</button></div>
+    <label for="import-age">Or paste an existing private age ID</label>
+    <input id="import-age" type="password" autocomplete="off" spellcheck="false" placeholder="AGE-SECRET-KEY-PQ-1…">
+    <div class="actions"><button id="use-age" type="button" class="secondary">Use imported ID</button><button id="copy-age" type="button" hidden>Copy new private ID</button></div>
+    <p id="age-recipient" class="status" role="status" aria-live="polite"></p>
+    <label class="check" id="age-backup-label" hidden><input id="age-backed-up" type="checkbox" disabled>I saved my private age ID somewhere safe.</label>
+  </section>
+
+  <section class="step" id="root-step" aria-labelledby="root-title" hidden>
+    <h2 id="root-title">2. Create or import your encrypted signing root</h2>
+    <p>The owner signing root is separate from age. It will be needed for signed device approvals when that trust flow is released. Only its age-encrypted backup is copied. This preview does not yet pin the public root as an active trust anchor.</p>
+    <div class="actions"><button id="create-root" type="button">Create encrypted root backup</button><button id="copy-root" type="button" hidden>Copy encrypted backup</button></div>
+    <label for="import-root">Or paste an existing encrypted root-key backup</label>
+    <textarea id="import-root" spellcheck="false" autocomplete="off" placeholder="-----BEGIN AGE ENCRYPTED FILE-----"></textarea>
+    <div class="actions"><button id="use-root" type="button" class="secondary">Verify imported backup</button></div>
+    <p id="root-fingerprint" class="status" role="status" aria-live="polite"></p>
+    <p class="warning">Keep both the encrypted root-key backup and the private age ID. Losing either can prevent future device approvals. Rawrarr cannot recover them for you.</p>
+    <label class="check" id="root-backup-label" hidden><input id="root-backed-up" type="checkbox" disabled>I saved the encrypted root backup and understand I need my age ID to unlock it.</label>
+  </section>
+
+  <section class="step" id="deploy-step" aria-labelledby="deploy-title" hidden>
+    <h2 id="deploy-title">3. Deploy on your own computer</h2>
+    <p>Choose a metadata node for Radarr/Sonarr and encrypted library data, or an apex node when this computer has media files. Your account uses the existing roarlay; this installer offers no roarlay or coordinator role.</p>
+    <label for="node-role">Node type</label>
+    <select id="node-role"><option value="metadata">Metadata</option><option value="storage">Apex (storage)</option></select>
+    <div id="media-path-group" hidden><label for="media-path">Absolute media folder path on this computer</label><input id="media-path" type="text" spellcheck="false" placeholder="/srv/media or C:/Media"><p>Docker Desktop must be allowed to access this folder. It mounts read-only.</p></div>
+    <p class="notice"><strong>Development preview:</strong> The public Rawrarr image has not been published. This Compose file uses <code>rawrarr:local</code> and will start only when that image is already present on the target computer. Public one-command installation remains pending.</p>
+    <div class="actions"><button id="prepare-compose" type="button">Prepare Compose file</button><button id="download-compose" type="button" hidden>Download compose.yaml</button></div>
+    <p id="compose-message" class="status" role="status" aria-live="polite"></p>
+    <pre id="compose-preview" hidden></pre>
+    <ol id="deploy-instructions" hidden>
+      <li>Install Docker Desktop on macOS or Windows, or Docker Engine with the Compose plugin on Debian.</li>
+      <li>Make the <code>rawrarr:local</code> image available on this computer. Confirm with <code>docker image inspect rawrarr:local</code>.</li>
+      <li>Save the downloaded file in a new folder. Check the media path if you selected apex.</li>
+      <li>In that folder run <code>docker compose config --quiet</code>, then <code>docker compose up -d</code>.</li>
+      <li>Return to roarlay’s Devices page and approve the pending node. Select the approved node there to continue setup. Direct <code>http://localhost:7297</code> sign-in requires a passkey registered for that localhost origin. Keep the age ID and encrypted root backup with you; do not put either in Compose.</li>
+      <li>Set up and verify a separate Syncthing peer before expecting <code>/shared</code> to replicate to another node. This file starts a standalone local volume; it does not join or share a Syncthing folder.</li>
+    </ol>
+  </section>
+</main>
+<script type="module" src="/assets/subscriber-onboarding.js"></script>
+</body>
+</html>

@@ -3,6 +3,9 @@
 - `test_rawrarr_coordinator_arr_links.mjs` — checks the coordinator's encrypted Radarr slug flow, direct metadata route, browser-only reachability gate, and year-cell icon wiring for Movies and TV. Run with `node --test scripts/tests/test_rawrarr_coordinator_arr_links.mjs`.
 # Rawrarr tests
 
+- `test_rawrarr_subscriber_compose.mjs` — Validates subscriber-only metadata/apex Compose output, local mounts, secret exclusion, and rejection of coordinator role; run with `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
+- `test_rawrarr_subscriber_onboarding_browser.mjs` — Chromium checks local age/root creation, backup gates, private-key display boundaries, and subscriber-only role choices; run in the isolated test image.
+
 - `test_rawrarr_landing_page.mjs` — Chromium checks for the signed-out landing page, passkey sign-in links, accurate security/maturity disclosure, and mobile layout. Run with `node --test scripts/tests/test_rawrarr_landing_page.mjs` in the isolated test image.
 
 - `test_share_storage_media.py` — Rejects unsafe media paths and plain HTTP remote APIs, requires the A/a filter for a root `/media` share, refuses overlapping folders, and checks send-only/receive-only pairing without auto-accept. Run `python3 scripts/tests/test_share_storage_media.py`.
