@@ -9,3 +9,4 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 - `test_rawrarr_passkey.py` — checks passkey setup, challenge/session handling, and malformed credential rejection against an isolated PostgreSQL database. Requires Python 3, `psql`, a release binary, and a database ending in `_test`.
 - `test_rawrarr_syncthing_peers.py` — checks the process-based Syncthing peer flow on systems without Docker. Requires Python 3 and Syncthing.
 - `test_rawrarr_syncthing_orbstack.py` — starts isolated web/storage Syncthing containers and verifies real folder and file transfer. Requires OrbStack's Docker context and Python 3.
+- `test_rawrarr_docker_healthchecks.mjs` — checks that the Rawrarr image and PostgreSQL Compose service define readiness checks. Requires Node.js; run `node --test scripts/tests/test_rawrarr_docker_healthchecks.mjs`.

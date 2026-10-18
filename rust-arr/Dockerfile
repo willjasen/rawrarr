@@ -10,7 +10,7 @@ RUN cargo build --release --locked
 
 FROM debian:bookworm-slim
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates libssl3 \
+    && apt-get install -y --no-install-recommends ca-certificates curl libssl3 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin rustarr \
     && mkdir -p /data \
@@ -26,3 +26,5 @@ ENV RAWARR_SHARED_DATA_DIR=/shared
 ENV RAWARR_METADATA_DIR=/metadata
 VOLUME ["/data", "/shared"]
 ENTRYPOINT ["/usr/local/bin/rust-arr"]
+HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=5 \
+    CMD ["curl", "--fail", "--silent", "--show-error", "--output", "/dev/null", "http://127.0.0.1:8080/health"]
