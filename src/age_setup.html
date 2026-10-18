@@ -75,25 +75,32 @@
       document.getElementById('private-preview-card').hidden = true;
     }
 
+    function shortenedPublicRecipient(recipient) {
+      if (recipient.length <= 20) return recipient;
+      return `${recipient.slice(0, 12)}…${recipient.slice(-8)}`;
+    }
+
     async function showPublicFingerprint(recipient) {
       const card = document.getElementById('public-card');
-      document.getElementById('public-recipient').textContent = recipient;
+      document.getElementById('public-recipient').textContent = shortenedPublicRecipient(recipient);
       const svg = document.getElementById('fingerprint');
       svg.replaceChildren();
       const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(recipient)));
+      const colors = ['#a6e3a1', '#77d4c8', '#8ab4f8', '#f2c879', '#d59cf6'];
       let bit = 0;
       for (let y = 0; y < 5; y += 1) {
         for (let x = 0; x < 3; x += 1) {
           const enabled = (digest[Math.floor(bit / 8)] & (1 << (bit % 8))) !== 0;
           bit += 1;
           if (!enabled) continue;
+          const color = colors[(digest[(bit + 19) % digest.length] + x + y) % colors.length];
           for (const mirroredX of x === 2 ? [x] : [x, 4 - x]) {
             const square = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
             square.setAttribute('x', String(mirroredX));
             square.setAttribute('y', String(y));
             square.setAttribute('width', '1');
             square.setAttribute('height', '1');
-            square.setAttribute('fill', '#a6e3a1');
+            square.setAttribute('fill', color);
             svg.append(square);
           }
         }
