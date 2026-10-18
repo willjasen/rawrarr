@@ -87,3 +87,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Resolve stale public age recipient](2026-10-18-age-recipient-conflict.md) — Preserve an unused setup recipient, unblock local onboarding, and distinguish identity conflicts from storage errors.
 
 - [Preserve the current page on refresh](2026-10-18-preserve-page-on-refresh.md) — Keep workspace navigation through reloads and browser history.
+
+- [Browser-reachable Radarr movie links](2026-10-18-radarr-movie-links.md) — Link posters and titles only after a browser reachability check.
