@@ -1,8 +1,10 @@
 FROM rust:1.85-bookworm
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl nodejs \
+    && apt-get install -y --no-install-recommends ca-certificates curl nodejs npm chromium \
     && rm -rf /var/lib/apt/lists/*
+
+RUN npm install --global playwright-core@1.55.0
 
 WORKDIR /workspace
 
