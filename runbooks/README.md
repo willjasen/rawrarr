@@ -20,6 +20,8 @@
 
 # Rawrarr runbooks
 
+- [Integrate subscriber tailnets with Swarmsail](2026-10-18-swarmsail-subscriber-tailnet-integration.md) — Record the eligibility gate, one-way privacy rule, current Swarmsail change, and remaining hosted integration.
+
 - [Fix TV artwork serving with Redis enabled](2026-10-18-fix-tv-artwork-redis.md) — Diagnose and restore the MacBook metadata node's encrypted TV poster responses while keeping Redis enabled.
 
 - [Document Arr summary cards](2026-10-18-document-arr-summary-cards.md) — Record shared card rendering, service-specific metadata sizes, and completed Sonarr backfill visibility in project docs.
