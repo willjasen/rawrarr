@@ -86,6 +86,11 @@
       return `${key.slice(0, 12)}…${key.slice(-5)}`;
     }
 
+    function privateIdentityKey(value) {
+      return value.split(/\r?\n/).map(line => line.trim())
+        .find(line => line.startsWith('AGE-SECRET-KEY-PQ-1')) || '';
+    }
+
     function clearPrivatePreview() {
       document.getElementById('private-preview').textContent = '';
       document.getElementById('private-preview-card').hidden = true;
@@ -172,10 +177,13 @@
     });
 
     document.getElementById('copy').addEventListener('click', async () => {
-      const privateIdentity = generatedIdentity || identity.value;
-      if (!privateIdentity) return;
+      const privateKey = privateIdentityKey(generatedIdentity || identity.value);
+      if (!privateKey) {
+        message.textContent = 'No private identity found to copy.';
+        return;
+      }
       try {
-        await navigator.clipboard.writeText(privateIdentity);
+        await navigator.clipboard.writeText(privateKey);
         message.textContent = 'Private identity copied. Store it securely before continuing.';
       } catch (_) {
         message.textContent = 'Clipboard access is unavailable. Allow clipboard access, then use Copy private identity.';

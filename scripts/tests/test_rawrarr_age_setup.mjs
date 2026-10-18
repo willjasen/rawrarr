@@ -6,8 +6,9 @@ import vm from 'node:vm';
 
 const page = await readFile(new URL('../../rust-arr/src/age_setup.html', import.meta.url), 'utf8');
 const mainPage = await readFile(new URL('../../rust-arr/src/ui.html', import.meta.url), 'utf8');
-const privateIdentity = '# created: test fixture\nAGE-SECRET-KEY-PQ-1-TEST-PRIVATE-DO-NOT-PRINT';
 const publicRecipient = 'age1pq1public-test-recipient';
+const privateKey = 'AGE-SECRET-KEY-PQ-1-TEST-PRIVATE-DO-NOT-PRINT';
+const privateIdentity = `# created: test fixture\n# public key: ${publicRecipient}\n${privateKey}`;
 const themeSeed = createHash('sha256').update(publicRecipient).digest('hex');
 
 function createElement() {
@@ -88,7 +89,8 @@ test('generated private age identity has a short preview and full value is expos
   assert.ok(!JSON.stringify(elements).includes(publicRecipient), 'full public recipient never appears in page elements');
 
   await elements.copy.click();
-  assert.deepEqual(clipboard, [privateIdentity]);
+  assert.deepEqual(clipboard, [privateKey]);
+  assert.ok(!clipboard[0].includes(publicRecipient), 'copy excludes the public recipient header');
   assert.ok(!JSON.stringify(elements).includes(privateIdentity), 'copy does not render the private identity');
 
   const beforeUnconfirmedUnlock = fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length;
@@ -106,6 +108,8 @@ test('generated private age identity has a short preview and full value is expos
   elements.identity.value = privateIdentity;
   await elements.identity.input();
   assert.equal(elements.identity.value, privateIdentity, 'a pasted identity remains in the masked password field');
+  await elements.copy.click();
+  assert.deepEqual(clipboard, [privateKey, privateKey], 'copying a pasted age file extracts only its private key');
   assert.equal(elements['backup-confirmed'].checked, false, 'pasting an identity resets the backup confirmation');
   assert.equal(elements.unlock.disabled, true, 'a pasted identity requires a fresh backup confirmation');
   assert.equal(

@@ -58,3 +58,4 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Make Rawrarr container logs verbose](2026-10-18-rawrarr-verbose-container-logs.md) — Log routine HTTP request summaries and safe scan counts to container stdout, with a quiet-mode environment option.
 - [Move local Rawrarr shared data outside Codebox](2026-10-18-rawrarr-local-shared-data-location.md) — Bind `/shared` to a persistent, Finder-accessible directory in Application Support and preserve the old folder as a rollback copy.
 - [Display rawrarr in lowercase](2026-10-18-rawrarr-lowercase-brand-copy.md) — Keep the product name lowercase in user-facing interface copy, errors, and logs, with a regression test for displayed text.
+- [Copy only the private age identity](2026-10-18-rawrarr-copy-private-identity-only.md) — Make the clipboard button extract the private key line and omit the public-recipient comment from an age identity file.
