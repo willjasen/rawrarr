@@ -1,6 +1,6 @@
 # rust-arr
 
-Initial Rust service skeleton for a Radarr-inspired application. It exposes `GET /health` and a read-only Radarr connection status endpoint. No media paths or database are configured.
+Early Radarr-focused Rust application. The root route (`/`) serves a responsive dashboard, `/health` is a service health check, and `/api/radarr/status` is a read-only Radarr connection status endpoint. Movie inventory, media paths, and a database are not implemented yet.
 
 ## Local development
 
@@ -8,6 +8,7 @@ Requires Rust 1.85 or newer.
 
 ```sh
 cargo run --manifest-path rust-arr/Cargo.toml
+open http://127.0.0.1:8080/
 curl http://127.0.0.1:8080/health
 ```
 

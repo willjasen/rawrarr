@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use axum::{Json, Router, extract::State, http::StatusCode, routing::get};
+use axum::{Json, Router, extract::State, http::StatusCode, response::Html, routing::get};
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::{env, net::SocketAddr, sync::Arc, time::Duration};
@@ -79,6 +79,10 @@ async fn health() -> &'static str {
     "ok"
 }
 
+async fn dashboard() -> Html<&'static str> {
+    Html(include_str!("ui.html"))
+}
+
 async fn radarr_status(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<RadarrStatus>, (StatusCode, Json<ApiError>)> {
@@ -110,6 +114,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let app = Router::new()
+        .route("/", get(dashboard))
         .route("/health", get(health))
         .route("/api/radarr/status", get(radarr_status))
         .with_state(state);
