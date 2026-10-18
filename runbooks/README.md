@@ -98,3 +98,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 
 - [Separate movie identifiers](2026-10-18-separate-movie-identifiers.md) — keep titles clean and display TMDb IDs in their own column.
 - [Coordinator roles and storage device-code linking](2026-10-18-coordinator-storage-device-linking.md) — Define coordinator/storage/shard/service boundaries and plan Tailscale HTTPS with owner-approved device codes.
+
+- [Plan two-Mac Syncthing replication](2026-10-18-plan-two-mac-syncthing.md) — Explicit shared-folder containers, peer setup, exclusions, and verification for coordinator/storage deployment.
