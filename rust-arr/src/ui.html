@@ -185,7 +185,7 @@
         <article class="panel">
           <div class="panel-head"><h2>Radarr movie library</h2><button id="refresh-movies" class="refresh" type="button">Refresh movies ↻</button></div>
           <div id="movies-message" class="scan-summary">Select refresh to load your Radarr library.</div>
-          <div class="table-wrap"><table><thead><tr><th>Movie</th><th>Year</th><th>File</th><th>Monitored</th><th>Quality profile</th><th>Size</th><th>Path</th></tr></thead><tbody id="radarr-movie-rows"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>Movie</th><th>Year</th><th>File</th><th>Monitored</th><th>Quality profile</th><th>Size</th></tr></thead><tbody id="radarr-movie-rows"></tbody></table></div>
         </article>
       </section>
       <section id="configuration-content" hidden>
@@ -498,12 +498,11 @@
           const values = [
             `${movie.title}${movie.tmdbId ? ` · TMDb ${movie.tmdbId}` : ''}`,
             movie.year || '—', movie.hasFile ? 'Present' : 'Missing', movie.monitored ? 'Yes' : 'No',
-            movie.qualityProfile || '—', formatBytes(movie.sizeOnDisk || 0), movie.path || '—'
+            movie.qualityProfile || '—', formatBytes(movie.sizeOnDisk || 0)
           ];
           for (const [index, value] of values.entries()) {
             const cell = document.createElement('td');
             cell.textContent = value;
-            if (index === 6) cell.className = 'path';
             if (index === 5) cell.className = 'size';
             row.append(cell);
           }

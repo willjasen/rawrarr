@@ -1,5 +1,7 @@
 # Rawrarr runbooks
 
+- [Remove Movies Path column](2026-10-18-remove-movies-path-column.md) — Remove filesystem paths from the movie table.
+
 - [Review current Rawrarr documentation](2026-10-18-documentation-review.md) — Align local setup, identity handling, artwork, health semantics, and testing instructions with the current source.
 
 Task records and operational procedures for this Rawrarr repository. Each entry links to the specific task; older records are retained as history.

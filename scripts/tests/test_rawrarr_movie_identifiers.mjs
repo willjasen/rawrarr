@@ -31,5 +31,7 @@ test('movie titles and TMDb identifiers occupy separate aligned columns', async 
     assert.equal(await cells.nth(idIndex).textContent(), id);
     assert.equal(await cells.nth(headers.indexOf('Year')).textContent(), year);
   }
-  assert.equal(await rows.nth(0).locator('td.path').textContent(), '/media/example');
+  assert.ok(!headers.includes('Path'));
+  assert.equal(await rows.locator('td.path').count(), 0);
+  assert.ok(!(await rows.allTextContents()).some(text => text.includes('/media/example')));
 });

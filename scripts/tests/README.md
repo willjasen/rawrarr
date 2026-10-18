@@ -21,7 +21,7 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 
 - `test_rawrarr_movie_responsiveness.mjs` — Chromium checks that pending Radarr probes do not block rows, refresh, or posters, and failed refreshes retain the previous list. Run in the existing isolated Playwright test image.
 
-- `test_rawrarr_movie_identifiers.mjs` — Chromium checks for clean movie titles, separate TMDb IDs, missing-ID placeholders, and column alignment. Run in the isolated Playwright test image.
+- `test_rawrarr_movie_identifiers.mjs` — Chromium checks for clean movie titles, separate TMDb IDs, missing-ID placeholders, column alignment, and omitted movie paths. Run in the isolated Playwright test image.
 
 - `test_rawrarr_metadata_cache.rs` — vault-local ciphertext cache reuse, same-length replacement invalidation, missing files, identity isolation, and concurrent replacement safety. Run `cargo test metadata_cache`.
 
