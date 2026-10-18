@@ -2,7 +2,7 @@
 
 ## Objective and initial state
 
-Create a provider-neutral interface for download clients so rawrarr can later connect to BitTorrent, Usenet, and other transfer methods. The app currently has a Radarr status integration only; it has no download-client configuration or adapters. Existing client context is documented in [Gamarr's Prowlarr and qBittorrent setup](2026-10-16-gamarr-prowlarr-setup.md) and [archive extraction investigation](2026-10-16-gamarr-automatic-extraction.md).
+Create a provider-neutral interface for download clients so rawrarr can later connect to BitTorrent, Usenet, and other transfer methods. The app currently has a Radarr status integration only; it has no download-client configuration or adapters.
 
 ## Actions
 

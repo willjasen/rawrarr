@@ -2,7 +2,7 @@
 
 ## Objective and initial state
 
-Add a read-only first Radarr integration to the Rust service while keeping future Arr integrations possible. The committed skeleton exposes only `/health`; the repository is clean on `main`. Existing Radarr operational context is in [the service integration runbook](2026-10-16-radarr-script-integration.md).
+Add a read-only first Radarr integration to the Rust service while keeping future Arr integrations possible. The committed skeleton exposes only `/health`; the repository is clean on `main`.
 
 ## Actions
 

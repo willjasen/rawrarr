@@ -2,7 +2,7 @@
 
 ## Objective and initial state
 
-Start a new memory-safe Rust service skeleton in this repository, prepared for local development and Docker deployment. The repository was clean on `main`. Project background is in [the movie organization runbook](2026-10-16-organize-remaining-loose-movies.md).
+Start a new memory-safe Rust service skeleton in this repository, prepared for local development and Docker deployment. The repository was clean on `main`.
 
 ## Actions
 

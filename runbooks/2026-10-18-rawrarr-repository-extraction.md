@@ -13,4 +13,10 @@ Move the Rawrarr application out of the mixed `arr-services` Git repository into
 
 ## Verification and remaining work
 
-Verify each Git repository has the intended file set, run `git diff --check`, run Rawrarr-specific tests from the new root, and confirm the existing OrbStack service remains up. Neither repository has an upstream configured; do not create one during this extraction.
+- The new repository history starts with the original Rust app skeleton and retains subsequent `rust-arr/` commits; it does not include earlier Arr-services-only commits.
+- `docker compose config --quiet` passed for the extracted Compose files using the local password-file path (the path was not copied into Git).
+- The two browser-side Node test files passed: 3 tests total.
+- Host `cargo test` could not start because the installed Rust toolchain's LLVM library has a missing `libz3.5.1.dylib` dependency.
+- OrbStack Compose configuration validation passed, and the Docker image built successfully from the new repository root (cached Rust release build).
+- The existing OrbStack Rawrarr container remained running at `127.0.0.1:8084`, and `/health` returned `ok`. Its named volumes and old host shared-data directory were not copied or modified.
+- Neither repository has an upstream configured; no remote was created.
