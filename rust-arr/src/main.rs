@@ -250,7 +250,7 @@ impl RadarrClient {
         }
         let parsed =
             reqwest::Url::parse(base_url.trim()).map_err(|_| RadarrConfigError::InvalidUrl)?;
-        if !matches!(parsed.scheme(), "http" | "https")
+        if parsed.scheme() != "https"
             || parsed.host_str().is_none()
             || !parsed.username().is_empty()
             || parsed.password().is_some()
@@ -1327,7 +1327,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod metadata_image_tests {
-    use super::validated_tmdb_image_url;
+    use super::{ArrClient, validated_tmdb_image_url};
 
     #[test]
     fn metadata_image_urls_are_restricted_to_tmdb_image_paths() {
@@ -1343,6 +1343,18 @@ mod metadata_image_tests {
             validated_tmdb_image_url("https://user@image.tmdb.org/t/p/original/poster.jpg")
                 .is_err()
         );
+    }
+
+    #[test]
+    fn arr_connections_require_https() {
+        assert!(ArrClient::new("https://radarr.example:7878".into(), "test-key".into()).is_ok());
+        assert!(ArrClient::new("https://sonarr.example:8989".into(), "test-key".into()).is_ok());
+        for url in ["http://radarr.example:7878", "http://sonarr.example:8989", "ftp://arr.example"] {
+            assert!(
+                ArrClient::new(url.into(), "test-key".into()).is_err(),
+                "accepted {url}"
+            );
+        }
     }
 }
 
