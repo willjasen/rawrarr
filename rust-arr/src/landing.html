@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#101411">
+  <meta name="description" content="rawrarr is a self-hosted media library workspace for the devices and storage you control.">
+  <title>rawrarr — Your library, your devices</title>
+  <style>
+    :root { color-scheme:dark; --bg:#101411; --panel:#171d19; --panel-2:#1b241e; --line:#29332c; --text:#edf3ec; --muted:#a0ada2; --green:#a6e3a1; --green-dark:#243b2a; --max:1120px }
+    * { box-sizing:border-box }
+    html { scroll-behavior:smooth }
+    body { margin:0; background:radial-gradient(ellipse at 50% -18%,#253a2b 0,transparent 52%),var(--bg); color:var(--text); font:16px/1.6 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
+    a { color:inherit }
+    .wrap { width:min(var(--max),100% - 40px); margin-inline:auto }
+    header { display:flex; align-items:center; justify-content:space-between; min-height:82px; border-bottom:1px solid #ffffff12 }
+    .brand { display:flex; align-items:center; gap:11px; color:var(--text); font-weight:750; letter-spacing:-.03em; text-decoration:none }
+    .brand img { width:38px; height:38px; object-fit:contain }
+    .brand span { font-size:20px }
+    .nav-link { color:#d7e1d7; text-decoration:none; font-size:14px }
+    .nav-link:hover { color:var(--green) }
+    .button { display:inline-flex; min-height:46px; align-items:center; justify-content:center; padding:0 19px; border:1px solid #658968; border-radius:10px; background:var(--green); color:#101711; font-size:14px; font-weight:720; text-decoration:none; transition:transform .15s ease,background .15s ease }
+    .button:hover { transform:translateY(-1px); background:#b9efb4 }
+    .button.secondary { background:#18221b; color:var(--text); border-color:#465b49 }
+    .hero { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(260px,.75fr); align-items:center; gap:64px; padding:92px 0 82px }
+    .eyebrow { color:var(--green); font-size:12px; font-weight:750; letter-spacing:.13em; text-transform:uppercase }
+    h1 { max-width:720px; margin:15px 0 17px; font-size:clamp(42px,7vw,76px); line-height:1.02; letter-spacing:-.065em }
+    .hero-copy { max-width:610px; margin:0; color:#b7c3b8; font-size:18px; line-height:1.65 }
+    .actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:29px }
+    .small-note { margin:15px 0 0; color:#8d9b8f; font-size:12px }
+    .orbit-card { position:relative; min-height:320px; display:grid; place-items:center; overflow:hidden; border:1px solid #ffffff16; border-radius:24px; background:linear-gradient(145deg,#1b281e,#131a15 72%); box-shadow:0 30px 90px #0004 }
+    .orbit-card::before,.orbit-card::after { position:absolute; content:""; border:1px solid #a6e3a125; border-radius:50%; transform:rotate(-24deg) }
+    .orbit-card::before { width:290px; height:155px }
+    .orbit-card::after { width:350px; height:215px; transform:rotate(32deg) }
+    .orbit { position:absolute; width:9px; height:9px; border-radius:50%; background:var(--green); box-shadow:0 0 24px #a6e3a1aa }
+    .orbit.one { top:54px; right:72px }
+    .orbit.two { bottom:58px; left:63px; width:6px; height:6px; background:#b6c9ff }
+    .orbit.three { bottom:77px; right:59px; width:5px; height:5px; background:#f0c77c }
+    .center-mark { z-index:1; display:grid; place-items:center; width:142px; height:142px; border:1px solid #a6e3a144; border-radius:40px; background:#18251b; box-shadow:0 0 65px #8bcc7e1f; transform:rotate(-7deg) }
+    .center-mark img { width:100px; height:100px; object-fit:contain; transform:rotate(7deg) }
+    .node { position:absolute; z-index:2; padding:7px 11px; border:1px solid #ffffff1b; border-radius:999px; background:#111713; color:#c7d2c8; font-size:11px; letter-spacing:.02em }
+    .node.coordinator { top:27px; left:50%; transform:translateX(-50%) }
+    .node.metadata { left:20px; bottom:39px }
+    .node.storage { right:20px; bottom:39px }
+    .section { padding:72px 0 }
+    .section-heading { max-width:650px; margin:0 auto 34px; text-align:center }
+    h2 { margin:0 0 10px; font-size:clamp(28px,4vw,40px); letter-spacing:-.045em; line-height:1.15 }
+    .section-heading p { margin:0; color:var(--muted) }
+    .features { display:grid; grid-template-columns:repeat(3,1fr); gap:16px }
+    .feature { min-height:205px; padding:24px; border:1px solid var(--line); border-radius:16px; background:linear-gradient(145deg,#1a211c,#151b17) }
+    .feature-icon { display:grid; place-items:center; width:38px; height:38px; margin-bottom:21px; border:1px solid #a6e3a13c; border-radius:11px; background:#a6e3a110; color:var(--green); font-size:18px }
+    h3 { margin:0 0 8px; font-size:17px; letter-spacing:-.02em }
+    .feature p { margin:0; color:var(--muted); font-size:14px; line-height:1.65 }
+    .privacy { display:grid; grid-template-columns:.8fr 1.2fr; gap:52px; align-items:start; padding:34px; border:1px solid #708d703d; border-radius:20px; background:linear-gradient(120deg,#18251b,#151b17) }
+    .privacy p { margin:0; color:#b1beb3; font-size:14px }
+    .privacy ul { display:grid; gap:12px; margin:0; padding:0; list-style:none }
+    .privacy li { display:flex; gap:10px; color:#d8e1d8; font-size:14px }
+    .check { color:var(--green); font-weight:800 }
+    .notice { margin-top:16px; padding:14px 16px; border-left:3px solid #d8b56d; border-radius:4px 10px 10px 4px; background:#d8b56d0d; color:#c7bea9; font-size:12px; line-height:1.65 }
+    .closing { margin:74px 0 50px; padding:40px; border:1px solid var(--line); border-radius:20px; text-align:center; background:#151b17 }
+    .closing p { margin:0 0 22px; color:var(--muted) }
+    footer { display:flex; justify-content:space-between; gap:20px; padding:22px 0 30px; border-top:1px solid #ffffff12; color:#89968b; font-size:12px }
+    footer a { color:#b8c5b9; text-decoration:none }
+    @media (max-width:760px) { .hero { grid-template-columns:1fr; gap:36px; padding:66px 0 55px } .orbit-card { min-height:270px } .features { grid-template-columns:1fr } .feature { min-height:0 } .privacy { grid-template-columns:1fr; gap:20px; padding:25px } .section { padding:54px 0 } .closing { margin-top:50px; padding:30px 20px } }
+    @media (max-width:430px) { .wrap { width:min(var(--max),100% - 28px) } header { min-height:70px } .brand img { width:32px; height:32px } .brand span { font-size:18px } .nav-link { font-size:13px } .hero-copy { font-size:16px } .actions .button { flex:1 } .node.metadata { left:10px } .node.storage { right:10px } footer { flex-direction:column; gap:7px } }
+    @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto } *,*::before,*::after { transition:none !important } }
+  </style>
+</head>
+<body>
+  <header class="wrap">
+    <a class="brand" href="/" aria-label="rawrarr home"><img src="/assets/rawrarr-logo.png" alt=""><span>rawrarr</span></a>
+    <a class="nav-link" href="/auth">Sign in <span aria-hidden="true">↗</span></a>
+  </header>
+  <main class="wrap">
+    <section class="hero" aria-labelledby="hero-title">
+      <div>
+        <div class="eyebrow">A self-hosted media workspace</div>
+        <h1 id="hero-title">Your library.<br>Your devices.</h1>
+        <p class="hero-copy">Bring your Radarr and Sonarr libraries together with the devices and storage you control. rawrarr helps coordinate your setup while your media stays on your own disks.</p>
+        <div class="actions"><a class="button" href="/auth">Continue to sign in <span aria-hidden="true">&nbsp;→</span></a><a class="button secondary" href="#how-it-works">Explore rawrarr</a></div>
+        <p class="small-note">Private workspace access uses a passkey.</p>
+      </div>
+      <div class="orbit-card" role="img" aria-label="A coordinator connecting your metadata and storage devices">
+        <span class="orbit one"></span><span class="orbit two"></span><span class="orbit three"></span>
+        <span class="node coordinator">COORDINATOR</span><span class="node metadata">METADATA</span><span class="node storage">YOUR STORAGE</span>
+        <div class="center-mark"><img src="/assets/rawrarr-logo.png" alt=""></div>
+      </div>
+    </section>
+
+    <section class="section" id="how-it-works" aria-labelledby="features-title">
+      <div class="section-heading"><div class="eyebrow">Made for your setup</div><h2 id="features-title">Your media stays yours.</h2><p>Keep the pieces close to home and see how they work together.</p></div>
+      <div class="features">
+        <article class="feature"><div class="feature-icon" aria-hidden="true">⌂</div><h3>Storage on your terms</h3><p>Storage nodes scan media where it lives. Rawrarr does not upload your media files to the coordinator.</p></article>
+        <article class="feature"><div class="feature-icon" aria-hidden="true">▤</div><h3>One view of your libraries</h3><p>Connect Radarr and Sonarr to browse your movie and TV libraries from the Rawrarr workspace.</p></article>
+        <article class="feature"><div class="feature-icon" aria-hidden="true">◇</div><h3>Devices that work together</h3><p>A coordinator helps you manage approved devices while metadata and storage nodes do their own jobs.</p></article>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="privacy-title">
+      <div class="privacy">
+        <div><div class="eyebrow">Privacy, clearly</div><h2 id="privacy-title">Designed with boundaries.</h2><p>Rawrarr separates account sign-in and device coordination from the nodes that work with your libraries and media.</p></div>
+        <div>
+          <ul>
+            <li><span class="check" aria-hidden="true">✓</span><span>Media files remain on storage you control.</span></li>
+            <li><span class="check" aria-hidden="true">✓</span><span>Shared configuration and metadata are designed to be age-encrypted before synchronization.</span></li>
+            <li><span class="check" aria-hidden="true">✓</span><span>Your age private identity is not needed by the coordinator.</span></li>
+            <li><span class="check" aria-hidden="true">✓</span><span>The coordinator can still see account, device, routing, timing, and traffic-size information.</span></li>
+          </ul>
+          <div class="notice"><strong>Early project:</strong> Rawrarr is under active development. Some content flows are incomplete or not yet verified end to end, and the project has not had an independent security audit. These design goals should not be read as a claim that every current flow already meets them.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="closing" aria-labelledby="closing-title"><h2 id="closing-title">Ready to open your workspace?</h2><p>Sign in with your passkey to continue.</p><a class="button" href="/auth">Continue to sign in <span aria-hidden="true">&nbsp;→</span></a></section>
+  </main>
+  <footer class="wrap"><span>rawrarr · self-hosted media workspace</span><span>Built for the devices you control.</span></footer>
+</body>
+</html>

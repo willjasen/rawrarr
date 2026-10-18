@@ -767,7 +767,7 @@ async fn coordinator_home(
     if crate::auth::is_authenticated(&state.coordinator_auth, &headers).await {
         axum::response::Html(include_str!("coordinator_workspace.html")).into_response()
     } else {
-        crate::auth::auth_html().into_response()
+        axum::response::Html(include_str!("landing.html")).into_response()
     }
 }
 

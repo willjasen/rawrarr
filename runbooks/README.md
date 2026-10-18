@@ -20,6 +20,8 @@
 
 # Rawrarr runbooks
 
+- [Public Rawrarr landing page](2026-10-18-public-landing-page.md) — Serve a security-qualified product introduction before passkey sign-in while keeping the authenticated workspace at the coordinator root.
+
 - [Integrate subscriber tailnets with Swarmsail](2026-10-18-swarmsail-subscriber-tailnet-integration.md) — Record the eligibility gate, one-way privacy rule, current Swarmsail change, and remaining hosted integration.
 
 - [Storage media replication](2026-10-18-storage-media-replication.md) — Add explicit first-to-second apex media-folder sharing through Syncthing.

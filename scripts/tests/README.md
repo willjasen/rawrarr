@@ -3,6 +3,8 @@
 - `test_rawrarr_coordinator_arr_links.mjs` — checks the coordinator's encrypted Radarr slug flow, direct metadata route, browser-only reachability gate, and year-cell icon wiring for Movies and TV. Run with `node --test scripts/tests/test_rawrarr_coordinator_arr_links.mjs`.
 # Rawrarr tests
 
+- `test_rawrarr_landing_page.mjs` — Chromium checks for the signed-out landing page, passkey sign-in links, accurate security/maturity disclosure, and mobile layout. Run with `node --test scripts/tests/test_rawrarr_landing_page.mjs` in the isolated test image.
+
 - `test_share_storage_media.py` — Rejects unsafe media paths and plain HTTP remote APIs, refuses overlapping folders, and checks send-only/receive-only pairing without auto-accept. Run `python3 scripts/tests/test_share_storage_media.py`.
 - `test_hash_media_tree.py` — Checks path/content hashing and symlink refusal. Run `python3 scripts/tests/test_hash_media_tree.py`.
 - `test_lock_syncthing_to_tailscale.py` — Checks that tailnet restrictions verify local identity and refuse to alter a Syncthing instance with unrelated peers. Run `python3 scripts/tests/test_lock_syncthing_to_tailscale.py`.
