@@ -8,7 +8,7 @@ See the [user guide](docs/user-guide.md) for Docker Compose setup, passkey onboa
 
 ## Development workflow
 
-Code changes are made and verified before updating the persistent `rawrarr-local` environment. Rebuild that environment only when requested, so it stays available for hands-on review between updates. The application image uses BuildKit Cargo caches to reuse downloaded crates and Rust build artifacts across source changes.
+Code changes are made and verified before updating the persistent `rawrarr-local` environment. After UI changes, rebuild that environment so hands-on review at http://localhost:7297 uses the current implementation. The application image uses BuildKit Cargo caches to reuse downloaded crates and Rust build artifacts across source changes.
 
 ## Test
 
