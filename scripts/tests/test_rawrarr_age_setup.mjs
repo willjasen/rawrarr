@@ -16,6 +16,7 @@ function createElement() {
     handlers: new Map(), attributes: {},
     addEventListener(name, handler) { this.handlers.set(name, handler); },
     async click() { if (!this.disabled) await this.handlers.get('click')?.({ currentTarget: this }); },
+    async input() { await this.handlers.get('input')?.({ currentTarget: this }); },
     async change() { await this.handlers.get('change')?.({ currentTarget: this }); },
     append(element) { this.children.push(element); },
     replaceChildren() { this.children = []; },
@@ -28,15 +29,16 @@ test('generated private age identity has a short preview and full value is expos
   assert.match(page, /id="identity" type="password"/);
   assert.match(page, /Copy private identity/);
   assert.match(page, /Public age recipient/);
-  assert.match(page, /Load identity from file/);
+  assert.match(page, /Paste existing private identity/);
+  assert.doesNotMatch(page, /identity-file|choose-file|Load identity from file|type="file"/);
   assert.match(page, />Unlock vault<\/button>/);
-  assert.match(page, /Loading only fills this masked field; select Unlock vault/);
+  assert.match(page, /To use a saved key, paste it into the masked field/);
   assert.match(page, /I have saved my private age identity somewhere safe and can retrieve it later/);
   assert.match(page, /Rawrarr cannot recover this identity if it is lost/);
   assert.doesNotMatch(page, />Import and unlock<\/button>/);
 
-  const ids = ['identity', 'identity-file', 'message', 'public-card', 'public-recipient',
-    'private-preview-card', 'private-preview', 'fingerprint', 'copy', 'generate', 'choose-file', 'unlock',
+  const ids = ['identity', 'message', 'public-card', 'public-recipient',
+    'private-preview-card', 'private-preview', 'fingerprint', 'copy', 'generate', 'unlock',
     'backup-confirmation', 'backup-confirmed'];
   const elements = Object.fromEntries(ids.map(id => [id, createElement()]));
   const rootStyles = new Map();
@@ -100,16 +102,15 @@ test('generated private age identity has a short preview and full value is expos
   assert.equal(elements.identity.value, '');
 
   const previousUnlockCount = fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length;
-  elements['identity-file'].files = [{ async text() { return privateIdentity; } }];
-  await elements['identity-file'].change();
-  assert.equal(elements.identity.value, privateIdentity, 'file selection loads the identity into the masked field');
-  assert.equal(elements['backup-confirmed'].checked, false, 'loading an identity resets the backup confirmation');
-  assert.equal(elements.unlock.disabled, true, 'an imported identity requires a fresh backup confirmation');
-  assert.match(elements.message.textContent, /Select Unlock vault/);
+  elements.identity.value = privateIdentity;
+  await elements.identity.input();
+  assert.equal(elements.identity.value, privateIdentity, 'a pasted identity remains in the masked password field');
+  assert.equal(elements['backup-confirmed'].checked, false, 'pasting an identity resets the backup confirmation');
+  assert.equal(elements.unlock.disabled, true, 'a pasted identity requires a fresh backup confirmation');
   assert.equal(
     fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length,
     previousUnlockCount,
-    'loading an identity file does not unlock automatically'
+    'pasting an identity does not unlock automatically'
   );
   elements['backup-confirmed'].checked = true;
   await elements['backup-confirmed'].change();
@@ -117,7 +118,7 @@ test('generated private age identity has a short preview and full value is expos
   assert.equal(
     fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length,
     previousUnlockCount + 1,
-    'unlocking after file import submits the identity'
+    'unlocking after paste submits the identity'
   );
   assert.equal(rootStyles.get('--theme-hue'), String(Number.parseInt(themeSeed.slice(0, 8), 16) % 360));
 

@@ -18,7 +18,6 @@
     .backup-confirmation { display:flex; align-items:flex-start; gap:10px; margin:16px 0 8px; padding:12px; border:1px solid var(--line); border-radius:10px; background:#111712; color:var(--text); font-size:12px }
     .backup-confirmation input { width:16px; height:16px; flex:none; margin:2px 0 0; accent-color:var(--green) }
     .backup-warning { margin:0; font-size:11px }
-    input[type="file"] { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap }
     .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px }
     button { border:1px solid #658968; border-radius:9px; padding:11px 13px; color:#101711; background:var(--green); font:650 12px system-ui; cursor:pointer }
     button.secondary { color:#dbe8dc; border-color:var(--line); background:#202821 }
@@ -48,13 +47,11 @@
       <span class="public-label">Private identity · shortened preview</span>
       <code id="private-preview"></code>
     </section>
-    <label for="identity">Existing private identity (optional)</label>
+    <label for="identity">Paste existing private identity (optional)</label>
     <input id="identity" type="password" spellcheck="false" autocomplete="off" placeholder="Paste identity (characters stay masked)">
-    <input id="identity-file" type="file" accept=".agekey,.txt,text/plain">
     <div class="actions">
       <button class="secondary" id="generate" type="button">Create identity</button>
       <button class="secondary" id="copy" type="button" disabled>Copy private identity</button>
-      <button class="secondary" id="choose-file" type="button">Load identity from file</button>
       <button id="unlock" type="button" disabled>Unlock vault</button>
     </div>
     <section id="backup-confirmation" hidden>
@@ -64,12 +61,11 @@
       </label>
       <p class="backup-warning">Rawrarr cannot recover this identity if it is lost. Without it, your encrypted shared configuration cannot be unlocked.</p>
     </section>
-    <p class="privacy-note">Create identity makes a new key that is ready to unlock after you copy it. To use a saved key, paste it here or choose Load identity from file. Loading only fills this masked field; select Unlock vault to open your encrypted settings. Only shortened identity previews are shown.</p>
+    <p class="privacy-note">Create identity makes a new key that is ready to unlock after you copy it. To use a saved key, paste it into the masked field. Select Unlock vault to open your encrypted settings. Only shortened identity previews are shown.</p>
     <div id="message" role="status" aria-live="polite"></div>
   </main>
   <script>
     const identity = document.getElementById('identity');
-    const privateFile = document.getElementById('identity-file');
     const message = document.getElementById('message');
     const unlockButton = document.getElementById('unlock');
     const backupConfirmation = document.getElementById('backup-confirmation');
@@ -146,7 +142,6 @@
       } catch (error) { message.textContent = error.message; }
     }
 
-    document.getElementById('choose-file').addEventListener('click', () => privateFile.click());
     identity.addEventListener('input', () => {
       generatedIdentity = '';
       backupConfirmed.checked = false;
@@ -154,17 +149,6 @@
       updateBackupConfirmation();
     });
     backupConfirmed.addEventListener('change', updateBackupConfirmation);
-    privateFile.addEventListener('change', async () => {
-      const file = privateFile.files && privateFile.files[0];
-      if (!file) return;
-      identity.value = await file.text();
-      generatedIdentity = '';
-      clearPrivatePreview();
-      backupConfirmed.checked = false;
-      updateBackupConfirmation();
-      message.textContent = 'Identity loaded into the masked field. Select Unlock vault to validate it and open your encrypted settings.';
-    });
-
     document.getElementById('generate').addEventListener('click', async event => {
       const button = event.currentTarget;
       button.disabled = true;
@@ -206,7 +190,7 @@
         return;
       }
       if (!privateIdentity) {
-        message.textContent = 'Create a new identity or paste/load an existing one before unlocking.';
+        message.textContent = 'Create a new identity or paste an existing one before unlocking.';
         return;
       }
       button.disabled = true;
