@@ -86,6 +86,7 @@
     .kind-tag { display: inline-block; border: 1px solid #3a493e; background: #202923; color: #c6d4c8; border-radius: 5px; padding: 3px 6px; font-size: 9px; white-space: nowrap; }
     .issue-note { color: var(--amber); padding: 0 18px 13px; font-size: 10px; }
     .footer { color: #647168; text-align: right; font-size: 9px; margin-top: 16px; }
+    .metadata-note { color: var(--muted); font-size: 10px; line-height: 1.5; padding: 11px 16px; border-bottom: 1px solid var(--line); }
     @media (max-width: 850px) { .app { grid-template-columns: 70px minmax(0, 1fr); } aside { padding: 22px 10px; } .brand { justify-content: center; padding: 0 0 32px; } .brand-copy, .section-label, .nav-text, .nav-soon, .sidebar-bottom { display: none; } .nav-item { justify-content: center; padding: 0; } main { padding: 30px 24px 50px; } .grid { grid-template-columns: 1fr 1fr; } .grid .card:last-child { grid-column: span 2; } }
     @media (max-width: 580px) { .app { display: block; } aside { position: sticky; z-index: 2; top: 0; height: 60px; display: flex; align-items: center; border-right: 0; border-bottom: 1px solid var(--line); padding: 0 14px; } .brand { padding: 0; margin-right: auto; } .brand-copy { display: block; } .nav-item { width: 40px; height: 40px; margin: 0 3px; } .nav-item.active { box-shadow: inset 0 -2px var(--green); } main { padding: 26px 16px 42px; } .topline { align-items: flex-start; margin-bottom: 22px; } .live-pill { font-size: 0; padding: 9px; } .welcome { align-items: flex-start; flex-direction: column; padding: 19px; } .grid { gap: 9px; } .card { padding: 14px; min-height: 116px; } .columns { grid-template-columns: 1fr; } }
   </style>
@@ -116,10 +117,11 @@
       <section class="columns">
         <article class="panel">
           <div class="panel-head"><h2>Local media</h2><button id="scan" class="refresh" type="button" disabled>Scan folder ↻</button></div>
+          <div id="metadata-note" class="metadata-note">Connect Radarr to look up metadata suggestions for movie files.</div>
           <div id="library-empty" class="empty"><div class="empty-icon">⌕</div><h3 id="library-empty-title">Configure a local folder</h3><p id="library-empty-copy">Set <code>RAWARR_LIBRARY_PATH</code> to a folder available to the rawrarr process, then restart it. Scanning is read-only and never follows symbolic links.</p></div>
           <div id="library-results" class="table-wrap" hidden>
             <div id="scan-summary" class="scan-summary"></div>
-            <table><thead><tr><th>Type</th><th>Name</th><th>Relative path</th><th>Size</th></tr></thead><tbody id="media-rows"></tbody></table>
+            <table><thead><tr><th>Type</th><th>Name</th><th>Relative path</th><th>Size</th><th>Metadata</th></tr></thead><tbody id="media-rows"></tbody></table>
             <div id="scan-issues" class="issue-note" hidden></div>
           </div>
         </article>
@@ -133,7 +135,7 @@
           </div>
         </article>
       </section>
-      <div class="footer">Status refreshes automatically every 30 seconds</div>
+      <div class="footer">Status refreshes automatically every 30 seconds · TMDb metadata provided by <a href="https://www.themoviedb.org/" target="_blank" rel="noreferrer"><img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg" alt="TMDb" width="18" height="18" style="vertical-align:middle"></a> The Movie Database. This product uses the TMDB API but is not endorsed or certified by TMDB.</div>
     </main>
   </div>
   <script>
@@ -144,6 +146,7 @@
     const libraryEmpty = document.getElementById('library-empty');
     const libraryResults = document.getElementById('library-results');
     let libraryConfigured = false;
+    let metadataConfigured = false;
 
     async function refreshStatus() {
       state.textContent = 'Checking…';
@@ -186,6 +189,19 @@
       }
     }
 
+    async function loadMetadataInfo() {
+      try {
+        const response = await fetch('/api/metadata/status', { headers: { Accept: 'application/json' } });
+        const info = await response.json();
+        metadataConfigured = info.configured;
+        document.getElementById('metadata-note').textContent = metadataConfigured
+          ? 'Movie filename and year are searched through Radarr. Review candidates before treating a match as confirmed.'
+          : 'Connect Radarr with its URL and API key to search for movie metadata.';
+      } catch (_) {
+        metadataConfigured = false;
+      }
+    }
+
     function formatBytes(value) {
       if (value < 1024) return `${value} B`;
       const units = ['KB', 'MB', 'GB', 'TB'];
@@ -193,6 +209,59 @@
       let unit = -1;
       do { size /= 1024; unit += 1; } while (size >= 1024 && unit < units.length - 1);
       return `${size.toFixed(1)} ${units[unit]}`;
+    }
+
+    function movieSearchTerms(filename) {
+      const withoutExtension = filename.replace(/\.[^.]+$/, '');
+      const yearMatch = withoutExtension.match(/\b(18\d{2}|19\d{2}|20\d{2}|2100)\b/);
+      const year = yearMatch ? Number(yearMatch[1]) : null;
+      const beforeYear = yearMatch ? withoutExtension.slice(0, yearMatch.index) : withoutExtension;
+      const query = beforeYear.replace(/[._]+/g, ' ')
+        .replace(/\[[^\]]*\]|\([^)]*\)/g, ' ')
+        .replace(/\b(1080p|2160p|720p|480p|bluray|blu ray|brrip|webrip|web dl|web-dl|hdtv|x264|x265|h264|h265|hevc|aac|dts|proper|repack)\b/ig, ' ')
+        .replace(/\s+/g, ' ').replace(/[\s([{._-]+$/, '').trim();
+      return { query: query || withoutExtension, year };
+    }
+
+    async function findMovieMetadata(file, row) {
+      const button = row.querySelector('button');
+      button.disabled = true;
+      button.textContent = 'Searching…';
+      const terms = movieSearchTerms(file.name);
+      try {
+        const response = await fetch('/api/metadata/movies/search', {
+          method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+          body: JSON.stringify(terms)
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Metadata search failed');
+        const details = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.colSpan = 5;
+        cell.className = 'path';
+        if (result.candidates.length === 0) {
+          cell.textContent = `No TMDb matches for “${terms.query}”.`;
+        } else {
+          for (const movie of result.candidates) {
+            const candidate = document.createElement('div');
+            candidate.style.padding = '8px 0';
+            const heading = document.createElement('strong');
+            const year = movie.year || 'year unknown';
+            heading.textContent = `${movie.title} (${year}) · TMDb #${movie.tmdbId}`;
+            const overview = document.createElement('div');
+            overview.textContent = movie.overview || 'No overview available.';
+            overview.style.marginTop = '4px';
+            candidate.append(heading, overview);
+            cell.append(candidate);
+          }
+        }
+        details.append(cell);
+        row.after(details);
+      } catch (error) {
+        button.textContent = error.message;
+      }
+      button.disabled = false;
+      if (button.textContent === 'Searching…') button.textContent = 'Find metadata';
     }
 
     async function scanLibrary() {
@@ -224,13 +293,25 @@
           const sizeCell = document.createElement('td');
           sizeCell.className = 'size';
           sizeCell.textContent = formatBytes(file.sizeBytes);
-          row.append(kindCell, nameCell, pathCell, sizeCell);
+          const metadataCell = document.createElement('td');
+          if (file.kind === 'movie') {
+            const matchButton = document.createElement('button');
+            matchButton.className = 'refresh';
+            matchButton.type = 'button';
+            matchButton.textContent = 'Find metadata';
+            matchButton.disabled = !metadataConfigured;
+            matchButton.addEventListener('click', () => findMovieMetadata(file, row));
+            metadataCell.append(matchButton);
+          } else {
+            metadataCell.textContent = '—';
+          }
+          row.append(kindCell, nameCell, pathCell, sizeCell, metadataCell);
           rows.append(row);
         }
         if (result.items.length === 0) {
           const row = document.createElement('tr');
           const cell = document.createElement('td');
-          cell.colSpan = 4;
+          cell.colSpan = 5;
           cell.textContent = 'No recognized media files found in this folder.';
           row.append(cell);
           rows.append(row);
@@ -256,6 +337,7 @@
     document.getElementById('refresh').addEventListener('click', refreshStatus);
     scanButton.addEventListener('click', scanLibrary);
     loadLibraryInfo();
+    loadMetadataInfo();
     refreshStatus();
     window.setInterval(refreshStatus, 30000);
   </script>

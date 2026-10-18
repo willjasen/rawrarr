@@ -2,6 +2,7 @@
 
 pub mod download_clients;
 pub mod library;
+pub mod metadata;
 
 use axum::{Json, Router, extract::State, http::StatusCode, response::Html, routing::get};
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
@@ -77,6 +78,32 @@ impl RadarrClient {
             .json()
             .await
     }
+
+    async fn search_movies(
+        &self,
+        request: metadata::MovieSearchRequest,
+    ) -> Result<metadata::MovieSearchResponse, metadata::SearchError> {
+        let term = request.validate()?;
+        let mut results: Vec<metadata::RadarrMovieLookupItem> = self
+            .http
+            .get(format!("{}/api/v3/movie/lookup", self.base_url))
+            .header("X-Api-Key", self.api_key.clone())
+            .header(ACCEPT, "application/json")
+            .query(&[("term", term)])
+            .send()
+            .await
+            .map_err(|_| metadata::SearchError::Upstream)?
+            .error_for_status()
+            .map_err(|_| metadata::SearchError::Upstream)?
+            .json()
+            .await
+            .map_err(|_| metadata::SearchError::Upstream)?;
+        results.truncate(5);
+        Ok(metadata::MovieSearchResponse {
+            provider: "radarr",
+            candidates: results.into_iter().map(Into::into).collect(),
+        })
+    }
 }
 
 async fn health() -> &'static str {
@@ -147,6 +174,46 @@ async fn radarr_status(
     })
 }
 
+async fn search_movie_metadata(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<metadata::MovieSearchRequest>,
+) -> Result<Json<metadata::MovieSearchResponse>, (StatusCode, Json<ApiError>)> {
+    let Some(provider) = &state.radarr else {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ApiError {
+                error: "Movie metadata provider is not configured",
+            }),
+        ));
+    };
+    provider
+        .search_movies(request)
+        .await
+        .map(Json)
+        .map_err(|error| {
+            let (status, message) = match error {
+                metadata::SearchError::InvalidQuery | metadata::SearchError::InvalidYear => {
+                    (StatusCode::BAD_REQUEST, "Invalid movie search request")
+                }
+                metadata::SearchError::Upstream => {
+                    (StatusCode::BAD_GATEWAY, "Movie metadata search failed")
+                }
+            };
+            (status, Json(ApiError { error: message }))
+        })
+}
+
+#[derive(Serialize)]
+struct MetadataStatus {
+    configured: bool,
+}
+
+async fn metadata_status(State(state): State<Arc<AppState>>) -> Json<MetadataStatus> {
+    Json(MetadataStatus {
+        configured: state.radarr.is_some(),
+    })
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let address = env::var("RUST_ARR_LISTEN_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".to_owned());
@@ -161,6 +228,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/health", get(health))
         .route("/api/library", get(library_info))
         .route("/api/library/scan", axum::routing::post(scan_library))
+        .route(
+            "/api/metadata/movies/search",
+            axum::routing::post(search_movie_metadata),
+        )
+        .route("/api/metadata/status", get(metadata_status))
         .route("/api/radarr/status", get(radarr_status))
         .with_state(state);
     let listener = tokio::net::TcpListener::bind(socket_address).await?;
