@@ -6,8 +6,27 @@ Add read-only Sonarr series integration and make library column layout shared wi
 ## Design
 Use one column schema and renderer for both libraries, retaining provider-specific identifiers and availability semantics. Sonarr credentials stay in subscriber age-encrypted configuration. Sonarr v3 API (Sonarr 3/4) is the initial target: https://sonarr.tv/docs/api/ . Episode mutation and shared encrypted television artwork caching remain planned.
 
-## Actions and verification
-Implementation in progress.
+## Handoff status
+
+### Done
+
+- Added Sonarr connection settings, status, and read-only series APIs. Sonarr URLs must use HTTPS; credentials are encrypted with the subscriber configuration. Saves and clears preserve Radarr settings and the shared metadata filename key.
+- Added a Sonarr Settings form and Series view. A shared column schema and renderer now drive both the Radarr Movies table and Sonarr Series table. Provider-specific cells show TMDb or TVDB IDs and movie-file or episode counts.
+- Added and passed focused Rust, encryption-preservation, and browser tests. The release image built successfully. Live Sonarr behavior has not been tested.
+- Commit: `75c5236` (`Add Sonarr adapter and shared library regression coverage`).
+
+### Still to do
+
+1. **Deploy the committed UI and adapter.** The earlier local rebuild was blocked by concurrent node-role changes and a missing coordinator approved-nodes file. The running app was later restored by another deployment and returned HTTP 200 on `/health`, but it did not contain this UI. Check the current Compose setup and port 7297 owner before rebuilding; preserve that working deployment and its volumes.
+2. **Connect to a real Sonarr instance.** Save its HTTPS URL and API key through Settings, then verify status and that series, episode/file counts, profile names, and TVDB IDs match Sonarr.
+3. **Finish integration edits.** The current worktree has the Sonarr module wired into `main.rs` and its encrypted config in `secure_config.rs`, but these integration hunks and the shared UI remain uncommitted because those files also contain concurrent changes. Review the current diff, preserve concurrent hunks, and commit only the Sonarr-owned changes.
+4. **Consider the next shared-library increment:** Sonarr artwork/snapshots and metadata lookup are not implemented. Add future Arr apps through the shared provider registry and column schema rather than making app-specific table copies.
+
+## Verification record
+
+- Passing: release Docker build; three Sonarr normalization/backward-compatibility tests; encrypted cross-app settings-preservation test; shared-library Chromium test; focused Radarr browser regressions; `git diff --check`.
+- Not verified: live Sonarr connection, final integrated checkout build after the handoff edits, or deployment of this UI to the persistent `rawrarr-local` service.
+- Current branch at handoff: `main`. Commit `75c5236` is local; there is no configured remote. Other worktree changes belong to concurrent tasks and must be preserved.
 
 ## Implemented
 - Shared `libraryColumns` and `renderArrLibrary` for Radarr and Sonarr. Provider descriptors supply identifier, title, availability, and detail-link semantics; column order and formatting have one owner.
