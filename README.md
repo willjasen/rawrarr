@@ -1,6 +1,6 @@
-# rust-arr
+# rawrarr
 
-Early Radarr-focused Rust application. The root route (`/`) serves a responsive dashboard, `/health` is a service health check, and `/api/radarr/status` is a read-only Radarr connection status endpoint. Movie inventory, media paths, and a database are not implemented yet.
+rawrarr is an early Radarr-focused Rust application. The root route (`/`) serves a responsive dashboard, `/health` is a service health check, and `/api/radarr/status` is a read-only Radarr connection status endpoint. Movie inventory, media paths, and a database are not implemented yet.
 
 ## Local development
 

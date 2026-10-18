@@ -120,7 +120,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_state(state);
     let listener = tokio::net::TcpListener::bind(socket_address).await?;
 
-    println!("rust-arr listening on {socket_address}");
+    println!("rawrarr listening on {socket_address}");
     axum::serve(listener, app).await?;
     Ok(())
 }
