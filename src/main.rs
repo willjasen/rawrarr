@@ -25,6 +25,7 @@ use axum::{
 use futures_util::Stream;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{env, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 use zeroize::{Zeroize, Zeroizing};
@@ -115,6 +116,7 @@ struct RadarrSettingsInfo {
 struct AgeSettingsInfo {
     unlocked: bool,
     encrypted_config_exists: bool,
+    theme_seed: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -173,6 +175,7 @@ impl Drop for AgeIdentityRequest {
 struct GeneratedAgeIdentity {
     identity: String,
     recipient: String,
+    theme_seed: String,
 }
 
 impl Drop for GeneratedAgeIdentity {
@@ -786,10 +789,19 @@ async fn get_radarr_settings(State(state): State<Arc<AppState>>) -> Json<RadarrS
 }
 
 async fn get_age_settings(State(state): State<Arc<AppState>>) -> Json<AgeSettingsInfo> {
+    let vault = state.vault.read().await;
     Json(AgeSettingsInfo {
-        unlocked: state.vault.read().await.is_some(),
+        unlocked: vault.is_some(),
         encrypted_config_exists: secure_config::AgeVault::config_path().is_file(),
+        theme_seed: vault.as_ref().map(|vault| age_theme_seed(vault.recipient())),
     })
+}
+
+fn age_theme_seed(recipient: &str) -> String {
+    Sha256::digest(recipient.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 async fn get_configuration(State(state): State<Arc<AppState>>) -> Json<ConfigurationView> {
@@ -957,6 +969,7 @@ async fn generate_age_identity() -> Result<Json<GeneratedAgeIdentity>, (StatusCo
         )
     })?;
     Ok(Json(GeneratedAgeIdentity {
+        theme_seed: age_theme_seed(&recipient),
         identity,
         recipient,
     }))
@@ -1005,10 +1018,12 @@ async fn unlock_age_settings(
         *state.radarr.write().await = Some(client);
     }
     let exists = vault.config_exists();
+    let theme_seed = age_theme_seed(vault.recipient());
     *state.vault.write().await = Some(vault);
     Ok(Json(AgeSettingsInfo {
         unlocked: true,
         encrypted_config_exists: exists,
+        theme_seed: Some(theme_seed),
     }))
 }
 
