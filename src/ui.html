@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#101514">
+  <link rel="icon" type="image/svg+xml" href="/assets/rawrarr-favicon.svg">
   <title>rawrarr — Movies</title>
   <style>
     :root {
@@ -29,10 +30,8 @@
     button { font: inherit; }
     .app { min-height: 100vh; display: grid; grid-template-columns: 240px minmax(0, 1fr); }
     aside { border-right: 1px solid var(--line); padding: 28px 18px; background: rgba(15, 20, 18, .74); }
-    .brand { display: flex; align-items: center; gap: 11px; padding: 0 10px 36px; }
-    .brand-mark { width: 34px; height: 34px; border-radius: 11px; background: var(--green); color: #172015; display: grid; place-items: center; font-size: 20px; font-weight: 850; }
-    .brand-name { font-size: 17px; font-weight: 760; letter-spacing: -.04em; }
-    .brand-caption { color: var(--muted); font-size: 11px; margin-top: 2px; }
+    .brand { display: flex; align-items: center; padding: 0 10px 36px; }
+    .brand-logo { display: block; width: 180px; height: 60px; object-fit: contain; padding: 2px; border-radius: 8px; background: #dff4bd; }
     .section-label { color: #75837a; font-size: 10px; text-transform: uppercase; letter-spacing: .14em; font-weight: 700; padding: 0 12px 9px; }
     .nav-item { min-height: 42px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-radius: 9px; color: var(--muted); font-size: 13px; margin: 3px 0; }
     .nav-item.active { color: var(--text); background: #222d26; box-shadow: inset 2px 0 var(--green); }
@@ -103,14 +102,14 @@
     .device-name { font-size: 11px; font-weight: 650; }
     .device-meta { color: var(--muted); font-size: 10px; line-height: 1.6; margin-top: 5px; }
     .device-status { color: var(--green); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; float: right; }
-    @media (max-width: 850px) { .app { grid-template-columns: 70px minmax(0, 1fr); } aside { padding: 22px 10px; } .brand { justify-content: center; padding: 0 0 32px; } .brand-copy, .section-label, .nav-text, .nav-soon, .sidebar-bottom { display: none; } .nav-item { justify-content: center; padding: 0; } main { padding: 30px 24px 50px; } .grid { grid-template-columns: 1fr 1fr; } .grid .card:last-child { grid-column: span 2; } }
+    @media (max-width: 850px) { .app { grid-template-columns: 70px minmax(0, 1fr); } aside { padding: 22px 10px; } .brand { justify-content: center; padding: 0 0 32px; } .brand-logo { width: 42px; height: 42px; object-fit: cover; object-position: left center; padding: 1px; } .section-label, .nav-text, .nav-soon, .sidebar-bottom { display: none; } .nav-item { justify-content: center; padding: 0; } main { padding: 30px 24px 50px; } .grid { grid-template-columns: 1fr 1fr; } .grid .card:last-child { grid-column: span 2; } }
     @media (max-width: 580px) { .app { display: block; } aside { position: sticky; z-index: 2; top: 0; height: 60px; display: flex; align-items: center; border-right: 0; border-bottom: 1px solid var(--line); padding: 0 14px; } .brand { padding: 0; margin-right: auto; } .brand-copy { display: block; } .nav-item { width: 40px; height: 40px; margin: 0 3px; } .nav-item.active { box-shadow: inset 0 -2px var(--green); } main { padding: 26px 16px 42px; } .topline { align-items: flex-start; margin-bottom: 22px; } .live-pill { font-size: 0; padding: 9px; } .welcome { align-items: flex-start; flex-direction: column; padding: 19px; } .grid { gap: 9px; } .card { padding: 14px; min-height: 116px; } .columns { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <div class="app">
     <aside aria-label="Main navigation">
-      <div class="brand"><div class="brand-mark">rr</div><div class="brand-copy"><div class="brand-name">rawrarr</div><div class="brand-caption">media automation</div></div></div>
+      <div class="brand"><img class="brand-logo" src="/assets/rawrarr-logo.png" alt="rawrarr" width="180" height="60"></div>
       <div class="section-label">Workspace</div>
       <div class="nav-item active"><span class="nav-icon">⌂</span><span class="nav-text">Overview</span></div>
       <button class="nav-item" id="movies-nav" type="button" style="width:100%;border:0;background:transparent;text-align:left;cursor:pointer"><span class="nav-icon">▧</span><span class="nav-text">Movies</span></button>
@@ -146,6 +145,20 @@
         <article class="panel">
           <div class="panel-head"><h2>Devices</h2><span id="device-count">—</span></div>
           <div id="device-list" class="device-list"><div class="device-meta">Loading scanner devices…</div></div>
+          <form id="syncthing-share" class="settings-form" style="border-top:1px solid var(--line)">
+            <h3 style="margin:0">Share metadata with a storage node</h3>
+            <p class="setup-intro">Configure a local Syncthing API in the web container, then enter the storage node API and peer addresses reachable on port 22000. Use HTTPS or a trusted private network for the remote API. The key is used for this request and is not saved.</p>
+            <label for="st-remote-url">Storage node Syncthing URL</label><input id="st-remote-url" type="url" placeholder="http://storage-node:8384" required>
+            <label for="st-remote-key">Storage node API key</label><input id="st-remote-key" type="password" autocomplete="new-password" required>
+            <label for="st-folder-id">Shared folder ID</label><input id="st-folder-id" value="rawrarr-metadata" required>
+            <label for="st-label">Folder label</label><input id="st-label" value="Rawrarr metadata" required>
+            <label for="st-local-path">Web node folder path</label><input id="st-local-path" placeholder="/data/shared-metadata" required>
+            <label for="st-remote-path">Storage node folder path</label><input id="st-remote-path" placeholder="/media/rawrarr-metadata" required>
+            <label for="st-local-address">Web node address, reachable by storage</label><input id="st-local-address" placeholder="tcp://web.example:22000" required>
+            <label for="st-remote-address">Storage node address, reachable by web</label><input id="st-remote-address" placeholder="tcp://storage.example:22000" required>
+            <div class="settings-actions"><button class="refresh" type="submit">Connect and share</button></div>
+            <div id="syncthing-message" class="settings-message" role="status" aria-live="polite"></div>
+          </form>
         </article>
         <article class="panel" id="radarr-settings-panel" style="grid-column: 1 / -1; scroll-margin-top: 24px">
           <div class="panel-head"><h2>Connect Radarr</h2><button id="refresh" class="refresh" type="button">Refresh status ↻</button></div>
@@ -503,7 +516,7 @@
           `Age ciphertext format recognized: ${result.encryption.ageFormatRecognized ? 'yes' : 'no'}`,
           `Age identity unlocked: ${result.encryption.identityUnlocked ? 'yes' : 'no'}`,
           `Decryption and config parsing verified: ${result.encryption.decryptionVerified ? 'yes' : 'no'}`,
-          `Peer synchronization: ${result.sharing.enabled ? 'enabled' : 'not implemented'}`
+          `Local Syncthing API: ${result.sharing.enabled ? 'configured' : 'not configured'}`
         ];
         details.textContent = checks.join(' · ');
       } catch (_) {
@@ -513,6 +526,29 @@
       }
     }
     document.getElementById('refresh-configuration').addEventListener('click', loadConfiguration);
+
+    document.getElementById('syncthing-share').addEventListener('submit', async event => {
+      event.preventDefault();
+      const message = document.getElementById('syncthing-message');
+      const button = event.currentTarget.querySelector('button[type="submit"]');
+      button.disabled = true;
+      message.textContent = 'Connecting peers and configuring the shared folder…';
+      const value = id => document.getElementById(id).value.trim();
+      try {
+        const response = await fetch('/api/syncthing/share', {
+          method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ remoteApiUrl: value('st-remote-url'), remoteApiKey: value('st-remote-key'),
+            folderId: value('st-folder-id'), label: value('st-label'), localPath: value('st-local-path'),
+            remotePath: value('st-remote-path'), localName: 'rawrarr-web', remoteName: 'rawrarr-storage',
+            localAddress: value('st-local-address'), remoteAddress: value('st-remote-address') })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Could not configure Syncthing peers');
+        document.getElementById('st-remote-key').value = '';
+        message.textContent = `Share configured · web ${result.localDeviceId} · storage ${result.remoteDeviceId}`;
+      } catch (error) { message.textContent = error.message; }
+      finally { button.disabled = false; }
+    });
 
     function movieSearchTerms(filename) {
       const withoutExtension = filename.replace(/\.[^.]+$/, '');

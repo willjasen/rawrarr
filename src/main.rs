@@ -6,6 +6,7 @@ pub mod download_clients;
 pub mod library;
 pub mod metadata;
 pub mod secure_config;
+pub mod syncthing;
 
 use axum::{
     Json, Router,
@@ -32,6 +33,7 @@ struct AppState {
     radarr: Arc<RwLock<Option<RadarrClient>>>,
     vault: Arc<RwLock<Option<secure_config::AgeVault>>>,
     library: Option<library::LibraryRoot>,
+    syncthing: Option<syncthing::Client>,
 }
 
 impl FromRef<AppState> for auth::AuthState {
@@ -339,6 +341,30 @@ impl RadarrClient {
 
 async fn health() -> &'static str {
     "ok"
+}
+
+fn static_asset(content_type: &'static str, data: &'static [u8]) -> Response<Body> {
+    let mut response = Response::new(Body::from(data));
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static(content_type),
+    );
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        axum::http::HeaderValue::from_static("public, max-age=86400"),
+    );
+    response
+}
+
+async fn rawrarr_logo() -> Response<Body> {
+    static_asset("image/png", include_bytes!("assets/rawrarr-logo.png"))
+}
+
+async fn rawrarr_favicon() -> Response<Body> {
+    static_asset(
+        "image/svg+xml",
+        include_str!("assets/rawrarr-favicon.svg").as_bytes(),
+    )
 }
 
 async fn auth_page(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response<Body> {
@@ -788,10 +814,91 @@ async fn get_configuration(State(state): State<Arc<AppState>>) -> Json<Configura
             decryption_verified,
         },
         sharing: SharingStatus {
-            enabled: false,
-            status: "peer synchronization is not implemented yet",
+            enabled: state.syncthing.is_some(),
+            status: if state.syncthing.is_some() {
+                "api_configured"
+            } else {
+                "not_configured"
+            },
         },
     })
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncthingStatusResponse {
+    configured: bool,
+    reachable: bool,
+    device_id: Option<String>,
+    version: Option<String>,
+}
+
+async fn syncthing_status(State(state): State<Arc<AppState>>) -> Json<SyncthingStatusResponse> {
+    let Some(client) = &state.syncthing else {
+        return Json(SyncthingStatusResponse {
+            configured: false,
+            reachable: false,
+            device_id: None,
+            version: None,
+        });
+    };
+    match client.status().await {
+        Ok(status) => Json(SyncthingStatusResponse {
+            configured: true,
+            reachable: true,
+            device_id: Some(status.my_id),
+            version: Some(status.version),
+        }),
+        Err(_) => Json(SyncthingStatusResponse {
+            configured: true,
+            reachable: false,
+            device_id: None,
+            version: None,
+        }),
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncthingShareResponse {
+    status: &'static str,
+    local_device_id: String,
+    remote_device_id: String,
+}
+
+async fn configure_syncthing_share(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<syncthing::ShareRequest>,
+) -> Result<Json<SyncthingShareResponse>, (StatusCode, Json<ApiError>)> {
+    let Some(local) = &state.syncthing else {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ApiError {
+                error: "Configure the local Syncthing API in the container first",
+            }),
+        ));
+    };
+    let remote =
+        syncthing::Client::new(&request.remote_api_url, &request.remote_api_key).map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ApiError {
+                    error: "Invalid remote Syncthing connection details",
+                }),
+            )
+        })?;
+    let (local_status, remote_status) = local.share_with(&remote, &request).await.map_err(|error| {
+        let status = match error {
+            syncthing::Error::InvalidConfiguration => StatusCode::BAD_REQUEST,
+            syncthing::Error::Request | syncthing::Error::Rejected => StatusCode::BAD_GATEWAY,
+        };
+        (status, Json(ApiError { error: "Syncthing could not configure the peer share; check API access, paths, and addresses" }))
+    })?;
+    Ok(Json(SyncthingShareResponse {
+        status: "configured",
+        local_device_id: local_status.my_id,
+        remote_device_id: remote_status.my_id,
+    }))
 }
 
 async fn generate_age_identity() -> Result<Json<GeneratedAgeIdentity>, (StatusCode, Json<ApiError>)>
@@ -972,6 +1079,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         radarr: Arc::new(RwLock::new(radarr)),
         vault: Arc::new(RwLock::new(vault)),
         library: library::LibraryRoot::from_env()?,
+        syncthing: syncthing::Client::from_env()
+            .map_err(|_| "invalid Syncthing environment configuration")?,
     });
 
     let protected = Router::new()
@@ -981,6 +1090,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/events", get(dashboard_events))
         .route("/api/library", get(library_info))
         .route("/api/devices", get(list_devices))
+        .route("/api/syncthing/status", get(syncthing_status))
+        .route("/api/syncthing/share", post(configure_syncthing_share))
         .route("/api/library/scan", axum::routing::post(scan_library))
         .route(
             "/api/metadata/movies/search",
@@ -1014,6 +1125,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ));
     let app = Router::new()
         .route("/health", get(health))
+        .route("/assets/rawrarr-logo.png", get(rawrarr_logo))
+        .route("/assets/rawrarr-favicon.svg", get(rawrarr_favicon))
         .route("/auth", get(auth_page))
         .route("/api/auth/status", get(auth::status))
         .route("/api/auth/register/start", post(auth::begin_registration))

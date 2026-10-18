@@ -26,7 +26,17 @@ Configure one read-only scan root with `RAWARR_LIBRARY_PATH=/absolute/path/to/me
 
 The dashboard opens an `EventSource` connection to `GET /api/events`. It emits a complete dashboard snapshot immediately and then every 30 seconds, including Radarr connectivity, metadata-provider readiness, library setup, and scanner-device state. The browser reconnects automatically if the stream drops; SSE keep-alive comments keep idle connections open.
 
-Set `RAWARR_DEVICE_NAME` to label this host in the Devices panel. The web API currently reports one local scanner device; configuring a separate remote device requires the future agent/pairing implementation described in the device architecture doc.
+Set `RAWARR_DEVICE_NAME` to label this host in the Devices panel. Scanner devices and Syncthing storage peers are separate roles; the web API reports local scanner state and exposes Syncthing peer status at `GET /api/syncthing/status`.
+
+### Syncthing storage peers
+
+The Devices panel can configure a web node and a storage node to share a folder. The Rawrarr web container needs access to its local Syncthing REST API through `RAWARR_SYNCTHING_API_URL` and either `RAWARR_SYNCTHING_API_KEY` or `RAWARR_SYNCTHING_API_KEY_FILE`. In Compose, provide these values through the environment; use a mounted secret file for the key when possible. The UI asks for the storage node's REST URL/key, the folder paths on both nodes, and network addresses each node can use to reach the other on Syncthing's port 22000. Use HTTPS or a trusted private network for the remote REST API, and do not publish Syncthing's REST API publicly.
+
+Rawrarr adds each peer to the other's Syncthing config and configures the web folder as send-only and the storage folder as receive-only. Syncthing handles the peer protocol, TLS, and file transfer. Rawrarr does not age-encrypt arbitrary folder contents; files that must remain age encrypted need to be written as `.aged` ciphertext before syncing. The OrbStack integration test runs two isolated `syncthing/syncthing:2.1.5` containers and checks the received file's SHA-256:
+
+```sh
+python3 scripts/tests/test_rawrarr_syncthing_orbstack.py
+```
 
 Configure the optional Radarr integration with `RADARR_URL` (for example, `http://radarr:7878`) and `RADARR_API_KEY`. The key is read from the environment and never returned in responses or error messages. With Compose, set these in an untracked `.env` file in the repository root or in the shell environment. When configured, `GET /api/radarr/status` reads Radarr's `/api/v3/system/status` endpoint. The route returns `503` when Radarr is not configured and `502` if Radarr does not return a successful response.
 
@@ -48,6 +58,8 @@ Create a protected password file outside the repository and point `RAWARR_POSTGR
 docker compose up --build
 curl http://localhost:8080/health
 ```
+
+Set `RAWARR_HOST_PORT` to choose another host port while keeping the container port at 8080 (for example, `RAWARR_HOST_PORT=8083`).
 
 The image uses a multi-stage build, includes the age v1.3.2 CLI for hybrid post-quantum encryption, and runs the application as UID 10001. Compose runs PostgreSQL on the private Compose network without publishing its port, persists the database in `rawrarr-postgres-data`, and mounts the supplied password file as a Docker secret. It publishes the web UI on host loopback only. The Rawrarr data volume stores encrypted config. Set `RAWARR_WEBAUTHN_RP_ID` and `RAWARR_WEBAUTHN_ORIGIN` in the environment when using a domain or non-default origin. `RADARR_URL` and `RADARR_API_KEY` remain available for headless/bootstrap deployments; UI settings require an unlocked age identity.
 
