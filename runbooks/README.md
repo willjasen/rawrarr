@@ -1,5 +1,7 @@
 # Rawrarr runbooks
 
+- [Review current Rawrarr documentation](2026-10-18-documentation-review.md) — Align local setup, identity handling, artwork, health semantics, and testing instructions with the current source.
+
 Task records and operational procedures for this Rawrarr repository. Each entry links to the specific task; older records are retained as history.
 
 - [Test age setup in Chromium](2026-10-18-age-challenge-playwright.md) — Add real-browser coverage for the age identity backup and unlock flow inside the isolated Rawrarr Docker test environment.
