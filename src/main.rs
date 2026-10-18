@@ -5,7 +5,17 @@ pub mod download_clients;
 pub mod library;
 pub mod metadata;
 
-use axum::{Json, Router, extract::State, http::StatusCode, response::Html, routing::get};
+use axum::{
+    Json, Router,
+    extract::State,
+    http::StatusCode,
+    response::{
+        Html, Sse,
+        sse::{Event, KeepAlive},
+    },
+    routing::get,
+};
+use futures_util::Stream;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::{env, net::SocketAddr, sync::Arc, time::Duration};
@@ -166,6 +176,90 @@ async fn dashboard() -> Html<&'static str> {
     Html(include_str!("ui.html"))
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DashboardRadarr {
+    configured: bool,
+    connected: bool,
+    app_name: Option<String>,
+    version: Option<String>,
+    url_base: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DashboardSnapshot {
+    radarr: DashboardRadarr,
+    metadata: MetadataStatus,
+    library: library::LibraryInfo,
+    devices: Vec<devices::DeviceInfo>,
+}
+
+async fn dashboard_snapshot(state: &AppState) -> DashboardSnapshot {
+    let radarr_client = state.radarr.read().await.clone();
+    let radarr = match radarr_client {
+        Some(client) => match client.status().await {
+            Ok(status) => DashboardRadarr {
+                configured: true,
+                connected: true,
+                app_name: Some(status.app_name),
+                version: Some(status.version),
+                url_base: Some(status.url_base),
+            },
+            Err(_) => DashboardRadarr {
+                configured: true,
+                connected: false,
+                app_name: None,
+                version: None,
+                url_base: None,
+            },
+        },
+        None => DashboardRadarr {
+            configured: false,
+            connected: false,
+            app_name: None,
+            version: None,
+            url_base: None,
+        },
+    };
+    let library_name = state.library.as_ref().map(library::LibraryRoot::name);
+    let library = match &state.library {
+        Some(root) => library::LibraryInfo {
+            configured: true,
+            name: Some(root.name().to_owned()),
+        },
+        None => library::LibraryInfo {
+            configured: false,
+            name: None,
+        },
+    };
+
+    DashboardSnapshot {
+        metadata: MetadataStatus {
+            configured: radarr.configured,
+        },
+        radarr,
+        library,
+        devices: vec![devices::DeviceInfo::local_scanner(library_name)],
+    }
+}
+
+async fn dashboard_events(
+    State(state): State<Arc<AppState>>,
+) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
+    let stream = async_stream::stream! {
+        let mut interval = tokio::time::interval(Duration::from_secs(30));
+        loop {
+            interval.tick().await;
+            let snapshot = dashboard_snapshot(&state).await;
+            if let Ok(event) = Event::default().event("dashboard").json_data(snapshot) {
+                yield Ok(event);
+            }
+        }
+    };
+    Sse::new(stream).keep_alive(KeepAlive::default())
+}
+
 async fn library_info(State(state): State<Arc<AppState>>) -> Json<library::LibraryInfo> {
     match &state.library {
         Some(root) => Json(library::LibraryInfo {
@@ -319,6 +413,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app = Router::new()
         .route("/", get(dashboard))
+        .route("/api/events", get(dashboard_events))
         .route("/health", get(health))
         .route("/api/library", get(library_info))
         .route("/api/devices", get(list_devices))
