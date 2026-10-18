@@ -85,3 +85,7 @@ Show synchronization states in user terms: up to date, syncing, waiting for devi
 ## Keeping this guide current
 
 When the user recommends or approves a change to how Rawrarr should look or behave, update this guide in the same task. Keep decisions here even when implementation is still pending, and track completion in the [roadmap](../ROADMAP.md) until the UI/service supports them. Do not silently turn an implementation detail into a product decision.
+
+## Mac mini storage-node deployment direction
+
+The Mac mini will run a subscriber storage node in OrbStack, joining the current instance and scanning `/Volumes/silo/Media/data` read-only. Keep media local, give the node independent operational/authentication storage, and preserve the existing shared instance and age recipient. Present drive unavailability separately from an empty library; combined cross-node catalogs and portable authentication remain planned. See the [deployment plan](mac-mini-storage-node-plan.md) for bootstrap gaps, verification, and recovery.

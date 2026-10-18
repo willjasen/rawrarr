@@ -28,3 +28,5 @@ Start here for the current project state and everyday use:
 
 - [Script and integration test index](../scripts/tests/README.md) — isolated test commands and infrastructure requirements.
 - [Runbooks](../runbooks/README.md) — dated implementation and operations records.
+
+- [Mac mini storage-node plan](mac-mini-storage-node-plan.md) — OrbStack deployment, attached-drive access, same-instance bootstrap, and acceptance checks.

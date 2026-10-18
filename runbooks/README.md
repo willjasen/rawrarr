@@ -89,3 +89,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Preserve the current page on refresh](2026-10-18-preserve-page-on-refresh.md) — Keep workspace navigation through reloads and browser history.
 
 - [Browser-reachable Radarr movie links](2026-10-18-radarr-movie-links.md) — Link posters and titles only after a browser reachability check.
+
+- [Plan the Mac mini storage node](2026-10-18-mac-mini-storage-node-plan.md) — Plan OrbStack, read-only silo media access, and joining the current instance.
