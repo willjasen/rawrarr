@@ -6,6 +6,7 @@ pub mod download_clients;
 pub mod library;
 pub mod metadata;
 pub mod secure_config;
+pub mod shared_logs;
 pub mod storage_node;
 pub mod syncthing;
 
@@ -35,6 +36,7 @@ struct AppState {
     vault: Arc<RwLock<Option<secure_config::AgeVault>>>,
     library: Option<library::LibraryRoot>,
     device_id: String,
+    shared_logs: Option<shared_logs::SharedLogger>,
     syncthing: Option<syncthing::Client>,
 }
 
@@ -523,7 +525,7 @@ async fn scan_library(
     ))?;
     let device_id = state.device_id.clone();
 
-    tokio::task::spawn_blocking(move || {
+    let summary = tokio::task::spawn_blocking(move || {
         let mut summary = root.scan();
         for file in &summary.items {
             let sidecar = library::MediaSidecar {
@@ -550,7 +552,6 @@ async fn scan_library(
         summary
     })
     .await
-    .map(Json)
     .map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -558,7 +559,17 @@ async fn scan_library(
                 error: "Local media scan failed",
             }),
         )
-    })
+    })?;
+    if let Some(logger) = &state.shared_logs {
+        logger.scan_completed(
+            summary.items.len(),
+            summary.sidecars_created,
+            summary.sidecar_errors,
+            summary.issues,
+            summary.truncated,
+        );
+    }
+    Ok(Json(summary))
 }
 
 async fn radarr_status(
@@ -1099,7 +1110,23 @@ async fn delete_radarr_settings(
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if env::args().nth(1).as_deref() == Some("storage-scan-once") {
+        let device_id = devices::load_or_create_device_id()?;
+        let logger =
+            shared_logs::SharedLogger::open(&secure_config::AgeVault::shared_dir(), &device_id)
+                .ok();
+        if logger.is_none() {
+            eprintln!("Rawrarr shared logging could not be initialized");
+        }
         let summary = storage_node::scan_once()?;
+        if let Some(logger) = logger {
+            logger.scan_completed(
+                summary.items.len(),
+                summary.sidecars_created,
+                summary.sidecar_errors,
+                summary.issues,
+                summary.truncated,
+            );
+        }
         println!(
             "Storage scan complete: {} media files; {} encrypted sidecars saved; {} sidecar errors; {} scan issues.",
             summary.items.len(),
@@ -1130,12 +1157,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         vault = Some(unlocked);
     }
+    let device_id = devices::load_or_create_device_id()?;
+    let shared_logs =
+        shared_logs::SharedLogger::open(&secure_config::AgeVault::shared_dir(), &device_id).ok();
+    if shared_logs.is_none() {
+        eprintln!("Rawrarr shared logging could not be initialized");
+    }
     let state = Arc::new(AppState {
         auth: auth.clone(),
         radarr: Arc::new(RwLock::new(radarr)),
         vault: Arc::new(RwLock::new(vault)),
         library: library::LibraryRoot::from_env()?,
-        device_id: devices::load_or_create_device_id()?,
+        device_id,
+        shared_logs: shared_logs.clone(),
         syncthing: syncthing::Client::from_env()
             .map_err(|_| "invalid Syncthing environment configuration")?,
     });
@@ -1195,6 +1229,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_state(state);
     let listener = tokio::net::TcpListener::bind(socket_address).await?;
 
+    if let Some(logger) = shared_logs {
+        logger.application_started();
+    }
     println!("rawrarr listening on {socket_address}");
     axum::serve(listener, app).await?;
     Ok(())
