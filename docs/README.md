@@ -2,7 +2,8 @@
 
 Start here for the current project state and everyday use:
 
-- [Technical status](technical-status.md) — what works today, what has been tested, and what is still planned.
+- [Project roadmap](../ROADMAP.md) — completed work, outstanding work, and recommended next milestones.
+- [Technical boundaries](technical-status.md) — data placement, privacy, and security constraints.
 - [User guide](user-guide.md) — Docker startup, first login, age identity, Radarr setup, and local scanning.
 
 ## Product design
@@ -11,7 +12,7 @@ Start here for the current project state and everyday use:
 
 ## Architecture and plans
 
-- [Product direction](product-direction.md) — product scope, privacy goals, compatibility, and roadmap.
+- [Product direction](product-direction.md) — long-term product scope, privacy goals, and compatibility.
 - [Node types](node-types.md) — operator service node, subscriber storage node, subscriber shard node, and SwarmSail enrollment.
 - [Device signing design](device-signing-design.md) — proposed signed device enrollment and configuration integrity.
 - [Data domains](data-domains.md) — placement and synchronization boundaries for `/media`, `/metadata`, `/shared`, `/data`, and backups.

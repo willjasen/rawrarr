@@ -1,6 +1,6 @@
 # Rawrarr user guide
 
-This guide covers features available in the current Docker prototype. For future work, see [technical status](technical-status.md).
+This guide covers features available in the current Docker prototype. For completed and outstanding project work, see the [roadmap](../ROADMAP.md); for data and security constraints, see [technical status](technical-status.md).
 
 ## Start Rawrarr with Docker Compose
 
@@ -77,10 +77,6 @@ The Devices panel can use local and remote Syncthing REST APIs to add peers and 
 
 This configures folder synchronization; it does not implement user invitations, selective per-user trust, shared passkey accounts, or media replication. Back up or test with disposable folders before pointing it at an existing Syncthing folder.
 
-## Current limitations
+## Project status
 
-- Only Radarr integration is available today; other Arr services and native discovery/download functions are planned.
-- Passkeys authenticate to the local Rawrarr node and are stored in its local PostgreSQL database; they are not yet replicated between nodes.
-- Each node's web/API, shared configuration, and database consistency are not yet ready for a production multi-node cluster.
-- The relay/claim workflow, SwarmSail integration, Tailscale sidecar, device signing, and shared-folder backup feature are plans, not available UI actions.
-- For data placement and security boundaries, see [technical status](technical-status.md) and [data domains](data-domains.md).
+See the [roadmap](../ROADMAP.md) for completed capabilities and planned work. For data placement and security boundaries, see [technical status](technical-status.md) and [data domains](data-domains.md).
