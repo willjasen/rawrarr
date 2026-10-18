@@ -122,12 +122,12 @@ test('generated private age identity has a short preview and full value is expos
   await elements['backup-confirmed'].change();
   assert.equal(elements['identity-challenge'].hidden, false, 'acknowledgement reveals the character challenge');
   assert.equal(elements['identity-challenge-input'].focused, true, 'revealing the challenge focuses the text field');
-  const challengePositions = [...elements['identity-challenge-prompt'].textContent.matchAll(/\d+/g)]
-    .map(match => Number(match[0]));
+  const challengeStart = Number(elements['identity-challenge-prompt'].textContent.match(/character (\d+) of the whole key/)?.[1]);
   const prefixLength = 'AGE-SECRET-KEY-PQ-1'.length;
-  assert.equal(challengePositions.length, 1, 'prompt gives the first position in the sequence');
-  assert.ok(challengePositions[0] >= prefixLength + 4 && challengePositions[0] <= prefixLength + 7, 'challenge starts at a random position from 4th to 7th after the fixed prefix');
+  assert.equal(challengeStart, 24, 'prompt gives the absolute starting position in the whole key');
+  assert.equal(challengeStart, prefixLength + 5, 'challenge always starts at the 5th character after the fixed prefix');
   assert.match(elements['identity-challenge-prompt'].textContent, /three consecutive characters/);
+  assert.match(elements['identity-challenge-prompt'].textContent, /character 5 after the AGE header/);
   assert.ok(!JSON.stringify(elements).includes(privateIdentity), 'copy does not render the private identity');
 
   const beforeUnconfirmedUnlock = fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length;
@@ -138,7 +138,7 @@ test('generated private age identity has a short preview and full value is expos
   await elements['identity-challenge-input'].input();
   assert.equal(elements.unlock.disabled, true, 'incorrect characters keep unlock disabled');
   elements['identity-challenge-input'].value = [0, 1, 2]
-    .map(offset => privateKey[challengePositions[0] - 1 + offset]).join('');
+    .map(offset => privateKey[challengeStart - 1 + offset]).join('');
   await elements['identity-challenge-input'].input();
   assert.equal(fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length, beforeUnconfirmedUnlock + 1, 'matching characters unlock the generated identity automatically');
   assert.equal(elements['identity-copy-dialog'].open, false, 'successful unlock closes the pop-up');
@@ -152,11 +152,10 @@ test('generated private age identity has a short preview and full value is expos
   assert.deepEqual(clipboard, [privateKey, privateKey]);
   elements['backup-confirmed'].checked = true;
   await elements['backup-confirmed'].change();
-  const regeneratedChallengePositions = [...elements['identity-challenge-prompt'].textContent.matchAll(/\d+/g)]
-    .map(match => Number(match[0]));
-  assert.ok(regeneratedChallengePositions[0] >= prefixLength + 4 && regeneratedChallengePositions[0] <= prefixLength + 7);
+  const regeneratedChallengeStart = Number(elements['identity-challenge-prompt'].textContent.match(/character (\d+) of the whole key/)?.[1]);
+  assert.equal(regeneratedChallengeStart, prefixLength + 5);
   elements['identity-challenge-input'].value = [0, 1, 2]
-    .map(offset => privateKey[regeneratedChallengePositions[0] - 1 + offset]).join('');
+    .map(offset => privateKey[regeneratedChallengeStart - 1 + offset]).join('');
   await elements['identity-challenge-input'].input();
   assert.equal(fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').length, 2, 'regenerated ID also unlocks after the challenge');
   const unlock = fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').at(-1);
@@ -179,12 +178,11 @@ test('generated private age identity has a short preview and full value is expos
   );
   elements['backup-confirmed'].checked = true;
   await elements['backup-confirmed'].change();
-  const pastedChallengePositions = [...elements['identity-challenge-prompt'].textContent.matchAll(/\d+/g)]
-    .map(match => Number(match[0]));
-  assert.ok(pastedChallengePositions[0] >= prefixLength + 4 && pastedChallengePositions[0] <= prefixLength + 7);
+  const pastedChallengeStart = Number(elements['identity-challenge-prompt'].textContent.match(/character (\d+) of the whole key/)?.[1]);
+  assert.equal(pastedChallengeStart, prefixLength + 5);
   assert.equal(elements.unlock.disabled, true, 'pasted identity also requires the character challenge');
   elements['identity-challenge-input'].value = [0, 1, 2]
-    .map(offset => privateKey[pastedChallengePositions[0] - 1 + offset]).join('');
+    .map(offset => privateKey[pastedChallengeStart - 1 + offset]).join('');
   await elements['identity-challenge-input'].input();
   await elements.unlock.click();
   assert.equal(

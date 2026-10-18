@@ -2,6 +2,8 @@
 
 Task records and operational procedures for this Rawrarr repository. Each entry links to the specific task; older records are retained as history.
 
+- [Fix the age challenge start position](2026-10-18-fixed-age-challenge-position.md) — Always start the sequential private-key character check at the 5th character after the fixed age prefix.
+
 - [Rebuild rawrarr-local from the current checkout](2026-10-18-rebuild-rawrarr-local.md) — Rebuild and recreate only the local app service with its current configuration, then verify health and the served setup page.
 
 - [Make the age identity challenge input visible](2026-10-18-rawrarr-visible-identity-challenge-input.md) — Style the three-character entry field and focus it when the copy acknowledgement reveals the challenge.
