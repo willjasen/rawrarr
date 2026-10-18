@@ -6,6 +6,7 @@ pub mod download_clients;
 pub mod library;
 pub mod metadata;
 pub mod secure_config;
+pub mod storage_node;
 pub mod syncthing;
 
 use axum::{
@@ -33,6 +34,7 @@ struct AppState {
     radarr: Arc<RwLock<Option<RadarrClient>>>,
     vault: Arc<RwLock<Option<secure_config::AgeVault>>>,
     library: Option<library::LibraryRoot>,
+    device_id: String,
     syncthing: Option<syncthing::Client>,
 }
 
@@ -457,7 +459,10 @@ async fn dashboard_snapshot(state: &AppState) -> DashboardSnapshot {
         },
         radarr,
         library,
-        devices: vec![devices::DeviceInfo::local_scanner(library_name)],
+        devices: vec![devices::DeviceInfo::local_scanner(
+            library_name,
+            &state.device_id,
+        )],
     }
 }
 
@@ -492,7 +497,10 @@ async fn library_info(State(state): State<Arc<AppState>>) -> Json<library::Libra
 
 async fn list_devices(State(state): State<Arc<AppState>>) -> Json<Vec<devices::DeviceInfo>> {
     let library_name = state.library.as_ref().map(library::LibraryRoot::name);
-    Json(vec![devices::DeviceInfo::local_scanner(library_name)])
+    Json(vec![devices::DeviceInfo::local_scanner(
+        library_name,
+        &state.device_id,
+    )])
 }
 
 async fn scan_library(
@@ -507,17 +515,50 @@ async fn scan_library(
         ));
     };
 
-    tokio::task::spawn_blocking(move || root.scan())
-        .await
-        .map(Json)
-        .map_err(|_| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiError {
-                    error: "Local media scan failed",
-                }),
-            )
-        })
+    let vault = state.vault.read().await.clone().ok_or((
+        StatusCode::LOCKED,
+        Json(ApiError {
+            error: "Unlock the age identity before scanning to create encrypted shared metadata",
+        }),
+    ))?;
+    let device_id = state.device_id.clone();
+
+    tokio::task::spawn_blocking(move || {
+        let mut summary = root.scan();
+        for file in &summary.items {
+            let sidecar = library::MediaSidecar {
+                schema_version: 1,
+                device_id: device_id.clone(),
+                library_name: summary.library_name.clone(),
+                scanned_at_unix_seconds: summary.scanned_at_unix_seconds,
+                file: file.clone(),
+            };
+            match serde_json::to_vec(&sidecar)
+                .map_err(|_| secure_config::VaultError::InvalidConfig)
+                .and_then(|json| {
+                    vault.store_library_sidecar(
+                        &device_id,
+                        &summary.library_name,
+                        &file.path,
+                        &json,
+                    )
+                }) {
+                Ok(()) => summary.sidecars_created += 1,
+                Err(_) => summary.sidecar_errors += 1,
+            }
+        }
+        summary
+    })
+    .await
+    .map(Json)
+    .map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiError {
+                error: "Local media scan failed",
+            }),
+        )
+    })
 }
 
 async fn radarr_status(
@@ -931,6 +972,14 @@ async fn unlock_age_settings(
             }),
         )
     })?;
+    vault.persist_public_recipient().map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiError {
+                error: "Could not save the public age recipient for storage nodes",
+            }),
+        )
+    })?;
     if let Some(settings) = stored {
         let client =
             RadarrClient::new(settings.radarr_url.clone(), settings.radarr_api_key.clone())
@@ -1049,6 +1098,20 @@ async fn delete_radarr_settings(
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if env::args().nth(1).as_deref() == Some("storage-scan-once") {
+        let summary = storage_node::scan_once()?;
+        println!(
+            "Storage scan complete: {} media files; {} encrypted sidecars saved; {} sidecar errors; {} scan issues.",
+            summary.items.len(),
+            summary.sidecars_created,
+            summary.sidecar_errors,
+            summary.issues
+        );
+        if summary.sidecar_errors > 0 || summary.issues > 0 || summary.truncated {
+            return Err("storage scan completed with errors or truncation".into());
+        }
+        return Ok(());
+    }
     let address = env::var("RUST_ARR_LISTEN_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".to_owned());
     let socket_address: SocketAddr = address.parse()?;
     let auth = auth::AuthState::connect().await?;
@@ -1072,6 +1135,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         radarr: Arc::new(RwLock::new(radarr)),
         vault: Arc::new(RwLock::new(vault)),
         library: library::LibraryRoot::from_env()?,
+        device_id: devices::load_or_create_device_id()?,
         syncthing: syncthing::Client::from_env()
             .map_err(|_| "invalid Syncthing environment configuration")?,
     });

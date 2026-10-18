@@ -123,7 +123,7 @@
         <div style="display:flex;align-items:center;gap:12px"><div class="live-pill"><span class="pulse"></span>LOCAL INSTANCE</div><button id="sign-out" class="refresh" type="button">Sign out</button></div>
       </div>
       <section class="welcome">
-        <div><h2>Welcome to rawrarr</h2><p>Your library can be scanned by a device that has the media mounted. The current scanner runs on the web app host; remote scanner agents will connect as separate devices.</p></div>
+        <div><h2>Welcome to rawrarr</h2><p>A device with the media mounted scans its library and writes age-encrypted JSON sidecars into the shared Rawrarr folder for Syncthing replication.</p></div>
         <div class="welcome-tag">RADARR · FIRST INTEGRATION</div>
       </section>
       <section class="grid" aria-label="Library summary">
@@ -369,7 +369,7 @@
       scanButton.disabled = !info.configured;
       if (info.configured) {
         document.getElementById('library-empty-title').textContent = `${info.name} is ready to scan`;
-        document.getElementById('library-empty-copy').textContent = 'Choose Scan folder to inventory recognized media files. This scan reads file names and sizes only.';
+        document.getElementById('library-empty-copy').textContent = 'Choose Scan folder to inventory recognized media and write age-encrypted JSON sidecars into the shared Rawrarr folder. Unlock the age identity first.';
       }
     }
 
@@ -628,7 +628,7 @@
 
         document.getElementById('media-total').textContent = result.counts.movies + result.counts.television + result.counts.music + result.counts.books + result.counts.subtitles + result.counts.other;
         document.getElementById('media-detail').textContent = `${result.counts.movies} movies · ${result.counts.television} TV · ${result.counts.music} music`;
-        document.getElementById('scan-summary').textContent = `${result.libraryName} · ${result.items.length}${result.truncated ? '+' : ''} media files · ${result.counts.books} books · ${result.counts.subtitles} subtitles · ${result.counts.other} other`;
+        document.getElementById('scan-summary').textContent = `${result.libraryName} · ${result.items.length}${result.truncated ? '+' : ''} media files · ${result.sidecarsCreated} encrypted sidecars saved to shared Rawrarr data · ${result.sidecarErrors} sidecar errors`;
 
         const rows = document.getElementById('media-rows');
         rows.replaceChildren();
@@ -673,8 +673,9 @@
         libraryEmpty.hidden = true;
         libraryResults.hidden = false;
         const issues = document.getElementById('scan-issues');
-        issues.hidden = result.issues === 0 && !result.truncated;
+        issues.hidden = result.issues === 0 && !result.truncated && result.sidecarErrors === 0;
         issues.textContent = result.truncated ? 'Scan reached a safety limit; results may be incomplete.' : `${result.issues} folders or files could not be read.`;
+        if (result.sidecarErrors > 0) issues.textContent += ` ${result.sidecarErrors} encrypted sidecar(s) could not be saved.`;
         if (result.items.length > 250) issues.hidden = false;
         if (result.items.length > 250) issues.textContent += ` Showing the first 250 entries of ${result.items.length}.`;
       } catch (error) {

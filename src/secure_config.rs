@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{
     env, fs,
     io::{Read, Write},
@@ -77,6 +78,10 @@ impl AgeVault {
         Self::shared_dir().join("config.aged")
     }
 
+    pub fn public_recipient_path() -> PathBuf {
+        Self::shared_dir().join("age-recipient")
+    }
+
     fn artwork_path(&self, tmdb_id: u64) -> PathBuf {
         self.shared_dir
             .join("metadata")
@@ -151,6 +156,82 @@ impl AgeVault {
             let _ = fs::remove_file(&temporary);
             VaultError::StorageFailed
         })
+    }
+
+    /// Store one JSON media sidecar as age ciphertext under the shared Rawrarr folder.
+    /// The deterministic filename is derived from device, library, and relative media path;
+    /// those values remain inside the encrypted JSON payload.
+    pub fn store_library_sidecar(
+        &self,
+        device_id: &str,
+        library_name: &str,
+        relative_path: &str,
+        plaintext_json: &[u8],
+    ) -> Result<(), VaultError> {
+        Self::store_library_sidecar_with_recipient(
+            &self.shared_dir,
+            &self.recipient,
+            device_id,
+            library_name,
+            relative_path,
+            plaintext_json,
+        )
+    }
+
+    /// Store a sidecar using only the public age recipient, for storage-only nodes.
+    pub fn store_library_sidecar_with_recipient(
+        shared_dir: &Path,
+        recipient: &str,
+        device_id: &str,
+        library_name: &str,
+        relative_path: &str,
+        plaintext_json: &[u8],
+    ) -> Result<(), VaultError> {
+        const MAX_SIDECAR_BYTES: usize = 1024 * 1024;
+        let relative = Path::new(relative_path);
+        if !is_post_quantum_recipient(recipient)
+            || device_id.trim().is_empty()
+            || library_name.trim().is_empty()
+            || relative_path.is_empty()
+            || relative.is_absolute()
+            || relative
+                .components()
+                .any(|component| !matches!(component, std::path::Component::Normal(_)))
+            || plaintext_json.is_empty()
+            || plaintext_json.len() > MAX_SIDECAR_BYTES
+            || serde_json::from_slice::<serde_json::Value>(plaintext_json).is_err()
+        {
+            return Err(VaultError::InvalidConfig);
+        }
+        let mut digest = Sha256::new();
+        digest.update(device_id.as_bytes());
+        digest.update([0]);
+        digest.update(library_name.as_bytes());
+        digest.update([0]);
+        digest.update(relative_path.as_bytes());
+        let filename = format!("{}.json.aged", encode_hex(&digest.finalize()));
+        let path = shared_dir.join("metadata").join("library").join(filename);
+        encrypt_shared_file(recipient, &path, plaintext_json)
+    }
+
+    pub fn persist_public_recipient(&self) -> Result<(), VaultError> {
+        let path = Self::public_recipient_path_for(&self.shared_dir);
+        if path.is_file() {
+            let existing = fs::read_to_string(&path).map_err(|_| VaultError::StorageFailed)?;
+            if existing.trim() == self.recipient {
+                return Ok(());
+            }
+            return Err(VaultError::InvalidIdentity);
+        }
+        encrypt_text_file(&path, format!("{}\n", self.recipient).as_bytes())
+    }
+
+    pub fn recipient(&self) -> &str {
+        &self.recipient
+    }
+
+    fn public_recipient_path_for(shared_dir: &Path) -> PathBuf {
+        shared_dir.join("age-recipient")
     }
 
     pub fn load_artwork(&self, tmdb_id: u64) -> Result<Option<EncryptedArtwork>, VaultError> {
@@ -327,6 +408,84 @@ impl AgeVault {
     }
 }
 
+pub fn is_post_quantum_recipient(recipient: &str) -> bool {
+    recipient.starts_with("age1pq1")
+        && (20..=4096).contains(&recipient.len())
+        && recipient
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+}
+
+fn encrypt_text_file(path: &Path, plaintext: &[u8]) -> Result<(), VaultError> {
+    let directory = path.parent().ok_or(VaultError::StorageFailed)?;
+    fs::create_dir_all(directory).map_err(|_| VaultError::StorageFailed)?;
+    set_shared_directory_permissions(directory)?;
+    let temporary = temporary_path(path);
+    fs::write(&temporary, plaintext).map_err(|_| VaultError::StorageFailed)?;
+    set_shared_ciphertext_permissions(&temporary)?;
+    fs::rename(&temporary, path).map_err(|_| {
+        let _ = fs::remove_file(&temporary);
+        VaultError::StorageFailed
+    })
+}
+
+fn encrypt_shared_file(recipient: &str, path: &Path, plaintext: &[u8]) -> Result<(), VaultError> {
+    if !is_post_quantum_recipient(recipient) {
+        return Err(VaultError::InvalidIdentity);
+    }
+    let directory = path.parent().ok_or(VaultError::StorageFailed)?;
+    fs::create_dir_all(directory).map_err(|_| VaultError::StorageFailed)?;
+    if let Some(metadata_directory) = directory.parent() {
+        set_shared_directory_permissions(metadata_directory)?;
+    }
+    set_shared_directory_permissions(directory)?;
+    let temporary = temporary_path(path);
+    let result = Command::new("age")
+        .args(["--recipient", recipient, "--output"])
+        .arg(&temporary)
+        .arg("-")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|_| VaultError::AgeUnavailable)
+        .and_then(|mut child| {
+            if let Some(mut stdin) = child.stdin.take() {
+                stdin
+                    .write_all(plaintext)
+                    .map_err(|_| VaultError::EncryptionFailed)?;
+            }
+            child.wait().map_err(|_| VaultError::EncryptionFailed)
+        });
+    match result {
+        Ok(status) if status.success() => {}
+        Err(error) => {
+            let _ = fs::remove_file(&temporary);
+            return Err(error);
+        }
+        _ => {
+            let _ = fs::remove_file(&temporary);
+            return Err(VaultError::EncryptionFailed);
+        }
+    }
+    if let Err(error) = set_shared_ciphertext_permissions(&temporary) {
+        let _ = fs::remove_file(&temporary);
+        return Err(error);
+    }
+    if fs::File::open(&temporary)
+        .and_then(|file| file.sync_all())
+        .is_err()
+    {
+        let _ = fs::remove_file(&temporary);
+        return Err(VaultError::StorageFailed);
+    }
+    fs::rename(&temporary, path).map_err(|_| {
+        let _ = fs::remove_file(&temporary);
+        VaultError::StorageFailed
+    })?;
+    Ok(())
+}
+
 fn run_with_input(
     program: &str,
     args: &[&str],
@@ -360,6 +519,16 @@ fn temporary_path(path: &Path) -> PathBuf {
         .unwrap_or_default();
     let filename = path.file_name().unwrap_or_default().to_string_lossy();
     path.with_file_name(format!(".{filename}.{}.{}.tmp", std::process::id(), nonce))
+}
+
+fn encode_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut encoded = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        encoded.push(HEX[(byte >> 4) as usize] as char);
+        encoded.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    encoded
 }
 
 // Syncthing must be able to read replicated files. Shared files contain age
@@ -407,6 +576,15 @@ mod tests {
         fs::create_dir_all(&shared_dir).expect("create isolated shared directory");
         let vault = AgeVault::from_identity_in_shared_dir(identity, shared_dir.clone())
             .expect("valid PQ age identity");
+        vault
+            .persist_public_recipient()
+            .expect("persist public age recipient for storage nodes");
+        assert_eq!(
+            fs::read_to_string(shared_dir.join("age-recipient"))
+                .unwrap()
+                .trim(),
+            vault.recipient()
+        );
         let config = PersistedConfig {
             radarr_url: "http://radarr.example:7878".into(),
             radarr_api_key: "disposable encrypted config fixture".into(),
@@ -416,9 +594,11 @@ mod tests {
         let encrypted_config = fs::read(&config_path).expect("read encrypted config");
         assert!(encrypted_config.starts_with(b"age-encryption.org/v1\n"));
         assert!(shared_dir.join("config.aged").is_file());
-        assert!(!encrypted_config
-            .windows(config.radarr_api_key.len())
-            .any(|window| window == config.radarr_api_key.as_bytes()));
+        assert!(
+            !encrypted_config
+                .windows(config.radarr_api_key.len())
+                .any(|window| window == config.radarr_api_key.as_bytes())
+        );
         assert_eq!(
             vault.load().expect("decrypt config").unwrap().radarr_url,
             config.radarr_url
@@ -434,6 +614,10 @@ mod tests {
             String::from_utf8(wrong_identity_output.stdout).expect("wrong identity is UTF-8");
         let wrong_vault = AgeVault::from_identity_in_shared_dir(wrong_identity, shared_dir.clone())
             .expect("second valid PQ age identity");
+        assert!(matches!(
+            wrong_vault.persist_public_recipient(),
+            Err(VaultError::InvalidIdentity)
+        ));
         assert!(matches!(
             wrong_vault.load(),
             Err(VaultError::DecryptionFailed)
@@ -470,6 +654,61 @@ mod tests {
             .expect("poster exists");
         assert_eq!(decrypted.content_type, "image/jpeg");
         assert_eq!(decrypted.bytes, image);
+
+        let sidecar_json = br#"{"schemaVersion":1,"deviceId":"storage-test","file":{"path":"Movies/Test Film (2024)/film.mkv","sizeBytes":42}}"#;
+        vault
+            .store_library_sidecar(
+                "storage-test",
+                "Test library",
+                "Movies/Test Film (2024)/film.mkv",
+                sidecar_json,
+            )
+            .expect("encrypt media JSON sidecar in shared folder");
+        let sidecar_directory = shared_dir.join("metadata/library");
+        let sidecar_path = fs::read_dir(&sidecar_directory)
+            .expect("sidecar directory exists")
+            .next()
+            .expect("sidecar file exists")
+            .expect("read sidecar entry")
+            .path();
+        assert!(sidecar_path.extension().is_some_and(|ext| ext == "aged"));
+        assert!(
+            sidecar_path
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .ends_with(".json.aged")
+        );
+        let encrypted_sidecar = fs::read(&sidecar_path).expect("read encrypted JSON sidecar");
+        assert!(encrypted_sidecar.starts_with(b"age-encryption.org/v1\n"));
+        assert!(
+            !encrypted_sidecar
+                .windows(sidecar_json.len())
+                .any(|window| window == sidecar_json)
+        );
+        let decrypted_sidecar = run_with_input(
+            "age",
+            &[
+                "--decrypt",
+                "--identity",
+                "-",
+                path_arg(&sidecar_path).unwrap(),
+            ],
+            vault.identity.as_bytes(),
+        )
+        .expect("decrypt media JSON sidecar");
+        assert!(decrypted_sidecar.status.success());
+        assert_eq!(decrypted_sidecar.stdout, sidecar_json);
+        assert!(
+            vault
+                .store_library_sidecar(
+                    "storage-test",
+                    "Test library",
+                    "../outside.mkv",
+                    sidecar_json
+                )
+                .is_err()
+        );
         fs::remove_dir_all(shared_dir).expect("remove test data");
     }
 }

@@ -1,4 +1,4 @@
-//! Read-only media inventory scanning for one explicitly configured library root.
+//! Media inventory scanning and age-encrypted sidecar creation for one library root.
 
 use serde::Serialize;
 use std::{
@@ -100,6 +100,17 @@ pub struct MediaFile {
     pub name: String,
     pub kind: MediaKind,
     pub size_bytes: u64,
+    pub modified_at_unix_seconds: Option<u64>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaSidecar {
+    pub schema_version: u32,
+    pub device_id: String,
+    pub library_name: String,
+    pub scanned_at_unix_seconds: u64,
+    pub file: MediaFile,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -111,6 +122,8 @@ pub struct ScanSummary {
     pub items: Vec<MediaFile>,
     pub issues: usize,
     pub truncated: bool,
+    pub sidecars_created: usize,
+    pub sidecar_errors: usize,
 }
 
 fn scan_root(root: &Path, name: &str) -> ScanSummary {
@@ -124,6 +137,8 @@ fn scan_root(root: &Path, name: &str) -> ScanSummary {
         items: Vec::new(),
         issues: 0,
         truncated: false,
+        sidecars_created: 0,
+        sidecar_errors: 0,
     };
     let mut pending = vec![(root.to_path_buf(), 0usize)];
     let mut visited = 0usize;
@@ -201,6 +216,11 @@ fn scan_root(root: &Path, name: &str) -> ScanSummary {
                 name: file_name,
                 kind,
                 size_bytes: metadata.len(),
+                modified_at_unix_seconds: metadata
+                    .modified()
+                    .ok()
+                    .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+                    .map(|duration| duration.as_secs()),
             });
             if summary.items.len() >= MAX_MEDIA_ITEMS {
                 summary.truncated = true;
