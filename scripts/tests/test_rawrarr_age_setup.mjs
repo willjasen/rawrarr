@@ -17,11 +17,13 @@ function createElement() {
   return {
     value: '', textContent: '', disabled: false, hidden: true, checked: false, open: false, files: [], children: [],
     handlers: new Map(), attributes: {},
+    focused: false,
     addEventListener(name, handler) { this.handlers.set(name, handler); },
     async click() { if (!this.disabled) await this.handlers.get('click')?.({ currentTarget: this }); },
     async input() { await this.handlers.get('input')?.({ currentTarget: this }); },
     async change() { await this.handlers.get('change')?.({ currentTarget: this }); },
     showModal() { this.open = true; },
+    focus() { this.focused = true; },
     close() { this.open = false; },
     append(element) { this.children.push(element); },
     replaceChildren() { this.children = []; },
@@ -44,6 +46,7 @@ test('generated private age identity has a short preview and full value is expos
   assert.match(page, /<span>I copied it and saved the private ID somewhere safe\.<\/span>/);
   assert.match(page, /Copy private identity/);
   assert.match(page, /Enter those three characters to continue/);
+  assert.match(page, /#identity-challenge-input \{ display:block; width:100%/);
   assert.match(page, /Create ID/);
   assert.match(page, /Public age recipient/);
   assert.match(page, /Paste existing private identity/);
@@ -118,6 +121,7 @@ test('generated private age identity has a short preview and full value is expos
   elements['backup-confirmed'].checked = true;
   await elements['backup-confirmed'].change();
   assert.equal(elements['identity-challenge'].hidden, false, 'acknowledgement reveals the character challenge');
+  assert.equal(elements['identity-challenge-input'].focused, true, 'revealing the challenge focuses the text field');
   const challengePositions = [...elements['identity-challenge-prompt'].textContent.matchAll(/\d+/g)]
     .map(match => Number(match[0]));
   const prefixLength = 'AGE-SECRET-KEY-PQ-1'.length;

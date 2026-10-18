@@ -16,6 +16,8 @@
     p { color:var(--muted); font-size:13px; margin:0 0 18px }
     label { display:block; margin:14px 0 6px; color:#c8d3c9; font-size:12px }
     input[type="password"] { width:100%; border:1px solid var(--line); border-radius:9px; padding:12px; color:var(--text); background:#111712; font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace }
+    #identity-challenge-input { display:block; width:100%; border:1px solid var(--line); border-radius:9px; padding:12px; color:var(--text); background:#111712; font:16px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.18em; text-transform:uppercase }
+    #identity-challenge-input:focus { outline:2px solid var(--green); outline-offset:2px }
     .backup-confirmation { display:flex; align-items:flex-start; gap:10px; margin:16px 0 8px; padding:12px; border:1px solid var(--line); border-radius:10px; background:#111712; color:var(--text); font-size:12px }
     .backup-confirmation input { width:16px; height:16px; flex:none; margin:2px 0 0; accent-color:var(--green) }
     .backup-warning { margin:0; font-size:11px }
@@ -156,6 +158,7 @@
       identityChallengeInput.value = '';
       identityChallengePrompt.textContent = `Enter the three consecutive characters starting at position ${challenge.positions[0]} in your private key.`;
       identityChallengeSection.hidden = false;
+      identityChallengeInput.focus();
       updateBackupConfirmation();
       return true;
     }

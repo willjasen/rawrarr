@@ -2,6 +2,8 @@
 
 Task records and operational procedures for this Rawrarr repository. Each entry links to the specific task; older records are retained as history.
 
+- [Make the age identity challenge input visible](2026-10-18-rawrarr-visible-identity-challenge-input.md) — Style the three-character entry field and focus it when the copy acknowledgement reveals the challenge.
+
 - [Use a sequential age identity challenge](2026-10-18-rawrarr-sequential-age-challenge.md) — Verify copied identity text with three consecutive characters starting randomly from the 4th–7th character after its fixed prefix.
 
 - [Apply Radarr settings without restarting rawrarr](2026-10-17-apply-radarr-settings-without-restart.md) — Make it clear that Radarr credentials entered in the dashboard apply to the running server immediately. Initial implementation already replaces…

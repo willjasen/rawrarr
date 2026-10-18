@@ -2,7 +2,7 @@
 
 The tests below cover Rawrarr application behavior. Some require a disposable PostgreSQL database or Docker with OrbStack; read each test's prerequisites before running it.
 
-- `test_rawrarr_age_setup.mjs` — checks the JPEG XL logo source and PNG fallback, shortened age-identity display, private-key-only copying, random character challenge, identity-derived visuals, and backup confirmation gating. Requires Node.js; run `node --test scripts/tests/test_rawrarr_age_setup.mjs`.
+- `test_rawrarr_age_setup.mjs` — checks the JPEG XL logo source and PNG fallback, shortened age-identity display, private-key-only copying, sequential character challenge and focused input, identity-derived visuals, and backup confirmation gating. Requires Node.js; run `node --test scripts/tests/test_rawrarr_age_setup.mjs`.
 - `test_rawrarr_docker_healthchecks.mjs` — checks Rawrarr/PostgreSQL readiness checks and unique naming for containers in `rawrarr-testing`. Requires Node.js; run `node --test scripts/tests/test_rawrarr_docker_healthchecks.mjs`.
 - `test_rawrarr_brand_case.mjs` — checks that pages and runtime messages display the product name as lowercase. Requires Node.js; run `node --test scripts/tests/test_rawrarr_brand_case.mjs`.
 - `test_rawrarr_passkey_ui.mjs` — checks browser-side decoding of WebAuthn API options. Requires Node.js; run `node --test scripts/tests/test_rawrarr_passkey_ui.mjs`.
