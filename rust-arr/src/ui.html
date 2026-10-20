@@ -271,7 +271,7 @@
               <p><strong>rawrarr</strong> coordinates your library and keeps shared metadata available across your devices.</p>
               <p><strong>Radarr and Sonarr</strong> manage movie and TV libraries. Connect them in Settings to see their library data in rawrarr.</p>
               <p><strong>Your devices</strong> synchronize encrypted shared metadata. Media files remain on the storage you choose; rawrarr does not upload them to the coordinator.</p>
-              <p>Rawrarr is evolving. General-purpose sharing of files and folders is a future direction; the current app focuses on media libraries and their metadata.</p>
+              <p>rawrarr is evolving. General-purpose sharing of files and folders is a future direction; the current app focuses on media libraries and their metadata.</p>
             </div>
           </article>
         </section>
@@ -282,7 +282,7 @@
   <dialog id="mini-export-dialog" style="width:min(520px,calc(100% - 28px));border:1px solid #39463d;border-radius:14px;background:#151b18;color:#e7eee8;padding:22px">
     <form id="mini-export-form">
       <h2 style="margin:0 0 8px;font-size:18px">Export metadata</h2>
-      <p class="setup-intro">This downloads all available movie metadata records and matching artwork. Your browser decrypts the shared config and files, then builds a ZIP locally. The age private ID is used only in this tab and is not sent to Rawrarr.</p>
+      <p class="setup-intro">This downloads all available movie metadata records and matching artwork. Your browser decrypts the shared config and files, then builds a ZIP locally. The age private ID is used only in this tab and is not sent to rawrarr.</p>
       <label for="mini-export-identity" class="settings-form" style="display:block;padding:0;color:var(--muted);font-size:10px">Post-quantum age private ID</label>
       <textarea id="mini-export-identity" autocomplete="off" spellcheck="false" required style="width:100%;min-height:92px;margin-top:6px;border:1px solid var(--line);border-radius:7px;background:#101613;color:var(--text);padding:9px;font:10px ui-monospace,monospace"></textarea>
       <div class="settings-actions"><button id="mini-export-start" class="refresh" type="submit">Decrypt and download ZIP</button><button id="mini-export-cancel" class="refresh" type="button">Cancel</button></div>
