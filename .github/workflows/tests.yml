@@ -52,23 +52,39 @@ jobs:
           ELAPSED_SECONDS: ${{ steps.tests.outputs.elapsed_seconds }}
         run: |
           {
-            echo "## Basic script tests"
+            case "$TEST_OUTCOME" in
+              success) status_icon="✅"; status_text="Passed" ;;
+              failure) status_icon="❌"; status_text="Failed" ;;
+              *) status_icon="⚪"; status_text="${TEST_OUTCOME:-Unknown}" ;;
+            esac
+            echo "## $status_icon Basic script tests $status_text"
             echo
-            echo "- **Outcome:** $TEST_OUTCOME"
-            echo "- **Runner:** $RUNNER_OS ($RUNNER_ARCH)"
-            echo "- **Python:** $(python --version 2>&1)"
-            echo "- **Elapsed:** ${ELAPSED_SECONDS:-unavailable} seconds"
-            echo "- **Command:** \`python -m unittest discover -s scripts/tests -p 'test_*.py' -v\`"
-            echo
-            echo "### Test results"
+            echo "| Result | Python | Runner | Time |"
+            echo "| --- | --- | --- | ---: |"
             if [ -f "$RUNNER_TEMP/script-tests.log" ]; then
-              results=$(grep -E '^(test_.* \.\.\. (ok|FAIL|ERROR)|Ran [0-9]+ tests|OK$|FAILED \()' "$RUNNER_TEMP/script-tests.log" || true)
-              if [ -n "$results" ]; then
-                printf '%s\n' "$results" | sed 's/^/- `&`/'
-              else
-                echo "- No unittest results were recorded."
-              fi
+              passed=$(grep -cE '^test_.* \.\.\. ok$' "$RUNNER_TEMP/script-tests.log" || true)
+              failed=$(grep -cE '^test_.* \.\.\. (FAIL|ERROR)$' "$RUNNER_TEMP/script-tests.log" || true)
+              total=$(sed -nE 's/^Ran ([0-9]+) tests?.*/\1/p' "$RUNNER_TEMP/script-tests.log" | tail -1)
+              total=${total:-$((passed + failed))}
             else
-              echo "- Test output was not produced."
+              passed=0
+              failed=0
+              total=0
+            fi
+            if [ "$failed" -eq 0 ] && [ "$TEST_OUTCOME" = "success" ]; then
+              result="$status_icon $passed passed"
+            else
+              result="❌ $failed failed, $passed passed"
+            fi
+            echo "| $result ($total total) | $(python --version 2>&1 | awk '{print $2}') | $RUNNER_OS ($RUNNER_ARCH) | ${ELAPSED_SECONDS:-?}s |"
+            echo
+            echo "**Command:** \`python -m unittest discover -s scripts/tests -p 'test_*.py' -v\`"
+            if [ -f "$RUNNER_TEMP/script-tests.log" ]; then
+              failures=$(grep -E '^test_.* \.\.\. (FAIL|ERROR)$' "$RUNNER_TEMP/script-tests.log" || true)
+              if [ -n "$failures" ]; then
+                echo
+                echo "### Failed tests"
+                printf '%s\n' "$failures" | sed -E 's/^test_(.*) \.\.\. (FAIL|ERROR)$/- `\1` (\2)/'
+              fi
             fi
           } >> "$GITHUB_STEP_SUMMARY"
