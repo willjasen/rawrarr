@@ -30,11 +30,17 @@ Keep Radarr recoverable from the Rawrarr shared folder so the owner can deploy a
 - The current isolated test image lacks the `rustfmt` component; the host formatter cannot load because LLVM's `libz3.5.1.dylib` is missing. The complete Rust/Node suites were not rerun after this focused change; the earlier suite had unrelated failures recorded above.
 - `git diff --check`
 
-The local `rawrarr-local` metadata container was rebuilt from this branch and reached healthy status. The loopback app health check passed, the Tailscale Serve route still sent `/` to roarlay and `/direct-api` to the subscriber, and the HTTPS coordinator health check succeeded. The local coordinator rejected the metadata node's registration; its approved-node registry and database are currently owned by another deployment configuration, so they were not changed.
+An earlier local deployment reached healthy status. The loopback app health check passed, the Tailscale Serve route sent `/` to roarlay and `/direct-api` to the subscriber, and the HTTPS coordinator health check succeeded. The local coordinator rejected the metadata node's registration; its approved-node registry and database are owned by another deployment configuration, so they were not changed.
 
 A live Radarr API status check succeeded for version 6.4.4.10685, and Rawrarr issued a native manual backup command. The advertised ZIP path redirected to `/login` despite the API-key header. Optional UI credential handling has now been added, but the live authenticated archive capture and restore still require the owner to enter the credentials in the local Radarr settings form and rerun the recovery test.
 
 The focused Python and Rust tests use synthetic archives and a local HTTP fixture. The live check established that the login-protected ZIP path is the remaining prerequisite for full recovery verification; do not place the API key or UI credentials in the download URL.
+
+## 2026-10-20 deployment attempt
+
+The authentication changes were committed as `12ece32` and deployed to the existing `rawrarr-local` project using its active Compose overrides. Both rebuilt containers entered restart loops. Roarlay exits because the active PostgreSQL database has SQLx migration version 6, while this branch contains migrations only through version 5 (`VersionMissing(6)`). The metadata node exits because registration with its configured coordinator is rejected and node enrollment is disabled. Tailscale Serve still routes `/` to `http://127.0.0.1:8080`, but the local and HTTPS health checks fail while roarlay is down.
+
+The deployment did not remove or reset volumes, database contents, shared data, or Tailscale Serve handlers. Do not retry from this branch against the active database until it includes the compatible migration history and the intended metadata registration configuration. Do not bypass node approval or downgrade/reset the database to make this branch start.
 
 ## Operational notes
 
