@@ -50,6 +50,7 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 - Cloudflare/reverse-proxy support for the intended public hostname, including verified SSE streaming behavior.
 - Productionize the existing local Tailscale sidecars and tailnet-scoped routes while keeping transport separate from Rawrarr authorization and age-key access.
 - Operator service node running SwarmSail/Headscale account coordination, with a one-time, revocable node claim flow.
+- Integrate one shared CrowdSec engine with SwarmSail-provisioned Headscale instances: register each instance's security logs when provisioned and remove the source when retired, then apply remediation at the serving ingress with decisions scoped to avoid unintended cross-user blocking.
 - Blind relay and portal for reaching subscriber nodes through outbound tunnels. The subscriber node must retain application authentication and TLS termination; the relay must not decrypt or store subscriber app data or proxy media.
 
 ### Packaging and subscriptions
