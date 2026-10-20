@@ -50,7 +50,7 @@ By default, completed containers are retained so their output can be reviewed la
 
 ## GitHub Actions
 
-The `Tests` workflow runs on pull requests, pushes to `main`, and manual dispatch. It uses Python 3.12 to run the standard-library unit tests discovered from `scripts/tests/test_*.py`. The Actions run summary records the outcome, runner and Python versions, elapsed time, command, and per-test results; live logs also show each test as it runs. This is a lightweight script-test check and does not build Docker images or run Playwright, Rust, PostgreSQL-backed, or Syncthing integration tests.
+The `Tests` workflow runs on pull requests, pushes to `main`, and manual dispatch. It uses Python 3.12 to run the standard-library unit tests discovered from `scripts/tests/test_*.py`. The Actions run summary shows a colored status, pass/fail totals, Python and runner versions, elapsed time, and the command; failed test names are listed only when needed. Live logs show each test as it runs. This lightweight check does not build Docker images or run Playwright, Rust, PostgreSQL-backed, or Syncthing integration tests.
 
 The container summary reports when test execution started and stopped, plus elapsed seconds. On each normal invocation, the runner checks a local timestamp under `~/Library/Application Support/Rawrarr/`; if cleanup is due, it removes only stopped `tests-*` containers in `rawrarr-testing` that are older than one hour. Preview candidates at any time with `python3 scripts/tests/run_rawrarr_tests_in_docker.py --cleanup-dry-run`; this does not update the cleanup timestamp or remove containers.
 
