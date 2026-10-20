@@ -17,6 +17,8 @@ This is the living product-design guide for how Rawrarr should behave and feel t
 
 Rawrarr should feel approachable and distinctive without making the interface look like a toy. Use a restrained dark or light surface system, readable typography, clear section hierarchy, and green as the primary brand accent. Reserve bright colors for status, identity illustrations, and meaningful actions.
 
+Use **“all the arrs”** as the Rawrarr tagline beneath the product name in the public landing-page header.
+
 Serve the brand logo as a lossless JPEG XL image where the browser supports it, with a PNG fallback. Future logo animation may be used sparingly for selected moments; keep a static fallback and respect reduced-motion preferences.
 
 Always render the product name as lowercase **rawrarr** in user-facing interface text, errors, and logs.

@@ -9,8 +9,7 @@
 - `test_rawrarr_subscriber_onboarding_browser.mjs` — Chromium checks age-ID and signing-root backup gates, private-key display boundaries, subscriber role choices, network-mode selection, auth-key omission from generated Compose, device names, completed-step collapse, Compose clipboard copy, waiting for the generated node to connect, and automatic navigation to Devices for approval; run in the isolated test image.
 - `test_rawrarr_ai_chat.mjs` — checks browser-local movie filters, Movies-versus-TV disk usage shares, and candid missing-data responses. Run `node --test scripts/tests/test_rawrarr_ai_chat.mjs`.
 
-- `test_rawrarr_landing_page.mjs` — Chromium checks for the signed-out landing page, passkey sign-in links, accurate security/maturity disclosure, and mobile layout. Run with `node --test scripts/tests/test_rawrarr_landing_page.mjs` in the isolated test image.
-
+- `test_rawrarr_landing_page.mjs` — Chromium checks for the signed-out landing page, header tagline, passkey sign-in links, accurate security/maturity disclosure, and mobile layout. Run with `node --test scripts/tests/test_rawrarr_landing_page.mjs` in the isolated test image.
 - `test_share_storage_media.py` — Rejects unsafe media paths and plain HTTP remote APIs, requires the A/a filter for a root `/media` share, refuses overlapping folders, and checks send-only/receive-only pairing without auto-accept. Run `python3 scripts/tests/test_share_storage_media.py`.
 - `test_add_music_sync_albums.py` — Checks exact album allow patterns, idempotency, and rejection of unsafe names. Run `python3 scripts/tests/test_add_music_sync_albums.py`.
 - `test_hash_media_tree.py` — Checks path/content hashing and symlink refusal. Run `python3 scripts/tests/test_hash_media_tree.py`.

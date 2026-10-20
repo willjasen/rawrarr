@@ -40,6 +40,10 @@ test('signed-out coordinator visitors see the public landing page and can contin
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
 
   await page.getByRole('heading', { name: 'Your library. Your devices.' }).waitFor();
+  assert.equal(await page.locator('.brand').getByText('all the arrs', { exact: true }).innerText(), 'all the arrs');
+  const brandNameBox = await page.locator('.brand-name').boundingBox();
+  const taglineBox = await page.locator('.brand-tagline').boundingBox();
+  assert.ok(brandNameBox && taglineBox && taglineBox.y > brandNameBox.y, 'tagline appears below the product name');
   assert.equal(await page.getByRole('link', { name: /Continue to sign in/ }).count(), 2);
   assert.equal(await page.getByRole('link', { name: 'Sign in', exact: true }).getAttribute('href'), '/auth');
   assert.match(await page.locator('.notice').innerText(), /under active development[\s\S]*independent security audit/i);

@@ -17,7 +17,9 @@
     header { display:flex; align-items:center; justify-content:space-between; min-height:82px; border-bottom:1px solid #ffffff12 }
     .brand { display:flex; align-items:center; gap:11px; color:var(--text); font-weight:750; letter-spacing:-.03em; text-decoration:none }
     .brand img { width:38px; height:38px; object-fit:contain }
-    .brand span { font-size:20px }
+    .brand-copy { display:flex; flex-direction:column; gap:1px }
+    .brand-name { font-size:20px; line-height:1.1 }
+    .brand-tagline { color:var(--muted); font-size:11px; font-weight:500; letter-spacing:0; line-height:1.2 }
     .nav-link { color:#d7e1d7; text-decoration:none; font-size:14px }
     .nav-link:hover { color:var(--green) }
     .button { display:inline-flex; min-height:46px; align-items:center; justify-content:center; padding:0 19px; border:1px solid #658968; border-radius:10px; background:var(--green); color:#101711; font-size:14px; font-weight:720; text-decoration:none; transition:transform .15s ease,background .15s ease }
@@ -63,13 +65,13 @@
     footer { display:flex; justify-content:space-between; gap:20px; padding:22px 0 30px; border-top:1px solid #ffffff12; color:#89968b; font-size:12px }
     footer a { color:#b8c5b9; text-decoration:none }
     @media (max-width:760px) { .hero { grid-template-columns:1fr; gap:36px; padding:66px 0 55px } .orbit-card { min-height:270px } .features { grid-template-columns:1fr } .feature { min-height:0 } .privacy { grid-template-columns:1fr; gap:20px; padding:25px } .section { padding:54px 0 } .closing { margin-top:50px; padding:30px 20px } }
-    @media (max-width:430px) { .wrap { width:min(var(--max),100% - 28px) } header { min-height:70px } .brand img { width:32px; height:32px } .brand span { font-size:18px } .nav-link { font-size:13px } .hero-copy { font-size:16px } .actions .button { flex:1 } .node.fossil { left:10px } .node.boneyard { right:10px } footer { flex-direction:column; gap:7px } }
+    @media (max-width:430px) { .wrap { width:min(var(--max),100% - 28px) } header { min-height:70px } .brand img { width:32px; height:32px } .brand-name { font-size:18px } .nav-link { font-size:13px } .hero-copy { font-size:16px } .actions .button { flex:1 } .node.fossil { left:10px } .node.boneyard { right:10px } footer { flex-direction:column; gap:7px } }
     @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto } *,*::before,*::after { transition:none !important } }
   </style>
 </head>
 <body>
   <header class="wrap">
-    <a class="brand" href="/" aria-label="rawrarr home"><img src="/assets/rawrarr-logo.png" alt=""><span>rawrarr</span></a>
+    <a class="brand" href="/" aria-label="rawrarr home"><img src="/assets/rawrarr-logo.png" alt=""><span class="brand-copy"><span class="brand-name">rawrarr</span><span class="brand-tagline">all the arrs</span></span></a>
     <a class="nav-link" href="/auth">Sign in <span aria-hidden="true">↗</span></a>
   </header>
   <main class="wrap">
