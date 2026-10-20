@@ -40,6 +40,12 @@ Before sign-in, the coordinator root route shows a public landing page that intr
 
 The shortened display is an explicit privacy decision: partial forms are for recognition; they are not a substitute for the complete identity and must not be expandable inline.
 
+### Planned one-line node deployment
+
+Extend the subscriber Compose preview with **Copy install command** and **Download/review script**, while retaining manual Compose download. The copied curl-based command runs on the destination node and downloads a script containing its generated Compose definition. Explain Docker prerequisites, platform limitations, requested host changes, and local storage before execution; installing Docker requires explicit consent. Keep media-path entry and private material on the subscriber side.
+
+Show **Started; waiting for owner approval** separately from a usable, approved node. Installation must not approve enrollment, unlock an age identity, or configure sharing automatically. Preserve `127.0.0.1:7297`, safe reruns, existing data, and other Docker workloads; stop on conflicts instead of silently changing ports. This flow is planned and depends on published images and a tested download/bootstrap path. See the [one-line node deployment plan](one-line-node-deployment-plan.md).
+
 ## Main workspace
 
 The main workspace should make the user's shared files, media, and service health easy to scan at a glance. The first version can stay focused on the media library, but the workspace should not imply that all shared data must be a movie, episode, album, or book. Keep the primary areas recognizable:

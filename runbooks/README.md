@@ -22,6 +22,8 @@
 
 # Rawrarr runbooks
 
+- [Plan one-line node deployment](2026-10-20-plan-one-line-node-deployment.md) — Plan a generated embedded-Compose installer, Docker setup, safe retries, and explicit owner approval; no runtime changes.
+
 - [Name fossil and boneyard nodes](2026-10-20-fossil-and-boneyard-terminology.md) — Use fossil for metadata nodes and boneyard for storage nodes while retaining internal role identifiers.
 
 - [Headscale container client staging](2026-10-18-headscale-container-client-staging.md) — Add isolated Docker Tailscale clients on both Macs to Headscale through the Caddy coordinator route, preserving current app sidecars during the transition.
