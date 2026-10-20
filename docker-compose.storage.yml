@@ -1,6 +1,6 @@
 # Standalone subscriber deployment: no PostgreSQL and no coordinator process.
 services:
-  apex:
+  boneyard:
     build:
       context: ./rust-arr
     image: rawrarr:local

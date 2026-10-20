@@ -11,4 +11,4 @@ npm run build
 
 The mini-export browser test also uses the age package and `fflate` from this dependency tree. Its ciphertext fixtures are generated ephemerally by the installed `age` CLI.
 
-`npm run build:subscriber-onboarding` bundles the browser-only age and encrypted signing-root setup at `/setup/node`. `subscriber-compose.js` builds a metadata or apex Compose file with no coordinator role or private keys. Rebuild after changing either source module; the generated bundle is embedded in roarlay. The public release image and active signed-approval trust anchor are separate remaining work.
+`npm run build:subscriber-onboarding` bundles the browser-only age and encrypted signing-root setup at `/setup/node`. `subscriber-compose.js` builds a fossil or boneyard Compose file with no coordinator role or private keys. Rebuild after changing either source module; the generated bundle is embedded in roarlay. The public release image and active signed-approval trust anchor are separate remaining work.

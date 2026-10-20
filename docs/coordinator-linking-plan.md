@@ -1,14 +1,14 @@
 # Coordinator device linking plan
 
-> Updated container architecture (2026-10-18): central **coordinator** owns passkeys/authentication, account ownership, the target primary UI, and node coordination; **metadata** and **storage** provide node-local capabilities. Only storage reads media. The MacBook metadata node currently serves the transitional UI; users should eventually reach it through the coordinator dashboard. Manual approval with account-scoped pending requests is implemented; browser device-code linking and multi-account invitations remain planned.
+> Current user-facing names: **roarlay** is the coordinator, **fossil** is the metadata-node name, and **boneyard** is the storage-node name. The MacBook fossil currently serves the transitional UI; users should reach it through the coordinator dashboard. Manual approval with account-scoped pending requests is implemented; browser device-code linking and multi-account invitations remain planned.
 
 Status: the current MacBook/Mini enrollment protocol, routes, pending UI, and explicit approval are implemented. The device-code flow below remains the future multi-account invitation design.
 
 ## Roles and joining nodes
 
-The coordinator is assumed to be already provisioned and healthy. The MacBook's existing **metadata** node is the seeded first participant; it connects to that coordinator and currently hosts the transitional browser UI. The intended user entry point is the coordinator-hosted dashboard, which will show both metadata and storage nodes without requiring `localhost:7297`. The Mac mini runs an OrbStack **storage** worker reading `/Volumes/silo/Media/data` through a read-only `/media` mount. It joins the existing instance, but does not receive user passkeys, sessions, PostgreSQL, or a private age identity merely to scan. The operator **service** is separate from all subscriber roles.
+The coordinator is assumed to be already provisioned and healthy. The MacBook's existing **fossil** (`metadata`) node is the seeded first participant; it connects to that coordinator and currently hosts the transitional browser UI. The intended user entry point is the coordinator-hosted dashboard, which will show both fossil and boneyard nodes without requiring `localhost:7297`. The Mac mini runs an OrbStack **boneyard** (`storage`) worker reading `/Volumes/silo/Media/data` through a read-only `/media` mount. It joins the existing instance, but does not receive user passkeys, sessions, PostgreSQL, or a private age identity merely to scan. The operator **service** is separate from all subscriber roles.
 
-The seeded MacBook metadata node already has its approved-node credential and authenticated access to the established coordinator. It is not part of the joining workflow. Each later metadata or storage node creates a credential locally and sends no user ID; the coordinator binds the pending request to its existing owner and filters approval to that same signed-in owner. The current implementation rejects enrollment if the coordinator has no account or multiple accounts exist. Multi-account enrollment must use an owner-issued, short-lived invitation; the node must never choose its account by supplying a user ID.
+The seeded MacBook fossil node already has its approved-node credential and authenticated access to the established coordinator. It is not part of the joining workflow. Each later fossil or boneyard node creates a credential locally and sends no user ID; the coordinator binds the pending request to its existing owner and filters approval to that same signed-in owner. The current implementation rejects enrollment if the coordinator has no account or multiple accounts exist. Multi-account enrollment must use an owner-issued, short-lived invitation; the node must never choose its account by supplying a user ID.
 
 ## Owner experience
 
@@ -18,7 +18,7 @@ Use a device-code flow similar in interaction to GitHub/Tailscale device enrollm
 2. After the coordinator accepts the pending request, the worker prints the linking URL and human-entered device code to its local Docker logs. Example shape only:
 
    ```text
-   Link this storage node:
+   Link this boneyard node:
    Open https://rawrarr.<tailnet>.ts.net/devices/link
    Enter code: <short-lived-device-code>
    Waiting for approval. Code expires at <expiry>.

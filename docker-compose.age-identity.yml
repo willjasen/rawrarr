@@ -1,5 +1,5 @@
 services:
-  metadata:
+  fossil:
     environment:
       RAWARR_AGE_IDENTITY_FILE: /run/secrets/rawrarr_age_identity
     secrets:

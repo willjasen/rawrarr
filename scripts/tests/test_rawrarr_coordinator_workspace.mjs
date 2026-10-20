@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 const root = new URL('../../', import.meta.url);
 const read = path => readFile(new URL(path, root), 'utf8');
-const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, metadataUi, compose, metadataExport, mainRs, tailscaleCompose, apexCompose, coordinatorAvatar] = await Promise.all([
+const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, metadataUi, compose, metadataExport, mainRs, tailscaleCompose, boneyardCompose, coordinatorAvatar] = await Promise.all([
   read('rust-arr/src/coordinator.rs'),
   read('rust-arr/src/auth.rs'),
   read('rust-arr/src/node_auth.rs'),
@@ -204,19 +204,19 @@ test('node list and relay are restricted to the signed-in owner and trusted conf
 test('coordinator relay can reach tailnet nodes through its Tailscale SOCKS5 sidecar', () => {
   assert.match(coordinator, /RAWARR_NODE_RELAY_SOCKS5_URL/);
   assert.match(coordinator, /reqwest::Proxy::all\(&proxy_url\)/);
-  assert.match(coordinator, /NoProxy::from_string\("metadata"\)/);
+  assert.match(coordinator, /NoProxy::from_string\("fossil"\)/);
   assert.match(compose, /"mac-mini-storage":"https:\/\/rawrarr-mini\.risk-mermaid\.ts\.net"/);
   assert.match(compose, /RAWARR_NODE_RELAY_SOCKS5_URL/);
 });
 
 test('coordinator workspace selects nodes and decrypts relayed ciphertext in the browser', () => {
-  assert.match(workspaceScript, /Choose a connected metadata or apex node/);
+  assert.match(workspaceScript, /Choose a connected fossil or boneyard node/);
   assert.match(workspaceScript, /roleLabel\(role\)/);
-  assert.match(workspaceScript, /'coordinator' \? 'roarlay' : role === 'storage' \? 'apex' : 'metadata'/);
+  assert.match(workspaceScript, /'coordinator' \? 'roarlay' : role === 'storage' \? 'boneyard' : 'fossil'/);
   assert.match(workspace, />roarlay<\/div>/);
   assert.match(compose, /  roarlay:\n/);
   assert.doesNotMatch(compose, /  coordinator:\n/);
-  assert.match(apexCompose, /  apex:\n/);
+  assert.match(boneyardCompose, /  boneyard:\n/);
   assert.match(tailscaleCompose, /aliases:\n          - coordinator/);
   assert.match(workspaceScript, /ageIdentityInMemory = identity/);
   assert.match(workspaceScript, /window\.rawrarrMiniExport\.loadRadarrLibrary\(identity, route\.base/);
@@ -309,8 +309,8 @@ test('encrypted Radarr browser library preserves genres for Overview charts', as
   assert.match(workspaceScript, /currentView === '' \|\| currentView === '#overview' \|\| currentView === 'overview'[\s\S]*?loadArrSettings\('radarr'\)[\s\S]*?loadArrSettings\('sonarr'\)/);
 });
 
-test('apex selection falls back to an available metadata node for workspace views', () => {
+test('boneyard selection falls back to an available fossil node for workspace views', () => {
   assert.match(workspaceScript, /selectedNode && selectedNodeDetails\?\.role !== 'metadata' && defaultNode/);
-  assert.match(workspaceScript, /Apex nodes can be opened explicitly, but they cannot provide the/);
+  assert.match(workspaceScript, /Boneyard nodes can be opened explicitly, but they cannot provide the/);
   assert.match(workspaceScript, /coordinator workspace data shown on Overview/);
 });

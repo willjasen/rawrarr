@@ -168,16 +168,16 @@
             <div id="pending-node-list" class="device-meta" role="status" aria-live="polite">Checking for new nodes…</div>
           </section>
           <form id="syncthing-share" class="settings-form" style="border-top:1px solid var(--line)">
-            <h3 style="margin:0">Share metadata with an apex node</h3>
-            <p class="setup-intro">Configure a local Syncthing API in the web container, then enter the apex node API and peer addresses reachable on port 22000. Use HTTPS or a trusted private network for the remote API. The key is used for this request and is not saved.</p>
-            <label for="st-remote-url">Apex Syncthing URL</label><input id="st-remote-url" type="url" placeholder="http://apex-node:8384" required>
-            <label for="st-remote-key">Apex API key</label><input id="st-remote-key" type="password" autocomplete="new-password" required>
+            <h3 style="margin:0">Share metadata with a boneyard node</h3>
+            <p class="setup-intro">Configure a local Syncthing API in the web container, then enter the boneyard node API and peer addresses reachable on port 22000. Use HTTPS or a trusted private network for the remote API. The key is used for this request and is not saved.</p>
+            <label for="st-remote-url">Boneyard Syncthing URL</label><input id="st-remote-url" type="url" placeholder="http://boneyard-node:8384" required>
+            <label for="st-remote-key">Boneyard API key</label><input id="st-remote-key" type="password" autocomplete="new-password" required>
             <label for="st-folder-id">Shared folder ID</label><input id="st-folder-id" value="rawrarr-metadata" required>
             <label for="st-label">Folder label</label><input id="st-label" value="rawrarr metadata" required>
             <label for="st-local-path">Web node folder path</label><input id="st-local-path" placeholder="/data/shared-metadata" required>
-            <label for="st-remote-path">Apex folder path</label><input id="st-remote-path" placeholder="/media/rawrarr-metadata" required>
-            <label for="st-local-address">Web node address, reachable by apex</label><input id="st-local-address" placeholder="tcp://web.example:22000" required>
-            <label for="st-remote-address">Apex address, reachable by web</label><input id="st-remote-address" placeholder="tcp://apex.example:22000" required>
+            <label for="st-remote-path">Boneyard folder path</label><input id="st-remote-path" placeholder="/media/rawrarr-metadata" required>
+            <label for="st-local-address">Fossil node address, reachable by boneyard</label><input id="st-local-address" placeholder="tcp://fossil.example:22000" required>
+            <label for="st-remote-address">Boneyard address, reachable by fossil</label><input id="st-remote-address" placeholder="tcp://boneyard.example:22000" required>
             <div class="settings-actions"><button class="refresh" type="submit">Connect and share</button></div>
             <div id="syncthing-message" class="settings-message" role="status" aria-live="polite"></div>
           </form>
@@ -261,7 +261,7 @@
             <div class="panel-head"><h2>What rawrarr does</h2></div>
             <div class="about-copy">
               <p>rawrarr brings your media libraries together across devices. Radarr and Sonarr provide the library views, while rawrarr organizes shared metadata and artwork so your devices can use the same information.</p>
-              <p>Metadata shared between nodes is age-encrypted before it is synchronized. A coordinator helps your signed-in account manage its devices, while storage nodes keep media on their own disks.</p>
+              <p>Metadata shared between nodes is age-encrypted before it is synchronized. Roarlay helps your signed-in account manage its devices, and boneyards keep media on their own disks.</p>
               <p>Use Movies and TV to browse connected libraries, and Settings to connect Radarr or Sonarr and manage other app options.</p>
             </div>
           </article>
@@ -558,14 +558,14 @@
           const meta = document.createElement('div');
           meta.className = 'device-meta';
           meta.textContent = device.libraryName
-            ? `Apex node · ${device.libraryName} · scan runs on this host`
-            : 'Metadata node · shared data and Radarr · no local media';
+            ? `Boneyard node · ${device.libraryName} · scan runs on this host`
+            : 'Fossil node · shared data and Radarr · no local media';
           card.append(name, meta);
           list.append(card);
         }
         const note = document.createElement('div');
         note.className = 'device-meta';
-        note.textContent = 'Apex and metadata nodes share application data; media stays on apex nodes.';
+        note.textContent = 'Fossil and boneyard nodes share application data; media stays on boneyard nodes.';
         list.append(note);
       } catch (_) {
         document.getElementById('device-count').textContent = 'Unavailable';

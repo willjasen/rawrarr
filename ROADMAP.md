@@ -14,7 +14,8 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 ## Completed in the repository
 
 - **Standalone Rust application:** Axum web/API service, local PostgreSQL migrations and state, `/health`, Docker Compose, and container health checks.
-- **Role-separated local deployment:** roarlay keeps passkeys and PostgreSQL; metadata and apex are subscriber nodes with separate local state. Owner-approved enrollment, node heartbeats, a roarlay workspace, scoped browser direct routes with relay fallback, and owner-requested scans are implemented. A Mac mini bounded manual scan and encrypted sidecar synchronization were verified; the scheduled scan still needs observation.
+- **Role-separated local deployment:** roarlay keeps passkeys and PostgreSQL; fossil (metadata) and boneyard (storage) are subscriber nodes with separate local state. Owner-approved enrollment, node heartbeats, a roarlay workspace, scoped browser direct routes with relay fallback, and owner-requested scans are implemented. A Mac mini bounded manual scan and encrypted sidecar synchronization were verified; the scheduled scan still needs observation.
+- Use **dino** for a user-deployed Rawrarr node. A dino may run fossil and either boneyard or tarpit, but boneyard and tarpit must be mutually exclusive. Tarpit is planned, not implemented.
 - **Local passkey onboarding:** first-account registration and sign-in use WebAuthn with passkeys and sessions stored in that node's PostgreSQL database.
 - **Age-encrypted shared settings:** create or paste a post-quantum age identity; encrypt configuration as `/shared/config.aged`. The private identity is sent to the subscriber web process for unlock and retained there while unlocked. An explicit **Keep this ID on this device** option saves it with owner-only permissions in node-local `/data/age-identity`; it never belongs in `/shared`, PostgreSQL, or the operator service. Generated IDs use a copy pop-up and copy acknowledgement, followed by an explicit **Continue** click before vault unlock and dashboard navigation. Pasted IDs unlock directly with **Unlock vault**, without copy acknowledgement. The dialog has no Close action. Character verification is temporarily disabled.
 - **Radarr and local library prototype:** configure Radarr, inspect movie inventory and connection status, scan a configured local media path, and create age-encrypted metadata and artwork. Media stays on its storage host.
@@ -29,11 +30,12 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 ### Multi-node subscriber application
 
 - Durable device and library catalog with stale/offline state, scan generations, and reconciliation.
-- Define library configuration and scanning for mixed-media roots and category-specific roots distributed across multiple storage nodes; combine them in the instance catalog without moving media bytes.
+- Define library configuration and scanning for mixed-media roots and category-specific roots distributed across multiple boneyard nodes; combine them in the instance catalog without moving media bytes.
 - Complete device credential rotation and revocation behavior, identity continuity, and a durable, narrowly scoped command/catalog channel. The current approval, heartbeats, and scan request are the foundation.
 - Keep user sign-in and PostgreSQL on roarlay. Multi-account invitations and multiple-coordinator auth/failover remain future work.
-- Publish role-specific packaging for roarlay, apex, metadata, and an isolated operator service; the existing Compose files are local source-build examples.
+- Publish role-specific packaging for roarlay, fossil, boneyard, and an isolated operator service; the existing Compose files are local source-build examples.
 - Implement explicit per-user sharing grants. Syncthing peer/folder configuration does not currently implement invitations, trust decisions, or selective sharing.
+- Plan a future **tarpit** node type: an untrusted Syncthing destination for selected media replicated from trusted boneyard nodes, with destination-at-rest encryption so the destination cannot view the media. Not implemented; implementation has not started. Syncthing transport encryption alone is insufficient.
 
 ### Shared clusters and owner-controlled membership
 

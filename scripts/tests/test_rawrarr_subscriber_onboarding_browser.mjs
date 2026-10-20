@@ -43,7 +43,7 @@ test('first-account subscriber setup gates node choices behind age and root back
   assert.equal((await page.locator('body').innerText()).includes(backup), false);
   await page.locator('#root-backed-up').check();
   await page.locator('#deploy-step').waitFor({ state: 'visible' });
-  assert.deepEqual(await page.locator('#node-role option').allTextContents(), ['Metadata', 'Apex (storage)']);
+  assert.deepEqual(await page.locator('#node-role option').allTextContents(), ['Fossil (metadata)', 'Boneyard (storage)']);
   assert.deepEqual(requests.filter(path => path !== '/favicon.ico'), ['/setup/node', '/assets/subscriber-onboarding.js'], 'private material never leaves the browser in the setup flow');
   await context.close();
 });
