@@ -29,4 +29,46 @@ jobs:
           python-version: "3.12"
 
       - name: Run standard-library script tests
-        run: python -m unittest discover -s scripts/tests -p 'test_*.py' -v
+        id: tests
+        shell: bash
+        run: |
+          set -o pipefail
+          start_time=$(date +%s)
+          echo "Runner: $RUNNER_OS ($RUNNER_ARCH)"
+          python --version
+          echo "Command: python -m unittest discover -s scripts/tests -p 'test_*.py' -v"
+          set +e
+          python -m unittest discover -s scripts/tests -p 'test_*.py' -v 2>&1 | tee "$RUNNER_TEMP/script-tests.log"
+          test_status=${PIPESTATUS[0]}
+          set -e
+          end_time=$(date +%s)
+          echo "elapsed_seconds=$((end_time - start_time))" >> "$GITHUB_OUTPUT"
+          exit "$test_status"
+
+      - name: Publish test run summary
+        if: always()
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+          ELAPSED_SECONDS: ${{ steps.tests.outputs.elapsed_seconds }}
+        run: |
+          {
+            echo "## Basic script tests"
+            echo
+            echo "- **Outcome:** $TEST_OUTCOME"
+            echo "- **Runner:** $RUNNER_OS ($RUNNER_ARCH)"
+            echo "- **Python:** $(python --version 2>&1)"
+            echo "- **Elapsed:** ${ELAPSED_SECONDS:-unavailable} seconds"
+            echo "- **Command:** \`python -m unittest discover -s scripts/tests -p 'test_*.py' -v\`"
+            echo
+            echo "### Test results"
+            if [ -f "$RUNNER_TEMP/script-tests.log" ]; then
+              results=$(grep -E '^(test_.* \.\.\. (ok|FAIL|ERROR)|Ran [0-9]+ tests|OK$|FAILED \()' "$RUNNER_TEMP/script-tests.log" || true)
+              if [ -n "$results" ]; then
+                printf '%s\n' "$results" | sed 's/^/- `&`/'
+              else
+                echo "- No unittest results were recorded."
+              fi
+            else
+              echo "- Test output was not produced."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -8,6 +8,7 @@ Run a lightweight set of repository script tests automatically on pull requests 
 
 - Added `.github/workflows/tests.yml` for pull requests, pushes to `main`, and manual dispatch.
 - The workflow uses Python 3.12 and runs standard-library unit tests discovered from `scripts/tests/test_*.py`.
+- The Actions summary reports result, runner, Python version, elapsed time, exact command, and individual test outcomes; verbose test output remains in the live job log.
 - This deliberately omits Playwright, Rust, and integration suites for a fast, dependency-light initial CI check.
 - The workflow requests read-only repository contents and does not require secrets.
 - Fixed additional issues exposed by the local full-suite attempt: the test image now installs the locked web-export npm dependencies and avatar conversion tools; Node 18 test runs enable global Web Crypto; browser-oriented unit fixtures provide the globals and DOM elements required by the page scripts.
