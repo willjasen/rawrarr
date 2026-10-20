@@ -1,5 +1,9 @@
 # rawrarr
 
+<p align="center">
+  <img src="rust-arr/src/assets/rawrarr-logo.png" alt="Rawrarr logo" width="360">
+</p>
+
 rawrarr is an early self-hosted device-to-device file-sharing project, with media automation as its first focused use case. The repository contains a Rust web application and local Docker Compose setup. See [ROADMAP.md](ROADMAP.md) for completed work, outstanding work, and the recommended next milestone.
 
 ## Run locally
