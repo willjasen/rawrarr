@@ -59,6 +59,7 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 
 - Publish versioned, multi-architecture application images with release notes, provenance, and a documented upgrade path.
 - Generate role-specific Compose files for private/subscribed coordinator, storage, shard, and combined coordinator + storage deployments. The current Compose files are local source-build examples.
+- **One-line subscriber node deployment (planned):** build on the existing fossil/boneyard Compose preview with a copied curl command that downloads a script containing the generated Compose definition, checks or helps install Docker and Compose, and starts the node. Preserve explicit owner approval, local-only secrets, safe reruns, and the manual Compose option. Public versioned images are a prerequisite; see the [deployment plan](docs/one-line-node-deployment-plan.md).
 - Hosted passkey account, checkout, trial, subscription/license issuance and enforcement. The selected direction is a shared-instance entitlement with signed licenses; provider, pricing, grace period, and final lock behavior remain undecided.
 
 ### Product capabilities and durability
@@ -78,6 +79,7 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 - [Device and service architecture](docs/device-architecture.md) — current local prototype boundaries and target node model.
 - [Product direction](docs/product-direction.md) — long-term product goals and trust boundaries.
 - [Product and interface design](docs/DESIGN.md) — user-facing principles and flows.
+- [One-line node deployment plan](docs/one-line-node-deployment-plan.md) — planned embedded-Compose installer, Docker bootstrap, platform support, approval boundaries, and acceptance criteria.
 - [Public demo plan](docs/public-demo-plan.md) — planned account-free public tour, synthetic data, security boundaries, and acceptance criteria.
 - [Shared cluster plan](docs/shared-cluster-sharing-plan.md) — planned isolated-to-shared transition, owner-controlled membership, MLS evaluation, age file handling, revocation cleanup, and phased work.
 - [Technical boundaries](docs/technical-status.md) — data placement and security boundaries.

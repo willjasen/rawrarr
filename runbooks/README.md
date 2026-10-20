@@ -22,6 +22,7 @@
 
 # Rawrarr runbooks
 
+- [Plan one-line node deployment](2026-10-20-plan-one-line-node-deployment.md) — Plan a generated embedded-Compose installer, Docker setup, safe retries, and explicit owner approval; no runtime changes.
 - [Admin console preview](2026-10-20-admin-console-preview.md) — Add a private, sample-data-only admin dashboard container with a loopback port and Tailscale-only access plan.
 
 - [Name fossil and boneyard nodes](2026-10-20-fossil-and-boneyard-terminology.md) — Use fossil for metadata nodes and boneyard for storage nodes while retaining internal role identifiers.

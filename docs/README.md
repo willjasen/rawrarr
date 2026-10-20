@@ -20,6 +20,7 @@ Start here for the current project state and everyday use:
 - [Product direction](product-direction.md) — long-term product scope, privacy goals, and compatibility.
 - [Shared cluster plan](shared-cluster-sharing-plan.md) — isolated/shared modes, owner-controlled membership, MLS evaluation over Syncthing, age-encrypted files, revocation cleanup, and implementation phases.
 - [Node types](node-types.md) — roarlay, fossil, and boneyard node roles, plus SwarmSail enrollment.
+- [One-line node deployment plan](one-line-node-deployment-plan.md) — planned curl-based installer containing generated Compose, Docker prerequisite setup, safe reruns, and explicit owner approval.
 - [Device signing design](device-signing-design.md) — proposed signed device enrollment and configuration integrity.
 - [Data domains](data-domains.md) — placement and synchronization boundaries for `/media`, `/metadata`, `/shared`, `/data`, and backups.
 - [Shared config schema v1](shared-config-v1.schema.json) — versioned age-encrypted config document with Radarr and Sonarr entries in `services`.
