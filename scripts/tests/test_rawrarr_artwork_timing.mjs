@@ -8,11 +8,16 @@ const code = ui.slice(ui.indexOf('    const artworkRequestTimings'), ui.indexOf(
 function fixture() {
   let callback;
   let pending = [];
-  const context = vm.createContext({ PerformanceObserver: class {
-    constructor(fn) { callback = fn; }
-    observe(options) { assert.deepEqual({ ...options }, { type: 'resource', buffered: true }); }
-    takeRecords() { const result = pending; pending = []; return result; }
-  } });
+  const context = vm.createContext({
+    PerformanceObserver: class {
+      constructor(fn) { callback = fn; }
+      observe(options) { assert.deepEqual({ ...options }, { type: 'resource', buffered: true }); }
+      takeRecords() { const result = pending; pending = []; return result; }
+    },
+    window: { setInterval() {} },
+    document: { getElementById() { return { hidden: false, classList: { toggle() {} }, setAttribute() {} }; } },
+    fetch: async () => ({ ok: false })
+  });
   vm.runInContext(code, context);
   return {
     deliver: entries => callback({ getEntries: () => entries }),

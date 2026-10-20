@@ -65,7 +65,8 @@ test('generated private age identity has a short preview and full value is expos
     'private-preview-card', 'private-preview', 'fingerprint', 'copy', 'generate', 'unlock', 'import-id', 'import-submit', 'import-dialog', 'import-message', 'review-generated',
     'backup-confirmation', 'backup-confirmed', 'remember-on-device',
     'identity-copy-status', 'identity-copy-dialog',
-    'identity-copy-instructions', 'copy-private-identity'];
+    'identity-copy-instructions', 'copy-private-identity',
+    'coordinator-passkey-section', 'add-coordinator-passkey'];
   const elements = Object.fromEntries(ids.map(id => [id, createElement()]));
   const rootStyles = new Map();
   const fetchCalls = [];
@@ -94,7 +95,7 @@ test('generated private age identity has a short preview and full value is expos
       if (options.method === 'POST') return { ok: true, async json() { return { unlocked: true, themeSeed }; } };
       return { ok: true, async json() { return { unlocked: false, encryptedConfigExists: false }; } };
     },
-    window: { location: { replaced: [], replace(path) { this.replaced.push(path); } }, addEventListener() {} }
+    window: { location: { origin: 'http://localhost:7297', replaced: [], replace(path) { this.replaced.push(path); } }, addEventListener() {} }
   };
   const script = page.match(/<script>([\s\S]*?)<\/script>/i)?.[1];
   assert.ok(script, 'age setup page contains client script');

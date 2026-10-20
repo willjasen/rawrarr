@@ -1,12 +1,15 @@
 FROM rust:1.85-bookworm
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl nodejs npm chromium \
+    && apt-get install -y --no-install-recommends ca-certificates curl nodejs npm chromium libjxl-tools librsvg2-bin \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm install --global playwright-core@1.55.0
 
 WORKDIR /workspace
+
+COPY rust-arr/web-export/package.json rust-arr/web-export/package-lock.json /opt/rawrarr-web-export/
+RUN npm ci --prefix /opt/rawrarr-web-export
 
 # This image is the reusable dependency base. Project source is copied into each
 # uniquely named test container after creation, so source edits never rebuild it.

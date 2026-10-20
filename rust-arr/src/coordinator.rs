@@ -650,7 +650,11 @@ fn validate_direct_target(origin: &str, target: &str) -> Result<reqwest::Url, &'
                 .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
         });
     let tailnet_origin = url.scheme() == "https"
-        && url.host_str().is_some_and(|host| host.ends_with(".risk-mermaid.ts.net"))
+        && url.host_str().is_some_and(|host| {
+            host.ends_with(".risk-mermaid.ts.net")
+                && (host == "rawrarr.risk-mermaid.ts.net"
+                    || host.starts_with("rawrarr-"))
+        })
         && url.port().is_none();
     if url.scheme() != "https"
         || (url.origin().ascii_serialization() != origin && !tailnet_origin)

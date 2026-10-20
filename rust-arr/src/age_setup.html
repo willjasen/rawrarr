@@ -70,7 +70,7 @@
     <p class="privacy-note">Pasted IDs unlock directly. New IDs use the copy and backup confirmation flow. A remembered ID stays in this node's private local data folder and is not synced.</p>
     <div id="message" role="status" aria-live="polite"></div>
     <section class="coordinator-passkey" id="coordinator-passkey-section" aria-label="Roarlay passkey" hidden>
-      <p>Add a passkey for roarlay using your existing signed-in Rawrarr account. The passkey ceremony opens on the roarlay website.</p>
+      <p>Add a passkey for roarlay using your existing signed-in rawrarr account. The passkey ceremony opens on the roarlay website.</p>
       <button class="secondary" id="add-coordinator-passkey" type="button">Add passkey for roarlay</button>
     </section>
     <dialog id="import-dialog" aria-labelledby="import-title">
@@ -132,7 +132,7 @@
         const result = await response.json();
         if (!response.ok || typeof result.url !== 'string') {
           throw new Error(response.status === 401
-            ? 'Sign in to this Rawrarr node before adding a roarlay passkey.'
+            ? 'Sign in to this rawrarr node before adding a roarlay passkey.'
             : 'Could not start roarlay passkey setup. Try again.');
         }
         window.location.assign(result.url);
