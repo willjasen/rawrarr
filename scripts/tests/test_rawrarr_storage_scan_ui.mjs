@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
+import { runInNewContext } from 'node:vm';
 
 const root = new URL('../../', import.meta.url);
 const [workspace, coordinator, main] = await Promise.all([
@@ -33,4 +34,79 @@ test('Devices offers owner-routed storage scans with a bounded 1–2 GB movie sa
   assert.match(coordinator, /storage_scan_relay_allowed\(/);
   assert.match(coordinator, /role != "storage"/);
   assert.match(coordinator, /api\/library\/scan\/schedule/);
+});
+
+function scheduleHarness(state) {
+  const controls = {
+    frequency: { value: '', parentElement: {} },
+    time: { value: '', parentElement: {} },
+    weekday: { value: '', parentElement: {} },
+    timezone: {},
+    save: {},
+  };
+  const form = {
+    dataset: {},
+    querySelector(selector) {
+      if (selector === '.storage-scan-schedule-timezone') return controls.timezone;
+      return controls[selector.match(/name="(\w+)"/)[1]];
+    },
+    querySelectorAll() { return [controls.frequency, controls.time, controls.weekday, controls.save]; },
+  };
+  const drafts = new Map();
+  const requests = [];
+  const busy = [];
+  const api = runInNewContext(
+    workspace.slice(workspace.indexOf('function formatStorageScanTime('), workspace.indexOf('async function scanStorageNode('))
+      + '\n({ refreshStorageSchedule, saveStorageSchedule });',
+    {
+      Intl, Date,
+      storageScheduleDrafts: drafts,
+      storageScanRequest: async (...args) => {
+        requests.push(args);
+        return { ok: true, status: 200, state, text: async () => JSON.stringify(state) };
+      },
+      storageScanJson: async response => response.state,
+      setStorageScanBusy: (...args) => busy.push(args),
+    },
+  );
+  return { ...api, controls, form, drafts, requests, busy };
+}
+
+test('schedule refresh restores unsaved edits and shows scheduled progress', async () => {
+  const state = {
+    schedule: { frequency: 'daily', time: '04:00', timeZone: 'America/New_York', weekday: null },
+    nextRunAt: '2026-10-20T08:00:00Z',
+    scan: { active: true, scheduled: true, filesCompleted: 3, filesTotal: 30 },
+  };
+  const harness = scheduleHarness(state);
+  const node = { nodeId: 'mini', online: true };
+  harness.drafts.set('mini', { ...state.schedule, frequency: 'weekly', weekday: 'monday', time: '05:30' });
+  const summary = {};
+  const status = {};
+  await harness.refreshStorageSchedule(node, harness.form, summary, status);
+  assert.equal(harness.controls.frequency.value, 'weekly');
+  assert.equal(harness.controls.weekday.value, 'monday');
+  assert.equal(harness.controls.time.value, '05:30');
+  assert.equal(harness.controls.weekday.parentElement.hidden, false);
+  assert.match(summary.textContent, /Unsaved changes.*Current schedule: Daily.*Next scan/);
+  assert.match(status.textContent, /Scheduled scan is running.*3 of 30/);
+  assert.equal(harness.busy[0][1], true);
+});
+
+test('saving a weekly schedule sends PUT and clears its draft only after success', async () => {
+  const schedule = { frequency: 'weekly', time: '05:30', timeZone: 'America/New_York', weekday: 'monday' };
+  const state = { schedule, nextRunAt: '2026-10-26T09:30:00Z', scan: { active: false } };
+  const harness = scheduleHarness(state);
+  const node = { nodeId: 'mini', online: true };
+  await harness.refreshStorageSchedule(node, harness.form, {}, {});
+  harness.drafts.set('mini', schedule);
+  const summary = {};
+  await harness.saveStorageSchedule(node, harness.form, summary, harness.controls.save, {});
+  const request = harness.requests.at(-1);
+  assert.equal(request[1], '/api/library/scan/schedule');
+  assert.equal(request[3], 'PUT');
+  assert.deepEqual(JSON.parse(JSON.stringify(request[2])), schedule);
+  assert.equal(harness.drafts.has('mini'), false);
+  assert.match(summary.textContent, /Schedule saved.*Next scan/);
+  assert.equal(harness.controls.save.disabled, false);
 });

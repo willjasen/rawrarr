@@ -229,7 +229,7 @@ fn save_schedule(path: &Path, state: &PersistedScanSchedule) -> Result<(), Box<d
 fn next_scheduled_run(schedule: &ScanSchedule, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
     let timezone = schedule.time_zone();
     let first_date = now.with_timezone(&timezone).date_naive();
-    for offset in 0..=8 {
+    for offset in 0..=15 {
         let date = first_date.checked_add_days(chrono::Days::new(offset))?;
         let matches_frequency = match schedule.frequency {
             ScanFrequency::Daily => true,

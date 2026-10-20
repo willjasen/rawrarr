@@ -27,3 +27,7 @@ Verify that the Mac mini storage worker starts a scan without an owner request. 
 - Confirmed the recurring LaunchAgent plist parses, is loaded in `gui/501`, is waiting with `Hour=4` and `Minute=0`, and had not started at 22:54 EDT. Its schedule runs daily.
 - Confirmed storage remained healthy after the restart and removed the task's `.container-rebuild-storage.lock` marker.
 - The earlier scheduled run was observed starting and writing encrypted sidecars, but was intentionally interrupted. After the first 4 AM run, inspect the local scan log and the new shared scan-completion event, then update this runbook and the roadmap with its counts, errors, and truncation status. Do not claim completion or full-library coverage until that result is verified.
+
+## Service scheduler replacement
+
+Later on 2026-10-19, the [configurable schedule implementation](2026-10-19-configurable-storage-scan-schedule.md) replaced the temporary LaunchAgent with the storage service's persisted daily `04:00` schedule in `America/New_York`. The LaunchAgent was unloaded and its plist archived only after the updated service returned healthy and the schedule file was verified. The interval timer described above is historical; owners now change the schedule from Devices.

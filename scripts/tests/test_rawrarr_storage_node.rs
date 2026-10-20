@@ -92,6 +92,15 @@ fn next_weekly_scan_uses_selected_day_and_skips_a_dst_gap() {
         next_scheduled_run(&dst_schedule, before_dst).unwrap(),
         Utc.with_ymd_and_hms(2026, 3, 9, 6, 30, 0).unwrap()
     );
+    let weekly_gap = ScanSchedule {
+        frequency: ScanFrequency::Weekly,
+        weekday: Some(ScanWeekday::Sunday),
+        ..dst_schedule
+    };
+    assert_eq!(
+        next_scheduled_run(&weekly_gap, before_dst).unwrap(),
+        Utc.with_ymd_and_hms(2026, 3, 15, 6, 30, 0).unwrap()
+    );
 }
 
 #[test]

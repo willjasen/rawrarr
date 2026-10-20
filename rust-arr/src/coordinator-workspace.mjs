@@ -1027,7 +1027,7 @@ async function saveStorageSchedule(node, form, summary, saveButton, scanStatus) 
   } catch (error) {
     summary.textContent = error.message || 'Could not save the scan schedule.';
   } finally {
-    void refreshStorageSchedule(node, form, summary, scanStatus);
+    saveButton.disabled = false;
   }
 }
 
