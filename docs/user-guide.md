@@ -73,6 +73,21 @@ The public recipient is safe to share for encryption, but it cannot unlock the c
 
 Movie text records are stored at `/shared/metadata/movies/text/` and encrypted artwork at `/shared/metadata/movies/artwork/`. Posters use shared encrypted artwork when available and the vault is unlocked, with live Radarr fallback. Missing movie details and posters are cached on demand rather than scraping the entire library at once.
 
+## Recover Radarr on a chosen node
+
+When a Radarr connection is configured and the age vault is unlocked, Rawrarr asks Radarr to create a native backup on startup and every six hours. It age-encrypts the latest backup to `/shared/metadata/radarr/recovery.zip.aged`; Syncthing replicates that ciphertext to the other approved nodes. The archive contains Radarr's database and settings, including any credentials stored by Radarr. Rawrarr's scraped movie metadata and artwork are already stored separately in the shared, age-encrypted `movies/text/` and `movies/artwork/` folders, and remain available independently of the Radarr restore. If capture fails, the previous snapshot is retained and the failure is written to the node log.
+
+To restore, deploy a Radarr container yourself on the metadata or storage node you choose, wait for its shared folder to sync, then run the helper from a Rawrarr source checkout on a host with Python 3 and `age` installed:
+
+```sh
+python3 scripts/restore_radarr.py \
+  --backup /path/to/shared/metadata/radarr/recovery.zip.aged \
+  --identity-file /path/to/private/age-identity \
+  --url https://radarr.example.com
+```
+
+The command requires the exact `RESTORE` confirmation and prompts for the new Radarr API key without echoing it or putting it in process arguments. It verifies that the URL is Radarr, decrypts into a mode-`0600` temporary file, validates the archive, and uploads it directly to Radarr's restore API. The target's existing Radarr database and settings are replaced; the media files are not copied or changed. Radarr's root-folder paths are restored as recorded, so mount the same paths in the new container or repair them in Radarr after it restarts. Keep the age identity outside `/shared`; never place it in the backup archive or container Compose file.
+
 ## Read the Movies and TV summary cards
 
 The Movies and TV pages each show four service-specific summary cards using the same layout. Their counts and disk usage come from Radarr or Sonarr. The metadata-size card shows the encrypted metadata stored for that service's media type—Movies for Radarr and TV for Sonarr—and “All metadata” shows the full shared metadata tree. The total is expected to be the same on both pages; each service-specific subtotal can differ. Sizes count stored files and use binary units (1 GB is 1,024 MB).

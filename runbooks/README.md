@@ -102,6 +102,7 @@
 
 - [Name fossil and boneyard nodes](2026-10-20-fossil-and-boneyard-terminology.md) — Use fossil for metadata nodes and boneyard for storage nodes while retaining internal role identifiers.
 - [Add the Rawrarr tagline](2026-10-20-rawrarr-tagline.md) — Show “all the arrs” beneath the product name in the public landing-page header.
+- [Store and restore Radarr recovery data through Syncthing](2026-10-19-radarr-shared-recovery.md) — Capture age-encrypted native Radarr backups in the shared folder and restore them to a user-deployed Radarr on a chosen node.
 
 - [Headscale container client staging](2026-10-18-headscale-container-client-staging.md) — Add isolated Docker Tailscale clients on both Macs to Headscale through the Caddy coordinator route, preserving current app sidecars during the transition.
 

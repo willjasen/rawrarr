@@ -156,6 +156,8 @@ pub struct EncryptedArtwork {
     pub bytes: Vec<u8>,
 }
 
+const MAX_RADARR_BACKUP_BYTES: usize = 512 * 1024 * 1024;
+
 impl Drop for PersistedConfig {
     fn drop(&mut self) {
         self.radarr_url.zeroize();
@@ -439,6 +441,22 @@ impl AgeVault {
     pub fn store_tv_artwork(&self, tvdb_id: u64, content_type: &str, bytes: &[u8]) -> Result<(), VaultError> {
         let path = self.tv_artwork_path(tvdb_id)?;
         store_artwork_with_recipient(&self.recipient, tvdb_id, content_type, bytes, &path)
+    }
+
+    pub fn radarr_backup_path(&self) -> PathBuf {
+        self.metadata_dir
+            .join("radarr")
+            .join("recovery.zip.aged")
+    }
+
+    pub fn store_radarr_backup(&self, bytes: &[u8]) -> Result<(), VaultError> {
+        if bytes.len() < 4
+            || bytes.len() > MAX_RADARR_BACKUP_BYTES
+            || !bytes.starts_with(b"PK\x03\x04")
+        {
+            return Err(VaultError::InvalidConfig);
+        }
+        encrypt_shared_file(&self.recipient, &self.radarr_backup_path(), bytes)
     }
 
     pub fn store_artwork(
@@ -1561,6 +1579,58 @@ mod tests {
             metadata_dir_for(&shared, Some(PathBuf::from("/metadata"))),
             PathBuf::from("/metadata")
         );
+    }
+
+    #[test]
+    fn radarr_recovery_archive_is_age_encrypted_under_shared_metadata() {
+        let keygen = Command::new("age-keygen")
+            .arg("-pq")
+            .output()
+            .expect("age-keygen must be installed for this test");
+        assert!(keygen.status.success());
+        let identity = String::from_utf8(keygen.stdout).expect("identity is UTF-8");
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock after epoch")
+            .as_nanos();
+        let shared_dir = env::temp_dir().join(format!(
+            "rawrarr-radarr-backup-test-{}-{unique}",
+            std::process::id()
+        ));
+        let vault = AgeVault::from_identity_in_dirs(
+            identity,
+            shared_dir.clone(),
+            shared_dir.join("local.json"),
+            false,
+        )
+        .expect("valid PQ age identity");
+        vault
+            .persist_public_recipient()
+            .expect("persist shared recipient");
+        let archive = b"PK\x03\x04private-radarr-config-fixture";
+        vault
+            .store_radarr_backup(archive)
+            .expect("store encrypted backup");
+
+        let path = shared_dir.join("metadata/radarr/recovery.zip.aged");
+        let ciphertext = fs::read(&path).expect("read shared backup ciphertext");
+        assert!(ciphertext.starts_with(b"age-encryption.org/v1\n"));
+        assert!(!ciphertext
+            .windows(archive.len())
+            .any(|window| window == archive));
+        let decrypted = run_with_input(
+            "age",
+            &["--decrypt", "--identity", "-", path_arg(&path).unwrap()],
+            vault.identity.as_bytes(),
+        )
+        .expect("decrypt backup fixture");
+        assert!(decrypted.status.success());
+        assert_eq!(decrypted.stdout, archive);
+        assert!(matches!(
+            vault.store_radarr_backup(b"not a zip"),
+            Err(VaultError::InvalidConfig)
+        ));
+        fs::remove_dir_all(shared_dir).expect("remove isolated test data");
     }
 
     #[test]

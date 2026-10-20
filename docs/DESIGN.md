@@ -103,6 +103,10 @@ The metadata-size card reports the selected service's media subtree (Radarr movi
 
 Treat Radarr as the first supported external library integration. Let the user enter its URL and API key in the UI, validate the connection, and apply saved settings without requiring an app restart. Show connection status and movie data in the workspace. Mask or redact the API key everywhere it is displayed after entry.
 
+### Radarr recovery and node migration
+
+Keep the latest native Radarr backup in the shared Syncthing folder as age ciphertext, refreshing it every six hours when Radarr is connected and the age vault is unlocked. Rawrarr's scraped movie metadata and artwork remain in their existing shared, age-encrypted paths alongside the native backup. Together these support disaster recovery and migration, but Rawrarr does not create or control the Radarr container: the user deploys it on a chosen metadata or storage node and initiates restore there. Restore Radarr's database and settings without copying or modifying media; preserve the backup's root-folder paths and require matching mounts or user repair after restart. Keep Sonarr out of this first implementation.
+
 ### Local scans and metadata
 
 Let the user choose a mounted media location and start a scan deliberately. Explain that a scan reads media and creates Rawrarr metadata; it does not move or rename media files. Show scan progress and per-item matching status. When a match is uncertain, present choices rather than silently attaching incorrect metadata.

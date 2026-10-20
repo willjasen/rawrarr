@@ -66,6 +66,7 @@ struct AppState {
     // Shared across both Arr workers so their metadata requests never overlap.
     artwork_scrape_lock: Arc<tokio::sync::Mutex<()>>,
     artwork_scrape_notify: Arc<tokio::sync::Notify>,
+    radarr_backup_notify: Arc<tokio::sync::Notify>,
     artwork_force_rescan: Arc<AtomicBool>,
     sonarr_scrape_notify: Arc<tokio::sync::Notify>,
     artwork_cache: Arc<artwork_cache::ArtworkCache>,
@@ -325,6 +326,104 @@ impl ArrClient {
             .await
     }
 
+    async fn create_recovery_backup(&self) -> Result<Zeroizing<Vec<u8>>, &'static str> {
+        const MAX_BACKUP_BYTES: usize = 512 * 1024 * 1024;
+
+        let command: serde_json::Value = self
+            .http
+            .post(format!("{}/api/v3/command", self.base_url))
+            .header("X-Api-Key", self.api_key.clone())
+            .json(&serde_json::json!({"name": "Backup"}))
+            .send()
+            .await
+            .map_err(|_| "could not start Radarr backup")?
+            .error_for_status()
+            .map_err(|_| "could not start Radarr backup")?
+            .json()
+            .await
+            .map_err(|_| "Radarr returned an invalid backup command")?;
+        let command_id = command
+            .get("id")
+            .and_then(serde_json::Value::as_i64)
+            .ok_or("Radarr returned an invalid backup command")?;
+        let deadline = Instant::now() + Duration::from_secs(10 * 60);
+        loop {
+            let command: serde_json::Value = self
+                .http
+                .get(format!("{}/api/v3/command/{command_id}", self.base_url))
+                .header("X-Api-Key", self.api_key.clone())
+                .send()
+                .await
+                .map_err(|_| "could not check Radarr backup status")?
+                .error_for_status()
+                .map_err(|_| "could not check Radarr backup status")?
+                .json()
+                .await
+                .map_err(|_| "Radarr returned an invalid backup status")?;
+            match command
+                .get("status")
+                .and_then(serde_json::Value::as_str)
+            {
+                Some("completed") => break,
+                Some("failed" | "aborted") => return Err("Radarr backup did not complete"),
+                _ if Instant::now() < deadline => {
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                }
+                _ => return Err("Radarr backup timed out"),
+            }
+        }
+
+        let backups: Vec<serde_json::Value> = self
+            .http
+            .get(format!("{}/api/v3/system/backup", self.base_url))
+            .header("X-Api-Key", self.api_key.clone())
+            .send()
+            .await
+            .map_err(|_| "could not list Radarr backups")?
+            .error_for_status()
+            .map_err(|_| "could not list Radarr backups")?
+            .json()
+            .await
+            .map_err(|_| "Radarr returned an invalid backup list")?;
+        let path = backups
+            .iter()
+            .filter_map(|backup| backup.get("path").and_then(serde_json::Value::as_str))
+            .find(|path| valid_radarr_backup_path(path))
+            .ok_or("Radarr did not provide a valid backup archive")?;
+        let url = format!("{}/{}", self.base_url, path.trim_start_matches('/'));
+        let mut response = self
+            .http
+            .get(url)
+            .header("X-Api-Key", self.api_key.clone())
+            .timeout(Duration::from_secs(10 * 60))
+            .send()
+            .await
+            .map_err(|_| "could not download Radarr backup")?
+            .error_for_status()
+            .map_err(|_| "could not download Radarr backup")?;
+        if response
+            .content_length()
+            .is_some_and(|length| length > MAX_BACKUP_BYTES as u64)
+        {
+            return Err("Radarr backup exceeds the 512 MiB limit");
+        }
+        let mut bytes = Zeroizing::new(Vec::new());
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|_| "could not download Radarr backup")?
+        {
+            if bytes.len().saturating_add(chunk.len()) > MAX_BACKUP_BYTES {
+                return Err("Radarr backup exceeds the 512 MiB limit");
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        if bytes.len() < 4 || !bytes.starts_with(b"PK\x03\x04") {
+            return Err("Radarr returned an invalid backup archive");
+        }
+        Ok(bytes)
+    }
+
     async fn search_movies(
         &self,
         request: metadata::MovieSearchRequest,
@@ -502,6 +601,19 @@ impl ArrClient {
             .map_err(|_| ())?;
         read_image_response(&mut response).await
     }
+}
+
+fn valid_radarr_backup_path(path: &str) -> bool {
+    let Some(name) = path.strip_prefix("/backup/manual/") else {
+        return false;
+    };
+    name.ends_with(".zip")
+        && !name.contains('/')
+        && !name.contains('\\')
+        && !name.contains("..")
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
 fn poster_image(movie: &serde_json::Value) -> Option<&serde_json::Value> {
@@ -1197,6 +1309,42 @@ async fn run_metadata_artwork_backfill(state: Arc<AppState>) {
         }
         state.artwork_backfill.write().await.active = false;
         wait_for_metadata_backfill(&state, Duration::from_secs(6 * 60 * 60)).await;
+    }
+}
+
+async fn run_radarr_backup(state: Arc<AppState>) {
+    wait_for_radarr_backup(&state, Duration::from_secs(10)).await;
+    loop {
+        let radarr = state.radarr.read().await.clone();
+        let vault = state.vault.read().await.clone();
+        match (radarr, vault) {
+            (Some(radarr), Some(vault)) => match radarr.create_recovery_backup().await {
+                Ok(bytes) => {
+                    let stored = tokio::task::spawn_blocking(move || {
+                        vault.store_radarr_backup(&bytes)
+                    })
+                    .await;
+                    match stored {
+                        Ok(Ok(())) => {}
+                        Ok(Err(_)) => eprintln!("Radarr recovery backup could not be encrypted or saved"),
+                        Err(_) => eprintln!("Radarr recovery backup storage task failed"),
+                    }
+                    wait_for_radarr_backup(&state, Duration::from_secs(6 * 60 * 60)).await;
+                }
+                Err(error) => {
+                    eprintln!("Radarr recovery backup failed: {error}");
+                    wait_for_radarr_backup(&state, Duration::from_secs(6 * 60 * 60)).await;
+                }
+            },
+            _ => wait_for_radarr_backup(&state, Duration::from_secs(60)).await,
+        }
+    }
+}
+
+async fn wait_for_radarr_backup(state: &AppState, delay: Duration) {
+    tokio::select! {
+        _ = tokio::time::sleep(delay) => {},
+        _ = state.radarr_backup_notify.notified() => {},
     }
 }
 
@@ -1982,6 +2130,7 @@ async fn unlock_age_settings(
     let exists = vault.config_exists();
     let theme_seed = age_theme_seed(vault.recipient());
     *state.vault.write().await = Some(vault);
+    state.radarr_backup_notify.notify_one();
     Ok(Json(AgeSettingsInfo {
         unlocked: true,
         encrypted_config_exists: exists,
@@ -2070,6 +2219,7 @@ async fn put_radarr_settings(
             )
         })?;
     *state.radarr.write().await = Some(client);
+    state.radarr_backup_notify.notify_one();
     Ok(Json(RadarrSettingsInfo {
         configured: true,
         url: Some(url),
@@ -2242,6 +2392,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         sonarr_backfill: Arc::new(RwLock::new(ArtworkBackfillProgress::default())),
         artwork_scrape_lock: Arc::new(tokio::sync::Mutex::new(())),
         artwork_scrape_notify: Arc::new(tokio::sync::Notify::new()),
+        radarr_backup_notify: Arc::new(tokio::sync::Notify::new()),
         artwork_force_rescan: Arc::new(AtomicBool::new(false)),
         sonarr_scrape_notify: Arc::new(tokio::sync::Notify::new()),
         artwork_cache: Arc::new(artwork_cache::ArtworkCache::from_env()),
@@ -2249,6 +2400,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if role == node_role::NodeRole::Metadata {
         tokio::spawn(run_metadata_artwork_backfill(state.clone()));
         tokio::spawn(run_metadata_sonarr_backfill(state.clone()));
+    }
+    if role != node_role::NodeRole::Coordinator {
+        tokio::spawn(run_radarr_backup(state.clone()));
     }
 
     let protected = Router::new()
@@ -2559,5 +2713,26 @@ mod metadata_export_tests {
             assert!(!valid_export_filename("artwork", name));
         }
         assert!(!valid_export_filename("unknown", "123.aged"));
+    }
+}
+
+#[cfg(test)]
+mod radarr_backup_tests {
+    use super::valid_radarr_backup_path;
+
+    #[test]
+    fn only_manual_zip_backup_paths_are_downloaded() {
+        assert!(valid_radarr_backup_path(
+            "/backup/manual/radarr_backup_v6.0.0.1_2026.10.19_10.00.00.zip"
+        ));
+        for path in [
+            "/backup/scheduled/radarr_backup.zip",
+            "/backup/manual/../../secrets.zip",
+            "/backup/manual/subdir/backup.zip",
+            "/backup/manual/backup.xml",
+            "https://attacker.example/backup.zip",
+        ] {
+            assert!(!valid_radarr_backup_path(path), "unexpectedly accepted {path}");
+        }
     }
 }
