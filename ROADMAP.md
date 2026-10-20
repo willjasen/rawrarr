@@ -34,7 +34,7 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 - Keep user sign-in and PostgreSQL on roarlay. Multi-account invitations and multiple-coordinator auth/failover remain future work.
 - Publish role-specific packaging for roarlay, fossil, boneyard, and an isolated operator service; the existing Compose files are local source-build examples.
 - Implement explicit per-user sharing grants. Syncthing peer/folder configuration does not currently implement invitations, trust decisions, or selective sharing.
-- Consider a future, as-yet-unnamed feature for selected media replication from trusted boneyard nodes to untrusted Syncthing destinations with destination-at-rest encryption.
+- Plan a future **tarpit** node type: an untrusted Syncthing destination for selected media replicated from trusted boneyard nodes, with destination-at-rest encryption so the destination cannot view the media. Not implemented; implementation has not started. Syncthing transport encryption alone is insufficient.
 
 ### Shared clusters and owner-controlled membership
 

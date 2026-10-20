@@ -6,9 +6,9 @@ The implemented roles are identified internally as `coordinator`, `storage`, and
 
 See [container deployment](container-deployment.md) for the authoritative capability matrix, startup behavior, trust limitations, local migration, and Mac mini setup. The coordinator is the established central control plane. The MacBook fossil node is its seeded first participant; later fossil and boneyard nodes join that coordinator. No subscriber role connects directly to PostgreSQL.
 
-## Future encrypted Syncthing destinations
+## Planned tarpit nodes
 
-An eventual feature may replicate selected media from a trusted boneyard node to an untrusted Syncthing device that stores received files encrypted at rest. That destination type has no name yet and is not implemented. A boneyard is the Rawrarr storage role, not that future destination; ordinary Syncthing transport encryption alone does not provide destination-at-rest encryption.
+**Tarpit** is the planned user-facing name for an untrusted Syncthing destination that receives selected media from a trusted boneyard and stores it encrypted at rest. The name evokes a dark, difficult-to-escape place, matching the intended property that the destination cannot view the encrypted media. Tarpit is a future node type, not an implemented Rawrarr role; no implementation work has started. A boneyard remains the Rawrarr storage role. Ordinary Syncthing transport encryption alone does not provide destination-at-rest encryption.
 
 Manual, account-scoped node approval and node-scoped central authentication are implemented for the coordinator's current single-owner setup. Browser device-code enrollment, multi-account invitations, public image distribution, and SwarmSail provisioning remain planned. The sections below retain future distribution/networking direction; references to the old service/shard packaging are superseded by the three-role deployment guide.
 
