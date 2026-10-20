@@ -2,7 +2,7 @@
 
 ## Objective
 
-Verify that the Mac mini storage worker starts a scan without an owner request. Stop the pass after the owner's requested threshold and schedule a fuller one-time scan for 4 AM.
+Verify that the Mac mini storage worker starts a scan without an owner request. Stop the pass after the owner's requested threshold and schedule a fuller scan daily at 4 AM.
 
 ## Initial state
 
@@ -19,11 +19,11 @@ Verify that the Mac mini storage worker starts a scan without an owner request. 
 
 - At the owner's direction, restarted only `rawrarr-mini-storage` at 2026-10-19 22:46:45 EDT. This interrupted the in-progress pass without changing its image, mounts, `/data`, `/shared`, or `/media`.
 - After restart, the service returned to `running/healthy`, `/health` returned HTTP 200, and the default automatic scan timer was enabled again. Restarting reset that timer; the next built-in scheduled run is 24 hours after this restart.
-- Scheduled a one-time default `storage-scan-once` run for 2026-10-20 04:00 EDT through the Mac mini user's LaunchAgent `com.rawrarr.storage-scan-once-20261020`. It invokes `/usr/local/bin/rust-arr storage-scan-once` inside the existing storage container and writes its output to local-only Application Support logs. The wrapper disables/unloads the job and removes its launch files after the scan exits. The Mac's `at` service was unavailable, so no `at` job was used.
-- The one-time scan uses the normal bounded scanner and may report truncation at the 10,000-media-item cap. It is not evidence of a complete cross-node catalog.
+- Scheduled the default `storage-scan-once` run daily at 04:00 EDT, starting 2026-10-20, through the Mac mini user's LaunchAgent `com.rawrarr.storage-scan-daily-0400`. It invokes `/usr/local/bin/rust-arr storage-scan-once` inside the existing storage container and writes its output to local-only Application Support logs. The previous one-time job was replaced; the recurring job remains loaded after each run. As a user LaunchAgent, it runs in the Mac mini account's logged-in GUI session. The Mac's `at` service was unavailable, so no `at` job was used.
+- Each daily run uses the normal bounded scanner and may report truncation at the 10,000-media-item cap. It is not evidence of a complete cross-node catalog.
 
 ## Verification and pending follow-up
 
-- Confirmed the LaunchAgent plist parses, is loaded in `gui/501`, is waiting with `Hour=4` and `Minute=0`, and had not started at 22:49 EDT.
+- Confirmed the recurring LaunchAgent plist parses, is loaded in `gui/501`, is waiting with `Hour=4` and `Minute=0`, and had not started at 22:54 EDT. Its schedule runs daily.
 - Confirmed storage remained healthy after the restart and removed the task's `.container-rebuild-storage.lock` marker.
-- The scheduled run was observed starting and writing encrypted sidecars, but was intentionally interrupted. At 4 AM, inspect the local scan log and the new shared scan-completion event, then update this runbook and the roadmap with its counts, errors, and truncation status. Do not claim completion or full-library coverage until that result is verified.
+- The earlier scheduled run was observed starting and writing encrypted sidecars, but was intentionally interrupted. After the first 4 AM run, inspect the local scan log and the new shared scan-completion event, then update this runbook and the roadmap with its counts, errors, and truncation status. Do not claim completion or full-library coverage until that result is verified.
