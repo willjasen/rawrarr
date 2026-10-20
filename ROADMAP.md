@@ -14,7 +14,8 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 ## Completed in the repository
 
 - **Standalone Rust application:** Axum web/API service, local PostgreSQL migrations and state, `/health`, Docker Compose, and container health checks.
-- **Role-separated local deployment:** roarlay keeps passkeys and PostgreSQL; metadata and apex are subscriber nodes with separate local state. Owner-approved enrollment, node heartbeats, a roarlay workspace, scoped browser direct routes with relay fallback, and owner-requested scans are implemented. A Mac mini bounded manual scan and encrypted sidecar synchronization were verified; the scheduled scan still needs observation.
+- **Role-separated local deployment:** roarlay keeps passkeys and PostgreSQL; fossil (metadata) and boneyard (storage) are subscriber nodes with separate local state. Owner-approved enrollment, node heartbeats, a roarlay workspace, scoped browser direct routes with relay fallback, and owner-requested scans are implemented. A Mac mini bounded manual scan and encrypted sidecar synchronization were verified; the scheduled scan still needs observation.
+- Use **dino** for a user-deployed Rawrarr node. A dino may run fossil and either boneyard or tarpit, but boneyard and tarpit must be mutually exclusive. Tarpit is planned, not implemented.
 - **Local passkey onboarding:** first-account registration and sign-in use WebAuthn with passkeys and sessions stored in that node's PostgreSQL database.
 - **Age-encrypted shared settings:** create or paste a post-quantum age identity; encrypt configuration as `/shared/config.aged`. The private identity is sent to the subscriber web process for unlock and retained there while unlocked. An explicit **Keep this ID on this device** option saves it with owner-only permissions in node-local `/data/age-identity`; it never belongs in `/shared`, PostgreSQL, or the operator service. Generated IDs use a copy pop-up and copy acknowledgement, followed by an explicit **Continue** click before vault unlock and dashboard navigation. Pasted IDs unlock directly with **Unlock vault**, without copy acknowledgement. The dialog has no Close action. Character verification is temporarily disabled.
 - **Radarr and local library prototype:** configure Radarr, inspect movie inventory and connection status, scan a configured local media path, and create age-encrypted metadata and artwork. Media stays on its storage host.
@@ -29,11 +30,12 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 ### Multi-node subscriber application
 
 - Durable device and library catalog with stale/offline state, scan generations, and reconciliation.
-- Define library configuration and scanning for mixed-media roots and category-specific roots distributed across multiple storage nodes; combine them in the instance catalog without moving media bytes.
+- Define library configuration and scanning for mixed-media roots and category-specific roots distributed across multiple boneyard nodes; combine them in the instance catalog without moving media bytes.
 - Complete device credential rotation and revocation behavior, identity continuity, and a durable, narrowly scoped command/catalog channel. The current approval, heartbeats, and scan request are the foundation.
 - Keep user sign-in and PostgreSQL on roarlay. Multi-account invitations and multiple-coordinator auth/failover remain future work.
-- Publish role-specific packaging for roarlay, apex, metadata, and an isolated operator service; the existing Compose files are local source-build examples.
+- Publish role-specific packaging for roarlay, fossil, boneyard, and an isolated operator service; the existing Compose files are local source-build examples.
 - Implement explicit per-user sharing grants. Syncthing peer/folder configuration does not currently implement invitations, trust decisions, or selective sharing.
+- Plan a future **tarpit** node type: an untrusted Syncthing destination for selected media replicated from trusted boneyard nodes, with destination-at-rest encryption so the destination cannot view the media. Not implemented; implementation has not started. Syncthing transport encryption alone is insufficient.
 
 ### Shared clusters and owner-controlled membership
 
@@ -63,10 +65,12 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 
 - Restore private-key character verification after fixing the reported rejection of correct answers and validating the full browser flow.
 
+- Flesh out the public landing page into an account-free interactive demo: add a clearly labeled entry point, a guided tour of representative screens, fictional fixture data, and only read-only or explicitly simulated interactions. Keep it isolated from subscriber data and protected APIs, preserve existing sign-in/workspace behavior, and label implemented, planned, and simulated capabilities accurately. See the [public demo plan](docs/public-demo-plan.md).
 - General-purpose file/folder sharing beyond media.
 - Sonarr posters/artwork, snapshots, metadata lookup, and episode mutations; Lidarr, Readarr, and Bazarr integrations; Prowlarr-style indexer management and search; concrete download-client adapters and fulfillment. The current download-client abstraction has no concrete adapter.
 - Manual age-encrypted shared-folder backup to one node-local destination, including recovery verification and a retention policy.
 - Device signing, approval, signed shared configuration, and revocation/revision checks.
+- Replace the Mac mini's generated device-ID display alias with a randomly selected, scientifically recognized non-avian dinosaur species name from a vetted, substantial taxonomy list. Exclude candidates whose genus or species epithet matches any word in the owner's current profile name, ignoring case and punctuation; if no candidate remains, ask rather than weaken the exclusion. Change only the alias in the existing age-encrypted device-name config, preserving the stable device ID and verifying the UI still identifies the same node.
 - Static logo animation for selected moments, with reduced-motion behavior.
 
 ## Related documentation
@@ -74,6 +78,7 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 - [Device and service architecture](docs/device-architecture.md) — current local prototype boundaries and target node model.
 - [Product direction](docs/product-direction.md) — long-term product goals and trust boundaries.
 - [Product and interface design](docs/DESIGN.md) — user-facing principles and flows.
+- [Public demo plan](docs/public-demo-plan.md) — planned account-free public tour, synthetic data, security boundaries, and acceptance criteria.
 - [Shared cluster plan](docs/shared-cluster-sharing-plan.md) — planned isolated-to-shared transition, owner-controlled membership, MLS evaluation, age file handling, revocation cleanup, and phased work.
 - [Technical boundaries](docs/technical-status.md) — data placement and security boundaries.
 - [User guide](docs/user-guide.md) — current local prototype usage.

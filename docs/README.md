@@ -1,6 +1,6 @@
 # Rawrarr documentation
 
-- [Container deployment](container-deployment.md) — implemented roarlay (coordinator), apex (storage), and metadata roles and Mac mini setup.
+- [Container deployment](container-deployment.md) — implemented roarlay (coordinator), fossil (metadata), and boneyard (storage) roles and Mac mini setup.
 - [Security](SECURITY.md) — trust boundaries, age encryption, browser-to-node encrypted transport through the coordinator, authentication, storage, and current limitations.
 - [Production deployment plan](production-deployment-plan.md) — start with coordinator-local PostgreSQL, production launch requirements, and a future managed-database migration path.
 - [Admin console](admin-console.md) — private, separate-container dashboard preview, network boundaries, and the authentication gate required before live account data.
@@ -19,7 +19,7 @@ Start here for the current project state and everyday use:
 
 - [Product direction](product-direction.md) — long-term product scope, privacy goals, and compatibility.
 - [Shared cluster plan](shared-cluster-sharing-plan.md) — isolated/shared modes, owner-controlled membership, MLS evaluation over Syncthing, age-encrypted files, revocation cleanup, and implementation phases.
-- [Node types](node-types.md) — roarlay, apex, and metadata node roles, plus SwarmSail enrollment.
+- [Node types](node-types.md) — roarlay, fossil, and boneyard node roles, plus SwarmSail enrollment.
 - [Device signing design](device-signing-design.md) — proposed signed device enrollment and configuration integrity.
 - [Data domains](data-domains.md) — placement and synchronization boundaries for `/media`, `/metadata`, `/shared`, `/data`, and backups.
 - [Shared config schema v1](shared-config-v1.schema.json) — versioned age-encrypted config document with Radarr and Sonarr entries in `services`.
@@ -28,6 +28,7 @@ Start here for the current project state and everyday use:
 - [Blind coordinator content flow](blind-coordinator-content.md) — keep metadata/storage content encrypted through the coordinator and decrypt it in the user's browser; documents the bounded implementation and remaining scope.
 - [Browser security test plan](security-test-plan.md) — plan Playwright integration evidence for metadata/storage confidentiality through the coordinator, including limits and malicious-coordinator caveats.
 - [Public landing page](DESIGN.md#account-and-first-run-flow) — public, pre-sign-in introduction with clear Rawrarr maturity and security-limit disclosures.
+- [Public demo plan](public-demo-plan.md) — planned account-free tour using isolated synthetic data, read-only interactions, and explicit product-maturity disclosures.
 - [Local backups](local-backups.md) — planned manual, age-encrypted backup of `/shared` to one node-local destination.
 - [Device architecture](device-architecture.md) — IDs, local/shared records, storage, and remote access boundaries.
 - [Cloud access](cloud-access-architecture.md) — passkey account service, blind relay, and subscriber-data boundary.
@@ -43,6 +44,6 @@ Start here for the current project state and everyday use:
 - [Script and integration test index](../scripts/tests/README.md) — isolated test commands and infrastructure requirements.
 - [Runbooks](../runbooks/README.md) — dated implementation and operations records.
 
-- [Mac mini storage-node plan](mac-mini-storage-node-plan.md) — OrbStack deployment, attached-drive access, same-instance bootstrap, and acceptance checks.
+- [Mac mini boneyard-node plan](mac-mini-storage-node-plan.md) — OrbStack deployment, attached-drive access, same-instance bootstrap, and acceptance checks.
 
 - [Coordinator device linking](coordinator-linking-plan.md) — Planned Docker-log device code, coordinator sign-in and approval, and authenticated storage enrollment.

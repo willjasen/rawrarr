@@ -21,10 +21,15 @@ test('metadata and storage have no host-published application ports', () => {
 });
 
 test('MacBook metadata is loopback-only in the coordinator Tailscale namespace', () => {
-  assert.match(macbookTailscale, /metadata:[\s\S]*?network_mode: "service:tailscale"/);
+  assert.match(macbookTailscale, /fossil:[\s\S]*?network_mode: "service:tailscale"/);
   assert.match(macbookTailscale, /RUST_ARR_LISTEN_ADDR: 127\.0\.0\.1:8081/);
   assert.match(macbookTailscale, /RAWARR_NODE_RELAY_TARGETS: .*127\.0\.0\.1:8081/);
   assert.match(macbookTailscale, /127\.0\.0\.1:8081\/health/);
+});
+
+test('standalone metadata Compose identifies the service and device as fossil', () => {
+  assert.match(metadata, /services:[\s\S]*?\n  fossil:/);
+  assert.match(metadata, /RAWARR_DEVICE_NAME: \$\{RAWARR_DEVICE_NAME:-Fossil node\}/);
 });
 
 test('Mini storage and Serve proxy use only loopback in the Tailscale namespace', () => {

@@ -1,11 +1,11 @@
-# Additional MacBook apex node. Use with the existing rawrarr-local coordinator
+# Additional MacBook boneyard node. Use with the existing rawrarr-local coordinator
 # network namespace after mounting a verified, synchronized local media folder.
 services:
-  apex-macbook:
+  boneyard-macbook:
     build:
       context: ./rust-arr
     image: rawrarr:local
-    container_name: rawrarr-local-macbook-apex
+    container_name: rawrarr-local-macbook-boneyard
     environment:
       RAWARR_ROLE: storage
       RUST_ARR_LISTEN_ADDR: 127.0.0.1:8084

@@ -1,0 +1,87 @@
+name: Tests
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Basic script tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run standard-library script tests
+        id: tests
+        shell: bash
+        run: |
+          set -o pipefail
+          start_time=$(date +%s)
+          echo "Runner: $RUNNER_OS ($RUNNER_ARCH)"
+          python --version
+          echo "Command: python -m unittest discover -s scripts/tests -p 'test_*.py' -v"
+          set +e
+          python -m unittest discover -s scripts/tests -p 'test_*.py' -v 2>&1 | tee "$RUNNER_TEMP/script-tests.log"
+          test_status=${PIPESTATUS[0]}
+          set -e
+          end_time=$(date +%s)
+          echo "elapsed_seconds=$((end_time - start_time))" >> "$GITHUB_OUTPUT"
+          exit "$test_status"
+
+      - name: Publish test run summary
+        if: always()
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+          ELAPSED_SECONDS: ${{ steps.tests.outputs.elapsed_seconds }}
+        run: |
+          {
+            case "$TEST_OUTCOME" in
+              success) status_icon="✅"; status_text="Passed" ;;
+              failure) status_icon="❌"; status_text="Failed" ;;
+              *) status_icon="⚪"; status_text="${TEST_OUTCOME:-Unknown}" ;;
+            esac
+            echo "## $status_icon Basic script tests $status_text"
+            echo
+            echo "| Result | Python | Runner | Time |"
+            echo "| --- | --- | --- | ---: |"
+            if [ -f "$RUNNER_TEMP/script-tests.log" ]; then
+              passed=$(grep -cE '^test_.* \.\.\. ok$' "$RUNNER_TEMP/script-tests.log" || true)
+              failed=$(grep -cE '^test_.* \.\.\. (FAIL|ERROR)$' "$RUNNER_TEMP/script-tests.log" || true)
+              total=$(sed -nE 's/^Ran ([0-9]+) tests?.*/\1/p' "$RUNNER_TEMP/script-tests.log" | tail -1)
+              total=${total:-$((passed + failed))}
+            else
+              passed=0
+              failed=0
+              total=0
+            fi
+            if [ "$failed" -eq 0 ] && [ "$TEST_OUTCOME" = "success" ]; then
+              result="$status_icon $passed passed"
+            else
+              result="❌ $failed failed, $passed passed"
+            fi
+            echo "| $result ($total total) | $(python --version 2>&1 | awk '{print $2}') | $RUNNER_OS ($RUNNER_ARCH) | ${ELAPSED_SECONDS:-?}s |"
+            echo
+            echo "**Command:** \`python -m unittest discover -s scripts/tests -p 'test_*.py' -v\`"
+            if [ -f "$RUNNER_TEMP/script-tests.log" ]; then
+              failures=$(grep -E '^test_.* \.\.\. (FAIL|ERROR)$' "$RUNNER_TEMP/script-tests.log" || true)
+              if [ -n "$failures" ]; then
+                echo
+                echo "### Failed tests"
+                printf '%s\n' "$failures" | sed -E 's/^test_(.*) \.\.\. (FAIL|ERROR)$/- `\1` (\2)/'
+              fi
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

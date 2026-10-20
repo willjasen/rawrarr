@@ -131,19 +131,31 @@ fn merge_profiles(
                 .map(str::to_owned)
         });
         if let Some(name) = &name { movie["qualityProfile"] = json!({"name": name}); }
-        let mut metadata = metadata::arr_text_record("radarr", "tmdbId", id, movie);
-        if let Some(saved) = saved.as_ref().filter(|saved| saved.is_object()) {
-            // Preserve locally derived values that are not present in Radarr's API record.
-            if let Some(artwork_source) = saved.get("artworkSource") {
-                metadata["artworkSource"] = artwork_source.clone();
+        let mut metadata = saved
+            .as_ref()
+            .filter(|saved| saved.is_object())
+            .cloned()
+            .unwrap_or_else(|| json!({}));
+        if let Some(fields) = metadata::arr_text_record("radarr", "tmdbId", id, movie).as_object() {
+            for (key, value) in fields {
+                metadata
+                    .as_object_mut()
+                    .expect("metadata remains an object")
+                    .entry(key.clone())
+                    .or_insert_with(|| value.clone());
             }
         }
-        if let Some(name) = name {
-            metadata["qualityProfile"] = json!({
-                "id": movie.get("qualityProfileId").and_then(Value::as_u64),
-                "name": name,
-            });
-        }
+        let Some(name) = name else {
+            continue;
+        };
+        metadata["qualityProfileId"] = movie
+            .get("qualityProfileId")
+            .cloned()
+            .unwrap_or(Value::Null);
+        metadata["qualityProfile"] = json!({
+            "id": movie.get("qualityProfileId").and_then(Value::as_u64),
+            "name": name,
+        });
         if saved.as_ref() != Some(&metadata) {
             cache.store(id, &metadata)?;
         }

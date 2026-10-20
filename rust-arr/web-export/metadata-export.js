@@ -93,7 +93,7 @@ export async function saveDeviceName(identity, base, nodeId, name) {
   if (name) names[nodeId] = name; else delete names[nodeId];
   config.device_names = names;
   const recipientResponse = await fetch(`${prefix}api/metadata/export/recipient`, { cache: 'no-store' });
-  if (!recipientResponse.ok) throw new Error('Could not read the public age recipient from this metadata node.');
+  if (!recipientResponse.ok) throw new Error('Could not read the public age recipient from this fossil node.');
   const recipient = (await recipientResponse.text()).trim();
   const encrypter = new age.Encrypter();
   encrypter.addRecipient(recipient);

@@ -7,6 +7,16 @@ echo "Node: $(node --version)"
 test_started_epoch=$(date +%s)
 test_started_at=$(date '+%Y-%m-%d %H:%M:%S %z')
 
+web_export_modules=/workspace/rust-arr/web-export/node_modules
+if [ ! -e "$web_export_modules" ]; then
+    if [ ! -d /opt/rawrarr-web-export/node_modules ]; then
+        echo "ERROR: web-export test dependencies are missing from the test image."
+        exit 1
+    fi
+    mkdir -p /workspace/rust-arr/web-export
+    ln -s /opt/rawrarr-web-export/node_modules "$web_export_modules"
+fi
+
 node_log="/tmp/rawrarr-node-tests.$$.log"
 playwright_log="/tmp/rawrarr-playwright-tests.$$.log"
 rust_log="/tmp/rawrarr-rust-tests.$$.log"
@@ -29,13 +39,13 @@ for test_file in /workspace/scripts/tests/*.mjs; do
     fi
     node_files="$node_files $test_file"
 done
-node --test $node_files >"$node_log" 2>&1
+node --experimental-global-webcrypto --test $node_files >"$node_log" 2>&1
 node_status=$?
 cat "$node_log"
 section_end "NODE.JS TESTS" "$node_status"
 
 section_start "PLAYWRIGHT BROWSER TEST"
-node --test "$browser_test" >"$playwright_log" 2>&1
+node --experimental-global-webcrypto --test "$browser_test" >"$playwright_log" 2>&1
 playwright_status=$?
 cat "$playwright_log"
 section_end "PLAYWRIGHT BROWSER TEST" "$playwright_status"

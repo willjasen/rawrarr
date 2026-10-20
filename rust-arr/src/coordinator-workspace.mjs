@@ -80,7 +80,7 @@ const saveAgeIdButton = document.getElementById('save-age-id');
 const removeAgeIdButton = document.getElementById('remove-age-id');
 const views = Object.fromEntries(['overview', 'devices', 'movies', 'series', 'configuration', 'settings', 'about'].map(name => [name, document.getElementById(`${name}-view`)]));
 function roleLabel(role) {
-  return role === 'coordinator' ? 'roarlay' : role === 'storage' ? 'apex' : 'metadata';
+  return role === 'coordinator' ? 'roarlay' : role === 'storage' ? 'boneyard' : 'fossil';
 }
 function showView(name, updateHash = true) {
   const requestedView = name === 'tv' ? 'series' : name;
@@ -157,9 +157,9 @@ async function loadProfileAvatar() {
   profileAvatarLoadNode = node.nodeId;
   try {
     const response = await fetch(`/nodes/${encodeURIComponent(node.nodeId)}/api/metadata/export/recipient`, { cache: 'no-store', headers: { Accept: 'text/plain' } });
-    if (!response.ok) throw new Error('Public age ID is not available from this metadata node.');
+    if (!response.ok) throw new Error('Public age ID is not available from this fossil node.');
     const recipient = (await response.text()).trim();
-    if (!/^age1pq1[a-z0-9]+$/.test(recipient)) throw new Error('Metadata node returned an invalid public age ID.');
+    if (!/^age1pq1[a-z0-9]+$/.test(recipient)) throw new Error('Fossil node returned an invalid public age ID.');
     const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(recipient)));
     profileAvatarSeed = Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
     renderProfileAvatar();
@@ -299,7 +299,7 @@ const metadataExportCancel = document.getElementById('metadata-export-cancel');
 async function runMetadataExport(identity) {
   const node = selectedNodeDetails;
   if (!node || node.role !== 'metadata') {
-    metadataExportStatus.textContent = 'Select a metadata node before exporting.';
+    metadataExportStatus.textContent = 'Select a fossil node before exporting.';
     return;
   }
   metadataExportButton.disabled = true;
@@ -401,7 +401,7 @@ window.addEventListener('storage', event => {
   resetArrSummary('radarr');
   contentStatus.textContent = 'Age private ID removed from browser storage; metadata is locked.';
 });
-if (ageIdentityInMemory) contentStatus.textContent = 'Remembered age private ID loaded from this browser. It will be used only with the metadata node you select.';
+if (ageIdentityInMemory) contentStatus.textContent = 'Remembered age private ID loaded from this browser. It will be used only with the fossil node you select.';
 
 document.getElementById('age-storage-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -413,7 +413,7 @@ document.getElementById('age-storage-form').addEventListener('submit', async eve
     return;
   }
   saveAgeIdButton.disabled = true;
-  ageStorageMessage.textContent = 'Validating the age ID with the selected metadata node…';
+  ageStorageMessage.textContent = 'Validating the age ID with the selected fossil node…';
   try {
     await arrDirectRequest('/settings/age', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -423,7 +423,7 @@ document.getElementById('age-storage-form').addEventListener('submit', async eve
     localStorage.setItem(ageSessionKey, identity);
     rememberAgeId.checked = true;
     settingsAgeIdInput.value = '';
-    contentStatus.textContent = 'Age private ID saved in this browser and validated by the selected metadata node.';
+    contentStatus.textContent = 'Age private ID saved in this browser and validated by the selected fossil node.';
     ageStorageMessage.textContent = 'Age private ID saved in this browser.';
     updateAgeIdControls();
   } catch (error) {
@@ -471,7 +471,7 @@ function clearConfigStrings(value) {
 async function arrDirectUrl() {
   const node = selectedNodeDetails;
   if (!node || node.role !== 'metadata' || !node.online || !node.directUrl) {
-    throw new Error('Select an online metadata node with a direct Tailscale route in Devices.');
+    throw new Error('Select an online fossil node with a direct Tailscale route in Devices.');
   }
   const route = await chooseNodeRoute(node, true);
   if (!route.direct) {
@@ -552,7 +552,7 @@ async function loadArrSettings(service) {
     document.getElementById(copy.button).disabled = true;
     const message = document.getElementById(copy.message);
     message.dataset.state = '';
-    message.textContent = 'Connecting directly to the selected metadata node…';
+    message.textContent = 'Connecting directly to the selected fossil node…';
   }
   try {
     await unlockMetadataVaultForSettings();
@@ -663,7 +663,7 @@ async function loadClusterConfiguration() {
   }
   const node = workspaceNodes.find(candidate => candidate.role === 'metadata' && canOpenNode(candidate));
   if (!node) {
-    configurationStatus.textContent = 'No reachable metadata node is available to read the shared configuration.';
+    configurationStatus.textContent = 'No reachable fossil node is available to read the shared configuration.';
     return;
   }
   configurationStatus.textContent = 'Fetching encrypted config and decrypting it in this browser…';
@@ -714,8 +714,8 @@ function openNode(node) {
   moviesPanel.replaceChildren();
   resetArrSummary('radarr');
   status.textContent = node.role === 'metadata'
-    ? `${node.nodeId} · metadata node`
-    : `${node.nodeId} · apex node · content is available when published by a metadata node`;
+    ? `${node.nodeId} · fossil node`
+    : `${node.nodeId} · boneyard node · content is available when published by a fossil node`;
   if (node.role === 'metadata') {
     if (location.hash === '' || location.hash === '#overview') void loadOverviewMetadata();
     if (node.preferredDirect) {
@@ -773,18 +773,18 @@ function setStorageScanBusy(nodeId, busy) {
 async function storageScanJson(response) {
   const body = await response.text();
   if (!body.trim()) {
-    throw new Error(`Storage node returned an empty scan response (HTTP ${response.status}); its scan service may need updating.`);
+    throw new Error(`Boneyard node returned an empty scan response (HTTP ${response.status}); its scan service may need updating.`);
   }
   try {
     return JSON.parse(body);
   } catch (_) {
-    throw new Error(`Storage node returned an invalid scan response (HTTP ${response.status}).`);
+    throw new Error(`Boneyard node returned an invalid scan response (HTTP ${response.status}).`);
   }
 }
 
 async function storageScanRequest(node, path, options, method = options ? 'POST' : 'GET') {
   const route = await chooseNodeRoute(node);
-  if (!route) throw new Error('No route is available to this storage node.');
+  if (!route) throw new Error('No route is available to this boneyard node.');
   const send = target => fetch(`${target.base}${path}`, {
     method,
     cache: 'no-store',
@@ -800,7 +800,7 @@ async function storageScanRequest(node, path, options, method = options ? 'POST'
       if (refreshed?.direct) response = await send(refreshed);
     }
     if (route.direct && !response.ok && response.status !== 400 && response.status !== 409) {
-      throw new Error(`Storage node request failed (HTTP ${response.status}).`);
+      throw new Error(`Boneyard node request failed (HTTP ${response.status}).`);
     }
     return response;
   } catch (error) {
@@ -964,10 +964,10 @@ async function loadOverviewMetadata() {
   const node = selectedNodeDetails;
   if (!node || node.role !== 'metadata') {
     const onlineMetadata = workspaceNodes.some(candidate => candidate.role === 'metadata' && candidate.online);
-    state.textContent = onlineMetadata ? 'Metadata node not selected' : 'No online metadata node';
+    state.textContent = onlineMetadata ? 'Fossil node not selected' : 'No online fossil node';
     detail.textContent = onlineMetadata
-      ? 'An online metadata node is available in Devices, but it is not selected for this overview.'
-      : 'Connect an online metadata node in Devices to see shared-folder details.';
+      ? 'An online fossil node is available in Devices, but it is not selected for this overview.'
+      : 'Connect an online fossil node in Devices to see shared-folder details.';
     document.getElementById('overview-metadata-size').textContent = '—';
     return;
   }
@@ -975,7 +975,7 @@ async function loadOverviewMetadata() {
   const folders = health?.folders || [];
   if (!folders.length) {
     state.textContent = 'Unavailable';
-    detail.textContent = 'Shared-folder status is not available from this metadata node.';
+    detail.textContent = 'Shared-folder status is not available from this fossil node.';
   } else {
     const complete = folders.filter(folder => folder.state === 'idle' || folder.completionPercent >= 100).length;
     state.textContent = folders.length === 1 ? (folders[0].state || 'Unknown') : `${complete} / ${folders.length} ready`;
@@ -1073,7 +1073,7 @@ document.getElementById('refresh-series').addEventListener('click', async event 
   message.hidden = false;
   message.dataset.state = '';
   try {
-    const nodeId = selectedNodeDetails?.nodeId || 'the selected metadata node';
+    const nodeId = selectedNodeDetails?.nodeId || 'the selected fossil node';
     message.textContent = `Requesting a TV metadata rescan from ${nodeId}…`;
     await unlockMetadataVaultForSettings();
     await arrDirectRequest('/metadata/sonarr/rescan', { method: 'POST' });
@@ -1234,7 +1234,7 @@ document.getElementById('unlock').addEventListener('click', () => { void unlockM
 document.getElementById('refresh-movies').addEventListener('click', async event => {
   const button = event.currentTarget;
   button.disabled = true;
-  const nodeId = selectedNodeDetails?.nodeId || 'the selected metadata node';
+  const nodeId = selectedNodeDetails?.nodeId || 'the selected fossil node';
   contentStatus.textContent = `Requesting a movie metadata rescan from ${nodeId}…`;
   try {
     await unlockMetadataVaultForSettings();
@@ -1303,7 +1303,7 @@ async function loadNodes() {
     nodesPanel.replaceChildren();
     if (nodes.length === 0) {
       renderDeviceTopology([], [], {});
-      status.textContent = 'No metadata or apex nodes are connected to this account yet.';
+      status.textContent = 'No fossil or boneyard nodes are connected to this account yet.';
       contentPanel.hidden = true;
       return;
     }
@@ -1498,7 +1498,7 @@ async function loadNodes() {
       }
     }
     renderDeviceTopology(nodes, observedSyncthingPeers, deviceNames);
-    status.textContent = 'Choose a connected metadata or apex node to open its Rawrarr page.';
+    status.textContent = 'Choose a connected fossil or boneyard node to open its Rawrarr page.';
     const canOpen = canOpenNode;
     const requested = requestedNode && nodes.find(node => node.nodeId === requestedNode && canOpen(node));
     // Node status polling must not reset the active workspace or refetch its
@@ -1519,7 +1519,7 @@ async function loadNodes() {
       }
     }
     if (selectedNode && selectedNodeDetails?.role !== 'metadata' && defaultNode) {
-      // Apex nodes can be opened explicitly, but they cannot provide the
+      // Boneyard nodes can be opened explicitly, but they cannot provide the
       // coordinator workspace data shown on Overview, Movies, and TV.
       selectedNode = null;
       selectedNodeDetails = null;

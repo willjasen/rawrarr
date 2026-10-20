@@ -19,14 +19,14 @@ async function post(path, body) {
     body: JSON.stringify(body),
   });
   if (!response.ok) {
-    if (response.status === 410) throw new Error('This link expired or was already used. Start again from your signed-in metadata node.');
-    throw new Error('Could not add a passkey. Return to your metadata node and try again.');
+    if (response.status === 410) throw new Error('This link expired or was already used. Start again from your signed-in fossil node.');
+    throw new Error('Could not add a passkey. Return to your fossil node and try again.');
   }
   return response.json();
 }
 
 async function preparePasskey() {
-  if (!/^[0-9a-f]{64}$/i.test(token)) throw new Error('The one-time link is missing or invalid. Start again from your signed-in metadata node.');
+  if (!/^[0-9a-f]{64}$/i.test(token)) throw new Error('The one-time link is missing or invalid. Start again from your signed-in fossil node.');
   if (!window.PublicKeyCredential || !navigator.credentials) throw new Error('This browser does not support passkeys.');
   registration = await post('/api/passkeys/coordinator/register/start', { token });
   message.textContent = 'Your secure link is ready. Select Create roarlay passkey, then follow your browser’s passkey prompt.';
@@ -49,7 +49,7 @@ async function addPasskey() {
     createButton.hidden = true;
     returnLink.hidden = false;
   } catch (error) {
-    message.textContent = error.message || 'Could not add a passkey. Start again from your signed-in metadata node.';
+    message.textContent = error.message || 'Could not add a passkey. Start again from your signed-in fossil node.';
     createButton.disabled = false;
   }
 }

@@ -31,7 +31,7 @@ services:
       RAWARR_APPROVED_NODES_FILE: /run/secrets/rawrarr_approved_nodes
       RAWARR_COORDINATOR_WEB_RP_ID: ${RAWARR_COORDINATOR_WEB_RP_ID:-rawrarr.risk-mermaid.ts.net}
       RAWARR_COORDINATOR_WEB_ORIGIN: ${RAWARR_COORDINATOR_WEB_ORIGIN:-https://rawrarr.risk-mermaid.ts.net}
-      RAWARR_NODE_RELAY_TARGETS: ${RAWARR_NODE_RELAY_TARGETS:-{"macbook-metadata":"http://metadata:8080","mac-mini-storage":"https://rawrarr-mini.risk-mermaid.ts.net"}}
+      RAWARR_NODE_RELAY_TARGETS: ${RAWARR_NODE_RELAY_TARGETS:-{"macbook-metadata":"http://fossil:8080","mac-mini-storage":"https://rawrarr-mini.risk-mermaid.ts.net"}}
       RAWARR_NODE_RELAY_SOCKS5_URL: ${RAWARR_NODE_RELAY_SOCKS5_URL:-socks5h://127.0.0.1:1055}
     secrets:
       - rawrarr_postgres_password
@@ -43,7 +43,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  metadata:
+  fossil:
     build:
       context: ./rust-arr
     image: rawrarr:local
