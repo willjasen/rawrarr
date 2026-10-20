@@ -22,7 +22,7 @@ services:
       RAWARR_DEVICE_ID: macbook-storage
       RAWARR_NODE_TOKEN_FILE: /data/node-token
       RAWARR_NODE_ENROLLMENT_ENABLED: "true"
-      RAWARR_STORAGE_SCAN_INTERVAL_SECONDS: "86400"
+      RAWARR_STORAGE_SCAN_TIMEZONE: ${RAWARR_STORAGE_SCAN_TIMEZONE:-UTC}
       RAWARR_LOCAL_PLAINTEXT_CONFIG: "false"
       RAWARR_SYNCTHING_API_URL: http://rawrarr-local-syncthing-1:8384
       RAWARR_SYNCTHING_API_KEY_FILE: /run/secrets/rawrarr_syncthing_api_key

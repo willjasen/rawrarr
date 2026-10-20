@@ -61,6 +61,12 @@
     .device-delete-button:hover,.reject-button:hover { border-color:#ff9999; background:#392323 }
     .storage-scan-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px }
     .storage-scan-status { display:block; color:var(--muted); margin-top:8px; font-size:12px }
+    .storage-scan-schedule { display:grid; grid-template-columns:repeat(auto-fit,minmax(115px,1fr)); gap:8px; margin-top:14px; padding-top:12px; border-top:1px solid var(--line) }
+    .storage-scan-schedule label { display:grid; gap:5px; color:var(--muted); font-size:12px }
+    .storage-scan-schedule select,.storage-scan-schedule input { min-width:0; padding:7px 9px; border:1px solid var(--line); border-radius:7px; background:var(--bg); color:var(--text); font:inherit }
+    .storage-scan-schedule-summary,.storage-scan-schedule-timezone { grid-column:1/-1; color:var(--muted); font-size:12px; margin:0 }
+    .storage-scan-schedule-actions { display:flex; align-items:end }
+    .storage-scan-schedule-actions button { width:100% }
     .storage-scan-progress { height:6px; overflow:hidden; margin-top:8px; border-radius:999px; background:var(--line) }
     .storage-scan-progress[hidden] { display:none }
     .storage-scan-progress-indicator { width:38%; height:100%; border-radius:inherit; background:var(--green); animation:storage-scan-progress 1.25s ease-in-out infinite alternate }
