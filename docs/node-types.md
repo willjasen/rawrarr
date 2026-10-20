@@ -4,6 +4,12 @@
 
 The implemented roles are identified internally as `coordinator`, `storage`, and `metadata`. Their user-facing names are **roarlay** (coordinator), **boneyard** (storage), and **fossil** (metadata). The names do not change capabilities: roarlay handles central authentication, passkey persistence, and node coordination; fossil and boneyard nodes both run the subscriber UI and shared app-data functionality, while boneyard nodes also have read-only local media access and scanning. Metadata replaces shard, and subscriber describes ownership rather than a container type. The former service role is retired. Compose services and generated containers use `roarlay`, `fossil`, and `boneyard` for these roles. Rust `RAWARR_ROLE` values, database role values, API route paths, and stable node IDs remain `coordinator`, `storage`, and `metadata` for compatibility.
 
+## Dino deployments
+
+A **dino** is a Rawrarr node deployed by a user. It describes the user's deployed node, not an additional capability or internal role. A dino may run a **fossil** metadata node and may also run exactly one media role: either a **boneyard** storage node with access to its local media, or a **tarpit** encrypted-media node. A dino must not run both boneyard and tarpit roles. The tarpit combination is planned only; tarpit is not implemented.
+
+Roarlay remains the coordinator role; these dino combinations describe the fossil and media roles and do not change coordinator behavior.
+
 See [container deployment](container-deployment.md) for the authoritative capability matrix, startup behavior, trust limitations, local migration, and Mac mini setup. The coordinator is the established central control plane. The MacBook fossil node is its seeded first participant; later fossil and boneyard nodes join that coordinator. No subscriber role connects directly to PostgreSQL.
 
 ## Planned tarpit nodes
