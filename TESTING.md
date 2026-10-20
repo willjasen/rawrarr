@@ -48,6 +48,10 @@ python3 scripts/tests/run_rawrarr_tests_in_docker.py --rebuild-base
 
 By default, completed containers are retained so their output can be reviewed later. The base image remains tagged `rawrarr-testing-base:local`; source changes never rebuild it, and runner containers do not download dependencies. The first base build does need network access to fetch OS packages, the age release archive, and locked Cargo crates. Test execution itself has networking disabled.
 
+## GitHub Actions
+
+The `Tests` workflow runs on pull requests, pushes to `main`, and manual dispatch. It builds the same isolated test image from `scripts/tests/Dockerfile`, mounts the checked-out source into `/workspace`, and runs `scripts/tests/run-tests-in-container.sh` with container networking disabled. The workflow covers the Node.js, Playwright/Chromium, and Rust suites; Python database-backed and Docker/OrbStack integrations remain separate because they require disposable external fixtures.
+
 The container summary reports when test execution started and stopped, plus elapsed seconds. On each normal invocation, the runner checks a local timestamp under `~/Library/Application Support/Rawrarr/`; if cleanup is due, it removes only stopped `tests-*` containers in `rawrarr-testing` that are older than one hour. Preview candidates at any time with `python3 scripts/tests/run_rawrarr_tests_in_docker.py --cleanup-dry-run`; this does not update the cleanup timestamp or remove containers.
 
 ## Inspect a run

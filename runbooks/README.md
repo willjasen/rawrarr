@@ -1,3 +1,5 @@
+- [GitHub Actions test workflow](2026-10-20-github-actions-tests.md) — Run the Node.js, browser, and Rust suites automatically on pull requests and main-branch pushes.
+
 - [Implement the metadata-node Redis artwork cache](2026-10-18-implement-metadata-redis-cache.md) — Cache encrypted movie and TV artwork in optional node-local Redis with shared-file fallback.
 - [Fix large TV artwork pipe deadlocks](2026-10-18-fix-large-tv-artwork-pipe.md) — Drain age subprocess output concurrently with large artwork input so poster requests do not hang.
 - [Update Mac mini Rawrarr containers](2026-10-18-update-mac-mini-containers.md) — Refresh the Mac mini storage image and relay proxies, verifying all preserved mounts and routes.

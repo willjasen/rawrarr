@@ -1,0 +1,35 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Node, browser, and Rust tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build isolated test image
+        run: docker build --file scripts/tests/Dockerfile --tag rawrarr-testing-base:ci .
+
+      - name: Run tests without network access
+        run: >-
+          docker run --rm --network none
+          --volume "$GITHUB_WORKSPACE:/workspace"
+          --workdir /workspace
+          rawrarr-testing-base:ci
+          sh scripts/tests/run-tests-in-container.sh
