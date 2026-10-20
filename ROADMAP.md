@@ -49,6 +49,7 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 
 ### Private access, operator service, and relay
 
+- Continue the private operator admin console from the sample-data preview: add server-enforced admin login/authorization before connecting production accounts, keep it in a separate container reachable only through localhost or Tailscale (never a public route), then add least-privilege live account reporting. Trial and subscription metrics must wait for implemented, authoritative billing state; do not infer them from account age.
 - Cloudflare/reverse-proxy support for the intended public hostname, including verified SSE streaming behavior.
 - Productionize the existing local Tailscale sidecars and tailnet-scoped routes while keeping transport separate from Rawrarr authorization and age-key access.
 - Operator service node running SwarmSail/Headscale account coordination, with a one-time, revocable node claim flow.
