@@ -3,6 +3,7 @@
 - [Container deployment](container-deployment.md) — implemented roarlay (coordinator), apex (storage), and metadata roles and Mac mini setup.
 - [Security](SECURITY.md) — trust boundaries, age encryption, browser-to-node encrypted transport through the coordinator, authentication, storage, and current limitations.
 - [Production deployment plan](production-deployment-plan.md) — start with coordinator-local PostgreSQL, production launch requirements, and a future managed-database migration path.
+- [Admin console](admin-console.md) — private, separate-container dashboard preview, network boundaries, and the authentication gate required before live account data.
 
 Start here for the current project state and everyday use:
 

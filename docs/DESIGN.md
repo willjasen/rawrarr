@@ -29,6 +29,8 @@ The signed-in profile picture uses a SHA-256 digest of the public age recipient 
 
 Before sign-in, the coordinator root route shows a public landing page that introduces Rawrarr, its current Radarr/Sonarr and device roles, and the passkey sign-in path. Keep the page useful without an account, responsive, and explicit that Rawrarr is under active development. Explain privacy goals alongside the coordinator's visible operational metadata and the current limits of unverified content flows. Do not present design goals as a completed security audit or imply that future general file-sharing and subscription features are already available.
 
+The operator admin console is a separate, private service, not a coordinator page or public product route. Its first preview uses unmistakably labeled sample data and has no connection to production accounts. Localhost and Tailscale reachability are network boundaries, not a substitute for the planned administrator login; require server-enforced admin authorization before showing live user data. See the [admin console architecture](admin-console.md).
+
 1. Check PostgreSQL for an existing passkey account. If one exists, show only **Sign in with passkey** and use the stored account identity. If none exists, then ask for the user's name and offer **Create passkey**; derive the internal username from that name.
 2. After a first passkey is registered, take the user to the age setup screen before the main app.
 3. Let the user create a new age identity or paste an existing one into a masked field. Explain that the identity protects shared configuration and metadata. Keep copy confirmation distinct from unlocking the encrypted vault.

@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>rawrarr admin preview</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Admin navigation">
+      <a class="brand" href="#overview" aria-label="rawrarr admin preview home">
+        <span class="brand-mark" aria-hidden="true">r</span>
+        <span><strong>rawrarr</strong><small>operator console</small></span>
+      </a>
+      <div class="nav-label">Workspace</div>
+      <nav>
+        <a class="nav-link active" href="#overview"><span aria-hidden="true">◫</span>Overview</a>
+        <a class="nav-link" href="#users"><span aria-hidden="true">♙</span>Users</a>
+        <a class="nav-link" href="#subscriptions"><span aria-hidden="true">◇</span>Subscriptions</a>
+        <a class="nav-link" href="#operations"><span aria-hidden="true">⌁</span>Operations</a>
+      </nav>
+      <div class="sidebar-foot">
+        <span class="lock-icon" aria-hidden="true">⌑</span>
+        <span><strong>Private access</strong><small>Localhost · Tailscale</small></span>
+      </div>
+    </aside>
+
+    <main id="overview">
+      <header class="topbar">
+        <div class="crumb">Administration <span>/</span> Overview</div>
+        <div class="topbar-right"><span class="preview-pill"><i></i> Preview</span><span class="avatar" aria-label="Operator">W</span></div>
+      </header>
+
+      <div class="content">
+        <section class="intro">
+          <div>
+            <p class="eyebrow">OPERATOR CONSOLE</p>
+            <h1>Good morning, Will</h1>
+            <p class="intro-copy">A clear view of accounts and subscriptions across rawrarr.</p>
+          </div>
+          <div class="snapshot"><span class="snapshot-dot"></span><span>Sample snapshot</span><strong>Oct 20, 2026</strong></div>
+        </section>
+
+        <section class="preview-notice" role="note" aria-label="Preview data notice">
+          <span class="notice-icon" aria-hidden="true">i</span>
+          <p><strong>Preview only — no live production data.</strong> Everything on this page is sample data. Admin sign-in and live account reporting are planned before connecting production data.</p>
+          <span class="notice-tag">SAMPLE DATA</span>
+        </section>
+
+        <section class="metrics" aria-label="Account summary">
+          <article class="metric-card">
+            <div class="metric-top"><span>Total accounts</span><span class="metric-icon green">♙</span></div>
+            <div class="metric-value">1,284</div><div class="metric-foot"><span class="up">↗ 8.2%</span> <span>vs. last month</span></div>
+            <div class="sparkline" aria-hidden="true"><i class="h-30"></i><i class="h-45"></i><i class="h-37"></i><i class="h-57"></i><i class="h-49"></i><i class="h-72"></i><i class="h-66"></i><i class="h-88"></i><i class="h-77"></i><i class="h-100"></i></div>
+          </article>
+          <article class="metric-card">
+            <div class="metric-top"><span>Active trials</span><span class="metric-icon amber">◷</span></div>
+            <div class="metric-value">32</div><div class="metric-foot"><span class="neutral">8 ending soon</span> <span>in the next 7 days</span></div>
+            <div class="progress-track" aria-label="8 of 32 trials ending soon"><span class="progress-quarter"></span></div>
+          </article>
+          <article class="metric-card">
+            <div class="metric-top"><span>Subscribers</span><span class="metric-icon blue">◇</span></div>
+            <div class="metric-value">964</div><div class="metric-foot"><span class="up">↗ 5.4%</span> <span>vs. last month</span></div>
+            <div class="mini-bars" aria-hidden="true"><i class="h-38"></i><i class="h-48"></i><i class="h-42"></i><i class="h-62"></i><i class="h-57"></i><i class="h-74"></i><i class="h-69"></i><i class="h-88"></i><i class="h-79"></i><i class="h-100"></i></div>
+          </article>
+          <article class="metric-card">
+            <div class="metric-top"><span>Needs attention</span><span class="metric-icon red">!</span></div>
+            <div class="metric-value">14</div><div class="metric-foot"><span class="red-text">6 payment issues</span> <span>· 8 trials ending</span></div>
+            <a class="text-link" href="#subscriptions">Review accounts <span aria-hidden="true">→</span></a>
+          </article>
+        </section>
+
+        <section class="dashboard-grid" aria-label="Account trends">
+          <article class="panel signup-panel">
+            <div class="panel-heading"><div><h2>Account growth</h2><p>New accounts over time</p></div><select aria-label="Growth chart period"><option>Last 12 months</option><option>Last 30 days</option></select></div>
+            <div class="chart-wrap">
+              <div class="chart-y" aria-hidden="true"><span>160</span><span>120</span><span>80</span><span>40</span><span>0</span></div>
+              <div class="chart">
+                <div class="chart-grid" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+                <svg viewBox="0 0 720 220" preserveAspectRatio="none" role="img" aria-label="Sample monthly account growth increasing from 48 to 142 accounts">
+                  <defs><linearGradient id="fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#94d3a2" stop-opacity=".28"/><stop offset="1" stop-color="#94d3a2" stop-opacity="0"/></linearGradient></defs>
+                  <path class="chart-area" d="M0 157 C38 150 40 130 72 138 S112 142 137 119 S181 127 203 104 S250 117 268 92 S307 107 334 82 S371 92 400 69 S440 80 466 58 S505 76 530 49 S572 61 598 35 S639 51 664 27 S695 32 720 12 L720 220 L0 220Z"/>
+                  <path class="chart-line" d="M0 157 C38 150 40 130 72 138 S112 142 137 119 S181 127 203 104 S250 117 268 92 S307 107 334 82 S371 92 400 69 S440 80 466 58 S505 76 530 49 S572 61 598 35 S639 51 664 27 S695 32 720 12"/>
+                </svg>
+                <div class="chart-x" aria-hidden="true"><span>Nov</span><span>Dec</span><span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span></div>
+              </div>
+            </div>
+          </article>
+          <article class="panel status-panel">
+            <div class="panel-heading"><div><h2>Account status</h2><p>Current account mix</p></div><button class="icon-button" type="button" aria-label="More account status options">···</button></div>
+            <div class="status-chart">
+              <div class="donut" role="img" aria-label="Sample account mix: 75 percent subscribed, 18 percent trial or expired, 7 percent other"><div><strong>1,284</strong><span>accounts</span></div></div>
+              <div class="legend">
+                <div><i class="legend-swatch subscribed"></i><span>Subscribed</span><strong>964 <small>75%</small></strong></div>
+                <div><i class="legend-swatch trial"></i><span>In trial</span><strong>32 <small>3%</small></strong></div>
+                <div><i class="legend-swatch expired"></i><span>Trial ended</span><strong>205 <small>16%</small></strong></div>
+                <div><i class="legend-swatch other"></i><span>Other</span><strong>83 <small>6%</small></strong></div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="panel users-panel" id="users">
+          <div class="panel-heading users-heading">
+            <div><h2>Recent accounts</h2><p>A sample of recently created accounts</p></div>
+            <div class="table-actions"><label class="search"><span aria-hidden="true">⌕</span><input id="user-search" type="search" placeholder="Search accounts" autocomplete="off"></label><select id="status-filter" aria-label="Filter accounts by status"><option value="all">All statuses</option><option value="Subscribed">Subscribed</option><option value="Trial">Trial</option><option value="Trial ended">Trial ended</option><option value="Payment issue">Payment issue</option></select><a class="secondary-button" href="#users">View all <span aria-hidden="true">→</span></a></div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Account</th><th scope="col">Created</th><th scope="col">Status</th><th scope="col">Plan</th><th scope="col">Next date</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+              <tbody id="user-rows"></tbody>
+            </table>
+            <p class="empty-state" id="empty-state" hidden>No sample accounts match those filters.</p>
+          </div>
+          <div class="table-footer"><span id="result-count" aria-live="polite"></span><div><button type="button" class="page-button" disabled aria-label="Previous page">←</button><span class="page-current">1</span><button type="button" class="page-button" disabled aria-label="Next page">→</button></div></div>
+        </section>
+
+        <section class="lower-grid">
+          <article class="panel" id="subscriptions">
+            <div class="panel-heading"><div><h2>Subscription snapshot</h2><p>Sample billing overview</p></div><span class="soft-tag">PREVIEW</span></div>
+            <div class="subscription-items"><div><span class="sub-icon green">↗</span><span><strong>Monthly recurring</strong><small>Illustrative monthly plans</small></span><b>$12,840</b></div><div><span class="sub-icon blue">↻</span><span><strong>Annual recurring</strong><small>Illustrative annual plans</small></span><b>$38,400</b></div><div><span class="sub-icon amber">◷</span><span><strong>Renewals this week</strong><small>Sample upcoming renewals</small></span><b>27</b></div></div>
+          </article>
+          <article class="panel" id="operations">
+            <div class="panel-heading"><div><h2>Operations</h2><p>Service health preview</p></div><span class="health-pill"><i></i> All systems normal</span></div>
+            <div class="operation-list"><div><span class="operation-dot green-dot"></span><span><strong>Account service</strong><small>Sample status · operational</small></span><time>Now</time></div><div><span class="operation-dot green-dot"></span><span><strong>Database</strong><small>Sample status · operational</small></span><time>Now</time></div><div><span class="operation-dot amber-dot"></span><span><strong>Billing events</strong><small>Integration planned</small></span><time>Planned</time></div></div>
+          </article>
+        </section>
+        <footer>rawrarr admin preview <span>·</span> <strong>Sample information only</strong> <span>·</span> Admin authentication planned before live account data</footer>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

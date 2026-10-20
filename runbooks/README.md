@@ -20,6 +20,7 @@
 
 # Rawrarr runbooks
 
+- [Admin console preview](2026-10-20-admin-console-preview.md) — Add a private, sample-data-only admin dashboard container with a loopback port and Tailscale-only access plan.
 - [Headscale container client staging](2026-10-18-headscale-container-client-staging.md) — Add isolated Docker Tailscale clients on both Macs to Headscale through the Caddy coordinator route, preserving current app sidecars during the transition.
 
 - [Subscriber node onboarding on roarlay](2026-10-18-subscriber-node-onboarding.md) — Guide passkey owners through local age/root backup and offer subscriber-only Compose deployment instructions.

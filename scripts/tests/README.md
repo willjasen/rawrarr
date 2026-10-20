@@ -3,6 +3,7 @@
 - `test_rawrarr_coordinator_arr_links.mjs` — checks the coordinator's encrypted Radarr slug flow, direct metadata route, browser-only reachability gate, and year-cell icon wiring for Movies and TV. Run with `node --test scripts/tests/test_rawrarr_coordinator_arr_links.mjs`.
 # Rawrarr tests
 
+- `test_rawrarr_admin_preview.mjs` — checks sample-only admin content, local-only port publishing, absence of a production data connection, and planned authentication before live reporting. Run with `node --test scripts/tests/test_rawrarr_admin_preview.mjs`.
 - `test_rawrarr_subscriber_compose.mjs` — Validates subscriber-only metadata/apex Compose output, local mounts, secret exclusion, and rejection of coordinator role; run with `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
 - `test_rawrarr_subscriber_onboarding_browser.mjs` — Chromium checks local age/root creation, backup gates, private-key display boundaries, and subscriber-only role choices; run in the isolated test image.
 
