@@ -69,6 +69,7 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 - Sonarr posters/artwork, snapshots, metadata lookup, and episode mutations; Lidarr, Readarr, and Bazarr integrations; Prowlarr-style indexer management and search; concrete download-client adapters and fulfillment. The current download-client abstraction has no concrete adapter.
 - Manual age-encrypted shared-folder backup to one node-local destination, including recovery verification and a retention policy.
 - Device signing, approval, signed shared configuration, and revocation/revision checks.
+- Replace the Mac mini's generated device-ID display alias with a randomly selected, scientifically recognized non-avian dinosaur species name from a vetted, substantial taxonomy list. Exclude candidates whose genus or species epithet matches any word in the owner's current profile name, ignoring case and punctuation; if no candidate remains, ask rather than weaken the exclusion. Change only the alias in the existing age-encrypted device-name config, preserving the stable device ID and verifying the UI still identifies the same node.
 - Static logo animation for selected moments, with reduced-motion behavior.
 
 ## Related documentation
