@@ -13,6 +13,9 @@ Keep Radarr recoverable from the Rawrarr shared folder so the owner can deploy a
 ## Implementation
 
 - Added the Radarr `Backup` command, status polling, manual backup listing, bounded archive download, and age-encrypted shared persistence to the non-coordinator Radarr worker.
+- Added optional Radarr UI credentials to the encrypted shared service config so the worker can download backup ZIPs protected by Radarr forms or HTTP Basic authentication. Credentials are sent only to the configured HTTPS origin; redirects are disabled and no secret is put in a URL.
+- Exposed the optional login fields in both Radarr settings forms. The settings read response reveals only whether a login is configured; leaving both fields blank preserves it, while clearing the Radarr connection removes it.
+- Kept the UI login out of the optional node-local plaintext mirror and out of the API settings response.
 - Triggered a fresh attempt after unlocking the age vault or saving Radarr settings. The worker retries on its six-hour cadence and logs generic errors without upstream response bodies or credentials.
 - Added `scripts/restore_radarr.py` for an owner-driven restore on the selected node. It limits the archive to 512 MiB, rejects unsafe ZIP paths/symlinks and oversized archives, allows HTTP only for loopback, and avoids putting API keys or identity contents in process arguments.
 - Documented the data path, secret boundary, and manual deployment/restore steps in the user guide and data/security documentation.
@@ -23,13 +26,15 @@ Keep Radarr recoverable from the Rawrarr shared folder so the owner can deploy a
 - `python3 -m py_compile scripts/restore_radarr.py scripts/tests/test_rawrarr_radarr_recovery.py`
 - `cargo test --locked --offline --manifest-path rust-arr/Cargo.toml radarr_backup_tests` was attempted on the host but rustc could not start because its LLVM dependency `libz3.5.1.dylib` is missing.
 - The rebuilt isolated container compiled the Rust test binary and ran the Radarr backup tests successfully. The wider Rust suite reported 59 passed and 5 failures in coordinator-route, avatar-tooling, and quality-profile tests. Its Playwright test passed; the Node suite had multiple existing UI/backfill failures; Python integration tests were skipped by the container.
+- After adding optional UI authentication, all seven recovery Python tests passed; the four-case coordinator Radarr/Sonarr settings browser test passed in the isolated test image. Focused Rust tests passed for the form-login download/redirect boundary, cookie extraction, credential-pair validation, encrypted config round-trip and plaintext-mirror exclusion, schema migration, and Radarr/Sonarr config isolation.
+- The current isolated test image lacks the `rustfmt` component; the host formatter cannot load because LLVM's `libz3.5.1.dylib` is missing. The complete Rust/Node suites were not rerun after this focused change; the earlier suite had unrelated failures recorded above.
 - `git diff --check`
 
 The local `rawrarr-local` metadata container was rebuilt from this branch and reached healthy status. The loopback app health check passed, the Tailscale Serve route still sent `/` to roarlay and `/direct-api` to the subscriber, and the HTTPS coordinator health check succeeded. The local coordinator rejected the metadata node's registration; its approved-node registry and database are currently owned by another deployment configuration, so they were not changed.
 
-A live Radarr API status check succeeded for version 6.4.4.10685, and Rawrarr issued a native manual backup command. The advertised ZIP path redirected to `/login` despite the API-key header, and Radarr exposes no authenticated ZIP download API in the tested endpoints. Therefore Rawrarr did not store a recovery ciphertext, the restore helper was not run against a real target, and no Radarr container was deployed. Capturing backups from Radarr installations with UI authentication needs a safe authenticated download design; do not place the API key in the download URL.
+A live Radarr API status check succeeded for version 6.4.4.10685, and Rawrarr issued a native manual backup command. The advertised ZIP path redirected to `/login` despite the API-key header. Optional UI credential handling has now been added, but the live authenticated archive capture and restore still require the owner to enter the credentials in the local Radarr settings form and rerun the recovery test.
 
-The focused Python tests use synthetic archives and a local HTTP fixture. The live check uncovered the static-download authentication limitation, so a full live recovery remains unverified.
+The focused Python and Rust tests use synthetic archives and a local HTTP fixture. The live check established that the login-protected ZIP path is the remaining prerequisite for full recovery verification; do not place the API key or UI credentials in the download URL.
 
 ## Operational notes
 

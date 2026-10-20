@@ -499,7 +499,7 @@ removeAgeIdButton.addEventListener('click', () => {
 
 const configurationStatus = document.getElementById('configuration-status');
 const configurationJson = document.getElementById('configuration-json');
-const secretConfigKey = /apikey|key|token|secret|password|privatekey|credential|authorization|auth|passphrase/i;
+const secretConfigKey = /apikey|key|token|secret|password|username|privatekey|credential|authorization|auth|passphrase/i;
 function redactConfigSecrets(value) {
   if (Array.isArray(value)) return value.map(redactConfigSecrets);
   if (!value || typeof value !== 'object') return value;
@@ -635,8 +635,8 @@ async function unlockMetadataVaultForSettings() {
 const arrSettings = {
   radarr: {
     copies: [
-      { url: 'radarr-url', key: 'radarr-key', form: 'radarr-settings', note: 'radarr-key-note', message: 'radarr-settings-message', button: 'save-radarr', clear: 'clear-radarr', nodeNote: 'radarr-node-note' },
-      { url: 'settings-radarr-url', key: 'settings-radarr-key', form: 'settings-radarr-settings', note: 'settings-radarr-key-note', message: 'settings-radarr-settings-message', button: 'settings-save-radarr', clear: 'settings-clear-radarr', nodeNote: 'settings-radarr-node-note' },
+      { url: 'radarr-url', key: 'radarr-key', uiUsername: 'radarr-ui-username', uiPassword: 'radarr-ui-password', uiNote: 'radarr-ui-auth-note', form: 'radarr-settings', note: 'radarr-key-note', message: 'radarr-settings-message', button: 'save-radarr', clear: 'clear-radarr', nodeNote: 'radarr-node-note' },
+      { url: 'settings-radarr-url', key: 'settings-radarr-key', uiUsername: 'settings-radarr-ui-username', uiPassword: 'settings-radarr-ui-password', uiNote: 'settings-radarr-ui-auth-note', form: 'settings-radarr-settings', note: 'settings-radarr-key-note', message: 'settings-radarr-settings-message', button: 'settings-save-radarr', clear: 'settings-clear-radarr', nodeNote: 'settings-radarr-node-note' },
     ],
     mediaCard: 'radarr-connection-card', saved: 'settings-radarr-saved', savedUrl: 'settings-radarr-saved-url', endpoint: '/settings/radarr', label: 'Radarr',
   },
@@ -670,7 +670,14 @@ async function loadArrSettings(service) {
       document.getElementById(copy.note).textContent = settings.configured
         ? 'Leave blank to keep the saved API key.'
         : 'Required for the first encrypted save.';
-      document.getElementById(copy.nodeNote).textContent = `Settings are sent directly to ${selectedNodeDetails.nodeId}; roarlay does not receive the API key.`;
+      if (service === 'radarr') {
+        document.getElementById(copy.uiUsername).value = '';
+        document.getElementById(copy.uiPassword).value = '';
+        document.getElementById(copy.uiNote).textContent = settings.hasUiAuth
+          ? 'Leave both blank to keep the encrypted login. Enter both to replace it; clear connection removes it.'
+          : 'Optional. Enter both only if Radarr requires a UI login to download backups; saved in the age-encrypted config.';
+      }
+      document.getElementById(copy.nodeNote).textContent = `Settings are sent directly to ${selectedNodeDetails.nodeId}; roarlay does not receive the ${service === 'radarr' ? 'API key or UI login' : 'API key'}.`;
       const message = document.getElementById(copy.message);
       message.textContent = settings.configured ? `Saved ${fields.label} settings loaded from the age-encrypted config.` : `Enter your ${fields.label} HTTPS URL and API key.`;
       message.dataset.state = '';
@@ -721,9 +728,22 @@ for (const [service, fields] of Object.entries(arrSettings)) {
         await unlockMetadataVaultForSettings();
         await arrDirectRequest(fields.endpoint, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: document.getElementById(copy.url).value, apiKey: document.getElementById(copy.key).value }),
+          body: JSON.stringify({
+            url: document.getElementById(copy.url).value,
+            apiKey: document.getElementById(copy.key).value,
+            ...(service === 'radarr' ? {
+              uiUsername: document.getElementById(copy.uiUsername).value,
+              uiPassword: document.getElementById(copy.uiPassword).value,
+            } : {}),
+          }),
         });
-        for (const peer of fields.copies) document.getElementById(peer.key).value = '';
+        for (const peer of fields.copies) {
+          document.getElementById(peer.key).value = '';
+          if (service === 'radarr') {
+            document.getElementById(peer.uiUsername).value = '';
+            document.getElementById(peer.uiPassword).value = '';
+          }
+        }
         await loadArrSettings(service);
         message.textContent = `Connected to ${fields.label}. Settings saved encrypted.`;
       } catch (error) {
@@ -741,6 +761,11 @@ for (const [service, fields] of Object.entries(arrSettings)) {
         for (const peer of fields.copies) {
           document.getElementById(peer.url).value = '';
           document.getElementById(peer.key).value = '';
+          if (service === 'radarr') {
+            document.getElementById(peer.uiUsername).value = '';
+            document.getElementById(peer.uiPassword).value = '';
+            document.getElementById(peer.uiNote).textContent = 'Optional. Enter both only if Radarr requires a UI login to download backups; saved in the age-encrypted config.';
+          }
           document.getElementById(peer.key).required = true;
           document.getElementById(peer.note).textContent = 'Required for the first encrypted save.';
           document.getElementById(peer.message).dataset.state = '';

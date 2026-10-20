@@ -77,6 +77,8 @@ Movie text records are stored at `/shared/metadata/movies/text/` and encrypted a
 
 When a Radarr connection is configured and the age vault is unlocked, Rawrarr asks Radarr to create a native backup on startup and every six hours. It age-encrypts the latest backup to `/shared/metadata/radarr/recovery.zip.aged`; Syncthing replicates that ciphertext to the other approved nodes. The archive contains Radarr's database and settings, including any credentials stored by Radarr. Rawrarr's scraped movie metadata and artwork are already stored separately in the shared, age-encrypted `movies/text/` and `movies/artwork/` folders, and remain available independently of the Radarr restore. If capture fails, the previous snapshot is retained and the failure is written to the node log.
 
+If Radarr requires a UI login to download its backup ZIP, enter both the optional UI username and password in the Radarr connection settings. They are sent directly to the selected metadata node and stored only inside the age-encrypted shared config; they are never shown again. Leave both blank to keep a saved login, or use **Clear connection** to remove it. These credentials are used only for the configured Radarr HTTPS origin when downloading backups.
+
 To restore, deploy a Radarr container yourself on the metadata or storage node you choose, wait for its shared folder to sync, then run the helper from a Rawrarr source checkout on a host with Python 3 and `age` installed:
 
 ```sh

@@ -39,6 +39,8 @@ pub struct PersistedConfig {
     pub sonarr: Option<ArrConnection>,
     pub radarr_url: String,
     pub radarr_api_key: String,
+    pub radarr_ui_username: String,
+    pub radarr_ui_password: String,
     pub additional_services: Vec<ServiceConfig>,
     pub(crate) needs_migration: bool,
     /// Reserved exclusively for opaque metadata filename derivation; never an encryption/auth key.
@@ -51,9 +53,17 @@ pub struct ServiceConfig {
     pub service_type: String,
     pub url: String,
     pub api_key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ui_username: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ui_password: Option<String>,
 }
 impl Drop for ServiceConfig {
-    fn drop(&mut self) { self.api_key.zeroize(); }
+    fn drop(&mut self) {
+        self.api_key.zeroize();
+        self.ui_username.zeroize();
+        self.ui_password.zeroize();
+    }
 }
 
 #[derive(Deserialize, Default)]
@@ -87,12 +97,19 @@ impl<'de> Deserialize<'de> for PersistedConfig {
             && wire.sonarr.is_none();
         let mut radarr_url = wire.radarr_url;
         let mut radarr_api_key = wire.radarr_api_key;
+        let mut radarr_ui_username = String::new();
+        let mut radarr_ui_password = String::new();
         let mut sonarr = wire.sonarr;
         let mut additional_services = Vec::new();
         if let Some(services) = wire.services {
             for service in services {
                 match service.service_type.as_str() {
-                    "radarr" => { radarr_url = service.url.clone(); radarr_api_key = service.api_key.clone(); }
+                    "radarr" => {
+                        radarr_url = service.url.clone();
+                        radarr_api_key = service.api_key.clone();
+                        radarr_ui_username = service.ui_username.clone().unwrap_or_default();
+                        radarr_ui_password = service.ui_password.clone().unwrap_or_default();
+                    }
                     "sonarr" => { sonarr = Some(ArrConnection { url: service.url.clone(), api_key: service.api_key.clone() }); }
                     _ => additional_services.push(service),
                 }
@@ -103,6 +120,8 @@ impl<'de> Deserialize<'de> for PersistedConfig {
             sonarr,
             radarr_url,
             radarr_api_key,
+            radarr_ui_username,
+            radarr_ui_password,
             additional_services,
             needs_migration: !canonical,
             metadata_filename_key: wire.metadata_filename_key,
@@ -120,16 +139,36 @@ impl Serialize for PersistedConfig {
             service_type: &'a str,
             url: &'a str,
             api_key: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            ui_username: Option<&'a str>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            ui_password: Option<&'a str>,
         }
         let mut services = Vec::new();
         if !self.radarr_url.is_empty() || !self.radarr_api_key.is_empty() {
-            services.push(ServiceRef { service_type: "radarr", url: &self.radarr_url, api_key: &self.radarr_api_key });
+            services.push(ServiceRef {
+                service_type: "radarr",
+                url: &self.radarr_url,
+                api_key: &self.radarr_api_key,
+                ui_username: (!self.radarr_ui_username.is_empty()).then_some(&self.radarr_ui_username),
+                ui_password: (!self.radarr_ui_password.is_empty()).then_some(&self.radarr_ui_password),
+            });
         }
         if let Some(sonarr) = &self.sonarr {
-            services.push(ServiceRef { service_type: "sonarr", url: &sonarr.url, api_key: &sonarr.api_key });
+            services.push(ServiceRef {
+                service_type: "sonarr",
+                url: &sonarr.url,
+                api_key: &sonarr.api_key,
+                ui_username: None,
+                ui_password: None,
+            });
         }
         services.extend(self.additional_services.iter().map(|service| ServiceRef {
-            service_type: &service.service_type, url: &service.url, api_key: &service.api_key,
+            service_type: &service.service_type,
+            url: &service.url,
+            api_key: &service.api_key,
+            ui_username: service.ui_username.as_deref(),
+            ui_password: service.ui_password.as_deref(),
         }));
         let mut state = serializer.serialize_struct("PersistedConfig", 4)?;
         state.serialize_field("schema_version", &1u32)?;
@@ -162,6 +201,8 @@ impl Drop for PersistedConfig {
     fn drop(&mut self) {
         self.radarr_url.zeroize();
         self.radarr_api_key.zeroize();
+        self.radarr_ui_username.zeroize();
+        self.radarr_ui_password.zeroize();
         self.metadata_filename_key.zeroize();
         for service in &mut self.additional_services { service.api_key.zeroize(); }
     }
@@ -871,6 +912,8 @@ impl AgeVault {
             sonarr: existing.as_ref().and_then(|stored| stored.sonarr.clone()),
             radarr_url: config.radarr_url.clone(),
             radarr_api_key: config.radarr_api_key.clone(),
+            radarr_ui_username: config.radarr_ui_username.clone(),
+            radarr_ui_password: config.radarr_ui_password.clone(),
             metadata_filename_key: existing
                 .as_ref()
                 .and_then(|stored| stored.metadata_filename_key.clone())
@@ -947,6 +990,8 @@ impl AgeVault {
             device_names: std::collections::HashMap::new(),
             radarr_url: String::new(),
             radarr_api_key: String::new(),
+            radarr_ui_username: String::new(),
+            radarr_ui_password: String::new(),
             sonarr: None,
             metadata_filename_key: None,
             additional_services: Vec::new(),
@@ -967,6 +1012,10 @@ impl AgeVault {
             config.radarr_url.clear();
             config.radarr_api_key.zeroize();
             config.radarr_api_key.clear();
+            config.radarr_ui_username.zeroize();
+            config.radarr_ui_username.clear();
+            config.radarr_ui_password.zeroize();
+            config.radarr_ui_password.clear();
             self.write_config(&config)?;
         }
         remove_local_config(&self.local_config_path)
@@ -1676,6 +1725,8 @@ mod tests {
             sonarr: None,
             radarr_url: "http://radarr.example:7878".into(),
             radarr_api_key: "disposable encrypted config fixture".into(),
+            radarr_ui_username: "radarr-user-fixture".into(),
+            radarr_ui_password: "disposable radarr password fixture".into(),
             metadata_filename_key: None,
             additional_services: Vec::new(),
             needs_migration: false,
@@ -1690,7 +1741,23 @@ mod tests {
                 .windows(config.radarr_api_key.len())
                 .any(|window| window == config.radarr_api_key.as_bytes())
         );
+        assert!(
+            !encrypted_config
+                .windows(config.radarr_ui_username.len())
+                .any(|window| window == config.radarr_ui_username.as_bytes())
+        );
+        assert!(
+            !encrypted_config
+                .windows(config.radarr_ui_password.len())
+                .any(|window| window == config.radarr_ui_password.as_bytes())
+        );
         let local_config = fs::read(&local_config_path).expect("read node-local config mirror");
+        assert!(!local_config
+            .windows(config.radarr_ui_username.len())
+            .any(|window| window == config.radarr_ui_username.as_bytes()));
+        assert!(!local_config
+            .windows(config.radarr_ui_password.len())
+            .any(|window| window == config.radarr_ui_password.as_bytes()));
         assert_eq!(
             serde_json::from_slice::<PersistedConfig>(&local_config)
                 .expect("parse local config mirror")
@@ -1698,10 +1765,10 @@ mod tests {
             config.radarr_api_key
         );
         assert!(!shared_dir.join("radarr-config.json").exists());
-        assert_eq!(
-            vault.load().expect("decrypt config").unwrap().radarr_url,
-            config.radarr_url
-        );
+        let loaded = vault.load().expect("decrypt config").unwrap();
+        assert_eq!(loaded.radarr_url, config.radarr_url);
+        assert_eq!(loaded.radarr_ui_username, config.radarr_ui_username);
+        assert_eq!(loaded.radarr_ui_password, config.radarr_ui_password);
         assert!(vault.config_exists());
 
         let wrong_identity_output = Command::new("age-keygen")
@@ -1844,6 +1911,8 @@ mod tests {
         let cleared = vault.load().unwrap().unwrap();
         assert!(cleared.radarr_url.is_empty());
         assert!(cleared.radarr_api_key.is_empty());
+        assert!(cleared.radarr_ui_username.is_empty());
+        assert!(cleared.radarr_ui_password.is_empty());
         assert!(cleared.metadata_filename_key.is_some());
         assert!(!local_config_path.exists());
         fs::remove_dir_all(&data_dir).expect("remove isolated local data directory");

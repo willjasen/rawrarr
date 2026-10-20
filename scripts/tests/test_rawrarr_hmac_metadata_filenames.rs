@@ -13,6 +13,8 @@ fn movie_files_use_domain_separated_hmac_names_and_migrate_ciphertext() {
         sonarr: None,
         radarr_url: "https://radarr.example".into(),
         radarr_api_key: "fixture".into(),
+        radarr_ui_username: String::new(),
+        radarr_ui_password: String::new(),
         metadata_filename_key: None,
         additional_services: Vec::new(),
         needs_migration: false,

@@ -34,6 +34,40 @@ fn unsupported_config_schema_versions_are_rejected() {
 }
 
 #[test]
+fn encrypted_radarr_ui_credentials_round_trip_in_canonical_service_config() {
+    let config: PersistedConfig = serde_json::from_str(
+        r#"{
+          "schema_version":1,
+          "device_names":{},
+          "services":[
+            {
+              "type":"radarr",
+              "url":"https://radarr.example/",
+              "api_key":"fixture-api-key",
+              "ui_username":"fixture-ui-user",
+              "ui_password":"fixture-ui-password"
+            }
+          ],
+          "metadata_filename_key":null
+        }"#,
+    )
+    .unwrap();
+    assert!(!config.needs_migration);
+    assert_eq!(config.radarr_ui_username, "fixture-ui-user");
+    assert_eq!(config.radarr_ui_password, "fixture-ui-password");
+
+    let serialized = serde_json::to_value(&config).unwrap();
+    assert_eq!(
+        serialized["services"][0]["ui_username"],
+        "fixture-ui-user"
+    );
+    assert_eq!(
+        serialized["services"][0]["ui_password"],
+        "fixture-ui-password"
+    );
+}
+
+#[test]
 fn unlocking_legacy_ciphertext_rewrites_it_as_canonical_schema_v1() {
     let root = std::env::temp_dir().join(format!("rawrarr-config-migration-{}", uuid::Uuid::new_v4()));
     let shared = root.join("shared");

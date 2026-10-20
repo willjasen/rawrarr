@@ -37,7 +37,7 @@ use axum::{
 use aes_gcm::KeyInit;
 use p256::elliptic_curve::{rand_core::RngCore, sec1::ToEncodedPoint};
 use futures_util::Stream;
-use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
+use reqwest::header::{ACCEPT, CONTENT_TYPE, COOKIE, HeaderMap, HeaderValue, SET_COOKIE};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -87,6 +87,8 @@ struct ArrClient {
     movie_snapshot: movie_snapshot::Cache,
     base_url: String,
     api_key: HeaderValue,
+    ui_username: Option<Zeroizing<String>>,
+    ui_password: Option<Zeroizing<String>>,
     http: reqwest::Client,
 }
 
@@ -127,6 +129,8 @@ struct ApiError {
 struct RadarrSettingsRequest {
     url: String,
     api_key: Option<String>,
+    ui_username: Option<String>,
+    ui_password: Option<String>,
 }
 
 impl Drop for RadarrSettingsRequest {
@@ -134,15 +138,18 @@ impl Drop for RadarrSettingsRequest {
         if let Some(api_key) = &mut self.api_key {
             api_key.zeroize();
         }
+        self.ui_username.zeroize();
+        self.ui_password.zeroize();
     }
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct RadarrSettingsInfo {
+struct ArrSettingsInfo {
     configured: bool,
     url: Option<String>,
     persisted: bool,
+    has_ui_auth: bool,
 }
 
 #[derive(Serialize)]
@@ -175,6 +182,7 @@ struct SharedConfiguration {
 struct SharedRadarrConfig {
     url: String,
     api_key: &'static str,
+    has_ui_auth: bool,
 }
 
 #[derive(Serialize)]
@@ -257,6 +265,7 @@ impl Drop for GeneratedAgeIdentity {
 enum RadarrConfigError {
     InvalidUrl,
     InvalidApiKey,
+    InvalidUiCredentials,
 }
 
 impl std::fmt::Display for RadarrConfigError {
@@ -264,6 +273,7 @@ impl std::fmt::Display for RadarrConfigError {
         formatter.write_str(match self {
             Self::InvalidUrl => "Invalid Radarr URL",
             Self::InvalidApiKey => "Invalid Radarr API key",
+            Self::InvalidUiCredentials => "Invalid Radarr UI credentials",
         })
     }
 }
@@ -274,7 +284,15 @@ type RadarrClient = ArrClient;
 
 impl ArrClient {
     fn new(base_url: String, api_key: String) -> Result<Self, RadarrConfigError> {
-        let api_key = Zeroizing::new(api_key);
+        Self::new_with_ui_auth(base_url, Zeroizing::new(api_key), None, None)
+    }
+
+    fn new_with_ui_auth(
+        base_url: String,
+        api_key: Zeroizing<String>,
+        ui_username: Option<Zeroizing<String>>,
+        ui_password: Option<Zeroizing<String>>,
+    ) -> Result<Self, RadarrConfigError> {
         if base_url.trim().is_empty() || base_url.len() > 2048 {
             return Err(RadarrConfigError::InvalidUrl);
         }
@@ -295,6 +313,14 @@ impl ArrClient {
         let mut api_key_header =
             HeaderValue::from_str(api_key.trim()).map_err(|_| RadarrConfigError::InvalidApiKey)?;
         api_key_header.set_sensitive(true);
+        let ui_username = ui_username.filter(|value| !value.is_empty());
+        let ui_password = ui_password.filter(|value| !value.is_empty());
+        if ui_username.is_some() != ui_password.is_some()
+            || ui_username.as_ref().is_some_and(|value| value.len() > 256)
+            || ui_password.as_ref().is_some_and(|value| value.len() > 4096)
+        {
+            return Err(RadarrConfigError::InvalidUiCredentials);
+        }
         let http = reqwest::Client::builder()
             // Arr library endpoints can take several seconds while the service
             // is scraping metadata; five seconds caused intermittent 502s.
@@ -307,6 +333,8 @@ impl ArrClient {
             movie_snapshot: Default::default(),
             base_url: parsed.as_str().trim_end_matches('/').to_owned(),
             api_key: api_key_header,
+            ui_username,
+            ui_password,
             http,
         })
     }
@@ -391,16 +419,7 @@ impl ArrClient {
             .find(|path| valid_radarr_backup_path(path))
             .ok_or("Radarr did not provide a valid backup archive")?;
         let url = format!("{}/{}", self.base_url, path.trim_start_matches('/'));
-        let mut response = self
-            .http
-            .get(url)
-            .header("X-Api-Key", self.api_key.clone())
-            .timeout(Duration::from_secs(10 * 60))
-            .send()
-            .await
-            .map_err(|_| "could not download Radarr backup")?
-            .error_for_status()
-            .map_err(|_| "could not download Radarr backup")?;
+        let mut response = self.backup_download_response(&url).await?;
         if response
             .content_length()
             .is_some_and(|length| length > MAX_BACKUP_BYTES as u64)
@@ -422,6 +441,78 @@ impl ArrClient {
             return Err("Radarr returned an invalid backup archive");
         }
         Ok(bytes)
+    }
+
+    async fn backup_download_response(
+        &self,
+        url: &str,
+    ) -> Result<reqwest::Response, &'static str> {
+        const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+        let initial = self
+            .http
+            .get(url)
+            .timeout(DOWNLOAD_TIMEOUT)
+            .send()
+            .await
+            .map_err(|_| "could not download Radarr backup")?;
+        if initial.status().is_success() {
+            return Ok(initial);
+        }
+        if self.ui_username.is_none() || self.ui_password.is_none() {
+            return Err(if initial.status().is_redirection() {
+                "Radarr backup download requires UI login credentials"
+            } else {
+                "could not download Radarr backup"
+            });
+        }
+
+        let username = self.ui_username.as_deref().expect("credentials validated");
+        let password = self.ui_password.as_deref().expect("credentials validated");
+        let basic_auth = self
+            .http
+            .get(url)
+            .basic_auth(username.as_str(), Some(password.as_str()))
+            .timeout(DOWNLOAD_TIMEOUT)
+            .send()
+            .await
+            .map_err(|_| "could not download Radarr backup")?;
+        if basic_auth.status().is_success() {
+            return Ok(basic_auth);
+        }
+
+        let form = Zeroizing::new(
+            url::form_urlencoded::Serializer::new(String::new())
+                .append_pair("Username", username.as_str())
+                .append_pair("Password", password.as_str())
+                .append_pair("RememberMe", "false")
+                .finish(),
+        );
+        let login = self
+            .http
+            .post(format!("{}/login", self.base_url))
+            .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .body(form.to_string())
+            .send()
+            .await
+            .map_err(|_| "Radarr UI login failed")?;
+        let cookie = session_cookie(login.headers()).ok_or("Radarr UI login failed")?;
+        if login.status().is_client_error() || login.status().is_server_error() {
+            return Err("Radarr UI login failed");
+        }
+
+        let authenticated = self
+            .http
+            .get(url)
+            .header(COOKIE, cookie)
+            .timeout(DOWNLOAD_TIMEOUT)
+            .send()
+            .await
+            .map_err(|_| "could not download Radarr backup")?;
+        if authenticated.status().is_success() {
+            Ok(authenticated)
+        } else {
+            Err("Radarr rejected UI credentials or backup download")
+        }
     }
 
     async fn search_movies(
@@ -614,6 +705,24 @@ fn valid_radarr_backup_path(path: &str) -> bool {
         && name
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+}
+
+fn session_cookie(headers: &HeaderMap) -> Option<HeaderValue> {
+    let mut cookies = Vec::new();
+    for value in headers.get_all(SET_COOKIE).iter() {
+        let pair = value.to_str().ok()?.split(';').next()?.trim();
+        let (name, cookie_value) = pair.split_once('=')?;
+        if name.trim().is_empty() || cookie_value.is_empty() {
+            continue;
+        }
+        cookies.push(pair);
+    }
+    if cookies.is_empty() {
+        return None;
+    }
+    let mut value = HeaderValue::from_str(&cookies.join("; ")).ok()?;
+    value.set_sensitive(true);
+    Some(value)
 }
 
 fn poster_image(movie: &serde_json::Value) -> Option<&serde_json::Value> {
@@ -1857,12 +1966,15 @@ async fn metadata_status(State(state): State<Arc<AppState>>) -> Json<MetadataSta
     })
 }
 
-async fn get_radarr_settings(State(state): State<Arc<AppState>>) -> Json<RadarrSettingsInfo> {
+async fn get_radarr_settings(State(state): State<Arc<AppState>>) -> Json<ArrSettingsInfo> {
     let radarr = state.radarr.read().await;
-    Json(RadarrSettingsInfo {
+    Json(ArrSettingsInfo {
         configured: radarr.is_some(),
         url: radarr.as_ref().map(|client| client.base_url.clone()),
         persisted: secure_config::AgeVault::config_path().is_file(),
+        has_ui_auth: radarr
+            .as_ref()
+            .is_some_and(|client| client.ui_username.is_some()),
     })
 }
 
@@ -1922,13 +2034,25 @@ async fn get_configuration(State(state): State<Arc<AppState>>) -> Json<Configura
     };
     let configuration = stored_config
         .as_ref()
-        .map(|config| (config.radarr_url.clone(), !config.radarr_api_key.is_empty()))
+        .map(|config| {
+            (
+                config.radarr_url.clone(),
+                !config.radarr_api_key.is_empty(),
+                !config.radarr_ui_username.is_empty() && !config.radarr_ui_password.is_empty(),
+            )
+        })
         .or_else(|| {
             active_radarr
                 .as_ref()
-                .map(|client| (client.base_url.clone(), true))
+                .map(|client| {
+                    (
+                        client.base_url.clone(),
+                        true,
+                        client.ui_username.is_some() && client.ui_password.is_some(),
+                    )
+                })
         })
-        .map(|(url, has_api_key)| SharedConfiguration {
+        .map(|(url, has_api_key, has_ui_auth)| SharedConfiguration {
             metadata_filename_key_configured: stored_config
                 .as_ref()
                 .is_some_and(|config| config.metadata_filename_key.is_some()),
@@ -1941,6 +2065,7 @@ async fn get_configuration(State(state): State<Arc<AppState>>) -> Json<Configura
                 } else {
                     "[NOT SET]"
                 },
+                has_ui_auth,
             }),
         });
 
@@ -2122,16 +2247,22 @@ async fn unlock_age_settings(
         (status, Json(ApiError { error: message }))
     })?;
     if let Some(settings) = stored.filter(|settings| !settings.radarr_url.is_empty()) {
-        let client =
-            RadarrClient::new(settings.radarr_url.clone(), settings.radarr_api_key.clone())
-                .map_err(|_| {
-                    (
-                        StatusCode::BAD_REQUEST,
-                        Json(ApiError {
-                            error: "Saved Radarr settings are invalid",
-                        }),
-                    )
-                })?;
+        let client = RadarrClient::new_with_ui_auth(
+            settings.radarr_url.clone(),
+            Zeroizing::new(settings.radarr_api_key.clone()),
+            Some(Zeroizing::new(settings.radarr_ui_username.clone()))
+                .filter(|username| !username.is_empty()),
+            Some(Zeroizing::new(settings.radarr_ui_password.clone()))
+                .filter(|password| !password.is_empty()),
+        )
+        .map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ApiError {
+                    error: "Saved Radarr settings are invalid",
+                }),
+            )
+        })?;
         *state.radarr.write().await = Some(client);
     }
     let exists = vault.config_exists();
@@ -2148,7 +2279,7 @@ async fn unlock_age_settings(
 async fn put_radarr_settings(
     State(state): State<Arc<AppState>>,
     Json(mut settings): Json<RadarrSettingsRequest>,
-) -> Result<Json<RadarrSettingsInfo>, (StatusCode, Json<ApiError>)> {
+) -> Result<Json<ArrSettingsInfo>, (StatusCode, Json<ApiError>)> {
     let vault = state.vault.read().await.clone().ok_or((
         StatusCode::LOCKED,
         Json(ApiError {
@@ -2160,13 +2291,14 @@ async fn put_radarr_settings(
         .take()
         .filter(|api_key| !api_key.trim().is_empty());
     let api_key = match supplied_api_key {
-        Some(api_key) => api_key,
+        Some(api_key) => Zeroizing::new(api_key),
         None => state
             .radarr
             .read()
             .await
             .as_ref()
             .and_then(|radarr| radarr.api_key.to_str().ok().map(str::to_owned))
+            .map(Zeroizing::new)
             .ok_or((
                 StatusCode::BAD_REQUEST,
                 Json(ApiError {
@@ -2174,11 +2306,50 @@ async fn put_radarr_settings(
                 }),
             ))?,
     };
-    let client =
-        RadarrClient::new(std::mem::take(&mut settings.url), api_key).map_err(|error| {
+    let supplied_ui_username = settings
+        .ui_username
+        .take()
+        .filter(|username| !username.is_empty())
+        .map(Zeroizing::new);
+    let supplied_ui_password = settings
+        .ui_password
+        .take()
+        .filter(|password| !password.is_empty())
+        .map(Zeroizing::new);
+    let (ui_username, ui_password) = match (supplied_ui_username, supplied_ui_password) {
+        (Some(username), Some(password)) => (Some(username), Some(password)),
+        (None, None) => {
+            let existing = state.radarr.read().await;
+            let client = existing.as_ref();
+            (
+                client
+                    .and_then(|client| client.ui_username.as_ref())
+                    .cloned(),
+                client
+                    .and_then(|client| client.ui_password.as_ref())
+                    .cloned(),
+            )
+        }
+        _ => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiError {
+                    error: "Enter both the Radarr UI username and password, or leave both blank to keep saved credentials",
+                }),
+            ));
+        }
+    };
+    let client = RadarrClient::new_with_ui_auth(
+        std::mem::take(&mut settings.url),
+        api_key,
+        ui_username,
+        ui_password,
+    )
+    .map_err(|error| {
             let message = match error {
                 RadarrConfigError::InvalidUrl => "Enter a valid Radarr HTTPS URL",
                 RadarrConfigError::InvalidApiKey => "Enter a valid Radarr API key",
+                RadarrConfigError::InvalidUiCredentials => "Enter valid Radarr UI credentials",
             };
             (StatusCode::BAD_REQUEST, Json(ApiError { error: message }))
         })?;
@@ -2199,6 +2370,7 @@ async fn put_radarr_settings(
         ));
     }
     let url = client.base_url.clone();
+    let has_ui_auth = client.ui_username.is_some();
     let api_key = client.api_key.to_str().map_err(|_| {
         (
             StatusCode::BAD_REQUEST,
@@ -2213,6 +2385,14 @@ async fn put_radarr_settings(
             sonarr: None,
             radarr_url: url.clone(),
             radarr_api_key: api_key.to_owned(),
+            radarr_ui_username: client
+                .ui_username
+                .as_ref()
+                .map_or_else(String::new, |username| username.to_string()),
+            radarr_ui_password: client
+                .ui_password
+                .as_ref()
+                .map_or_else(String::new, |password| password.to_string()),
             metadata_filename_key: None,
             additional_services: Vec::new(),
             needs_migration: false,
@@ -2227,16 +2407,17 @@ async fn put_radarr_settings(
         })?;
     *state.radarr.write().await = Some(client);
     state.radarr_backup_notify.notify_one();
-    Ok(Json(RadarrSettingsInfo {
+    Ok(Json(ArrSettingsInfo {
         configured: true,
         url: Some(url),
         persisted: true,
+        has_ui_auth,
     }))
 }
 
 async fn delete_radarr_settings(
     State(state): State<Arc<AppState>>,
-) -> Result<Json<RadarrSettingsInfo>, (StatusCode, Json<ApiError>)> {
+) -> Result<Json<ArrSettingsInfo>, (StatusCode, Json<ApiError>)> {
     if let Some(vault) = state.vault.read().await.clone() {
         vault.clear().map_err(|_| {
             (
@@ -2255,10 +2436,11 @@ async fn delete_radarr_settings(
         ));
     }
     *state.radarr.write().await = None;
-    Ok(Json(RadarrSettingsInfo {
+    Ok(Json(ArrSettingsInfo {
         configured: false,
         url: None,
         persisted: false,
+        has_ui_auth: false,
     }))
 }
 
@@ -2348,9 +2530,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .or(local_settings)
             .filter(|settings| !settings.radarr_url.is_empty())
         {
-            radarr = Some(RadarrClient::new(
+            radarr = Some(RadarrClient::new_with_ui_auth(
                 settings.radarr_url.clone(),
-                settings.radarr_api_key.clone(),
+                Zeroizing::new(settings.radarr_api_key.clone()),
+                Some(Zeroizing::new(settings.radarr_ui_username.clone()))
+                    .filter(|username| !username.is_empty()),
+                Some(Zeroizing::new(settings.radarr_ui_password.clone()))
+                    .filter(|password| !password.is_empty()),
             )?);
         }
         vault = Some(unlocked);
@@ -2644,7 +2830,10 @@ async fn subscriber_ui_disabled() -> StatusCode {
 
 #[cfg(test)]
 mod metadata_image_tests {
-    use super::{ArrClient, validated_tmdb_image_url};
+    use super::{
+        ArrClient, Body, Bytes, COOKIE, CONTENT_TYPE, HeaderMap, HeaderValue, Response, SET_COOKIE,
+        StatusCode, Zeroizing, get, header, post, session_cookie, validated_tmdb_image_url,
+    };
 
     #[test]
     fn metadata_image_urls_are_restricted_to_tmdb_image_paths() {
@@ -2672,6 +2861,126 @@ mod metadata_image_tests {
                 "accepted {url}"
             );
         }
+    }
+
+    #[test]
+    fn ui_auth_credentials_must_be_supplied_as_a_pair() {
+        assert!(ArrClient::new_with_ui_auth(
+            "https://radarr.example:7878".into(),
+            Zeroizing::new("test-key".into()),
+            Some(Zeroizing::new("user".into())),
+            Some(Zeroizing::new("password".into())),
+        )
+        .is_ok());
+        assert!(ArrClient::new_with_ui_auth(
+            "https://radarr.example:7878".into(),
+            Zeroizing::new("test-key".into()),
+            Some(Zeroizing::new("user".into())),
+            None,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn session_cookie_keeps_only_cookie_pairs_and_marks_them_sensitive() {
+        let mut headers = HeaderMap::new();
+        headers.append(
+            SET_COOKIE,
+            HeaderValue::from_static("radarrAuth=secret==; Path=/; HttpOnly"),
+        );
+        headers.append(
+            SET_COOKIE,
+            HeaderValue::from_static("csrf=token; Path=/; SameSite=Lax"),
+        );
+        let cookie = session_cookie(&headers).expect("login cookies");
+        assert_eq!(cookie.to_str().unwrap(), "radarrAuth=secret==; csrf=token");
+        assert!(cookie.is_sensitive());
+        assert!(session_cookie(&HeaderMap::new()).is_none());
+    }
+
+    #[tokio::test]
+    async fn backup_download_logs_in_without_following_cross_origin_redirects() {
+        let backup_headers = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let login_body = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+        let observed_backup_headers = backup_headers.clone();
+        let observed_login_body = login_body.clone();
+        let app = axum::Router::new()
+            .route(
+                "/radarr/backup/manual/fixture.zip",
+                get(move |headers: HeaderMap| {
+                    let captured = observed_backup_headers.clone();
+                    async move {
+                        captured.lock().unwrap().push(headers.clone());
+                        if headers
+                            .get(COOKIE)
+                            .and_then(|value| value.to_str().ok())
+                            .is_some_and(|cookie| cookie.contains("radarrAuth=session-fixture"))
+                        {
+                            Response::builder()
+                                .status(StatusCode::OK)
+                                .header(CONTENT_TYPE, "application/zip")
+                                .body(Body::from(&b"PK\x03\x04fixture"[..]))
+                                .unwrap()
+                        } else {
+                            Response::builder()
+                                .status(StatusCode::FOUND)
+                                .header(header::LOCATION, "/login")
+                                .body(Body::empty())
+                                .unwrap()
+                        }
+                    }
+                }),
+            )
+            .route(
+                "/radarr/login",
+                post(move |body: Bytes| {
+                    let captured = observed_login_body.clone();
+                    async move {
+                        *captured.lock().unwrap() =
+                            String::from_utf8(body.to_vec()).unwrap();
+                        Response::builder()
+                            .status(StatusCode::FOUND)
+                            .header(header::LOCATION, "https://attacker.invalid/login")
+                            .header(SET_COOKIE, "radarrAuth=session-fixture; Path=/; HttpOnly")
+                            .body(Body::empty())
+                            .unwrap()
+                    }
+                }),
+            );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base_url = format!("http://{}/radarr", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let client = ArrClient {
+            movie_snapshot: Default::default(),
+            base_url: base_url.clone(),
+            api_key: HeaderValue::from_static("fixture-api-key"),
+            ui_username: Some(Zeroizing::new("radarr user".into())),
+            ui_password: Some(Zeroizing::new("p&ss=word".into())),
+            http: reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .unwrap(),
+        };
+
+        let response = client
+            .backup_download_response(&format!("{base_url}/backup/manual/fixture.zip"))
+            .await
+            .expect("authenticated download");
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            *login_body.lock().unwrap(),
+            "Username=radarr+user&Password=p%26ss%3Dword&RememberMe=false"
+        );
+        let requests = backup_headers.lock().unwrap();
+        assert_eq!(requests.len(), 3);
+        assert!(requests.iter().all(|headers| headers.get("X-Api-Key").is_none()));
+        assert!(requests[0].get(COOKIE).is_none());
+        assert!(requests[1].get(COOKIE).is_none());
+        assert_eq!(
+            requests[2].get(COOKIE).unwrap().to_str().unwrap(),
+            "radarrAuth=session-fixture"
+        );
+        server.abort();
     }
 }
 

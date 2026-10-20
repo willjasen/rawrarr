@@ -49,6 +49,29 @@ class RadarrRecoveryTests(unittest.TestCase):
         self.assertIn('join("recovery.zip.aged")', SECURE_CONFIG)
         self.assertIn("encrypt_shared_file(&self.recipient, &self.radarr_backup_path(), bytes)", SECURE_CONFIG)
 
+    def test_backup_download_supports_ui_login_without_redirecting_or_putting_secrets_in_urls(self) -> None:
+        start = SOURCE.index("async fn backup_download_response")
+        end = SOURCE.index("async fn search_movies", start)
+        download = SOURCE[start:end]
+        self.assertIn(".basic_auth(username.as_str(), Some(password.as_str()))", download)
+        self.assertIn('format!("{}/login", self.base_url)', download)
+        self.assertIn(".header(COOKIE, cookie)", download)
+        self.assertNotIn('.header("X-Api-Key"', download)
+        self.assertIn(".redirect(reqwest::redirect::Policy::none())", SOURCE)
+
+    def test_ui_login_is_not_returned_or_written_to_local_plaintext_config(self) -> None:
+        settings_info = SOURCE[SOURCE.index("struct ArrSettingsInfo"):SOURCE.index("struct AgeSettingsInfo")]
+        self.assertIn("has_ui_auth: bool", settings_info)
+        self.assertNotIn("ui_username", settings_info)
+        local_config = SECURE_CONFIG[
+            SECURE_CONFIG.index("struct LocalRadarrConfig"):
+            SECURE_CONFIG.index("let plaintext", SECURE_CONFIG.index("struct LocalRadarrConfig"))
+        ]
+        self.assertNotIn("ui_username", local_config)
+        self.assertNotIn("ui_password", local_config)
+        self.assertIn("radarr_ui_username", SECURE_CONFIG)
+        self.assertIn("radarr_ui_password", SECURE_CONFIG)
+
     def test_url_validation_requires_https_except_loopback_and_rejects_url_credentials(self) -> None:
         self.assertEqual(
             restore_radarr.validate_radarr_url("https://radarr.example/radarr").hostname,

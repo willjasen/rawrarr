@@ -31,18 +31,19 @@ pub(super) async fn client(state: &AppState) -> Result<ArrClient, (StatusCode, J
     ArrClient::new(config.url.clone(), config.api_key.clone())
         .map_err(|_| failure(StatusCode::BAD_REQUEST, "Invalid Sonarr settings"))
 }
-pub(super) async fn settings(State(state): State<Arc<AppState>>) -> ApiResult<RadarrSettingsInfo> {
+pub(super) async fn settings(State(state): State<Arc<AppState>>) -> ApiResult<ArrSettingsInfo> {
     let config = connection(&vault(&state).await?)?;
-    Ok(Json(RadarrSettingsInfo {
+    Ok(Json(ArrSettingsInfo {
         configured: config.is_some(),
         persisted: config.is_some(),
         url: config.map(|c| c.url.clone()),
+        has_ui_auth: false,
     }))
 }
 pub(super) async fn save(
     State(state): State<Arc<AppState>>,
     Json(mut request): Json<RadarrSettingsRequest>,
-) -> ApiResult<RadarrSettingsInfo> {
+) -> ApiResult<ArrSettingsInfo> {
     let vault = vault(&state).await?;
     let key = request
         .api_key
@@ -87,13 +88,14 @@ pub(super) async fn save(
             )
         })?;
     state.sonarr_scrape_notify.notify_one();
-    Ok(Json(RadarrSettingsInfo {
+    Ok(Json(ArrSettingsInfo {
         configured: true,
         persisted: true,
         url: Some(client.base_url),
+        has_ui_auth: false,
     }))
 }
-pub(super) async fn clear(State(state): State<Arc<AppState>>) -> ApiResult<RadarrSettingsInfo> {
+pub(super) async fn clear(State(state): State<Arc<AppState>>) -> ApiResult<ArrSettingsInfo> {
     vault(&state).await?.save_sonarr(None).map_err(|_| {
         failure(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -102,10 +104,11 @@ pub(super) async fn clear(State(state): State<Arc<AppState>>) -> ApiResult<Radar
     })?;
     *state.sonarr_backfill.write().await = ArtworkBackfillProgress::default();
     state.sonarr_scrape_notify.notify_one();
-    Ok(Json(RadarrSettingsInfo {
+    Ok(Json(ArrSettingsInfo {
         configured: false,
         persisted: false,
         url: None,
+        has_ui_auth: false,
     }))
 }
 pub(super) async fn status(State(state): State<Arc<AppState>>) -> ApiResult<RadarrStatus> {

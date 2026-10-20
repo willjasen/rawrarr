@@ -68,11 +68,11 @@ test('coordinator saves Radarr and Sonarr settings over the direct metadata rout
         return route.fulfill({ json: [{ id: 7, title: 'Example Show', year: 2024, tvdbId: 7123, monitored: true, episodeFileCount: 3, episodeCount: 8, sizeOnDisk: 1536, qualityProfile: 'HD-1080p' }] });
       }
       if (url.pathname === '/direct-api/api/settings/radarr' && request.method() === 'GET') {
-        return route.fulfill({ json: { configured: Boolean(radarr), persisted: Boolean(radarr), url: radarr?.url || null } });
+        return route.fulfill({ json: { configured: Boolean(radarr), persisted: Boolean(radarr), hasUiAuth: Boolean(radarr?.uiUsername && radarr?.uiPassword), url: radarr?.url || null } });
       }
       if (url.pathname === '/direct-api/api/settings/radarr' && request.method() === 'PUT') {
         radarr = request.postDataJSON();
-        return route.fulfill({ json: { configured: true, persisted: true, url: radarr.url } });
+        return route.fulfill({ json: { configured: true, persisted: true, hasUiAuth: Boolean(radarr.uiUsername && radarr.uiPassword), url: radarr.url } });
       }
       if (url.pathname === '/direct-api/api/settings/radarr' && request.method() === 'DELETE') {
         radarr = null;
@@ -137,17 +137,28 @@ test('coordinator saves Radarr and Sonarr settings over the direct metadata rout
   await page.locator('#radarr-settings-message').getByText('Enter your Radarr HTTPS URL and API key.').waitFor();
   await page.locator('#radarr-url').fill('https://radarr.example.test');
   await page.locator('#radarr-key').fill('radarr-secret-api-key');
+  await page.locator('#radarr-ui-username').fill('radarr-ui-user');
+  await page.locator('#radarr-ui-password').fill('radarr-ui-password-secret');
   await page.click('#save-radarr');
   await page.locator('#radarr-connection-card').waitFor({ state: 'hidden' });
   assert.equal(radarr.url, 'https://radarr.example.test');
   assert.equal(radarr.apiKey, 'radarr-secret-api-key');
+  assert.equal(radarr.uiUsername, 'radarr-ui-user');
+  assert.equal(radarr.uiPassword, 'radarr-ui-password-secret');
   assert.equal(await page.locator('#radarr-key').inputValue(), '');
+  assert.equal(await page.locator('#radarr-ui-username').inputValue(), '');
+  assert.equal(await page.locator('#radarr-ui-password').inputValue(), '');
   assert.ok(directRequests.some(request => request.path === '/direct-api/api/settings/radarr' && request.method === 'PUT' && request.body.includes('radarr-secret-api-key')));
+  assert.ok(directRequests.some(request => request.path === '/direct-api/api/settings/radarr' && request.method === 'PUT' && request.body.includes('radarr-ui-password-secret')));
+  assert.ok(directRequests.filter(request => request.path === '/direct-api/api/settings/radarr' && request.method === 'GET').every(request => !request.body.includes('radarr-ui-password-secret')));
+  assert.ok(workspaceRequests.every(request => !request.body.includes('radarr-ui-user') && !request.body.includes('radarr-ui-password-secret')));
   await page.click('[data-view="settings"]');
   await page.locator('#settings-radarr-saved').waitFor({ state: 'visible' });
   await page.locator('#radarr-connection-card').waitFor({ state: 'hidden' });
   assert.equal(await page.locator('#settings-radarr-saved-url').textContent(), 'https://radarr.example.test');
   assert.equal(await page.locator('#settings-radarr-key').inputValue(), '');
+  assert.equal(await page.locator('#settings-radarr-ui-username').inputValue(), '');
+  assert.equal(await page.locator('#settings-radarr-ui-password').inputValue(), '');
   assert.doesNotMatch(await page.locator('#settings-radarr-saved').textContent(), /radarr-secret-api-key/);
   await page.click('#settings-clear-radarr');
   await page.locator('#settings-radarr-settings-message').getByText('Radarr settings cleared from the age-encrypted config.').waitFor();
@@ -167,6 +178,7 @@ test('coordinator opens TV from #tv and upgrades the old #series link', async t 
     if (path === '/') return route.fulfill({ body: html, contentType: 'text/html' });
     if (path === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
     if (path === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
+    if (path === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
     if (path === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
     if (path === '/api/workspace/nodes') return route.fulfill({ json: [] });
     if (path === '/api/workspace/pending') return route.fulfill({ json: [] });
@@ -230,6 +242,7 @@ test('age ID stays in page memory only and is cleared on reload', async t => {
     if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
     if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
     if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: 'window.rawrarrMiniExport = { loadRadarrLibrary: async () => [] };' });
     if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
     if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }] });
@@ -274,6 +287,7 @@ test('Settings validates age ID for this tab without storing it', async t => {
     if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
     if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
     if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: 'window.rawrarrMiniExport = { loadRadarrLibrary: async () => [] };' });
     if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
     if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }] });
