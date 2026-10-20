@@ -20,7 +20,7 @@
 
 # Rawrarr runbooks
 
-- [Fossil and boneyard node terminology](2026-10-20-fossil-and-boneyard-terminology.md) — Record the planned fossil name for storage/apex sources and boneyard name for a future untrusted, Syncthing-encrypted media destination.
+- [Name fossil and boneyard nodes](2026-10-20-fossil-and-boneyard-terminology.md) — Use fossil for metadata nodes and boneyard for storage nodes while retaining internal role identifiers.
 
 - [Headscale container client staging](2026-10-18-headscale-container-client-staging.md) — Add isolated Docker Tailscale clients on both Macs to Headscale through the Caddy coordinator route, preserving current app sidecars during the transition.
 
@@ -34,7 +34,7 @@
 
 - [Integrate subscriber tailnets with Swarmsail](2026-10-18-swarmsail-subscriber-tailnet-integration.md) — Record the eligibility gate, one-way privacy rule, current Swarmsail change, and remaining hosted integration.
 
-- [Storage media replication](2026-10-18-storage-media-replication.md) — Add explicit first-to-second apex media-folder sharing through Syncthing.
+- [Storage media replication](2026-10-18-storage-media-replication.md) — Add explicit first-to-second boneyard media-folder sharing through Syncthing.
 
 - [Fix TV artwork serving with Redis enabled](2026-10-18-fix-tv-artwork-redis.md) — Diagnose and restore the MacBook metadata node's encrypted TV poster responses while keeping Redis enabled.
 
@@ -421,7 +421,7 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 
 - [Keep metadata independent of the coordinator service](2026-10-18-metadata-external-coordinator.md) — Configure metadata nodes to reach a coordinator through an HTTPS URL without a Compose service dependency.
 
-- [Name Rawrarr node types](2026-10-18-node-type-names.md) — Adopt roarlay for coordinator nodes and apex for storage nodes; use these labels in the UI and Compose container names while retaining internal role identifiers. Metadata nodes remain unnamed pending a decision.
+- [Name Rawrarr node types](2026-10-18-node-type-names.md) — Historical naming decision, superseded by the 2026-10-20 fossil/boneyard mapping.
 
 - [Propose signed device identities and role claims](2026-10-18-device-signing-identity-proposal.md) — Separate future cryptographic device IDs from display names and node functions, while preserving existing deployment IDs until migration is designed.
 

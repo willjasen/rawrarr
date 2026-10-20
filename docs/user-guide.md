@@ -1,6 +1,6 @@
 # Rawrarr user guide
 
-> Current container architecture (2026-10-18): **roarlay** (`RAWARR_ROLE=coordinator`) owns passkeys, authentication, and node coordination; **apex** (`storage`) reads local media; **metadata** serves encrypted app data and Arr connections. See [container deployment](container-deployment.md) for the role-specific Compose files and node enrollment.
+> Current container architecture: **roarlay** (`RAWARR_ROLE=coordinator`) owns passkeys, authentication, and node coordination; **fossil** (`metadata`) serves encrypted app data and Arr connections; **boneyard** (`storage`) reads local media. See [container deployment](container-deployment.md) for the role-specific Compose files and node enrollment.
 
 This guide covers features available in the current Docker prototype. For completed and outstanding project work, see the [roadmap](../ROADMAP.md); for data and security constraints, see [technical status](technical-status.md).
 
@@ -21,17 +21,17 @@ If the port belongs to the existing `rawrarr-local` app, update that project. Re
 export RAWARR_POSTGRES_PASSWORD_FILE="$HOME/Library/Application Support/rawrarr/orbstack-postgres-password"
 test -f "$RAWARR_POSTGRES_PASSWORD_FILE"
 docker inspect rawrarr-local-roarlay-1 --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}'
-docker inspect rawrarr-local-metadata-1 --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}'
+docker inspect rawrarr-local-fossil-1 --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}'
 ```
 
 Use the recorded files and project name when updating a service; the MacBook Tailscale overlay supplies the 7297 listener and shared network namespace. The base `docker-compose.yml` alone does not publish port 7297. Follow the [deployment guide](container-deployment.md) and the per-container rebuild locks in [project instructions](../AGENTS.md) before recreating a service. If the password file is missing, inspect the existing Compose secret mount to locate it without reading its contents. For a genuinely new installation, provision a protected random PostgreSQL password file outside the repository first.
 
-Open `https://rawrarr.risk-mermaid.ts.net/` for the roarlay workspace and its tailnet-origin passkey. In the current MacBook overlay, `127.0.0.1:7297` and `127.0.0.1:7298` both forward to roarlay for local diagnostics; the metadata service listens inside the shared Tailscale namespace on `127.0.0.1:8081`. The tailnet and `localhost` WebAuthn origins use separate credentials linked to the same account. Keep the origin and relying-party hostname aligned when configuring another hostname.
+Open `https://rawrarr.risk-mermaid.ts.net/` for the roarlay workspace and its tailnet-origin passkey. In the current MacBook overlay, `127.0.0.1:7297` and `127.0.0.1:7298` both forward to roarlay for local diagnostics; the fossil service listens inside the shared Tailscale namespace on `127.0.0.1:8081`. The tailnet and `localhost` WebAuthn origins use separate credentials linked to the same account. Keep the origin and relying-party hostname aligned when configuring another hostname.
 
 With the password-file variable set, useful commands are:
 
 ```sh
-docker compose -p rawrarr-local logs -f metadata
+docker compose -p rawrarr-local logs -f fossil
 docker compose -p rawrarr-local ps
 curl --fail http://127.0.0.1:7297/health
 ```
@@ -54,7 +54,7 @@ To place it elsewhere, set `RAWARR_SHARED_DATA_PATH` to a persistent host direct
 
 Roarlay owns account passkeys in its PostgreSQL database. Sign in through the tailnet URL; an existing `localhost` credential cannot be used at the tailnet origin without linking a passkey for that origin. In the roarlay workspace, enter the age private ID on Movies to unlock selected-node metadata and settings, or save it in browser storage from Settings by explicit choice. The ID otherwise stays in the tab's memory, and sign-out clears both locations.
 
-The following generated/imported ID flow describes the metadata-node onboarding interface when that interface is exposed directly:
+The following generated/imported ID flow describes the fossil-node onboarding interface when that interface is exposed directly:
 
 1. If PostgreSQL has no passkey account yet, enter your name and select **Create passkey**. Rawrarr creates the internal username from your name and stores the account and passkey in roarlay's PostgreSQL database. On later visits, the page shows only **Sign in with passkey** and uses the account already stored in PostgreSQL.
 2. After passkey sign-in, Rawrarr opens age identity setup if the vault is locked. A remembered identity can unlock it during startup; passkey sign-in is still required. Select **Create ID** to generate an identity. The page shows a shortened preview and a public-recipient fingerprint, then opens a copy pop-up.
@@ -83,11 +83,11 @@ The local plaintext copy stays in node-local `/data`; it is never synchronized. 
 
 ## Use the roarlay workspace
 
-After signing in at the tailnet URL, use **Overview** for library and shared-folder summaries, **Devices** for approved nodes, routes, peer state, and storage scan actions, and **Movies** and **TV** for the selected metadata node's Radarr and Sonarr libraries. The browser prefers a healthy direct Tailscale node route and falls back to roarlay's scoped relay. Its route status reflects a browser probe; a green node or web health page alone does not verify Arr connectivity or synchronization.
+After signing in at the tailnet URL, use **Overview** for library and shared-folder summaries, **Devices** for approved nodes, routes, peer state, and boneyard scan actions, and **Movies** and **TV** for the selected fossil node's Radarr and Sonarr libraries. The browser prefers a healthy direct Tailscale node route and falls back to roarlay's scoped relay. Its route status reflects a browser probe; a green node or web health page alone does not verify Arr connectivity or synchronization.
 
-Movies and TV offer **Rescan** to request an on-demand metadata refresh on the selected metadata node. This starts its worker; it does not mean every record is already refreshed. The Settings **Export metadata** action downloads a browser-built ZIP of all indexed encrypted movie text records and matching available artwork. It needs the age private ID in the browser, and the ZIP contains decrypted data, so store it privately. The current export builds the archive in browser memory and covers movie metadata only; other media classes, cancellation, and a partial-failure report remain planned. See the [export plan](metadata-export-plan.md).
+Movies and TV offer **Rescan** to request an on-demand metadata refresh on the selected fossil node. This starts its worker; it does not mean every record is already refreshed. The Settings **Export metadata** action downloads a browser-built ZIP of all indexed encrypted movie text records and matching available artwork. It needs the age private ID in the browser, and the ZIP contains decrypted data, so store it privately. The current export builds the archive in browser memory and covers movie metadata only; other media classes, cancellation, and a partial-failure report remain planned. See the [export plan](metadata-export-plan.md).
 
-On an enrolled apex node, scheduled media scans start after the configured interval, then repeat after each run. The default is 86,400 seconds (24 hours); `RAWARR_STORAGE_SCAN_INTERVAL_SECONDS=0` disables them, and values from 60 to 604800 seconds are accepted. The Devices view can request a scan independently. The scanner reads its node-local `/media` mount and writes encrypted sidecars to `/shared`; a successful scan does not establish a combined cross-node catalog. A [bounded manual Mini scan](../runbooks/2026-10-18-clarify-storage-scan-action.md) produced synchronized encrypted sidecars, but an unattended scheduled run has not been observed.
+On an enrolled boneyard node, scheduled media scans start after the configured interval, then repeat after each run. The default is 86,400 seconds (24 hours); `RAWARR_STORAGE_SCAN_INTERVAL_SECONDS=0` disables them, and values from 60 to 604800 seconds are accepted. The Devices view can request a scan independently. The scanner reads its node-local `/media` mount and writes encrypted sidecars to `/shared`; a successful scan does not establish a combined cross-node catalog. A [bounded manual Mini scan](../runbooks/2026-10-18-clarify-storage-scan-action.md) produced synchronized encrypted sidecars, but an unattended scheduled run has not been observed.
 
 ## Scan a local media folder
 
@@ -107,15 +107,15 @@ The Devices panel can use local and remote Syncthing REST APIs to add peers and 
 
 This form configures the app-data folder; it does not implement user invitations, selective per-user trust, or shared passkey accounts. Back up or test with disposable folders before pointing it at an existing Syncthing folder.
 
-### Replicate a storage node's media folder
+### Replicate a boneyard node's media folder
 
-Media replication is an explicit, separate Syncthing share between two approved storage nodes. Mount the verified source media directory into its Syncthing companion at `/media` read-only, and mount an empty destination directory into the second companion at `/media` writable. `docker-compose.syncthing-media.yml` adds this bind to each host's existing Syncthing service; use that host's existing Compose file, `-p rawrarr-local`, and its verified `RAWARR_HOST_MEDIA_PATH`. The Rawrarr storage worker itself keeps `/media` read-only. Never mount media into roarlay or `/shared`.
+Media replication is an explicit, separate Syncthing share between two approved boneyard nodes. Mount the verified source media directory into its Syncthing companion at `/media` read-only, and mount an empty destination directory into the second companion at `/media` writable. `docker-compose.syncthing-media.yml` adds this bind to each host's existing Syncthing service; use that host's existing Compose file, `-p rawrarr-local`, and its verified `RAWARR_HOST_MEDIA_PATH`. The Rawrarr storage worker itself keeps `/media` read-only. Never mount media into roarlay or `/shared`.
 
 Choose a source directory whose contents fit on the destination and verify the two Syncthing device IDs with `scripts/share_storage_media.py --docker-container CONTAINER --show-id` on each host. For the current music share, mount the Mini's music directory and the MacBook's `media.ev/music` directory as `/media`. Install the same `.stignore` at each mount root before pairing: `!/[Aa]*`, `!/[Aa]*/**`, then `*`, one pattern per line. This limits the current music tree to its A/a top-level entries; inspect those entries and confirm they are directories before enabling the share. The Mini's read-only bind also needs an existing `.stfolder` directory at its root. Use one matching folder ID, `rawrarr-media`, and `--path /media --include-a-folders` on each host. Run the default dry-run first, then `--apply` on the Mini with `--role source` and `--apply --confirm-empty-destination` on a new MacBook destination with `--role destination`. The source is send-only and the destination receive-only. Existing app-data peer and folder configuration is preserved. The script refuses an existing or overlapping media folder.
 
 The current share also includes three exact album paths: `Mike Jourgensen/Rainy Landfill Music`, `DU Records/Noise Tent 2K Spring Sampler`, and `Longmont Potion Castle/Longmont Potion Castle 15`. To add another album later, run `scripts/add_music_sync_albums.py --root HOST_MUSIC_DIR --album 'Artist/Album'` on both hosts, adding `--source` on the Mini. Review each dry-run and use `--apply` on each host, then scan and verify the bounded transfer. The script adds one exact directory pattern per album before the final `*`; an artist-level allow pattern would include all of that artist's albums.
 
-Check `--status --folder-id ID` on both hosts until they are idle with zero needed files, bytes, and errors. `scripts/hash_media_tree.py` prints a path/content fingerprint for each host folder; compare those outputs before claiming a successful copy. Syncthing sessions are encrypted in transit, but replicated media files are ordinary media bytes on both hosts. Deletions can propagate, so keep separate backups. Adding a Syncthing share does not itself enroll the second Rawrarr storage worker; approve that worker in Devices before expecting its media scan or catalog entry.
+Check `--status --folder-id ID` on both hosts until they are idle with zero needed files, bytes, and errors. `scripts/hash_media_tree.py` prints a path/content fingerprint for each host folder; compare those outputs before claiming a successful copy. Syncthing sessions are encrypted in transit, but replicated media files are ordinary media bytes on both hosts. Deletions can propagate, so keep separate backups. Adding a Syncthing share does not itself enroll the second Rawrarr boneyard worker; approve that worker in Devices before expecting its media scan or catalog entry.
 
 The current Syncthing connection uses the existing Tailscale sidecars' TCP 22000 Serve forwards and SOCKS5 proxy. The separately enrolled Swarmsail Headscale clients do not use Serve and are not yet attached to Syncthing. Replacing the current path requires a direct Tailscale networking mode for those app containers; preserve the old sidecars until that path and the browser passkey origin have been migrated. [Syncthing proxy settings](https://docs.syncthing.net/users/proxying.html) and [Tailscale userspace networking](https://tailscale.com/docs/concepts/userspace-networking) describe the existing transport behavior.
 

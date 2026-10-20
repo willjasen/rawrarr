@@ -1,6 +1,6 @@
 services:
-  metadata:
-    container_name: rawrarr-local-apex
+  fossil:
+    container_name: rawrarr-local-boneyard
     environment:
       RAWARR_ROLE: storage
       RAWARR_LIBRARY_PATH: /media

@@ -1,5 +1,5 @@
 export function subscriberCompose({ role, nodeId, coordinatorUrl, mediaPath = '' }) {
-  if (!['metadata', 'storage'].includes(role)) throw new Error('Only metadata and apex nodes can be installed here.');
+  if (!['metadata', 'storage'].includes(role)) throw new Error('Only fossil and boneyard nodes can be installed here.');
   if (!/^device-[0-9a-f]{24}$/.test(nodeId)) throw new Error('Invalid generated device ID.');
   let origin;
   try { origin = new URL(coordinatorUrl); }
@@ -11,7 +11,7 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, mediaPath = ''
     '# Rawrarr subscriber node. Requires the rawrarr:local image until a public release is published.',
     '# This file runs no coordinator, roarlay, or PostgreSQL service.',
     'services:',
-    `  ${role === 'storage' ? 'apex' : 'metadata'}:`,
+    `  ${role === 'storage' ? 'boneyard' : 'fossil'}:`,
     '    image: rawrarr:local',
     '    environment:',
     `      RAWARR_ROLE: ${role}`,
@@ -21,7 +21,7 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, mediaPath = ''
     '      RAWARR_METADATA_DIR: /metadata',
     `      RAWARR_NODE_ID: ${nodeId}`,
     `      RAWARR_DEVICE_ID: ${nodeId}`,
-    `      RAWARR_DEVICE_NAME: ${quote(role === 'storage' ? 'My apex node' : 'My metadata node')}`,
+    `      RAWARR_DEVICE_NAME: ${quote(role === 'storage' ? 'My boneyard node' : 'My fossil node')}`,
     `      RAWARR_COORDINATOR_URL: ${quote(coordinatorUrl)}`,
     '      RAWARR_NODE_TOKEN_FILE: /data/node-token',
     '      RAWARR_NODE_ENROLLMENT_ENABLED: "true"',

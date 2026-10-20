@@ -41,8 +41,8 @@
     .center-mark img { width:100px; height:100px; object-fit:contain; transform:rotate(7deg) }
     .node { position:absolute; z-index:2; padding:7px 11px; border:1px solid #ffffff1b; border-radius:999px; background:#111713; color:#c7d2c8; font-size:11px; letter-spacing:.02em }
     .node.coordinator { top:27px; left:50%; transform:translateX(-50%) }
-    .node.metadata { left:20px; bottom:39px }
-    .node.storage { right:20px; bottom:39px }
+    .node.fossil { left:20px; bottom:39px }
+    .node.boneyard { right:20px; bottom:39px }
     .section { padding:72px 0 }
     .section-heading { max-width:650px; margin:0 auto 34px; text-align:center }
     h2 { margin:0 0 10px; font-size:clamp(28px,4vw,40px); letter-spacing:-.045em; line-height:1.15 }
@@ -63,7 +63,7 @@
     footer { display:flex; justify-content:space-between; gap:20px; padding:22px 0 30px; border-top:1px solid #ffffff12; color:#89968b; font-size:12px }
     footer a { color:#b8c5b9; text-decoration:none }
     @media (max-width:760px) { .hero { grid-template-columns:1fr; gap:36px; padding:66px 0 55px } .orbit-card { min-height:270px } .features { grid-template-columns:1fr } .feature { min-height:0 } .privacy { grid-template-columns:1fr; gap:20px; padding:25px } .section { padding:54px 0 } .closing { margin-top:50px; padding:30px 20px } }
-    @media (max-width:430px) { .wrap { width:min(var(--max),100% - 28px) } header { min-height:70px } .brand img { width:32px; height:32px } .brand span { font-size:18px } .nav-link { font-size:13px } .hero-copy { font-size:16px } .actions .button { flex:1 } .node.metadata { left:10px } .node.storage { right:10px } footer { flex-direction:column; gap:7px } }
+    @media (max-width:430px) { .wrap { width:min(var(--max),100% - 28px) } header { min-height:70px } .brand img { width:32px; height:32px } .brand span { font-size:18px } .nav-link { font-size:13px } .hero-copy { font-size:16px } .actions .button { flex:1 } .node.fossil { left:10px } .node.boneyard { right:10px } footer { flex-direction:column; gap:7px } }
     @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto } *,*::before,*::after { transition:none !important } }
   </style>
 </head>
@@ -83,7 +83,7 @@
       </div>
       <div class="orbit-card" role="img" aria-label="A coordinator connecting your metadata and storage devices">
         <span class="orbit one"></span><span class="orbit two"></span><span class="orbit three"></span>
-        <span class="node coordinator">COORDINATOR</span><span class="node metadata">METADATA</span><span class="node storage">YOUR STORAGE</span>
+        <span class="node coordinator">ROARLAY</span><span class="node fossil">FOSSIL</span><span class="node boneyard">BONEYARD</span>
         <div class="center-mark"><img src="/assets/rawrarr-logo.png" alt=""></div>
       </div>
     </section>
@@ -93,7 +93,7 @@
       <div class="features">
         <article class="feature"><div class="feature-icon" aria-hidden="true">⌂</div><h3>Storage on your terms</h3><p>Storage nodes scan media where it lives. Rawrarr does not upload your media files to the coordinator.</p></article>
         <article class="feature"><div class="feature-icon" aria-hidden="true">▤</div><h3>One view of your libraries</h3><p>Connect Radarr and Sonarr to browse your movie and TV libraries from the Rawrarr workspace.</p></article>
-        <article class="feature"><div class="feature-icon" aria-hidden="true">◇</div><h3>Devices that work together</h3><p>A coordinator helps you manage approved devices while metadata and storage nodes do their own jobs.</p></article>
+        <article class="feature"><div class="feature-icon" aria-hidden="true">◇</div><h3>Devices that work together</h3><p>Roarlay helps you manage approved devices while fossils and boneyards do their own jobs.</p></article>
       </div>
     </section>
 

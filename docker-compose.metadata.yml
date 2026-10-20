@@ -13,7 +13,7 @@ services:
     networks:
       - metadata-private
 
-  metadata:
+  fossil:
     build:
       context: ./rust-arr
     image: rawrarr:local
@@ -23,9 +23,9 @@ services:
       RAWARR_DATA_DIR: /data
       RAWARR_SHARED_DATA_DIR: /shared
       RAWARR_METADATA_DIR: /metadata
-      RAWARR_NODE_ID: ${RAWARR_NODE_ID:?Set a stable, unique metadata node ID}
-      RAWARR_DEVICE_ID: ${RAWARR_NODE_ID:?Set a stable, unique metadata node ID}
-      RAWARR_DEVICE_NAME: ${RAWARR_DEVICE_NAME:-Metadata node}
+      RAWARR_NODE_ID: ${RAWARR_NODE_ID:?Set a stable, unique fossil node ID}
+      RAWARR_DEVICE_ID: ${RAWARR_NODE_ID:?Set a stable, unique fossil node ID}
+      RAWARR_DEVICE_NAME: ${RAWARR_DEVICE_NAME:-Fossil node}
       RAWARR_COORDINATOR_URL: ${RAWARR_COORDINATOR_URL:-https://swarmsail.willjasen.net}
       RAWARR_COORDINATOR_LOCAL_HTTP: ${RAWARR_COORDINATOR_LOCAL_HTTP:-false}
       RAWARR_NODE_TOKEN_FILE: /run/secrets/rawrarr_node_token

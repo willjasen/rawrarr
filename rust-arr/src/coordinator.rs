@@ -161,7 +161,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
     let targets_text = env::var("RAWARR_NODE_RELAY_TARGETS")
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| r#"{"macbook-metadata":"http://metadata:8080"}"#.to_owned());
+        .unwrap_or_else(|| r#"{"macbook-metadata":"http://fossil:8080"}"#.to_owned());
     let configured_targets: HashMap<String, String> = serde_json::from_str(&targets_text)
         .map_err(|_| "RAWARR_NODE_RELAY_TARGETS must be a JSON object of node IDs to base URLs")?;
     let mut relay_targets = HashMap::new();
@@ -186,7 +186,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .redirect(reqwest::redirect::Policy::none());
     if let Ok(proxy_url) = env::var("RAWARR_NODE_RELAY_SOCKS5_URL") {
         let proxy = reqwest::Proxy::all(&proxy_url)?
-            .no_proxy(reqwest::NoProxy::from_string("metadata"));
+            .no_proxy(reqwest::NoProxy::from_string("fossil"));
         relay_client_builder = relay_client_builder.proxy(proxy);
     }
     let relay_client = relay_client_builder.build()?;

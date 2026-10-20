@@ -184,7 +184,7 @@
       <article class="overview-card"><h2>Set up another node</h2><p class="overview-detail">Create or import your age ID and encrypted signing-root backup, then prepare a subscriber-only Docker Compose file for your own equipment. Root signing keys are never saved in browser storage.</p><a href="/setup/node">Open node setup →</a></article>
       <div class="overview-grid" aria-label="Workspace overview">
         <article class="overview-card"><h2>Shared folder</h2><div id="overview-folder-state" class="overview-value">Checking…</div><div id="overview-folder-detail" class="overview-detail" role="status" aria-live="polite">Loading shared-folder status…</div></article>
-        <article class="overview-card"><h2>Shared metadata</h2><div id="overview-metadata-size" class="overview-value">—</div><div id="overview-metadata-detail" class="overview-detail">Encrypted metadata stored on the selected metadata node</div></article>
+        <article class="overview-card"><h2>Shared metadata</h2><div id="overview-metadata-size" class="overview-value">—</div><div id="overview-metadata-detail" class="overview-detail">Encrypted metadata stored on the selected fossil node</div></article>
         <article class="overview-card"><h2>Radarr</h2><div id="overview-movie-count" class="overview-value">—</div><div id="overview-movie-detail" class="overview-detail">Movie library statistics</div></article>
         <article class="overview-card"><h2>Sonarr</h2><div id="overview-series-count" class="overview-value">—</div><div id="overview-series-detail" class="overview-detail">TV library statistics</div></article>
         <article class="overview-card overview-genre-card"><h2>Radarr genres</h2><div id="overview-movie-genres" class="overview-genre-chart overview-detail" aria-live="polite">Genre breakdown loads with the movie library.</div></article>
@@ -205,7 +205,7 @@
     <section id="movies-view" hidden><h1 class="page-title">Movies</h1>
     <article id="radarr-connection-card" class="connection-card" aria-labelledby="radarr-connection-title" hidden>
       <h2 id="radarr-connection-title">Radarr connection</h2>
-      <p class="connection-intro" id="radarr-node-note">Select an online metadata node in Devices. The URL and API key go directly from this browser to that node; roarlay never receives the API key. Settings are saved in its age-encrypted config.</p>
+      <p class="connection-intro" id="radarr-node-note">Select an online fossil node in Devices. The URL and API key go directly from this browser to that node; roarlay never receives the API key. Settings are saved in its age-encrypted config.</p>
       <form id="radarr-settings" class="connection-form">
         <label for="radarr-url">Radarr URL</label>
         <input id="radarr-url" name="url" type="url" placeholder="https://radarr.example.com" autocomplete="url" required>
@@ -237,7 +237,7 @@
     <section id="series-view" hidden><h1 class="page-title">TV</h1>
       <article id="sonarr-connection-card" class="connection-card" aria-labelledby="sonarr-connection-title" hidden>
         <h2 id="sonarr-connection-title">Sonarr connection</h2>
-        <p class="connection-intro" id="sonarr-node-note">Select an online metadata node in Devices. The URL and API key go directly from this browser to that node; roarlay never receives the API key. Settings are saved in its age-encrypted config.</p>
+        <p class="connection-intro" id="sonarr-node-note">Select an online fossil node in Devices. The URL and API key go directly from this browser to that node; roarlay never receives the API key. Settings are saved in its age-encrypted config.</p>
         <form id="sonarr-settings" class="connection-form">
           <label for="sonarr-url">Sonarr URL</label>
           <input id="sonarr-url" name="url" type="url" placeholder="https://sonarr.example.com" autocomplete="url" required>
@@ -268,13 +268,13 @@
         <h2>A shared library for your devices</h2>
         <p class="connection-intro">rawrarr connects the media tools you already use with a private, synchronized library of useful metadata.</p>
         <p class="sub">Radarr and Sonarr manage your movie and TV libraries. Connect them in Settings to browse library data in rawrarr. Devices with access to your media can share age-encrypted metadata and artwork so the same information is available across your devices.</p>
-        <p class="sub">Your media files stay on the storage you choose. Roarlay coordinates your account and devices; metadata nodes connect to your media tools and share encrypted library metadata.</p>
+        <p class="sub">Your media files stay on the storage you choose. Roarlay coordinates your account and devices; fossils connect to your media tools and share encrypted library metadata.</p>
         <p class="sub">Rawrarr currently focuses on media libraries and their metadata. General-purpose sharing of files and folders is a future direction.</p>
       </article>
     </section>
     <section id="settings-view" hidden><h1 class="page-title">Settings</h1>
       <div class="settings-identity">
-      <article class="profile-card"><picture class="profile-avatar"><source id="profile-picture-jxl" type="image/jxl"><img id="profile-picture" alt="Generated dinosaur profile picture"></picture><div class="profile-avatar-copy"><h2 class="profile-name" id="profile-name">Loading profile…</h2><p class="profile-avatar-status" id="profile-avatar-status" role="status" aria-live="polite">Loading the public age ID from a metadata node…</p></div></article>
+      <article class="profile-card"><picture class="profile-avatar"><source id="profile-picture-jxl" type="image/jxl"><img id="profile-picture" alt="Generated dinosaur profile picture"></picture><div class="profile-avatar-copy"><h2 class="profile-name" id="profile-name">Loading profile…</h2><p class="profile-avatar-status" id="profile-avatar-status" role="status" aria-live="polite">Loading the public age ID from a fossil node…</p></div></article>
       <article class="age-storage-card" aria-labelledby="age-storage-title">
         <h2 id="age-storage-title">Age private ID in this browser</h2>
         <p id="age-storage-status" class="age-storage-status" role="status" aria-live="polite">Checking browser storage…</p>
@@ -287,12 +287,12 @@
       </article>
       </div>
       <h2 style="margin:26px 0 4px">Media service connections</h2>
-      <p class="connection-intro">Save Radarr and Sonarr details to the selected metadata node's age-encrypted config. API keys go directly from this browser to that node and are never shown after saving.</p>
+      <p class="connection-intro">Save Radarr and Sonarr details to the selected fossil node's age-encrypted config. API keys go directly from this browser to that node and are never shown after saving.</p>
       <div class="settings-connections">
         <article class="connection-card" aria-labelledby="settings-radarr-title">
           <h2 id="settings-radarr-title">Radarr</h2>
           <div id="settings-radarr-saved" class="connection-saved" hidden role="status" aria-live="polite"><strong>Radarr details saved</strong><span id="settings-radarr-saved-url" class="connection-saved-url"></span><span class="connection-saved-note">API key stored in the age-encrypted config.</span></div>
-          <p class="connection-intro" id="settings-radarr-node-note">Select an online metadata node in Devices to manage this connection.</p>
+          <p class="connection-intro" id="settings-radarr-node-note">Select an online fossil node in Devices to manage this connection.</p>
           <form id="settings-radarr-settings" class="connection-form">
             <label for="settings-radarr-url">Radarr URL</label>
             <input id="settings-radarr-url" name="url" type="url" placeholder="https://radarr.example.com" autocomplete="url" required>
@@ -306,7 +306,7 @@
         <article class="connection-card" aria-labelledby="settings-sonarr-title">
           <h2 id="settings-sonarr-title">Sonarr</h2>
           <div id="settings-sonarr-saved" class="connection-saved" hidden role="status" aria-live="polite"><strong>Sonarr details saved</strong><span id="settings-sonarr-saved-url" class="connection-saved-url"></span><span class="connection-saved-note">API key stored in the age-encrypted config.</span></div>
-          <p class="connection-intro" id="settings-sonarr-node-note">Select an online metadata node in Devices to manage this connection.</p>
+          <p class="connection-intro" id="settings-sonarr-node-note">Select an online fossil node in Devices to manage this connection.</p>
           <form id="settings-sonarr-settings" class="connection-form">
             <label for="settings-sonarr-url">Sonarr URL</label>
             <input id="settings-sonarr-url" name="url" type="url" placeholder="https://sonarr.example.com" autocomplete="url" required>
