@@ -34,6 +34,7 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 - Keep user sign-in and PostgreSQL on roarlay. Multi-account invitations and multiple-coordinator auth/failover remain future work.
 - Publish role-specific packaging for roarlay, apex, metadata, and an isolated operator service; the existing Compose files are local source-build examples.
 - Implement explicit per-user sharing grants. Syncthing peer/folder configuration does not currently implement invitations, trust decisions, or selective sharing.
+- Adopt **fossil** as the future user-facing name for storage/apex media-source nodes, then plan a separate feature for selected media replication from fossils to untrusted **boneyard** Syncthing devices with destination-at-rest encryption. Neither the terminology migration nor the boneyard feature is implemented.
 
 ### Shared clusters and owner-controlled membership
 

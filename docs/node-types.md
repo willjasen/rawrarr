@@ -6,6 +6,12 @@ The implemented roles are currently identified internally as `coordinator`, `sto
 
 See [container deployment](container-deployment.md) for the authoritative capability matrix, startup behavior, trust limitations, local migration, and Mac mini setup. The coordinator is the established central control plane. The MacBook metadata node is its seeded first participant; later metadata and storage nodes join that coordinator. No subscriber role connects directly to PostgreSQL.
 
+## Planned media-node terminology
+
+The user-facing name for the existing storage/apex media-source node is planned to become **fossil**. This is terminology only for now: deployed Compose services and containers remain `apex`, and the internal role remains `storage`.
+
+A future **boneyard** is a different kind of device: an untrusted Syncthing destination that receives selected media from a fossil and stores the received files encrypted at rest by Syncthing. This feature is not implemented. A boneyard is not a Rawrarr storage role, and ordinary Syncthing transport encryption alone does not provide destination-at-rest encryption.
+
 Manual, account-scoped node approval and node-scoped central authentication are implemented for the coordinator's current single-owner setup. Browser device-code enrollment, multi-account invitations, public image distribution, and SwarmSail provisioning remain planned. The sections below retain future distribution/networking direction; references to the old service/shard packaging are superseded by the three-role deployment guide.
 
 ## Instance and enrollment model
