@@ -27,6 +27,7 @@ Start here for the current project state and everyday use:
 - [Blind coordinator content flow](blind-coordinator-content.md) — keep metadata/storage content encrypted through the coordinator and decrypt it in the user's browser; documents the bounded implementation and remaining scope.
 - [Browser security test plan](security-test-plan.md) — plan Playwright integration evidence for metadata/storage confidentiality through the coordinator, including limits and malicious-coordinator caveats.
 - [Public landing page](DESIGN.md#account-and-first-run-flow) — public, pre-sign-in introduction with clear Rawrarr maturity and security-limit disclosures.
+- [Public demo plan](public-demo-plan.md) — planned account-free tour using isolated synthetic data, read-only interactions, and explicit product-maturity disclosures.
 - [Local backups](local-backups.md) — planned manual, age-encrypted backup of `/shared` to one node-local destination.
 - [Device architecture](device-architecture.md) — IDs, local/shared records, storage, and remote access boundaries.
 - [Cloud access](cloud-access-architecture.md) — passkey account service, blind relay, and subscriber-data boundary.

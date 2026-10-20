@@ -64,6 +64,7 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 
 - Restore private-key character verification after fixing the reported rejection of correct answers and validating the full browser flow.
 
+- Flesh out the public landing page into an account-free interactive demo: add a clearly labeled entry point, a guided tour of representative screens, fictional fixture data, and only read-only or explicitly simulated interactions. Keep it isolated from subscriber data and protected APIs, preserve existing sign-in/workspace behavior, and label implemented, planned, and simulated capabilities accurately. See the [public demo plan](docs/public-demo-plan.md).
 - General-purpose file/folder sharing beyond media.
 - Sonarr posters/artwork, snapshots, metadata lookup, and episode mutations; Lidarr, Readarr, and Bazarr integrations; Prowlarr-style indexer management and search; concrete download-client adapters and fulfillment. The current download-client abstraction has no concrete adapter.
 - Manual age-encrypted shared-folder backup to one node-local destination, including recovery verification and a retention policy.
@@ -75,6 +76,7 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 - [Device and service architecture](docs/device-architecture.md) — current local prototype boundaries and target node model.
 - [Product direction](docs/product-direction.md) — long-term product goals and trust boundaries.
 - [Product and interface design](docs/DESIGN.md) — user-facing principles and flows.
+- [Public demo plan](docs/public-demo-plan.md) — planned account-free public tour, synthetic data, security boundaries, and acceptance criteria.
 - [Shared cluster plan](docs/shared-cluster-sharing-plan.md) — planned isolated-to-shared transition, owner-controlled membership, MLS evaluation, age file handling, revocation cleanup, and phased work.
 - [Technical boundaries](docs/technical-status.md) — data placement and security boundaries.
 - [User guide](docs/user-guide.md) — current local prototype usage.
