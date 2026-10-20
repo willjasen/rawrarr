@@ -25,7 +25,11 @@ Keep Radarr recoverable from the Rawrarr shared folder so the owner can deploy a
 - The rebuilt isolated container compiled the Rust test binary and ran the Radarr backup tests successfully. The wider Rust suite reported 59 passed and 5 failures in coordinator-route, avatar-tooling, and quality-profile tests. Its Playwright test passed; the Node suite had multiple existing UI/backfill failures; Python integration tests were skipped by the container.
 - `git diff --check`
 
-The focused Python tests use synthetic archives and a local HTTP fixture. No live Radarr instance or real container restore was run.
+The local `rawrarr-local` metadata container was rebuilt from this branch and reached healthy status. The loopback app health check passed, the Tailscale Serve route still sent `/` to roarlay and `/direct-api` to the subscriber, and the HTTPS coordinator health check succeeded. The local coordinator rejected the metadata node's registration; its approved-node registry and database are currently owned by another deployment configuration, so they were not changed.
+
+A live Radarr API status check succeeded for version 6.4.4.10685, and Rawrarr issued a native manual backup command. The advertised ZIP path redirected to `/login` despite the API-key header, and Radarr exposes no authenticated ZIP download API in the tested endpoints. Therefore Rawrarr did not store a recovery ciphertext, the restore helper was not run against a real target, and no Radarr container was deployed. Capturing backups from Radarr installations with UI authentication needs a safe authenticated download design; do not place the API key in the download URL.
+
+The focused Python tests use synthetic archives and a local HTTP fixture. The live check uncovered the static-download authentication limitation, so a full live recovery remains unverified.
 
 ## Operational notes
 

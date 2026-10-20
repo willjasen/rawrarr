@@ -107,6 +107,10 @@ Treat Radarr as the first supported external library integration. Let the user e
 
 Keep the latest native Radarr backup in the shared Syncthing folder as age ciphertext, refreshing it every six hours when Radarr is connected and the age vault is unlocked. Rawrarr's scraped movie metadata and artwork remain in their existing shared, age-encrypted paths alongside the native backup. Together these support disaster recovery and migration, but Rawrarr does not create or control the Radarr container: the user deploys it on a chosen metadata or storage node and initiates restore there. Restore Radarr's database and settings without copying or modifying media; preserve the backup's root-folder paths and require matching mounts or user repair after restart. Keep Sonarr out of this first implementation.
 
+### Direct Radarr UI access (planned)
+
+Let the user open the Radarr UI managed by a selected subscriber node, while the browser communicates with that node directly. The coordinator must not proxy, receive, or log the Radarr UI session. Reuse the established node-direct route where possible; do not expose Radarr through a coordinator reverse proxy.
+
 ### Local scans and metadata
 
 Let the user choose a mounted media location and start a scan deliberately. Explain that a scan reads media and creates Rawrarr metadata; it does not move or rename media files. Show scan progress and per-item matching status. When a match is uncertain, present choices rather than silently attaching incorrect metadata.

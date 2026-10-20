@@ -1313,30 +1313,37 @@ async fn run_metadata_artwork_backfill(state: Arc<AppState>) {
 }
 
 async fn run_radarr_backup(state: Arc<AppState>) {
+    println!("Radarr recovery backup worker started");
     wait_for_radarr_backup(&state, Duration::from_secs(10)).await;
     loop {
         let radarr = state.radarr.read().await.clone();
         let vault = state.vault.read().await.clone();
         match (radarr, vault) {
-            (Some(radarr), Some(vault)) => match radarr.create_recovery_backup().await {
-                Ok(bytes) => {
-                    let stored = tokio::task::spawn_blocking(move || {
-                        vault.store_radarr_backup(&bytes)
-                    })
-                    .await;
-                    match stored {
-                        Ok(Ok(())) => {}
-                        Ok(Err(_)) => eprintln!("Radarr recovery backup could not be encrypted or saved"),
-                        Err(_) => eprintln!("Radarr recovery backup storage task failed"),
+            (Some(radarr), Some(vault)) => {
+                println!("Radarr recovery backup capture started");
+                match radarr.create_recovery_backup().await {
+                    Ok(bytes) => {
+                        let stored = tokio::task::spawn_blocking(move || {
+                            vault.store_radarr_backup(&bytes)
+                        })
+                        .await;
+                        match stored {
+                            Ok(Ok(())) => println!("Radarr recovery backup stored in shared data"),
+                            Ok(Err(_)) => eprintln!("Radarr recovery backup could not be encrypted or saved"),
+                            Err(_) => eprintln!("Radarr recovery backup storage task failed"),
+                        }
+                        wait_for_radarr_backup(&state, Duration::from_secs(6 * 60 * 60)).await;
                     }
-                    wait_for_radarr_backup(&state, Duration::from_secs(6 * 60 * 60)).await;
+                    Err(error) => {
+                        eprintln!("Radarr recovery backup failed: {error}");
+                        wait_for_radarr_backup(&state, Duration::from_secs(6 * 60 * 60)).await;
+                    }
                 }
-                Err(error) => {
-                    eprintln!("Radarr recovery backup failed: {error}");
-                    wait_for_radarr_backup(&state, Duration::from_secs(6 * 60 * 60)).await;
-                }
-            },
-            _ => wait_for_radarr_backup(&state, Duration::from_secs(60)).await,
+            }
+            _ => {
+                println!("Radarr recovery backup waiting for Radarr settings and an unlocked age vault");
+                wait_for_radarr_backup(&state, Duration::from_secs(60)).await;
+            }
         }
     }
 }

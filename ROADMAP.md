@@ -32,6 +32,7 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 
 ### Multi-node subscriber application
 
+- Provide direct browser access to a Radarr UI on its selected subscriber node without proxying the UI session through roarlay.
 - Durable device and library catalog with stale/offline state, scan generations, and reconciliation.
 - Define library configuration and scanning for mixed-media roots and category-specific roots distributed across multiple boneyard nodes; combine them in the instance catalog without moving media bytes.
 - Complete device credential rotation and revocation behavior, identity continuity, and a durable, narrowly scoped command/catalog channel. The current approval, heartbeats, and scan request are the foundation.
