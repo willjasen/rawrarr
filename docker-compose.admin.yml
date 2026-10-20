@@ -1,0 +1,22 @@
+# Optional private admin preview. Include with docker-compose.tailscale-macbook.yml.
+# The web container has no database connection and publishes no public port.
+services:
+  tailscale:
+    ports:
+      - "127.0.0.1:7299:8090"
+
+  admin:
+    build:
+      context: ./admin
+    image: rawrarr-admin:local
+    container_name: rawrarr-admin
+    network_mode: "service:tailscale"
+    depends_on:
+      tailscale:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8090/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
