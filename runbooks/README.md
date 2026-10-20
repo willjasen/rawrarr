@@ -8,6 +8,7 @@
 - [Import folded age-encrypted root backups](2026-10-21-import-folded-age-root-backups.md) — Normalize wrapped or whitespace-folded age armor for browser-side verification and signing.
 - [GitHub Actions test workflow](2026-10-20-github-actions-tests.md) — Run lightweight standard-library script tests automatically on pull requests and main-branch pushes.
 
+- [Observe the Mac mini unattended storage scan](2026-10-19-observe-unattended-storage-scan.md) — Observe the default scheduled run, stop it after 403 encrypted sidecars at the owner's direction, and schedule a fuller one-time scan for 4 AM EDT.
 - [Implement the metadata-node Redis artwork cache](2026-10-18-implement-metadata-redis-cache.md) — Cache encrypted movie and TV artwork in optional node-local Redis with shared-file fallback.
 - [Fix large TV artwork pipe deadlocks](2026-10-18-fix-large-tv-artwork-pipe.md) — Drain age subprocess output concurrently with large artwork input so poster requests do not hang.
 - [Update Mac mini Rawrarr containers](2026-10-18-update-mac-mini-containers.md) — Refresh the Mac mini storage image and relay proxies, verifying all preserved mounts and routes.
