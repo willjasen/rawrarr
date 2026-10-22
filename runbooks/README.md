@@ -26,6 +26,8 @@
 
 # Rawrarr runbooks
 
+- [Fix stale device topology labels](2026-10-22-fix-stale-device-topology.md) — Use current coordinator display names in the Devices topology diagram and document deployment verification.
+
 - [Fix cluster configuration fetch returning 401](2026-10-22-fix-cluster-config-401.md) — Include the direct metadata-node browser session cookie when reading encrypted cluster configuration.
 
 - [Show the sidebar profile as four words](2026-10-22-sidebar-profile-four-word-layout.md) — Arrange the generated account name as two words on each of two lines beside its avatar.

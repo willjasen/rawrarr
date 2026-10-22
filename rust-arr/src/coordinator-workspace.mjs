@@ -256,7 +256,7 @@ function renderDeviceTopology(nodes, observedPeers, deviceNames) {
     if (!source) continue;
     const peerTokens = deviceNameTokens(peer.name);
     const targets = nodes.filter(node => node.nodeId !== source.nodeId).filter(node => {
-      const tokens = new Set([...deviceNameTokens(node.nodeId), ...deviceNameTokens(deviceNames[node.nodeId])]);
+      const tokens = new Set([...deviceNameTokens(node.nodeId), ...deviceNameTokens(deviceNames[node.nodeId]), ...deviceNameTokens(node.displayName)]);
       return [...tokens].some(token => peerTokens.has(token));
     });
     if (targets.length !== 1) continue;
@@ -299,7 +299,7 @@ function renderDeviceTopology(nodes, observedPeers, deviceNames) {
     item.style.left = `${points[index].x / 10}%`;
     item.style.top = `${points[index].y / 5}%`;
     const name = document.createElement('strong');
-    name.textContent = deviceNames[node.nodeId] || node.nodeId;
+    name.textContent = deviceNames[node.nodeId] || node.displayName || node.nodeId;
     const role = document.createElement('small');
     role.textContent = `${roleLabel(node.role)} · ${node.online ? 'online' : 'offline'}`;
     item.append(name, role);
