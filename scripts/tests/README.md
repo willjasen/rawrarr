@@ -5,6 +5,7 @@
 - `test_rawrarr_coordinator_arr_links.mjs` — checks the coordinator's encrypted Radarr slug flow, direct metadata route, browser-only reachability gate, and year-cell icon wiring for Movies and TV. Run with `node --test scripts/tests/test_rawrarr_coordinator_arr_links.mjs`.
 # Rawrarr tests
 
+- `test_internal_deploy_targets.py` — checks coordinator-only, node-only, shared/unknown runtime, documentation-only, and mixed-change target classification. Run `python3 scripts/tests/test_internal_deploy_targets.py`.
 - `test_rawrarr_node_avatar.mjs` — verifies node-recipient validation, encoded relay route, no-store fetching, and deterministic SHA-256 avatar seed derivation; run with `node --test scripts/tests/test_rawrarr_node_avatar.mjs`.
 
 - `secure_config::tests::node_identity_is_created_once_and_existing_identity_is_reused` and `invalid_existing_node_identity_is_not_replaced` — Subscriber startup age identity generation, persistence/reuse, separation from the user identity, file permissions, and fail-closed invalid-file behavior; run with `cargo test --locked --manifest-path rust-arr/Cargo.toml node_identity` in the Rust test environment.
