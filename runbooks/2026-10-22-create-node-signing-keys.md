@@ -26,7 +26,8 @@ Verification:
 - Rust `cargo check` passed using the installed Rust 1.85.1 toolchain directly; the default Homebrew rustc shim aborts because its LLVM dependency requests unavailable Z3 5.1.
 - Focused `cargo test --locked --manifest-path rust-arr/Cargo.toml node_signing_key -- --nocapture` passed (2 tests).
 - The coordinator workspace's selected user-signing-copy test passed (1 test), the subscriber onboarding test file passed `node --check`, and `git diff --check` passed.
-- The onboarding bundle rebuilt with the locked npm dependencies. The full coordinator workspace test file was also attempted; 7 existing assertions fail against this `origin/main` baseline, while the updated user-signing-copy assertion passes. Repository-wide `cargo fmt --check` reports formatting diffs throughout unrelated existing files, so it was not used to reformat broad source.
+- The onboarding bundle rebuilt with the locked npm dependencies. The full coordinator workspace test file was attempted before rebasing; 7 unrelated assertions failed against that earlier baseline, while the updated user-signing-copy assertion passed. Repository-wide `cargo fmt --check` reports formatting diffs throughout unrelated existing files, so it was not used to reformat broad source.
+- After rebasing on current `origin/main`, the focused Rust checks and selected user-signing-copy check passed again. GitHub's required `Basic script tests` check passed; `Publish private UI bundle` was skipped.
 - No deployment or live-node key creation was performed. Generated private seeds are not enrolled or used for signatures yet. The selected RustCrypto ML-DSA crate documents that it has not been independently audited; cryptographic review remains required before production signing.
 
-Changes are committed on `codex/node-signing-key`; they have not been pushed or merged. No deployment is included in this task.
+Merged in [PR #25](https://github.com/willjasen/rawrarr/pull/25) as merge commit `310368dbd94e0192a7b7c6a732dc2169169634c9`. GitHub issue [#21](https://github.com/willjasen/rawrarr/issues/21) is closed. No deployment is included in this task.
