@@ -1,5 +1,5 @@
 use hmac::{Hmac, Mac};
-use ml_dsa::{MlDsa65, SigningKey};
+use ml_dsa::{MlDsa65, SigningKey, signature::{Keypair, Signer}};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -769,6 +769,22 @@ impl AgeVault {
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("data"));
         ensure_node_signing_key_at(&data_dir.join("node-signing-key"))
+    }
+
+    pub fn node_signing_public_key() -> Result<Vec<u8>, VaultError> {
+        let data_dir = env::var_os("RAWARR_DATA_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("data"));
+        let key = load_node_signing_key(&data_dir.join("node-signing-key"))?;
+        Ok(key.verifying_key().encode().to_vec())
+    }
+
+    pub fn sign_node_message(message: &[u8]) -> Result<Vec<u8>, VaultError> {
+        let data_dir = env::var_os("RAWARR_DATA_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("data"));
+        let key = load_node_signing_key(&data_dir.join("node-signing-key"))?;
+        Ok(key.sign(message).encode().to_vec())
     }
 
     pub fn node_identity_recipient() -> Result<String, VaultError> {

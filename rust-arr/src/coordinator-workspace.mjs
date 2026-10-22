@@ -6,6 +6,14 @@ import { initAiChat } from './coordinator-ai.mjs';
 const status = document.getElementById('status');
 const nodesPanel = document.getElementById('nodes');
 const pendingPanel = document.getElementById('pending');
+const approveNodeDialog = document.getElementById('approve-node-dialog');
+const approveNodeForm = document.getElementById('approve-node-form');
+const approveNodeIdentity = document.getElementById('approve-node-age-id');
+const approveNodeBackup = document.getElementById('approve-node-root-backup');
+const approveNodeFingerprint = document.getElementById('approve-node-root-fingerprint');
+const approveNodeStatus = document.getElementById('approve-node-status');
+const approveNodeCancel = document.getElementById('approve-node-cancel');
+let pendingNodeToApprove = null;
 const contentPanel = document.getElementById('content');
 const contentStatus = document.getElementById('content-status');
 const moviesPanel = document.getElementById('movies');
@@ -99,7 +107,6 @@ renderArrSummaryCards('radarr');
 renderArrSummaryCards('sonarr');
 const ageInput = document.getElementById('age-id');
 const ageIdEntry = document.getElementById('age-id-entry');
-const rememberAgeId = document.getElementById('remember-age-id');
 const clearKeyButton = document.getElementById('clear-key');
 const ageStorageStatus = document.getElementById('age-storage-status');
 const ageStorageMessage = document.getElementById('age-storage-message');
@@ -123,9 +130,6 @@ function showView(name, updateHash = true) {
   if (view === 'configuration' && updateHash) void loadClusterConfiguration();
   if (view === 'movies' && updateHash) {
     void loadArrSettings('radarr');
-    // Settings can report an ID persisted by this browser even when this tab's
-    // in-memory copy was cleared by pagehide. Rehydrate it before unlocking.
-    if (!ageIdentityInMemory) ageIdentityInMemory = localStorage.getItem(ageSessionKey) || '';
     updateAgeIdControls();
     if (selectedNode) renderCachedMovies(selectedNode);
     if (ageIdentityInMemory && selectedNode) void unlockMetadata();
@@ -358,6 +362,9 @@ if (initialUrl.searchParams.has('node')) {
   window.history.replaceState(null, '', initialUrl);
 }
 const ageSessionKey = 'rawrarr.browser.age-id';
+// Remove credentials saved by older UI versions; age identities now live only
+// in this document's memory and must be entered again after a reload.
+localStorage.removeItem(ageSessionKey);
 sessionStorage.removeItem(ageSessionKey);
 const metadataExportButton = document.getElementById('export-metadata');
 const metadataExportStatus = document.getElementById('metadata-export-status');
@@ -411,9 +418,8 @@ metadataExportForm?.addEventListener('submit', async event => {
   await runMetadataExport(identity);
 });
 
-// Remembering is opt-in; otherwise the age ID exists only in this tab's memory.
-let ageIdentityInMemory = localStorage.getItem(ageSessionKey) || '';
-rememberAgeId.checked = Boolean(ageIdentityInMemory);
+// Age identities are never persisted by this UI.
+let ageIdentityInMemory = '';
 ageInput.value = '';
 
 function updateAgeIdControls() {
@@ -423,57 +429,35 @@ function updateAgeIdControls() {
   updateAgeStorageSettings();
 }
 function updateAgeStorageSettings() {
-  const isStored = Boolean(localStorage.getItem(ageSessionKey));
-  ageStorageStatus.dataset.state = isStored ? 'stored' : '';
-  ageStorageStatus.textContent = isStored
-    ? 'Age private ID is stored in this browser.'
-    : ageIdentityInMemory
-      ? 'Age private ID is not saved, but is available in this tab’s memory.'
-      : 'Age private ID is not stored in this browser.';
-  settingsAgeIdInput.hidden = isStored || Boolean(ageIdentityInMemory);
+  ageStorageStatus.dataset.state = '';
+  ageStorageStatus.textContent = ageIdentityInMemory
+    ? 'Age private ID is available only in this tab’s memory. It will be cleared when this page closes.'
+    : 'Age private ID is not stored in this browser.';
+  settingsAgeIdInput.hidden = Boolean(ageIdentityInMemory);
   document.getElementById('settings-age-id-label').hidden = settingsAgeIdInput.hidden;
-  saveAgeIdButton.textContent = ageIdentityInMemory ? 'Save current age ID in this browser' : 'Save age ID in this browser';
-  saveAgeIdButton.hidden = isStored;
-  removeAgeIdButton.hidden = !isStored && !ageIdentityInMemory;
-  removeAgeIdButton.textContent = isStored ? 'Remove age ID from this browser' : 'Clear age ID from this tab';
+  saveAgeIdButton.textContent = 'Use age ID for this session';
+  saveAgeIdButton.hidden = Boolean(ageIdentityInMemory);
+  removeAgeIdButton.hidden = !ageIdentityInMemory;
+  removeAgeIdButton.textContent = 'Clear age ID from this tab';
 }
 function clearAgeIdentity() {
   aiMovies = null;
   aiSeries = null;
   ageIdentityInMemory = '';
   ageInput.value = '';
-  rememberAgeId.checked = false;
-  localStorage.removeItem(ageSessionKey);
-  sessionStorage.removeItem(ageSessionKey);
   updateAgeIdControls();
 }
 updateAgeIdControls();
-rememberAgeId.addEventListener('change', () => {
-  if (rememberAgeId.checked && ageIdentityInMemory) localStorage.setItem(ageSessionKey, ageIdentityInMemory);
-  else if (!rememberAgeId.checked) localStorage.removeItem(ageSessionKey);
-  updateAgeStorageSettings();
-});
 window.addEventListener('pagehide', () => {
-  ageIdentityInMemory = '';
+  clearAgeIdentity();
   ageInput.value = '';
   settingsAgeIdInput.value = '';
   metadataExportInput.value = '';
+  if (approveNodeDialog.open) approveNodeDialog.close();
+  approveNodeIdentity.value = '';
+  approveNodeBackup.value = '';
+  approveNodeFingerprint.value = '';
 });
-window.addEventListener('storage', event => {
-  if (event.storageArea !== localStorage || event.key !== ageSessionKey) return;
-  if (event.newValue) {
-    ageIdentityInMemory = event.newValue;
-    rememberAgeId.checked = true;
-    updateAgeIdControls();
-    contentStatus.textContent = 'Remembered age private ID loaded from this browser.';
-    return;
-  }
-  clearAgeIdentity();
-  moviesPanel.replaceChildren();
-  resetArrSummary('radarr');
-  contentStatus.textContent = 'Age private ID removed from browser storage; metadata is locked.';
-});
-if (ageIdentityInMemory) contentStatus.textContent = 'Remembered age private ID loaded from this browser. It will be used only with the fossil node you select.';
 
 document.getElementById('age-storage-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -492,11 +476,9 @@ document.getElementById('age-storage-form').addEventListener('submit', async eve
       body: JSON.stringify({ identity, rememberOnDevice: false }),
     });
     ageIdentityInMemory = identity;
-    localStorage.setItem(ageSessionKey, identity);
-    rememberAgeId.checked = true;
     settingsAgeIdInput.value = '';
-    contentStatus.textContent = 'Age private ID saved in this browser and validated by the selected fossil node.';
-    ageStorageMessage.textContent = 'Age private ID saved in this browser.';
+    contentStatus.textContent = 'Age private ID validated for this tab. It will be cleared when this page closes.';
+    ageStorageMessage.textContent = 'Age private ID validated and kept in memory for this tab.';
     updateAgeIdControls();
   } catch (error) {
     ageStorageMessage.dataset.state = 'error';
@@ -1320,8 +1302,6 @@ async function unlockMetadata() {
   if (!node || node.nodeId !== nodeId) return;
   const hasCachedMovies = renderCachedMovies(nodeId);
   ageIdentityInMemory = identity;
-  if (rememberAgeId.checked) localStorage.setItem(ageSessionKey, identity);
-  else localStorage.removeItem(ageSessionKey);
   ageInput.value = '';
   updateAgeIdControls();
   if (location.hash === '#movies') void loadArrSettings('radarr');
@@ -1772,20 +1752,21 @@ async function loadPending() {
       const item = document.createElement('div');
       item.className = 'pending-item';
       const label = document.createElement('span');
-      label.textContent = `${node.displayName} · ${roleLabel(node.role)} · joins ${node.ownerDisplayName}`;
+      const idChange = node.requestedNodeId && node.requestedNodeId !== node.nodeId
+        ? ` · configured ID ${node.requestedNodeId}; keeps existing ID ${node.nodeId}`
+        : ` · ID ${node.nodeId}`;
+      label.textContent = `${node.displayName} · ${roleLabel(node.role)} · joins ${node.ownerDisplayName}${idChange}`;
       const approve = document.createElement('button');
       approve.type = 'button';
       approve.textContent = 'Approve';
-      approve.addEventListener('click', async () => {
-        approve.disabled = true;
-        try {
-          await jsonRequest('/api/workspace/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: node.requestId }) });
-          await loadPending();
-          await loadNodes();
-        } catch (error) {
-          approve.disabled = false;
-          status.textContent = error.message || 'Could not approve this node.';
-        }
+      approve.addEventListener('click', () => {
+        pendingNodeToApprove = node;
+        approveNodeIdentity.value = '';
+        approveNodeBackup.value = '';
+        approveNodeFingerprint.value = '';
+        approveNodeStatus.textContent = `${node.displayName} · ${roleLabel(node.role)} · ${node.nodeId}`;
+        approveNodeDialog.showModal();
+        approveNodeIdentity.focus();
       });
       const reject = document.createElement('button');
       reject.type = 'button';
@@ -1813,6 +1794,54 @@ async function loadPending() {
     pendingPanel.hidden = true;
   }
 }
+
+approveNodeCancel.addEventListener('click', () => approveNodeDialog.close());
+approveNodeDialog.addEventListener('close', () => {
+  approveNodeIdentity.value = '';
+  approveNodeBackup.value = '';
+  approveNodeFingerprint.value = '';
+  pendingNodeToApprove = null;
+});
+approveNodeForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const node = pendingNodeToApprove;
+  if (!node) return;
+  const submit = approveNodeForm.querySelector('[type="submit"]');
+  submit.disabled = true;
+  approveNodeStatus.textContent = 'Unlocking the encrypted root backup and signing this exact node request in this tab…';
+  try {
+    const ageIdentity = approveNodeIdentity.value.trim();
+    const encryptedBackup = approveNodeBackup.value.trim();
+    const savedFingerprint = approveNodeFingerprint.value.trim().toLowerCase();
+    const { inspectEncryptedRootBackup, signDeviceApproval } = await import('/assets/device-signing-client.js');
+    const root = await inspectEncryptedRootBackup(encryptedBackup, ageIdentity);
+    if (root.fingerprint !== savedFingerprint) throw new Error('The backup fingerprint does not match the fingerprint you saved independently.');
+    const approval = await signDeviceApproval(encryptedBackup, ageIdentity, savedFingerprint, {
+      requestId: node.requestId,
+      nodeId: node.nodeId,
+      role: node.role,
+      displayName: node.displayName,
+      publicKeyHex: node.signingPublicKeyHex,
+    });
+    await jsonRequest('/api/workspace/approve', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requestId: node.requestId,
+        rootPublicKey: root.publicKey,
+        rootFingerprint: approval.rootFingerprint,
+        signature: approval.signature,
+        signedPayload: approval.signedPayload,
+      }),
+    });
+    approveNodeDialog.close();
+    await loadPending();
+    await loadNodes();
+  } catch (error) {
+    approveNodeStatus.textContent = error.message || 'Could not approve this node.';
+  } finally {
+    submit.disabled = false;
+  }
+});
 
 document.getElementById('sign-out').addEventListener('click', async () => {
   clearAgeIdentity();

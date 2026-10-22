@@ -10,6 +10,14 @@ pub enum NodeRole {
 }
 
 impl NodeRole {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Coordinator => "coordinator",
+            Self::Storage => "storage",
+            Self::Metadata => "metadata",
+        }
+    }
+
     pub fn parse(value: &str) -> Result<Self, &'static str> {
         match value {
             "coordinator" => Ok(Self::Coordinator),

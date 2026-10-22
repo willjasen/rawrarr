@@ -6,7 +6,7 @@ const byId = id => document.getElementById(id);
 let ageIdentity = '';
 let rootBackup = '';
 let generatedAge = false;
-let generatedRoot = false;
+let rootFingerprint = '';
 const nodeId = `device-${[...crypto.getRandomValues(new Uint8Array(12))].map(value => value.toString(16).padStart(2, '0')).join('')}`;
 
 function fail(id, error) { byId(id).textContent = error instanceof Error ? error.message : 'Setup failed. Try again.'; }
@@ -20,16 +20,17 @@ function clearCompose() {
 function updateSteps() {
   const ageReady = Boolean(ageIdentity) && (!generatedAge || byId('age-backed-up').checked);
   byId('root-step').hidden = !ageReady;
-  byId('deploy-step').hidden = !ageReady || !rootBackup || (generatedRoot && !byId('root-backed-up').checked);
+  byId('deploy-step').hidden = !ageReady || !rootBackup || !byId('root-backed-up').checked;
 }
 function resetRoot() {
   rootBackup = '';
-  generatedRoot = false;
+  rootFingerprint = '';
   byId('root-fingerprint').textContent = '';
   byId('root-backed-up').checked = false;
   byId('root-backed-up').disabled = true;
   byId('root-backup-label').hidden = true;
   byId('copy-root').hidden = true;
+  byId('copy-root-fingerprint').hidden = true;
   clearCompose();
   updateSteps();
 }
@@ -68,9 +69,10 @@ byId('create-root').addEventListener('click', async event => {
   try {
     const root = await createEncryptedRootBackup(await identityToRecipient(ageIdentity));
     rootBackup = root.encryptedBackup;
-    generatedRoot = true;
+    rootFingerprint = root.fingerprint;
     byId('import-root').value = '';
-    byId('root-fingerprint').textContent = `User signing-key fingerprint: ${root.fingerprint}`;
+    byId('root-fingerprint').textContent = `Instance root fingerprint: ${root.fingerprint}`;
+    byId('copy-root-fingerprint').hidden = false;
     byId('root-backup-label').hidden = false;
     byId('root-backed-up').checked = false;
     byId('root-backed-up').disabled = true;
@@ -83,20 +85,28 @@ byId('copy-root').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(rootBackup); byId('root-backed-up').disabled = false; byId('root-fingerprint').textContent += ' · Encrypted backup copied. Save it outside this browser.'; }
   catch { byId('root-fingerprint').textContent = 'Clipboard access failed. Allow clipboard access and try again.'; }
 });
+byId('copy-root-fingerprint').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(rootFingerprint); byId('root-fingerprint').textContent = 'Root fingerprint copied. Save it separately from this browser.'; }
+  catch { byId('root-fingerprint').textContent = 'Clipboard access failed. Allow clipboard access and try again.'; }
+});
 byId('use-root').addEventListener('click', async () => {
   try {
     const backup = byId('import-root').value.trim();
     const root = await inspectEncryptedRootBackup(backup, ageIdentity);
     rootBackup = backup;
-    generatedRoot = false;
+    rootFingerprint = root.fingerprint;
     byId('import-root').value = '';
     byId('root-fingerprint').textContent = `Verified root fingerprint: ${root.fingerprint}`;
-    byId('root-backup-label').hidden = true;
+    byId('copy-root-fingerprint').hidden = false;
+    byId('root-backup-label').hidden = false;
+    byId('root-backed-up').checked = false;
+    byId('root-backed-up').disabled = false;
     byId('copy-root').hidden = true;
     updateSteps();
   } catch (error) { fail('root-fingerprint', error); }
 });
 byId('root-backed-up').addEventListener('change', updateSteps);
+byId('root-fingerprint-confirm').addEventListener('input', clearCompose);
 let automaticDeviceName = 'My fossil node';
 byId('node-role').addEventListener('change', () => {
   byId('media-path-group').hidden = byId('node-role').value !== 'storage';
@@ -119,9 +129,11 @@ byId('prepare-compose').addEventListener('click', () => {
   try {
     const authKey = byId('network-auth-key').value.trim();
     if (!authKey) throw new Error('Enter a one-time Tailscale or Headscale auth key.');
+    const pinnedFingerprint = byId('root-fingerprint-confirm').value.trim().toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(pinnedFingerprint) || pinnedFingerprint !== rootFingerprint) throw new Error('Re-enter the independently saved root fingerprint exactly.');
     const mode = byId('network-mode').value;
     const coordinatorUrl = mode === 'internal-tailscale' ? byId('internal-coordinator-url').value.trim().replace(/\/$/, '') : location.origin;
-    const yaml = subscriberCompose({ role: byId('node-role').value, nodeId, coordinatorUrl, deviceName: byId('device-name').value, mediaPath: byId('media-path').value, networkMode: mode, controlServer: byId('headscale-server').value.trim(), authKey });
+    const yaml = subscriberCompose({ role: byId('node-role').value, nodeId, coordinatorUrl, deviceName: byId('device-name').value, mediaPath: byId('media-path').value, networkMode: mode, controlServer: byId('headscale-server').value.trim(), authKey, rootFingerprint: pinnedFingerprint });
     byId('compose-preview').textContent = yaml;
     byId('compose-preview').hidden = false;
     byId('download-compose').hidden = false;
@@ -152,4 +164,4 @@ byId('download-compose').addEventListener('click', () => {
   byId('compose-preview').hidden = true;
   byId('download-compose').hidden = true;
 });
-window.addEventListener('pagehide', () => { ageIdentity = ''; rootBackup = ''; byId('import-age').value = ''; byId('import-root').value = ''; byId('network-auth-key').value = ''; });
+window.addEventListener('pagehide', () => { ageIdentity = ''; rootBackup = ''; rootFingerprint = ''; byId('import-age').value = ''; byId('import-root').value = ''; byId('root-fingerprint-confirm').value = ''; byId('network-auth-key').value = ''; });

@@ -1,4 +1,4 @@
-export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, mediaPath = '', networkMode, controlServer, authKey }) {
+export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, mediaPath = '', networkMode, controlServer, authKey, rootFingerprint }) {
   if (!['metadata', 'storage'].includes(role)) throw new Error('Only fossil and boneyard nodes can be installed here.');
   if (!['internal-tailscale', 'headscale'].includes(networkMode)) throw new Error('Choose internal Tailscale or public Headscale networking.');
   if (!/^device-[0-9a-f]{24}$/.test(nodeId)) throw new Error('Invalid generated device ID.');
@@ -7,6 +7,7 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
   if (!name || name.length > 64 || /[\u0000-\u001f\u007f]/.test(name)) throw new Error('Enter a device name of 1 to 64 characters without control characters.');
   const networkAuthKey = String(authKey ?? '').trim();
   if (!networkAuthKey) throw new Error('Enter a one-time Tailscale or Headscale auth key.');
+  if (!/^[0-9a-f]{64}$/.test(String(rootFingerprint || '').toLowerCase())) throw new Error('Enter the independently saved instance root fingerprint.');
   let origin;
   try { origin = new URL(coordinatorUrl); }
   catch { throw new Error('The coordinator must have an HTTPS origin.'); }
@@ -67,6 +68,7 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
     `      RAWARR_NODE_ID: ${nodeId}`,
     `      RAWARR_DEVICE_ID: ${nodeId}`,
     `      RAWARR_DEVICE_NAME: ${quote(name)}`,
+    `      RAWARR_INSTANCE_ROOT_FINGERPRINT: ${String(rootFingerprint).toLowerCase()}`,
     `      RAWARR_COORDINATOR_URL: ${quote(coordinatorUrl)}`,
     '      RAWARR_UI_GITHUB_REPO: willjasen/rawrarr',
     '      RAWARR_UI_GITHUB_TOKEN_FILE: /run/secrets/rawrarr_ui_github_token',

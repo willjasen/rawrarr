@@ -5,6 +5,7 @@ mod sonarr;
 
 pub mod auth;
 mod coordinator;
+mod device_signing;
 mod artwork_cache;
 mod coordinator_avatar;
 pub mod devices;
@@ -2128,11 +2129,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     secure_config::AgeVault::ensure_node_identity()?;
     secure_config::AgeVault::ensure_node_signing_key()?;
+    let device_id = devices::load_or_create_device_id()?;
+    let device_name = env::var("RAWARR_DEVICE_NAME").unwrap_or_else(|_| "This device".to_owned());
+    let node_id = env::var("RAWARR_NODE_ID").unwrap_or_else(|_| device_id.clone());
+    let auth = node_auth::NodeAuth::from_env(role, &node_id, &device_name).await?;
+    let role_name = role.as_str();
     if arguments == ["storage-scan-once"] {
-        let device_id = devices::load_or_create_device_id()?;
-        let logger =
-            shared_logs::SharedLogger::open(&secure_config::AgeVault::shared_dir(), &device_id)
-                .ok();
+        let logger = secure_config::AgeVault::node_signing_public_key().ok().and_then(|public_key| {
+            shared_logs::SharedLogger::open(&secure_config::AgeVault::shared_dir(), &device_id, &node_id, role_name, auth.signing_certificate(), public_key, |message| {
+                secure_config::AgeVault::sign_node_message(message).map_err(std::io::Error::other)
+            }).ok()
+        });
         if logger.is_none() {
             eprintln!("rawrarr shared logging could not be initialized");
         }
@@ -2161,10 +2168,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let address = env::var("RUST_ARR_LISTEN_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".to_owned());
     let socket_address: SocketAddr = address.parse()?;
-    let device_id = devices::load_or_create_device_id()?;
-    let device_name = env::var("RAWARR_DEVICE_NAME").unwrap_or_else(|_| "This device".to_owned());
-    let node_id = env::var("RAWARR_NODE_ID").unwrap_or_else(|_| device_id.clone());
-    let auth = node_auth::NodeAuth::from_env(role, &node_id, &device_name).await?;
     let mut radarr = None;
     let mut vault = None;
     secure_config::AgeVault::enforce_local_config_policy()?;
@@ -2200,8 +2203,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             settings.radarr_api_key.clone(),
         )?);
     }
-    let shared_logs =
-        shared_logs::SharedLogger::open(&secure_config::AgeVault::shared_dir(), &device_id).ok();
+    let shared_logs = secure_config::AgeVault::node_signing_public_key().ok().and_then(|public_key| {
+        shared_logs::SharedLogger::open(&secure_config::AgeVault::shared_dir(), &device_id, &node_id, role_name, auth.signing_certificate(), public_key, |message| {
+            secure_config::AgeVault::sign_node_message(message).map_err(std::io::Error::other)
+        }).ok()
+    });
     if shared_logs.is_none() {
         eprintln!("rawrarr shared logging could not be initialized");
     }

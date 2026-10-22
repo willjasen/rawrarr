@@ -43,7 +43,7 @@ test('coordinator labels the Sonarr section TV in navigation and its page headin
   assert.match(workspace, /\.connection-form input \{ width:100%; min-height:42px/);
   assert.match(workspaceScript, /name === 'tv' \? 'series' : name/);
   assert.match(workspaceScript, /view === 'series' \? 'tv' : view/);
-  assert.match(workspaceScript, /if \(view === 'movies' && updateHash\)[\s\S]*?if \(!ageIdentityInMemory\) ageIdentityInMemory = localStorage\.getItem\(ageSessionKey\) \|\| ''[\s\S]*?if \(ageIdentityInMemory && selectedNode\) void unlockMetadata\(\)/);
+  assert.match(workspaceScript, /if \(view === 'movies' && updateHash\)[\s\S]*?updateAgeIdControls\(\)[\s\S]*?if \(ageIdentityInMemory && selectedNode\) void unlockMetadata\(\)/);
   assert.match(workspaceScript, /catch \(error\) \{[\s\S]*?moviesPanel\.replaceChildren\(\);\s*updateAgeIdControls\(\);\s*contentStatus\.textContent/);
 });
 
@@ -124,31 +124,53 @@ test('coordinator root selects passkey sign-in or an owner workspace while healt
   assert.match(auth, /auth\.node_id == "coordinator" \{\s*"\/setup\/node"/);
   assert.match(workspace, /id="age-id"/);
   assert.match(workspace, /id="age-id-entry"/);
-  assert.match(workspace, /id="remember-age-id" type="checkbox"/);
-  assert.match(workspace, /For the highest security, leave this unchecked/);
-  assert.match(workspace, /id="age-storage-title">Age private ID in this browser/);
+  assert.doesNotMatch(workspace, /id="remember-age-id"/);
+  assert.match(workspace, /Your ID stays only in this tab's memory/);
+  assert.match(workspace, /id="age-storage-title">Age private ID for this session/);
   assert.match(workspace, /id="age-storage-status"/);
   assert.match(workspace, /id="save-age-id"/);
   assert.match(workspace, /id="remove-age-id"/);
   assert.match(workspace, /User signing keys are never saved in browser storage/);
   assert.match(workspace, /id="clear-key" type="button" hidden/);
   assert.match(workspace, /<title>rawrarr<\/title>/);
-  assert.match(workspace, /will stay only in this tab's memory/);
-  assert.match(workspaceScript, /let ageIdentityInMemory = localStorage\.getItem\(ageSessionKey\) \|\| ''/);
+  assert.match(workspace, /stays in this tab's memory/);
+  assert.match(workspaceScript, /let ageIdentityInMemory = ''/);
   assert.match(workspaceScript, /ageIdentityInMemory = identity/);
   assert.match(workspaceScript, /addEventListener\('pagehide', \(\) =>/);
   assert.match(workspaceScript, /localStorage\.removeItem\(ageSessionKey\)/);
-  assert.match(workspaceScript, /if \(rememberAgeId\.checked\) localStorage\.setItem\(ageSessionKey, identity\)/);
-  assert.match(workspaceScript, /localStorage\.setItem\(ageSessionKey, identity\)/);
+  assert.doesNotMatch(workspaceScript, /localStorage\.(?:getItem|setItem)\(ageSessionKey/);
   assert.match(workspaceScript, /arrDirectRequest\('\/settings\/age'/);
   assert.doesNotMatch(workspaceScript, /localStorage\.(?:getItem|setItem)\([^)]*(?:root|signing)/i);
-  assert.doesNotMatch(workspaceScript, /sessionStorage\.getItem\(ageSessionKey\)|sessionStorage\.setItem\(ageSessionKey/);
-  assert.doesNotMatch(workspaceScript, /sessionStorage\.getItem\(ageSessionKey\)|sessionStorage\.setItem\(ageSessionKey/);
+  assert.match(workspaceScript, /localStorage\.removeItem\(ageSessionKey\)/);
+  assert.doesNotMatch(workspaceScript, /sessionStorage\.(?:getItem|setItem)\(ageSessionKey/);
   assert.match(workspaceScript, /ageIdEntry\.hidden = hasIdentity/);
   assert.match(workspaceScript, /clearKeyButton\.hidden = !hasIdentity/);
   assert.match(workspaceScript, /updateAgeIdControls\(\);/);
   assert.doesNotMatch(workspace, /<iframe/i);
   assert.match(workspaceScript, /\/api\/workspace\/nodes/);
+});
+
+test('device approvals use a volatile browser form and root-signed exact node request', async () => {
+  const [onboarding, onboardingScript, signingClient, subscriberComposeSource] = await Promise.all([
+    read('rust-arr/src/subscriber_onboarding.html'),
+    read('rust-arr/web-export/subscriber-onboarding.js'),
+    read('rust-arr/web-export/device-signing-client.js'),
+    read('rust-arr/web-export/subscriber-compose.js'),
+  ]);
+  assert.match(workspace, /id="approve-node-age-id" type="password"/);
+  assert.match(workspace, /id="approve-node-root-backup"/);
+  assert.match(workspace, /id="approve-node-root-fingerprint"/);
+  assert.match(workspaceScript, /signDeviceApproval\(encryptedBackup, ageIdentity, savedFingerprint/);
+  assert.match(workspaceScript, /signedPayload: approval\.signedPayload/);
+  assert.match(workspaceScript, /approveNodeDialog\.addEventListener\('close'/);
+  assert.match(workspaceScript, /approveNodeDialog\.close\(\)/);
+  assert.match(signingClient, /secretKey\?\.fill\(0\)/);
+  assert.match(onboarding, /id="root-fingerprint-confirm"/);
+  assert.match(onboarding, /Re-enter the root fingerprint you saved separately/);
+  assert.match(onboardingScript, /rootFingerprint: pinnedFingerprint/);
+  assert.match(subscriberComposeSource, /RAWARR_INSTANCE_ROOT_FINGERPRINT/);
+  assert.match(onboardingScript, /pagehide/);
+  assert.doesNotMatch(onboardingScript, /localStorage|sessionStorage/);
 });
 
 test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from the public age ID', () => {

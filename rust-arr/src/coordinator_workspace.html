@@ -193,8 +193,6 @@
     .connection-saved-note { color:var(--muted); font-size:12px }
     .settings-connections { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr)); gap:16px; margin-top:18px }
     .settings-connections .connection-card { margin:0; max-width:none }
-    .age-remember { display:flex; align-items:flex-start; gap:9px; margin-top:12px; color:#dce6dc; font-size:13px; font-weight:650 }
-    .age-remember input { flex:none; width:16px; height:16px; margin:2px 0 0; accent-color:var(--green) }
     .age-security-warning { max-width:640px; margin:7px 0 0; color:#e5c889; font-size:12px }
     .age-storage-card { max-width:780px; margin:18px 0; padding:20px; border:1px solid var(--line); border-radius:12px; background:linear-gradient(135deg,#18211a,#131915 72%) }
     .age-storage-card h2 { margin:0; font-size:18px }
@@ -297,12 +295,11 @@
         <label for="age-id">Age private ID</label><br>
         <input id="age-id" type="password" autocomplete="off" spellcheck="false" placeholder="AGE-SECRET-KEY-PQ-1…">
         <button id="unlock" type="button">Unlock metadata</button>
-        <label class="age-remember" for="remember-age-id"><input id="remember-age-id" type="checkbox"><span>Remember my age private ID in this browser</span></label>
-        <p class="age-security-warning">For the highest security, leave this unchecked. Your ID will stay only in this tab's memory and you will need to enter it again when changing encrypted settings.</p>
+        <p class="age-security-warning">Your ID stays only in this tab's memory. Enter it again after reloading or closing this page.</p>
       </div>
       <button id="clear-key" type="button" hidden>Clear private ID</button>
       </div></div>
-      <p id="content-status" role="status">Enter your age private ID to unlock. If you choose to remember it, it is stored in this browser until you clear it or sign out.</p>
+      <p id="content-status" role="status">Enter your age private ID to unlock. It stays in this tab's memory and is cleared when the page closes.</p>
       <section id="radarr-summary" class="summary" aria-label="Radarr movie statistics"></section>
       <article class="panel library-panel"><div class="panel-head"><h2>Movies</h2><button id="refresh-movies" type="button">Rescan</button></div>
         <p id="radarr-scrape-status" class="scrape-status" role="status" aria-live="polite" hidden></p>
@@ -355,12 +352,12 @@
       <div class="settings-identity">
       <article class="profile-card"><picture class="profile-avatar"><source id="profile-picture-jxl" type="image/jxl"><img id="profile-picture" alt="Generated dinosaur profile picture"></picture><div class="profile-avatar-copy"><h2 class="profile-name" id="profile-name">Loading profile…</h2><p class="profile-avatar-status" id="profile-avatar-status" role="status" aria-live="polite">Loading the public age ID from a fossil node…</p></div></article>
       <article class="age-storage-card" aria-labelledby="age-storage-title">
-        <h2 id="age-storage-title">Age private ID in this browser</h2>
+        <h2 id="age-storage-title">Age private ID for this session</h2>
         <p id="age-storage-status" class="age-storage-status" role="status" aria-live="polite">Checking browser storage…</p>
         <form id="age-storage-form" class="age-storage-form">
           <label id="settings-age-id-label" for="settings-age-id">Age private ID</label>
           <input id="settings-age-id" type="password" autocomplete="off" spellcheck="false" placeholder="AGE-SECRET-KEY-PQ-1…">
-          <div class="connection-actions"><button id="save-age-id" type="submit">Save age ID in this browser</button><button id="remove-age-id" type="button" hidden>Remove age ID from this browser</button></div>
+          <div class="connection-actions"><button id="save-age-id" type="submit">Use age ID for this session</button><button id="remove-age-id" type="button" hidden>Clear age ID from this tab</button></div>
           <p id="age-storage-message" class="connection-message" role="status" aria-live="polite"></p>
         </form>
       </article>
@@ -406,6 +403,20 @@
           <input id="metadata-export-identity" type="password" autocomplete="off" spellcheck="false" required style="width:100%;min-height:42px;margin-top:6px;border:1px solid #46574a;border-radius:8px;background:#101411;color:var(--text);padding:10px;font:12px ui-monospace,monospace">
           <div class="connection-actions"><button id="metadata-export-start" type="submit">Decrypt and download ZIP</button><button id="metadata-export-cancel" type="button">Cancel</button></div>
           <p id="metadata-export-dialog-status" class="connection-message" role="status" aria-live="polite"></p>
+        </form>
+      </dialog>
+      <dialog id="approve-node-dialog" style="width:min(640px,calc(100% - 28px));border:1px solid #39463d;border-radius:14px;background:#151b18;color:#e7eee8;padding:22px">
+        <form id="approve-node-form">
+          <h2 style="margin:0 0 8px">Approve with the instance root key</h2>
+          <p class="sub">This tab decrypts the root backup with your age ID and signs the displayed request locally. Only the public root key and signature are sent to roarlay. Compare the fingerprint with the copy you saved separately.</p>
+          <p id="approve-node-status" class="connection-message" role="status" aria-live="polite"></p>
+          <label for="approve-node-age-id">Age private ID</label>
+          <input id="approve-node-age-id" type="password" autocomplete="off" spellcheck="false" required style="width:100%;min-height:42px;margin-top:6px;border:1px solid #46574a;border-radius:8px;background:#101411;color:var(--text);padding:10px;font:12px ui-monospace,monospace">
+          <label for="approve-node-root-backup">Encrypted root-key backup</label>
+          <textarea id="approve-node-root-backup" required autocomplete="off" spellcheck="false" style="width:100%;min-height:135px;margin-top:6px;border:1px solid #46574a;border-radius:8px;background:#101411;color:var(--text);padding:10px;font:12px ui-monospace,monospace"></textarea>
+          <label for="approve-node-root-fingerprint">Independently saved root fingerprint</label>
+          <input id="approve-node-root-fingerprint" type="text" inputmode="text" pattern="[0-9a-fA-F]{64}" autocomplete="off" required style="width:100%;min-height:42px;margin-top:6px;border:1px solid #46574a;border-radius:8px;background:#101411;color:var(--text);padding:10px;font:12px ui-monospace,monospace">
+          <div class="connection-actions"><button type="submit">Sign and approve</button><button id="approve-node-cancel" type="button">Cancel</button></div>
         </form>
       </dialog>
     </section>
