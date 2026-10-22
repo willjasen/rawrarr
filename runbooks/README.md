@@ -30,6 +30,8 @@
 
 # Rawrarr runbooks
 
+- [Test and deploy GitHub main in OrbStack](2026-10-22-test-deploy-main-orbstack.md) — Run the regression and Playwright suites against clean GitHub `main`, then deploy code-affected internal services and verify their routes.
+
 - [Check GitHub UI releases every minute](2026-10-22-ui-updater-one-minute-poll.md) — Reduce coordinator and node UI bundle detection from five minutes to one minute, with a 60-second minimum.
 
 - [Show only device route latency](2026-10-22-show-only-device-route-latency.md) — Remove the Direct prefix from directly reachable device status while retaining the measured milliseconds.
