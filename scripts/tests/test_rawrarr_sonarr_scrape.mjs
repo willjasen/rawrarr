@@ -14,21 +14,33 @@ const [main, sonarr, config, workspace, workspaceScript] = await Promise.all([
 
 test('Sonarr metadata scraping starts on metadata nodes and repeats after six hours', () => {
   assert.match(main, /if role == node_role::NodeRole::Metadata\s*\{[\s\S]*?tokio::spawn\(run_metadata_sonarr_backfill/);
-  assert.match(main, /async fn run_metadata_sonarr_backfill[\s\S]*?sleep\(Duration::from_secs\(10\)\)/);
+  assert.match(main, /async fn run_metadata_sonarr_backfill[\s\S]*?wait_for_sonarr_backfill\(&state, Duration::from_secs\(10\)\)/);
   assert.match(main, /wait_for_sonarr_backfill\(&state, Duration::from_secs\(6 \* 60 \* 60\)\)/);
   assert.match(main, /sonarr_scrape_notify\.notified\(\)/);
   assert.match(sonarr, /state\.sonarr_scrape_notify\.notify_one\(\)/);
 });
 
+test('Arr backfills share one low-rate record lock across Radarr and Sonarr', () => {
+  assert.match(main, /let movies = match \{\s*let _guard = state\.artwork_scrape_lock\.lock\(\)\.await;\s*radarr\.list_movies/);
+  assert.match(main, /let \(series, profiles\) = match \{\s*let _guard = state\.artwork_scrape_lock\.lock\(\)\.await;\s*match sonarr::raw_series\(&client\)\.await/);
+  assert.match(main, /for tmdb_id in missing\s*\{[\s\S]*?artwork_scrape_lock\.lock\(\)\.await[\s\S]*?scrape_and_store_movie_artwork/);
+  assert.match(main, /for \(tvdb_id, item\) in records\s*\{[\s\S]*?artwork_scrape_lock\.lock\(\)\.await[\s\S]*?sonarr::scrape_and_store/);
+  assert.equal((main.match(/sleep\(Duration::from_secs\(2\)\)/g) ?? []).length, 2);
+  assert.match(main, /let _guard = state\.artwork_scrape_lock\.lock\(\)\.await;[\s\S]*?scrape_and_store_movie_artwork/);
+});
+
 test('Sonarr backfill is sequential, cache-first, and limited to series with posters and TVDB IDs', () => {
   assert.match(main, /sonarr::has_poster\(&item\)/);
-  assert.match(main, /!vault\.tv_metadata_exists\(\*tvdb_id\) \|\| !vault\.tv_artwork_exists\(\*tvdb_id\)/);
-  assert.match(main, /for \(tvdb_id, item\) in missing\s*\{[\s\S]*?sonarr::scrape_and_store\([\s\S]*?sleep\(Duration::from_millis\(250\)\)/);
-  assert.match(sonarr, /"tvdbId": tvdb_id/);
-  assert.match(sonarr, /"provider": "sonarr"/);
+  assert.match(main, /let cached = vault\.tv_artwork_exists\(tvdb_id\)/);
+  assert.match(main, /for \(tvdb_id, item\) in records\s*\{[\s\S]*?sonarr::scrape_and_store\([\s\S]*?sleep\(Duration::from_secs\(2\)\)/);
+  assert.match(sonarr, /arr_text_record\("sonarr", "tvdbId", tvdb_id, series\)/);
+  assert.match(sonarr, /raw_episodes\(client, series_id\)\.await\.ok\(\)/);
+  assert.match(sonarr, /attach_episodes\(&mut metadata, episodes, current\.as_ref\(\)\)/);
+  assert.match(sonarr, /fn attach_episodes[\s\S]*?previous[\s\S]*?\.unwrap_or_default\(\)/);
+  assert.match(sonarr, /arr_text_record\("sonarr", "tvdbId", tvdb_id, series\)/);
   assert.match(sonarr, /store_tv_metadata/);
   assert.match(sonarr, /store_tv_artwork/);
-  assert.match(sonarr, /load_tv_artwork\(tvdb_id\)[\s\S]*?existing_artwork_is_valid\(existing_artwork\)/);
+  assert.match(sonarr, /[a-z_]+\.load_tv_artwork\(tvdb_id\)[\s\S]*?existing_artwork_is_valid\(existing_artwork\)/);
   assert.match(sonarr, /Err\(secure_config::VaultError::DecryptionFailed\) => Ok\(false\)/);
   assert.match(sonarr, /validated_tvdb_image_url\(remote\)/);
   assert.match(sonarr, /https/);
@@ -51,6 +63,6 @@ test('Sonarr metadata and artwork stay in separate HMAC-named age-encrypted TV f
   assert.match(workspaceScript, /poster\.src = `\$\{artworkBase\}\/sonarr\/series\/\$\{encodeURIComponent\(item\.tvdbId\)\}\/poster`/);
   assert.match(workspaceScript, /poster\.loading = 'lazy'/);
   assert.match(main, /\.route\("\/api\/sonarr\/series\/\{tvdb_id\}\/poster", get\(get_sonarr_poster\)\)/);
-  assert.match(main, /vault\.load_tv_artwork\(tvdb_id\)/);
+  assert.match(main, /vault\.load_tv_artwork_cached\(tvdb_id/);
   assert.match(main, /\.route\("\/api\/metadata\/sonarr\/backfill", get\(metadata_sonarr_backfill_status\)\)/);
 });

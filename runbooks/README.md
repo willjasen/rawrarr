@@ -26,6 +26,8 @@
 
 # Rawrarr runbooks
 
+- [Throttle Arr metadata scraping](2026-10-22-throttle-arr-scraping.md) — Serialize Radarr and Sonarr record scraping and add a low request rate on metadata nodes.
+
 - [Serve the Radarr library through the node direct API](2026-10-22-temporary-direct-radarr-library.md) — Temporarily route Movies through the subscriber node like TV after shared quality-profile writes caused a Radarr library 502; includes rollback steps.
 
 - [Deploy subscriber setup changes to the internal coordinator](2026-10-22-deploy-node-setup-to-internal-coordinator.md) — Deploy the node setup flow to the Mac mini coordinator and verify its live Devices route.
@@ -499,3 +501,4 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Review current Rawrarr documentation](2026-10-18-current-state-documentation-review.md) — Align setup, architecture, export, scanning, and roadmap claims with current source and observed local port routing.
 - [Record documentation review commits](2026-10-18-documentation-commit-history.md) — Save the documentation-review commit in project instructions and require a separate history update after future reviews.
 - [OrbStack coordinator and two-node Headscale test](2026-10-21-orbstack-coordinator-two-node-test.md) — Run an isolated coordinator, Headscale control plane, and two Rawrarr subscriber nodes; verify heartbeats and bidirectional Tailnet pings.
+- [Fix Radarr and Sonarr poster delivery](2026-10-22-fix-arr-posters.md) — Restore direct Radarr poster delivery and verify that the metadata node writes encrypted artwork into the intended shared folder.

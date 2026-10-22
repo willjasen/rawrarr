@@ -203,34 +203,47 @@ pub(super) async fn raw_episodes(
         .json().await
 }
 
+fn attach_episodes(
+    metadata: &mut serde_json::Value,
+    fetched: Option<Vec<serde_json::Value>>,
+    previous: Option<&serde_json::Value>,
+) {
+    let episodes = fetched.unwrap_or_else(|| {
+        previous
+            .and_then(|record| record.get("episodes"))
+            .and_then(serde_json::Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+    });
+    metadata["episodes"] = serde_json::Value::Array(episodes.into_iter().map(|mut episode| {
+        metadata::sanitize_arr_text_fields(&mut episode);
+        episode
+    }).collect());
+}
+
 pub(super) async fn scrape_and_store(
     client: &ArrClient,
     vault: secure_config::AgeVault,
     series: &serde_json::Value,
     tvdb_id: u64,
-    scrape_lock: Arc<tokio::sync::Mutex<()>>,
-) -> Result<bool, ()> {
-    let _guard = scrape_lock.lock().await;
-    let series_id = series.get("id").and_then(serde_json::Value::as_i64).filter(|id| *id > 0).ok_or(())?;
-    let episodes = raw_episodes(client, series_id).await.map_err(|_| ())?;
+) -> Result<bool, &'static str> {
+    let series_id = series.get("id").and_then(serde_json::Value::as_i64).filter(|id| *id > 0).ok_or("invalid Sonarr series")?;
+    let episodes = raw_episodes(client, series_id).await.ok();
     let mut metadata = metadata::arr_text_record("sonarr", "tvdbId", tvdb_id, series);
-    metadata["episodes"] = serde_json::Value::Array(episodes.into_iter().map(|mut episode| {
-        metadata::sanitize_arr_text_fields(&mut episode);
-        episode
-    }).collect());
-    let serialized = serde_json::to_vec(&metadata).map_err(|_| ())?;
     let compare_vault = vault.clone();
     let current = tokio::task::spawn_blocking(move || compare_vault.load_tv_metadata(tvdb_id))
-        .await.map_err(|_| ())?.map_err(|_| ())?;
+        .await.map_err(|_| "TV metadata load task failed")?.map_err(|_| "TV metadata load failed")?;
+    attach_episodes(&mut metadata, episodes, current.as_ref());
+    let serialized = serde_json::to_vec(&metadata).map_err(|_| "TV metadata serialization failed")?;
     if current.as_ref() != Some(&metadata) {
         let store_vault = vault.clone();
         tokio::task::spawn_blocking(move || store_vault.store_tv_metadata(tvdb_id, &serialized))
-            .await.map_err(|_| ())?.map_err(|_| ())?;
+            .await.map_err(|_| "TV metadata store task failed")?.map_err(|_| "TV metadata store failed")?;
     }
     let artwork_vault = vault.clone();
     let existing_artwork = tokio::task::spawn_blocking(move || artwork_vault.load_tv_artwork(tvdb_id))
-        .await.map_err(|_| ())?;
-    if existing_artwork_is_valid(existing_artwork)? { return Ok(true); }
+        .await.map_err(|_| "TV artwork load task failed")?;
+    if existing_artwork_is_valid(existing_artwork).map_err(|_| "TV artwork cache check failed")? { return Ok(true); }
     let Some(image) = poster_image(series) else { return Ok(false); };
     if let Some(remote) = image.get("remoteUrl").and_then(serde_json::Value::as_str) {
         if let Ok(url) = validated_tvdb_image_url(remote) {
@@ -238,7 +251,7 @@ pub(super) async fn scrape_and_store(
                 if let Ok(Some((content_type, bytes))) = super::read_image_response(&mut response).await {
                     let store_vault = vault.clone();
                     tokio::task::spawn_blocking(move || store_vault.store_tv_artwork(tvdb_id, &content_type, &bytes))
-                        .await.map_err(|_| ())?.map_err(|_| ())?;
+                        .await.map_err(|_| "TV artwork store task failed")?.map_err(|_| "TV artwork store failed")?;
                     return Ok(true);
                 }
             }
@@ -246,8 +259,8 @@ pub(super) async fn scrape_and_store(
     }
     let Some(path) = image.get("url").and_then(|value| value.as_str()) else { return Ok(false); };
     if !path.starts_with('/') || path.starts_with("//") || path.contains('\\') { return Ok(false); }
-    let base = reqwest::Url::parse(&client.base_url).map_err(|_| ())?;
-    let url = base.join(path).map_err(|_| ())?;
+    let base = reqwest::Url::parse(&client.base_url).map_err(|_| "invalid Sonarr base URL")?;
+    let url = base.join(path).map_err(|_| "invalid Sonarr poster URL")?;
     if url.scheme() != base.scheme()
         || url.host_str() != base.host_str()
         || url.port_or_known_default() != base.port_or_known_default()
@@ -256,13 +269,13 @@ pub(super) async fn scrape_and_store(
     }
     let mut response = client.http.get(url)
         .header("X-Api-Key", client.api_key.clone())
-        .send().await.map_err(|_| ())?;
-    let Some((content_type, bytes)) = super::read_image_response(&mut response).await? else {
+        .send().await.map_err(|_| "Sonarr poster request failed")?;
+    let Some((content_type, bytes)) = super::read_image_response(&mut response).await.map_err(|_| "Sonarr poster response invalid")? else {
         return Ok(false);
     };
     let store_vault = vault.clone();
     tokio::task::spawn_blocking(move || store_vault.store_tv_artwork(tvdb_id, &content_type, &bytes))
-        .await.map_err(|_| ())?.map_err(|_| ())?;
+        .await.map_err(|_| "TV artwork store task failed")?.map_err(|_| "TV artwork store failed")?;
     Ok(true)
 }
 

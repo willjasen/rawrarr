@@ -51,6 +51,18 @@ fn tvdb_remote_poster_urls_are_restricted_to_https_artwork_paths() {
 }
 
 #[test]
+fn failed_episode_lookup_preserves_cached_details_and_does_not_block_metadata() {
+    let previous = serde_json::json!({"episodes":[{"id": 7, "title":"Cached episode"}]});
+    let mut metadata = serde_json::json!({"provider":"sonarr"});
+    attach_episodes(&mut metadata, None, Some(&previous));
+    assert_eq!(metadata["episodes"][0]["title"], "Cached episode");
+
+    let mut first_scrape = serde_json::json!({"provider":"sonarr"});
+    attach_episodes(&mut first_scrape, None, None);
+    assert_eq!(first_scrape["episodes"], serde_json::json!([]));
+}
+
+#[test]
 fn old_config_remains_compatible() {
     let config: secure_config::PersistedConfig =
         serde_json::from_str(r#"{"radarr_url":"","radarr_api_key":""}"#).unwrap();

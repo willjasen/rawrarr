@@ -61,6 +61,7 @@ struct AppState {
     syncthing: Option<syncthing::Client>,
     artwork_backfill: Arc<RwLock<ArtworkBackfillProgress>>,
     sonarr_backfill: Arc<RwLock<ArtworkBackfillProgress>>,
+    // Shared across both Arr workers so their metadata requests never overlap.
     artwork_scrape_lock: Arc<tokio::sync::Mutex<()>>,
     artwork_scrape_notify: Arc<tokio::sync::Notify>,
     artwork_force_rescan: Arc<AtomicBool>,
@@ -1001,7 +1002,8 @@ async fn radarr_movie_poster(
             error: "Radarr is not configured",
         }),
     ))?;
-    let (content_type, bytes) = scrape_and_store_movie_artwork(&radarr, vault, tmdb_id, state.artwork_scrape_lock.clone(), state.artwork_cache.clone(), false)
+    let _guard = state.artwork_scrape_lock.lock().await;
+    let (content_type, bytes) = scrape_and_store_movie_artwork(&radarr, vault, tmdb_id, state.artwork_cache.clone(), false)
         .await
         .map_err(|_| {
             (
@@ -1024,11 +1026,9 @@ async fn scrape_and_store_movie_artwork(
     radarr: &RadarrClient,
     vault: Option<secure_config::AgeVault>,
     tmdb_id: u64,
-    scrape_lock: Arc<tokio::sync::Mutex<()>>,
     artwork_cache: Arc<artwork_cache::ArtworkCache>,
     refresh_metadata: bool,
 ) -> Result<Option<(String, Vec<u8>)>, ()> {
-    let _guard = scrape_lock.lock().await;
     let Some(movie) = radarr.movie_by_tmdb_id(tmdb_id).await.map_err(|_| ())? else {
         return Ok(None);
     };
@@ -1138,7 +1138,10 @@ async fn run_metadata_artwork_backfill(state: Arc<AppState>) {
             wait_for_metadata_backfill(&state, Duration::from_secs(60)).await;
             continue;
         }
-        let movies = match radarr.list_movies(vault.clone()).await {
+        let movies = match {
+            let _guard = state.artwork_scrape_lock.lock().await;
+            radarr.list_movies(vault.clone()).await
+        } {
             Ok(movies) => movies,
             Err(_) => {
                 wait_for_metadata_backfill(&state, Duration::from_secs(60)).await;
@@ -1175,7 +1178,8 @@ async fn run_metadata_artwork_backfill(state: Arc<AppState>) {
         for tmdb_id in missing {
             let cached = vault.as_ref().is_some_and(|vault| vault.artwork_exists(tmdb_id));
             let succeeded = if cached && !force_rescan { true } else {
-                matches!(scrape_and_store_movie_artwork(&radarr, vault.clone(), tmdb_id, state.artwork_scrape_lock.clone(), state.artwork_cache.clone(), force_rescan).await, Ok(Some(_)))
+                let _guard = state.artwork_scrape_lock.lock().await;
+                matches!(scrape_and_store_movie_artwork(&radarr, vault.clone(), tmdb_id, state.artwork_cache.clone(), force_rescan).await, Ok(Some(_)))
                     || (force_rescan && vault.as_ref().is_some_and(|vault| vault.movie_metadata_exists(tmdb_id)))
             };
             let mut progress = state.artwork_backfill.write().await;
@@ -1184,7 +1188,8 @@ async fn run_metadata_artwork_backfill(state: Arc<AppState>) {
                 if !cached { progress.scraped += 1; }
             } else { progress.failed += 1; }
             drop(progress);
-            tokio::time::sleep(Duration::from_millis(250)).await;
+            // Yield between items and keep requests gentle on small Arr hosts.
+            tokio::time::sleep(Duration::from_secs(2)).await;
         }
         state.artwork_backfill.write().await.active = false;
         wait_for_metadata_backfill(&state, Duration::from_secs(6 * 60 * 60)).await;
@@ -1220,10 +1225,13 @@ async fn run_metadata_sonarr_backfill(state: Arc<AppState>) {
                 continue;
             }
         };
-        let (series, profiles) = match tokio::try_join!(
-            sonarr::raw_series(&client),
-            sonarr::raw_quality_profiles(&client),
-        ) {
+        let (series, profiles) = match {
+            let _guard = state.artwork_scrape_lock.lock().await;
+            match sonarr::raw_series(&client).await {
+                Ok(series) => sonarr::raw_quality_profiles(&client).await.map(|profiles| (series, profiles)),
+                Err(error) => Err(error),
+            }
+        } {
             Ok(result) => result,
             Err(_) => {
                 wait_for_sonarr_backfill(&state, Duration::from_secs(60)).await;
@@ -1250,12 +1258,20 @@ async fn run_metadata_sonarr_backfill(state: Arc<AppState>) {
         for (tvdb_id, item) in records {
             let cached = vault.tv_artwork_exists(tvdb_id);
             let expected_artwork = sonarr::has_poster(&item);
-            let scraped = sonarr::scrape_and_store(
-                &client, vault.clone(), &item, tvdb_id, state.artwork_scrape_lock.clone()
-            ).await;
+            let scraped = {
+                let _guard = state.artwork_scrape_lock.lock().await;
+                sonarr::scrape_and_store(&client, vault.clone(), &item, tvdb_id).await
+            };
+            let scrape_ok = match scraped {
+                Ok(_) => true,
+                Err(reason) => {
+                    eprintln!("Sonarr metadata scrape failed: {reason}");
+                    false
+                }
+            };
             let text_saved = vault.tv_metadata_exists(tvdb_id);
             let artwork_saved = vault.tv_artwork_exists(tvdb_id);
-            let succeeded = scraped.is_ok() && text_saved && (!expected_artwork || artwork_saved);
+            let succeeded = scrape_ok && text_saved && (!expected_artwork || artwork_saved);
             let mut progress = state.sonarr_backfill.write().await;
             progress.completed += 1;
             if succeeded {
@@ -1264,7 +1280,8 @@ async fn run_metadata_sonarr_backfill(state: Arc<AppState>) {
                 progress.failed += 1;
             }
             drop(progress);
-            tokio::time::sleep(Duration::from_millis(250)).await;
+            // Yield between items and keep requests gentle on small Arr hosts.
+            tokio::time::sleep(Duration::from_secs(2)).await;
         }
         state.sonarr_backfill.write().await.active = false;
         wait_for_sonarr_backfill(&state, Duration::from_secs(6 * 60 * 60)).await;
