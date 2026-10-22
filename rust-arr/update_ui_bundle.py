@@ -8,6 +8,11 @@ import argparse, hashlib, json, os, pathlib, shutil, subprocess, sys, tempfile, 
 
 MAX_BUNDLE = 32 * 1024 * 1024
 MAX_FILE = 8 * 1024 * 1024
+MIN_POLL_INTERVAL_SECONDS = 60
+DEFAULT_POLL_INTERVAL_SECONDS = 60
+
+def poll_interval_seconds(requested: int) -> int:
+    return max(MIN_POLL_INTERVAL_SECONDS, requested)
 # Rawrarr UI release signing public key (Ed25519 SubjectPublicKeyInfo PEM).
 PINNED_PUBLIC_KEY_FILE = pathlib.Path(os.environ.get("RAWARR_UI_PUBLISHER_PUBLIC_KEY_FILE", "/etc/rawrarr/ui-publisher-public-key.pem"))
 
@@ -99,7 +104,7 @@ def main() -> int:
     parser.add_argument("--root", type=pathlib.Path, default=pathlib.Path(os.environ.get("RAWARR_UI_ROOT", "/ui")))
     parser.add_argument("--apply", action="store_true", help="install the verified bundle; default only reports planned action")
     parser.add_argument("--watch", action="store_true", help="check periodically; intended for the application container")
-    parser.add_argument("--interval", type=int, default=300, help="seconds between watch checks")
+    parser.add_argument("--interval", type=int, default=DEFAULT_POLL_INTERVAL_SECONDS, help="seconds between watch checks (minimum 60)")
     args = parser.parse_args()
     while True:
         try: update(args.repo, args.token_file, args.root, args.apply)
@@ -111,6 +116,6 @@ def main() -> int:
             if not args.watch: return 1
         if not args.watch: return 0
         import time
-        time.sleep(max(60, args.interval))
+        time.sleep(poll_interval_seconds(args.interval))
 
 if __name__ == "__main__": raise SystemExit(main())

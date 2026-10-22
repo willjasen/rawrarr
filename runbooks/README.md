@@ -30,6 +30,8 @@
 
 # Rawrarr runbooks
 
+- [Check GitHub UI releases every minute](2026-10-22-ui-updater-one-minute-poll.md) — Reduce coordinator and node UI bundle detection from five minutes to one minute, with a 60-second minimum.
+
 - [Show only device route latency](2026-10-22-show-only-device-route-latency.md) — Remove the Direct prefix from directly reachable device status while retaining the measured milliseconds.
 
 - [Age ID library visibility regression](2026-10-22-age-id-library-visibility-regression.md) — Keep coordinator Movies and TV library content hidden until an age ID is loaded.
