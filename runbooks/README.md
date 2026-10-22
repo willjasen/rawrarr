@@ -26,6 +26,8 @@
 
 # Rawrarr runbooks
 
+- [Fix cluster configuration fetch returning 401](2026-10-22-fix-cluster-config-401.md) — Include the direct metadata-node browser session cookie when reading encrypted cluster configuration.
+
 - [Show the sidebar profile as four words](2026-10-22-sidebar-profile-four-word-layout.md) — Arrange the generated account name as two words on each of two lines beside its avatar.
 
 - [Render cached Movies and TV text immediately](2026-10-22-cache-library-text-in-browser.md) — Show the last successful node-scoped library text while live records refresh and artwork loads separately.
