@@ -8,7 +8,8 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
   let origin;
   try { origin = new URL(coordinatorUrl); }
   catch { throw new Error('The coordinator must have an HTTPS origin.'); }
-  if (origin.protocol !== 'https:' || origin.origin !== coordinatorUrl || origin.username || origin.password) throw new Error('The coordinator must have an HTTPS origin.');
+  if (origin.protocol !== 'https:' || origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash) throw new Error('The coordinator must have an HTTPS origin.');
+  coordinatorUrl = origin.origin;
   if (role === 'storage' && (!/^(?:\/[^\0-\x1f]*|[A-Za-z]:[\\/][^\0-\x1f]+)$/.test(mediaPath.trim()))) throw new Error('Enter the absolute path to your media folder.');
   const quote = value => JSON.stringify(value);
   const lines = [
@@ -29,8 +30,8 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
     let loginServer;
     try { loginServer = new URL(controlServer); }
     catch { throw new Error('Enter the HTTPS Headscale control server URL.'); }
-    if (loginServer.protocol !== 'https:' || loginServer.origin !== controlServer || loginServer.username || loginServer.password) throw new Error('Enter the HTTPS Headscale control server URL.');
-    tsArgs.push(`--login-server=${controlServer}`);
+    if (loginServer.protocol !== 'https:' || loginServer.username || loginServer.password || loginServer.pathname !== '/' || loginServer.search || loginServer.hash) throw new Error('Enter the HTTPS Headscale control server URL.');
+    tsArgs.push(`--login-server=${loginServer.origin}`);
   }
   lines.push(`      TS_EXTRA_ARGS: ${quote(tsArgs.join(' '))}`);
   lines.push(

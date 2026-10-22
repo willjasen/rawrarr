@@ -25,6 +25,8 @@
 
 # Rawrarr runbooks
 
+- [Fix subscriber coordinator origin validation](2026-10-22-fix-subscriber-coordinator-origin.md) — Accept and normalize the internal coordinator URL with an optional trailing slash.
+
 - [Deploy internal Mac mini coordinator](2026-10-22-deploy-internal-mini-coordinator.md) — Deploy an isolated coordinator project behind a dedicated Tailscale sidecar and HTTPS Serve route.
 
 - [Internal Mac mini coordinator on Tailscale](2026-10-22-internal-mini-coordinator-tailnet.md) — Point internal subscriber nodes at a Mac mini coordinator over the owner's Tailscale tailnet; record that live role migration remains separate.
