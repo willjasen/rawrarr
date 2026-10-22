@@ -67,6 +67,7 @@
 - [Name subscriber devices before Compose generation](2026-10-21-subscriber-device-name-and-local-route.md) — Set an owner-chosen node name in subscriber Compose and route same-host browsers directly to the approved node.
 
 - [Sync subscriber Compose device names](2026-10-22-sync-compose-device-name.md) — Update the coordinator's approved-node name from `RAWARR_DEVICE_NAME`, including after an existing node's Compose file changes.
+- [Add an Edit button to coordinator device names](2026-10-22-edit-device-name-button.md) — Show a clear Edit control beside each device name and activate the existing age-encrypted rename flow.
 
 - [Plan one-line node deployment](2026-10-20-plan-one-line-node-deployment.md) — Plan a generated embedded-Compose installer, Docker setup, safe retries, and explicit owner approval; no runtime changes.
 - [Admin console preview](2026-10-20-admin-console-preview.md) — Add a private, sample-data-only admin dashboard container with a loopback port and Tailscale-only access plan.

@@ -1422,11 +1422,28 @@ async function loadNodes() {
       nameInput.value = deviceNames[node.nodeId] || node.displayName || node.nodeId;
       nameInput.maxLength = 80;
       nameInput.setAttribute('aria-label', `Name for ${node.nodeId}`);
-      nameInput.title = ageIdentity && configNode ? 'Edit the device name; press Enter or leave the field to save.' : 'Unlock the age identity to edit device names.';
+      nameInput.title = 'Device name';
+      nameInput.readOnly = true;
       nameInput.disabled = !ageIdentity || !configNode;
+      const editNameButton = document.createElement('button');
+      editNameButton.type = 'button';
+      editNameButton.className = 'device-name-edit-button';
+      editNameButton.textContent = 'Edit';
+      editNameButton.setAttribute('aria-label', `Edit name for ${node.nodeId}`);
+      editNameButton.disabled = !ageIdentity || !configNode;
+      editNameButton.title = ageIdentity && configNode ? 'Edit this device name.' : 'Unlock the age identity to edit device names.';
+      editNameButton.addEventListener('click', event => {
+        event.stopPropagation();
+        nameInput.readOnly = false;
+        nameInput.focus();
+        nameInput.select();
+      });
       const heading = document.createElement('div');
       heading.className = 'device-heading';
-      heading.append(nameInput, state);
+      const nameGroup = document.createElement('div');
+      nameGroup.className = 'device-name-group';
+      nameGroup.append(nameInput, editNameButton);
+      heading.append(nameGroup, state);
       const detail = document.createElement('small');
       detail.className = 'device-detail';
       detail.textContent = `${roleLabel(node.role)}${node.online ? '' : ' · last seen earlier'}`;
@@ -1570,12 +1587,17 @@ async function loadNodes() {
       });
       nameInput.addEventListener('keydown', event => {
         if (event.key === 'Enter') { event.preventDefault(); nameInput.blur(); }
-        if (event.key === 'Escape') { nameInput.value = deviceNames[node.nodeId] || node.nodeId; nameInput.blur(); }
+        if (event.key === 'Escape') {
+          nameInput.value = deviceNames[node.nodeId] || node.displayName || node.nodeId;
+          nameInput.readOnly = true;
+          nameInput.blur();
+        }
       });
       nameInput.addEventListener('change', async () => {
+        nameInput.readOnly = true;
         const cleaned = nameInput.value.trim();
         if (!cleaned || cleaned.length > 80 || /[\u0000-\u001f\u007f]/.test(cleaned)) {
-          nameInput.value = deviceNames[node.nodeId] || node.nodeId;
+          nameInput.value = deviceNames[node.nodeId] || node.displayName || node.nodeId;
           document.getElementById('device-name-status').textContent = 'Enter a name of 1 to 80 printable characters.';
           return;
         }
@@ -1594,6 +1616,8 @@ async function loadNodes() {
           savingDeviceName = false;
           document.getElementById('device-name-status').textContent = error.message || 'Could not save this device name.';
           nameInput.disabled = false;
+          nameInput.readOnly = false;
+          nameInput.focus();
         }
       });
       nodesPanel.append(card);
