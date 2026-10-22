@@ -20,6 +20,8 @@
 
 # Rawrarr runbooks
 
+- [Merge AI chat work into main](2026-10-22-merge-ai-chat-into-main.md) — Integrate the AI chat, voice, quota, and tool-support work while preserving concurrent main-worktree edits.
+
 - [Record AI chat fallback and tool support direction](2026-10-18-ai-chat-tool-support.md) — Capture the canned response, recommend scoped Responses function tools for roarlay, and reserve MCP as an interop adapter for owner-run agents.
 
 - [Improve AI answers and split chat and voice](2026-10-18-improve-ai-chat-voice-tabs.md) — Answer Movies-versus-TV disk usage questions and give chat and voice separate tabs without a consent checkbox.
