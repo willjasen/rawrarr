@@ -550,3 +550,4 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 
 - [Use ECDH for encrypted browser library sessions](2026-10-22-ecdh-browser-library-session.md) — Replace only the Radarr browser-response session-key exchange with ephemeral P-256 ECDH and HKDF; retain age identities and encrypted metadata for other features.
 - [Complete per-instance device signing](2026-10-22-complete-device-signing.md) — Resolve GitHub issue #37 with owner-rooted ML-DSA enrollment, signed shared records, and a safe path for existing nodes.
+- [Review remaining local Rawrarr work](2026-10-22-local-work-cleanup-review.md) — Inventory deferred branches, dirty worktrees, and stashes and document a safe integration and cleanup sequence.
