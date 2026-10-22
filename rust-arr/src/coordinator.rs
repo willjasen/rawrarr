@@ -1362,9 +1362,8 @@ fn ciphertext_export_path(path: &str) -> bool {
 fn encrypted_session_request(path: &str, method: &Method, body: &[u8]) -> bool {
     path == "api/metadata/session/library"
         && *method == Method::POST
-        && body.len() == 65
-        && body.first() == Some(&4)
-        && p256::PublicKey::from_sec1_bytes(body).is_ok()
+        && (50..=4096).contains(&body.len())
+        && body.starts_with(b"-----BEGIN AGE ENCRYPTED FILE-----\n")
 }
 
 async fn delegated_node_session(

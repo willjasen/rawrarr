@@ -27,6 +27,8 @@
 
 # Rawrarr runbooks
 
+- [Age-wrapped browser response session](2026-10-22-age-wrapped-browser-response-session.md) — Wrap a per-request response key to the user's age recipient so nodes encrypt browser responses end to end through the coordinator.
+
 - [Reuse a live TV style browser for Movies and TV](2026-10-22-live-tv-library-browser.md) — Use one searchable, filterable poster-card layout across both coordinator libraries.
 
 - [Show shared Arr scraping progress on Movies and TV](2026-10-22-shared-arr-scrape-progress.md) — Reuse provider-aware status and progress UI for Radarr and Sonarr metadata artwork scraping.
