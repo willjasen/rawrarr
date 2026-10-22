@@ -453,3 +453,4 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Task-owned Git workflow](2026-10-18-task-owned-git-workflow.md) — Allow focused task-owned commits as work progresses and use dedicated worktrees when concurrent edits overlap.
 - [Review current Rawrarr documentation](2026-10-18-current-state-documentation-review.md) — Align setup, architecture, export, scanning, and roadmap claims with current source and observed local port routing.
 - [Record documentation review commits](2026-10-18-documentation-commit-history.md) — Save the documentation-review commit in project instructions and require a separate history update after future reviews.
+- [OrbStack coordinator and two-node Headscale test](2026-10-21-orbstack-coordinator-two-node-test.md) — Run an isolated coordinator, Headscale control plane, and two Rawrarr subscriber nodes; verify heartbeats and bidirectional Tailnet pings.

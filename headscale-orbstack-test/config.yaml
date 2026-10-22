@@ -1,0 +1,48 @@
+server_url: https://headscale
+listen_addr: 0.0.0.0:443
+tls_cert_path: /run/secrets/headscale_tls_cert
+tls_key_path: /run/secrets/headscale_tls_key
+metrics_listen_addr: 0.0.0.0:9090
+grpc_listen_addr: 0.0.0.0:50443
+grpc_allow_insecure: false
+noise:
+  private_key_path: /var/lib/headscale/noise_private.key
+prefixes:
+  v4: 100.108.0.0/24
+  v6: fd7a:115c:a1e0::/48
+  allocation: sequential
+derp:
+  server:
+    enabled: false
+  urls:
+    - https://controlplane.tailscale.com/derpmap/default
+  paths: []
+  auto_update_enabled: true
+  update_frequency: 3h
+disable_check_updates: false
+database:
+  type: sqlite
+  sqlite:
+    path: /var/lib/headscale/db.sqlite
+    write_ahead_log: true
+policy:
+  mode: database
+  path: ""
+dns:
+  magic_dns: true
+  base_domain: orbstacktest.rawrarr
+  override_local_dns: false
+  nameservers:
+    global:
+      - 1.1.1.1
+      - 1.0.0.1
+    split: {}
+  search_domains: []
+  extra_records: []
+unix_socket: /var/run/headscale/headscale.sock
+unix_socket_permission: "0770"
+log:
+  level: info
+  format: text
+logtail:
+  enabled: false
