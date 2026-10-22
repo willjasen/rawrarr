@@ -752,6 +752,15 @@ impl AgeVault {
         Ok((identity, vault.recipient.clone()))
     }
 
+    /// Ensure this subscriber node has a persistent age identity separate from the user's vault.
+    /// Existing malformed files are deliberately left untouched for recovery.
+    pub fn ensure_node_identity() -> Result<String, VaultError> {
+        let data_dir = env::var_os("RAWARR_DATA_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("data"));
+        ensure_node_identity_at(&data_dir.join("node-age-identity"))
+    }
+
     pub fn config_exists(&self) -> bool {
         self.config_path.is_file()
     }
@@ -1036,6 +1045,44 @@ fn set_private_file_permissions(file: &fs::File) -> Result<(), VaultError> {
     Ok(())
 }
 
+fn ensure_node_identity_at(path: &Path) -> Result<String, VaultError> {
+    if path.exists() {
+        return node_identity_recipient(path);
+    }
+    let parent = path.parent().ok_or(VaultError::StorageFailed)?;
+    fs::create_dir_all(parent).map_err(|_| VaultError::StorageFailed)?;
+    set_private_directory_permissions(parent)?;
+
+    let (identity, recipient) = AgeVault::generate_identity()?;
+    let temporary = temporary_path(path);
+    let result = (|| {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+            .map_err(|_| VaultError::StorageFailed)?;
+        set_private_file_permissions(&file)?;
+        file.write_all(identity.as_bytes())
+            .map_err(|_| VaultError::StorageFailed)?;
+        file.sync_all().map_err(|_| VaultError::StorageFailed)?;
+        match fs::hard_link(&temporary, path) {
+            Ok(()) => Ok(recipient),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                node_identity_recipient(path)
+            }
+            Err(_) => Err(VaultError::StorageFailed),
+        }
+    })();
+    let _ = fs::remove_file(&temporary);
+    result
+}
+
+fn node_identity_recipient(path: &Path) -> Result<String, VaultError> {
+    let identity = fs::read_to_string(path).map_err(|_| VaultError::StorageFailed)?;
+    let vault = AgeVault::from_identity(identity)?;
+    Ok(vault.recipient().to_owned())
+}
+
 fn set_private_directory_permissions(path: &Path) -> Result<(), VaultError> {
     #[cfg(unix)]
     {
@@ -1278,6 +1325,65 @@ fn set_shared_directory_permissions(path: &Path) -> Result<(), VaultError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn node_identity_is_created_once_and_existing_identity_is_reused() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock after epoch")
+            .as_nanos();
+        let data_dir = env::temp_dir().join(format!(
+            "rawrarr-node-identity-test-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&data_dir).expect("create isolated data directory");
+        let node_identity = data_dir.join("node-age-identity");
+        let user_identity = data_dir.join("age-identity");
+        fs::write(&user_identity, "existing user identity fixture").expect("keep user identity");
+
+        let first_recipient =
+            ensure_node_identity_at(&node_identity).expect("create node identity");
+        let first_identity = fs::read(&node_identity).expect("read generated node identity");
+        let second_recipient = ensure_node_identity_at(&node_identity).expect("reuse node identity");
+
+        assert_eq!(first_recipient, second_recipient);
+        assert_eq!(
+            fs::read(&node_identity).expect("read reused identity"),
+            first_identity
+        );
+        assert_eq!(
+            fs::read(&user_identity).expect("read preserved user identity"),
+            b"existing user identity fixture"
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(fs::metadata(&node_identity).unwrap().permissions().mode() & 0o777, 0o600);
+        }
+        fs::remove_dir_all(data_dir).expect("remove isolated data directory");
+    }
+
+    #[test]
+    fn invalid_existing_node_identity_is_not_replaced() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock after epoch")
+            .as_nanos();
+        let data_dir = env::temp_dir().join(format!(
+            "rawrarr-invalid-node-identity-test-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&data_dir).expect("create isolated data directory");
+        let path = data_dir.join("node-age-identity");
+        fs::write(&path, "not an age identity").expect("write invalid fixture");
+
+        assert!(ensure_node_identity_at(&path).is_err());
+        assert_eq!(
+            fs::read(&path).expect("read preserved invalid identity"),
+            b"not an age identity"
+        );
+        fs::remove_dir_all(data_dir).expect("remove isolated data directory");
+    }
 
     #[test]
     fn metadata_domain_defaults_to_shared_subtree_and_accepts_container_alias() {

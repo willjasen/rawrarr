@@ -2103,6 +2103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         axum::serve(listener, app).await?;
         return Ok(());
     }
+    secure_config::AgeVault::ensure_node_identity()?;
     if arguments == ["storage-scan-once"] {
         let device_id = devices::load_or_create_device_id()?;
         let logger =

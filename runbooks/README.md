@@ -28,6 +28,8 @@
 # Rawrarr runbooks
 
 - [Reuse a live TV style browser for Movies and TV](2026-10-22-live-tv-library-browser.md) — Use one searchable, filterable poster-card layout across both coordinator libraries.
+- [Node and app age identity design exploration](2026-10-22-node-and-app-age-identities.md) — Record startup creation and persistence of a separate node age identity, plus conditional Radarr/Sonarr identities.
+
 
 - [Show shared Arr scraping progress on Movies and TV](2026-10-22-shared-arr-scrape-progress.md) — Reuse provider-aware status and progress UI for Radarr and Sonarr metadata artwork scraping.
 
