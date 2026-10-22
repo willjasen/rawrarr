@@ -509,3 +509,4 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Record documentation review commits](2026-10-18-documentation-commit-history.md) — Save the documentation-review commit in project instructions and require a separate history update after future reviews.
 - [OrbStack coordinator and two-node Headscale test](2026-10-21-orbstack-coordinator-two-node-test.md) — Run an isolated coordinator, Headscale control plane, and two Rawrarr subscriber nodes; verify heartbeats and bidirectional Tailnet pings.
 - [Fix Radarr and Sonarr poster delivery](2026-10-22-fix-arr-posters.md) — Restore direct Radarr poster delivery and verify that the metadata node writes encrypted artwork into the intended shared folder.
+- [Merge the Rawrarr landing tagline](2026-10-22-merge-landing-tagline.md) — Integrate the tagline into current `main`, preserving concurrent work and excluding an obsolete migration change.
