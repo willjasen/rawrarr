@@ -60,6 +60,7 @@ struct AppState {
     device_id: String,
     shared_logs: Option<shared_logs::SharedLogger>,
     storage_scan: storage_node::ScanController,
+    storage_schedule: Option<storage_node::ScanScheduler>,
     syncthing: Option<syncthing::Client>,
     artwork_backfill: Arc<RwLock<ArtworkBackfillProgress>>,
     sonarr_backfill: Arc<RwLock<ArtworkBackfillProgress>>,
@@ -1027,10 +1028,40 @@ async fn request_storage_scan(
     if state.role != node_role::NodeRole::Storage {
         return StatusCode::NOT_FOUND.into_response();
     }
-    match state.storage_scan.start(options, state.shared_logs.clone()).await {
+    match state.storage_scan.start(options, state.shared_logs.clone(), false).await {
         Ok(()) => (StatusCode::ACCEPTED, Json(state.storage_scan.status().await)).into_response(),
         Err(error) => (StatusCode::CONFLICT, error).into_response(),
     }
+}
+
+async fn storage_scan_schedule(State(state): State<Arc<AppState>>) -> Response {
+    if state.role != node_role::NodeRole::Storage {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let Some(schedule) = &state.storage_schedule else {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    };
+    Json(schedule.status(&state.storage_scan).await).into_response()
+}
+
+async fn update_storage_scan_schedule(
+    State(state): State<Arc<AppState>>,
+    Json(schedule): Json<storage_node::ScanSchedule>,
+) -> Response {
+    if state.role != node_role::NodeRole::Storage {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let Some(scheduler) = &state.storage_schedule else {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    };
+    if let Err(error) = schedule.validate() {
+        return (StatusCode::BAD_REQUEST, error).into_response();
+    }
+    if let Err(error) = scheduler.update(schedule) {
+        eprintln!("storage scan schedule could not be saved: {error}");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    Json(scheduler.status(&state.storage_scan).await).into_response()
 }
 
 async fn storage_scan_status(State(state): State<Arc<AppState>>) -> Response {
@@ -2555,21 +2586,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("rawrarr shared logging could not be initialized");
     }
     let storage_scan = storage_node::ScanController::default();
-    if role == node_role::NodeRole::Storage {
-        if let Some(interval) = storage_node::scan_interval_from_env()? {
-            storage_node::start_periodic_scan_with_controller(
-                interval,
-                shared_logs.clone(),
-                storage_scan.clone(),
-            );
-            println!(
-                "storage automatic scanning enabled; scans repeat every {} seconds",
-                interval.as_secs()
-            );
-        } else {
-            println!("storage automatic scanning disabled by configuration");
-        }
-    }
+    let storage_schedule = if role == node_role::NodeRole::Storage {
+        let schedule = storage_node::ScanScheduler::load()?;
+        storage_node::start_scan_scheduler(
+            schedule.clone(),
+            shared_logs.clone(),
+            storage_scan.clone(),
+        );
+        Some(schedule)
+    } else {
+        None
+    };
     let state = Arc::new(AppState {
         auth: auth.clone(),
         radarr: Arc::new(RwLock::new(radarr)),
@@ -2579,6 +2606,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         shared_logs: shared_logs.clone(),
         role,
         storage_scan,
+        storage_schedule,
         syncthing: syncthing::Client::from_env()
             .map_err(|_| "invalid Syncthing environment configuration")?,
         artwork_backfill: Arc::new(RwLock::new(ArtworkBackfillProgress::default())),
@@ -2612,6 +2640,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/library/scan/missing", post(request_storage_scan))
         .route("/api/library/scan/status", get(storage_scan_status))
         .route("/api/library/scan/cancel", post(cancel_storage_scan))
+        .route(
+            "/api/library/scan/schedule",
+            get(storage_scan_schedule).put(update_storage_scan_schedule),
+        )
         .route(
             "/api/metadata/movies/search",
             axum::routing::post(search_movie_metadata),
@@ -2671,6 +2703,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/library/scan/missing", post(request_storage_scan))
         .route("/api/library/scan/status", get(storage_scan_status))
         .route("/api/library/scan/cancel", post(cancel_storage_scan))
+        .route(
+            "/api/library/scan/schedule",
+            get(storage_scan_schedule).put(update_storage_scan_schedule),
+        )
         .route("/api/metadata/storage", get(metadata_storage_status))
         .route("/api/metadata/sonarr/backfill", get(metadata_sonarr_backfill_status))
         .route("/api/metadata/sonarr/rescan", post(request_tv_metadata_rescan))

@@ -38,6 +38,7 @@ Start here for the current project state and everyday use:
 - [Subscription model](subscription-model.md) — proposed trial, hosted checkout, and signed entitlement model.
 - [Donation plan](donation-plan.md) — proposed optional one-time contributions, separate from subscription entitlements.
 - [Tailscale integration](tailscale-integration-plan.md) — optional overlay transport plan; SwarmSail will manage one tailnet per subscriber account.
+- [Account-bound subscriber tailnet provisioning](account-tailnet-provisioning-plan.md) — planned eligibility, isolation, provisioning, key lifecycle, and revocation requirements.
 
 ## Tests and operational notes
 

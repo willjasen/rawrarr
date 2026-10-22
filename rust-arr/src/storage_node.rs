@@ -1,6 +1,8 @@
 //! Storage-node media scanning and age-encrypted sidecar publication.
 
 use crate::{devices, library, secure_config};
+use chrono::{DateTime, Datelike, Duration as ChronoDuration, NaiveTime, TimeZone, Utc, Weekday};
+use chrono_tz::Tz;
 use md5::Md5;
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
@@ -16,45 +18,276 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-const DEFAULT_SCAN_INTERVAL_SECONDS: u64 = 24 * 60 * 60;
-const MIN_SCAN_INTERVAL_SECONDS: u64 = 60;
-const MAX_SCAN_INTERVAL_SECONDS: u64 = 7 * 24 * 60 * 60;
+const DEFAULT_SCAN_TIME: &str = "04:00";
+const DEFAULT_SCAN_TIMEZONE: &str = "UTC";
 
-/// Read the unattended scan interval. Zero is an explicit opt-out.
-pub fn scan_interval_from_env() -> Result<Option<Duration>, &'static str> {
-    let configured = std::env::var("RAWARR_STORAGE_SCAN_INTERVAL_SECONDS").ok();
-    parse_scan_interval(configured.as_deref())
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ScanFrequency {
+    Daily,
+    Weekly,
 }
 
-fn parse_scan_interval(value: Option<&str>) -> Result<Option<Duration>, &'static str> {
-    let seconds = value
-        .map(str::parse::<u64>)
-        .transpose()
-        .map_err(|_| "RAWARR_STORAGE_SCAN_INTERVAL_SECONDS must be an integer")?
-        .unwrap_or(DEFAULT_SCAN_INTERVAL_SECONDS);
-    if seconds == 0 {
-        return Ok(None);
-    }
-    if !(MIN_SCAN_INTERVAL_SECONDS..=MAX_SCAN_INTERVAL_SECONDS).contains(&seconds) {
-        return Err("RAWARR_STORAGE_SCAN_INTERVAL_SECONDS must be 0 or between 60 and 604800");
-    }
-    Ok(Some(Duration::from_secs(seconds)))
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ScanWeekday {
+    Monday,
+    Tuesday,
+    Wednesday,
+    Thursday,
+    Friday,
+    Saturday,
+    Sunday,
 }
 
-/// Wait one interval before the first scheduled scan, then repeat at that
-/// cadence. Owners can request a bounded scan independently after startup.
-/// Work is moved off the async executor because walking media trees and
-/// encrypting sidecars are blocking operations.
-pub fn start_periodic_scan_with_controller(
-    interval: Duration,
+impl ScanWeekday {
+    fn chrono(self) -> Weekday {
+        match self {
+            Self::Monday => Weekday::Mon,
+            Self::Tuesday => Weekday::Tue,
+            Self::Wednesday => Weekday::Wed,
+            Self::Thursday => Weekday::Thu,
+            Self::Friday => Weekday::Fri,
+            Self::Saturday => Weekday::Sat,
+            Self::Sunday => Weekday::Sun,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ScanSchedule {
+    pub frequency: ScanFrequency,
+    pub time: String,
+    pub time_zone: String,
+    pub weekday: Option<ScanWeekday>,
+}
+
+impl ScanSchedule {
+    pub fn default_for_timezone(time_zone: String) -> Self {
+        Self {
+            frequency: ScanFrequency::Daily,
+            time: DEFAULT_SCAN_TIME.to_owned(),
+            time_zone,
+            weekday: None,
+        }
+    }
+
+    pub fn validate(&self) -> Result<(), &'static str> {
+        let time_bytes = self.time.as_bytes();
+        if self.time.len() != 5
+            || time_bytes[2] != b':'
+            || !time_bytes[..2].iter().all(u8::is_ascii_digit)
+            || !time_bytes[3..].iter().all(u8::is_ascii_digit)
+            || NaiveTime::parse_from_str(&self.time, "%H:%M").is_err()
+        {
+            return Err("time must use 24-hour HH:MM format");
+        }
+        if self.time_zone.parse::<Tz>().is_err() {
+            return Err("timeZone must be a recognized IANA time zone");
+        }
+        match (self.frequency, self.weekday) {
+            (ScanFrequency::Daily, None) | (ScanFrequency::Weekly, Some(_)) => Ok(()),
+            (ScanFrequency::Daily, Some(_)) => Err("weekday is only valid for a weekly schedule"),
+            (ScanFrequency::Weekly, None) => Err("weekday is required for a weekly schedule"),
+        }
+    }
+
+    fn time_zone(&self) -> Tz {
+        self.time_zone.parse().expect("validated scan time zone")
+    }
+
+    fn time(&self) -> NaiveTime {
+        NaiveTime::parse_from_str(&self.time, "%H:%M").expect("validated scan time")
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PersistedScanSchedule {
+    schedule: ScanSchedule,
+    last_scheduled_run_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanScheduleStatus {
+    pub schedule: ScanSchedule,
+    pub next_run_at: DateTime<Utc>,
+    pub last_scheduled_run_at: Option<DateTime<Utc>>,
+    pub scan: ScanStatus,
+}
+
+#[derive(Clone)]
+pub struct ScanScheduler {
+    state: Arc<Mutex<PersistedScanSchedule>>,
+    path: PathBuf,
+}
+
+impl ScanScheduler {
+    pub fn load() -> Result<Self, Box<dyn Error>> {
+        let path =
+            PathBuf::from(std::env::var_os("RAWARR_DATA_DIR").unwrap_or_else(|| "/data".into()))
+                .join("storage-scan-schedule.json");
+        let state = match fs::read(&path) {
+            Ok(bytes) => {
+                let state: PersistedScanSchedule = serde_json::from_slice(&bytes)?;
+                state.schedule.validate()?;
+                state
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                let time_zone = std::env::var("RAWARR_STORAGE_SCAN_TIMEZONE")
+                    .unwrap_or_else(|_| DEFAULT_SCAN_TIMEZONE.to_owned());
+                let schedule = ScanSchedule::default_for_timezone(time_zone);
+                schedule.validate()?;
+                let state = PersistedScanSchedule {
+                    schedule,
+                    last_scheduled_run_at: None,
+                };
+                save_schedule(&path, &state)?;
+                state
+            }
+            Err(error) => return Err(error.into()),
+        };
+        Ok(Self {
+            state: Arc::new(Mutex::new(state)),
+            path,
+        })
+    }
+
+    pub async fn status(&self, controller: &ScanController) -> ScanScheduleStatus {
+        let state = self
+            .state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone();
+        ScanScheduleStatus {
+            next_run_at: next_scheduled_run(&state.schedule, Utc::now())
+                .expect("valid scan schedule always has a future run"),
+            schedule: state.schedule,
+            last_scheduled_run_at: state.last_scheduled_run_at,
+            scan: controller.status().await,
+        }
+    }
+
+    pub fn update(&self, schedule: ScanSchedule) -> Result<(), Box<dyn Error>> {
+        schedule.validate()?;
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        let updated = PersistedScanSchedule {
+            schedule,
+            last_scheduled_run_at: state.last_scheduled_run_at,
+        };
+        save_schedule(&self.path, &updated)?;
+        *state = updated;
+        Ok(())
+    }
+
+    fn due_run(&self, now: DateTime<Utc>) -> Result<Option<DateTime<Utc>>, Box<dyn Error>> {
+        let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        let Some(due) = next_scheduled_run(&state.schedule, now - ChronoDuration::minutes(1)) else {
+            return Ok(None);
+        };
+        if due > now || state.last_scheduled_run_at.is_some_and(|last| last >= due) {
+            return Ok(None);
+        }
+        Ok(Some(due))
+    }
+
+    fn record_run(&self, run_at: DateTime<Utc>) -> Result<(), Box<dyn Error>> {
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        let updated = PersistedScanSchedule {
+            schedule: state.schedule.clone(),
+            last_scheduled_run_at: Some(run_at),
+        };
+        let result = save_schedule(&self.path, &updated);
+        *state = updated;
+        result
+    }
+}
+
+fn save_schedule(path: &Path, state: &PersistedScanSchedule) -> Result<(), Box<dyn Error>> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let parent = path.parent().ok_or("storage data directory is invalid")?;
+    fs::create_dir_all(parent)?;
+    let temporary = parent.join(format!(
+        ".storage-scan-schedule-{}-{}.tmp",
+        std::process::id(),
+        SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+    ));
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&temporary)?;
+    file.write_all(&serde_json::to_vec(state)?)?;
+    file.sync_all()?;
+    fs::rename(&temporary, path)?;
+    Ok(())
+}
+
+fn next_scheduled_run(schedule: &ScanSchedule, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
+    let timezone = schedule.time_zone();
+    let first_date = now.with_timezone(&timezone).date_naive();
+    for offset in 0..=15 {
+        let date = first_date.checked_add_days(chrono::Days::new(offset))?;
+        let matches_frequency = match schedule.frequency {
+            ScanFrequency::Daily => true,
+            ScanFrequency::Weekly => schedule
+                .weekday
+                .is_some_and(|day| date.weekday() == day.chrono()),
+        };
+        if !matches_frequency {
+            continue;
+        }
+        let local_datetime = date.and_time(schedule.time());
+        let scheduled = match timezone.from_local_datetime(&local_datetime) {
+            chrono::LocalResult::Single(value) => Some(value),
+            chrono::LocalResult::Ambiguous(first, second) => Some(first.min(second)),
+            chrono::LocalResult::None => None,
+        };
+        let Some(scheduled) = scheduled else {
+            continue;
+        };
+        let scheduled = scheduled.with_timezone(&Utc);
+        if scheduled > now {
+            return Some(scheduled);
+        }
+    }
+    None
+}
+
+/// Run the configured wall-clock schedule once per due minute. Schedule
+/// settings and the last claimed run are kept on the storage node's /data.
+pub fn start_scan_scheduler(
+    scheduler: ScanScheduler,
     logger: Option<crate::shared_logs::SharedLogger>,
     controller: ScanController,
 ) {
     tokio::spawn(async move {
         loop {
-            tokio::time::sleep(interval).await;
-            if let Err(error) = controller.start(ScanOptions::default(), logger.clone()).await {
-                eprintln!("storage scan could not start: {error}");
+            tokio::time::sleep(Duration::from_secs(15)).await;
+            if controller.status().await.active {
+                continue;
+            }
+            let due = match scheduler.due_run(Utc::now()) {
+                Ok(Some(due)) => due,
+                Ok(None) => continue,
+                Err(error) => {
+                    eprintln!("storage scan schedule could not be checked: {error}");
+                    continue;
+                }
+            };
+            match controller
+                .start(ScanOptions::default(), logger.clone(), true)
+                .await
+            {
+                Ok(()) => {
+                    if let Err(error) = scheduler.record_run(due) {
+                        eprintln!("storage scan schedule run time could not be saved: {error}");
+                    }
+                }
+                Err(error) => eprintln!("scheduled storage scan could not start: {error}"),
             }
         }
     });
@@ -93,6 +326,7 @@ impl ScanOptions {
 #[serde(rename_all = "camelCase")]
 pub struct ScanStatus {
     pub active: bool,
+    pub scheduled: bool,
     pub cancel_requested: bool,
     pub cancelled: bool,
     pub media_files_found: usize,
@@ -133,6 +367,7 @@ impl ScanController {
         &self,
         options: ScanOptions,
         logger: Option<crate::shared_logs::SharedLogger>,
+        scheduled: bool,
     ) -> Result<(), &'static str> {
         options.validate()?;
         let mut status = self
@@ -144,6 +379,7 @@ impl ScanController {
         }
         *status = ScanStatus {
             active: true,
+            scheduled,
             files_total: options.max_files.unwrap_or_default(),
             ..ScanStatus::default()
         };
@@ -190,10 +426,11 @@ impl ScanController {
                         summary.truncated
                     );
                     if summary.sidecar_errors > 0 || summary.issues > 0 || summary.truncated {
-                        eprintln!("storage scan was incomplete; it will retry after the configured interval");
+                        eprintln!("the next scheduled storage scan will retry incomplete records");
                     }
                     ScanStatus {
                         active: false,
+                        scheduled,
                         cancel_requested: summary.cancelled,
                         cancelled: summary.cancelled,
                         media_files_found: summary.items.len(),

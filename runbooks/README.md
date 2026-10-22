@@ -1,4 +1,5 @@
 - [Integrate shared Radarr recovery](2026-10-22-integrate-radarr-shared-recovery.md) — Port owner-authenticated backup download, progress reporting, and scoped restore behavior onto current `main` through a focused pull request.
+- [Integrate scheduled storage scan controls](2026-10-22-integrate-scheduled-storage-scan.md) — Port configurable daily and weekly storage scan schedules onto current `main` and verify through a focused pull request.
 
 - [Deploy persistent node age identity](2026-10-22-deploy-node-age-identity.md) — Deploy the committed subscriber-only identity creation to internal fossil and verify persistence and health.
 
@@ -10,6 +11,8 @@
 - [Import folded age-encrypted root backups](2026-10-21-import-folded-age-root-backups.md) — Normalize wrapped or whitespace-folded age armor for browser-side verification and signing.
 - [GitHub Actions test workflow](2026-10-20-github-actions-tests.md) — Run lightweight standard-library script tests automatically on pull requests and main-branch pushes.
 
+- [Observe the Mac mini unattended storage scan](2026-10-19-observe-unattended-storage-scan.md) — Observe the default scheduled run, stop it after 403 encrypted sidecars at the owner's direction, and schedule a fuller one-time scan for 4 AM EDT.
+- [Configure scheduled storage scans from Devices](2026-10-19-configurable-storage-scan-schedule.md) — Persist daily or weekly scan schedules on each storage node and expose next-run and live progress controls in the owner UI.
 - [Implement the metadata-node Redis artwork cache](2026-10-18-implement-metadata-redis-cache.md) — Cache encrypted movie and TV artwork in optional node-local Redis with shared-file fallback.
 - [Fix large TV artwork pipe deadlocks](2026-10-18-fix-large-tv-artwork-pipe.md) — Drain age subprocess output concurrently with large artwork input so poster requests do not hang.
 - [Update Mac mini Rawrarr containers](2026-10-18-update-mac-mini-containers.md) — Refresh the Mac mini storage image and relay proxies, verifying all preserved mounts and routes.
@@ -31,6 +34,9 @@
 - [Improve the device topology diagram](2026-10-18-improve-device-topology-diagram.md) — Show enrolled devices in a network diagram with one line per device pair and live peer-state coloring.
 
 # Rawrarr runbooks
+
+- [Skip GitHub Actions for Markdown-only changes](2026-10-22-skip-actions-markdown-only.md) — Skip push and pull-request runs when changes contain only Markdown files.
+
 
 - [Test and deploy GitHub main in OrbStack](2026-10-22-test-deploy-main-orbstack.md) — Run the regression and Playwright suites against clean GitHub `main`, then deploy code-affected internal services and verify their routes.
 
@@ -553,3 +559,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 
 - [Use ECDH for encrypted browser library sessions](2026-10-22-ecdh-browser-library-session.md) — Replace only the Radarr browser-response session-key exchange with ephemeral P-256 ECDH and HKDF; retain age identities and encrypted metadata for other features.
 - [Complete per-instance device signing](2026-10-22-complete-device-signing.md) — Resolve GitHub issue #37 with owner-rooted ML-DSA enrollment, signed shared records, and a safe path for existing nodes.
+- [Review remaining local Rawrarr work](2026-10-22-local-work-cleanup-review.md) — Inventory deferred branches, dirty worktrees, and stashes and document a safe integration and cleanup sequence.
+- [Clean up deferred local feature work](2026-10-22-cleanup-deferred-local-work.md) — Remove the five explicitly deferred local feature worktrees and branches while preserving unrelated checkout state.
