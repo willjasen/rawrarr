@@ -14,38 +14,15 @@ fn coordinator_relay_accepts_only_ciphertext_export_reads() {
 }
 
 #[test]
-fn coordinator_relay_accepts_only_age_wrapped_session_key_posts_for_encrypted_library() {
+fn coordinator_relay_accepts_only_valid_ephemeral_key_posts_for_encrypted_library() {
     let method = axum::http::Method::POST;
-    let public = b"-----BEGIN AGE ENCRYPTED FILE-----\nwrapped-session-key";
+    let key = p256::SecretKey::random(&mut p256::elliptic_curve::rand_core::OsRng);
+    let public = key.public_key().to_sec1_bytes();
     assert!(encrypted_session_request("api/metadata/session/library", &method, public.as_ref()));
     assert!(!encrypted_session_request("api/radarr/movies", &method, public.as_ref()));
     assert!(!encrypted_session_request("api/metadata/session/library", &axum::http::Method::GET, public.as_ref()));
     assert!(!encrypted_session_request("api/metadata/session/library", &method, &[4; 65]));
-    assert!(!encrypted_session_request("api/metadata/session/library", &method, public[..10].as_ref()));
-}
-
-#[test]
-fn node_unwraps_age_wrapped_session_key_for_browser_response() {
-    use std::{io::Write, process::{Command, Stdio}};
-    let Ok(keygen) = Command::new("age-keygen").arg("-o").arg("/tmp/rawrarr-session-test-identity").output() else { return; };
-    assert!(keygen.status.success());
-    let identity = std::fs::read_to_string("/tmp/rawrarr-session-test-identity").expect("generated identity");
-    let _ = std::fs::remove_file("/tmp/rawrarr-session-test-identity");
-    let recipient = Command::new("age-keygen").args(["-y", "-"]).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn();
-    let Ok(mut recipient) = recipient else { return; };
-    recipient.stdin.take().expect("stdin").write_all(identity.as_bytes()).expect("identity input");
-    let output = recipient.wait_with_output().expect("recipient output");
-    assert!(output.status.success());
-    let recipient = String::from_utf8(output.stdout).expect("recipient UTF-8");
-    let session_key = [0x5au8; 32];
-    let mut encrypt = Command::new("age").args(["--recipient", recipient.trim()]).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().expect("age encrypt");
-    encrypt.stdin.take().expect("stdin").write_all(&session_key).expect("key input");
-    let ciphertext = encrypt.wait_with_output().expect("ciphertext");
-    assert!(ciphertext.status.success());
-    let decrypted = crate::secure_config::decrypt_age_input(identity.as_bytes(), &ciphertext.stdout)
-        .expect("node decrypts wrapped session key");
-    assert!(decrypted.status.success());
-    assert_eq!(decrypted.stdout, session_key);
+    assert!(!encrypted_session_request("api/metadata/session/library", &method, public[..64].as_ref()));
 }
 
 #[test]
