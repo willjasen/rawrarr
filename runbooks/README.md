@@ -1,3 +1,5 @@
+- [Integrate shared Radarr recovery](2026-10-22-integrate-radarr-shared-recovery.md) — Port owner-authenticated backup download, progress reporting, and scoped restore behavior onto current `main` through a focused pull request.
+
 - [Deploy persistent node age identity](2026-10-22-deploy-node-age-identity.md) — Deploy the committed subscriber-only identity creation to internal fossil and verify persistence and health.
 
 - [Deploy main to the internal Mac services](2026-10-22-deploy-main-to-internal-macs.md) — Update the Mac mini roarlay coordinator and MacBook fossil end-user node from one committed main revision.
