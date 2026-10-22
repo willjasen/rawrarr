@@ -11,6 +11,8 @@ This document is the single index of what the repository has completed and what 
 
 This sequence verifies deployed storage behavior, then addresses the missing catalog and export durability. Revisit it if product priorities change.
 
+5. **Evolve profile dinosaur generations through visual comparison.** Keep the public-age-recipient digest as the stable identity seed. Build named renderer generations and a fixed-seed preview that compares controlled mutations in dinosaur anatomy, pose, palette, lighting, texture, framing, and prehistoric backgrounds. Use human-selected improvements as the parent for later generations; promote a generation only after visual review at sidebar and profile sizes. The current style direction is premium 3D with cinematic violet-blue lighting and varied prehistoric trees. See [avatar generation comparison](runbooks/2026-10-21-version-avatar-generations.md).
+
 ## Completed in the repository
 
 - **Standalone Rust application:** Axum web/API service, local PostgreSQL migrations and state, `/health`, Docker Compose, and container health checks.
