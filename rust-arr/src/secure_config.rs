@@ -1,4 +1,5 @@
 use hmac::{Hmac, Mac};
+use ml_dsa::{MlDsa65, SigningKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -761,6 +762,15 @@ impl AgeVault {
         ensure_node_identity_at(&data_dir.join("node-age-identity"))
     }
 
+    /// Ensure this subscriber has a persistent signing key separate from the user's signing authority.
+    /// Existing malformed files are deliberately left untouched for recovery.
+    pub fn ensure_node_signing_key() -> Result<(), VaultError> {
+        let data_dir = env::var_os("RAWARR_DATA_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("data"));
+        ensure_node_signing_key_at(&data_dir.join("node-signing-key"))
+    }
+
     pub fn node_identity_recipient() -> Result<String, VaultError> {
         let data_dir = env::var_os("RAWARR_DATA_DIR")
             .map(PathBuf::from)
@@ -1090,6 +1100,70 @@ fn node_identity_recipient(path: &Path) -> Result<String, VaultError> {
     Ok(vault.recipient().to_owned())
 }
 
+const NODE_SIGNING_KEY_MAGIC: &[u8] = b"RAWARR-NODE-SIGNING-KEY\0";
+const NODE_SIGNING_KEY_VERSION: u8 = 1;
+const NODE_SIGNING_SEED_LEN: usize = 32;
+
+fn ensure_node_signing_key_at(path: &Path) -> Result<(), VaultError> {
+    if path.exists() {
+        return load_node_signing_key(path).map(|_| ());
+    }
+    let parent = path.parent().ok_or(VaultError::StorageFailed)?;
+    fs::create_dir_all(parent).map_err(|_| VaultError::StorageFailed)?;
+    set_private_directory_permissions(parent)?;
+
+    let mut seed = Zeroizing::new([0u8; NODE_SIGNING_SEED_LEN]);
+    getrandom::fill(&mut *seed).map_err(|_| VaultError::StorageFailed)?;
+    // The fixed-size seed derives an ML-DSA-65 key pair.
+    let signing_key = SigningKey::<MlDsa65>::from_seed(&(*seed).into());
+    drop(signing_key);
+
+    let temporary = temporary_path(path);
+    let mut contents = Zeroizing::new(Vec::with_capacity(
+        NODE_SIGNING_KEY_MAGIC.len() + 1 + NODE_SIGNING_SEED_LEN,
+    ));
+    contents.extend_from_slice(NODE_SIGNING_KEY_MAGIC);
+    contents.push(NODE_SIGNING_KEY_VERSION);
+    contents.extend_from_slice(&*seed);
+    let result = (|| {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+            .map_err(|_| VaultError::StorageFailed)?;
+        set_private_file_permissions(&file)?;
+        file.write_all(&contents)
+            .map_err(|_| VaultError::StorageFailed)?;
+        file.sync_all().map_err(|_| VaultError::StorageFailed)?;
+        match fs::hard_link(&temporary, path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                load_node_signing_key(path).map(|_| ())
+            }
+            Err(_) => Err(VaultError::StorageFailed),
+        }
+    })();
+    let _ = fs::remove_file(&temporary);
+    result
+}
+
+fn load_node_signing_key(path: &Path) -> Result<SigningKey<MlDsa65>, VaultError> {
+    let contents = Zeroizing::new(fs::read(path).map_err(|_| VaultError::StorageFailed)?);
+    let expected_len = NODE_SIGNING_KEY_MAGIC.len() + 1 + NODE_SIGNING_SEED_LEN;
+    if contents.len() != expected_len
+        || !contents.starts_with(NODE_SIGNING_KEY_MAGIC)
+        || contents[NODE_SIGNING_KEY_MAGIC.len()] != NODE_SIGNING_KEY_VERSION
+    {
+        return Err(VaultError::InvalidIdentity);
+    }
+    let seed_start = NODE_SIGNING_KEY_MAGIC.len() + 1;
+    let seed: [u8; NODE_SIGNING_SEED_LEN] = contents[seed_start..]
+        .try_into()
+        .map_err(|_| VaultError::InvalidIdentity)?;
+    let seed = Zeroizing::new(seed);
+    Ok(SigningKey::<MlDsa65>::from_seed(&(*seed).into()))
+}
+
 fn set_private_directory_permissions(path: &Path) -> Result<(), VaultError> {
     #[cfg(unix)]
     {
@@ -1393,6 +1467,69 @@ mod tests {
         assert_eq!(
             fs::read(&path).expect("read preserved invalid identity"),
             b"not an age identity"
+        );
+        fs::remove_dir_all(data_dir).expect("remove isolated data directory");
+    }
+
+    #[test]
+    fn node_signing_key_is_created_once_and_reused_separately_from_user_identity() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock after epoch")
+            .as_nanos();
+        let data_dir = env::temp_dir().join(format!(
+            "rawrarr-node-signing-key-test-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&data_dir).expect("create isolated data directory");
+        let node_key = data_dir.join("node-signing-key");
+        let user_identity = data_dir.join("age-identity");
+        fs::write(&user_identity, "user identity fixture").expect("write user identity fixture");
+
+        ensure_node_signing_key_at(&node_key).expect("create node signing key");
+        let first_key = fs::read(&node_key).expect("read generated node signing key");
+        let loaded_key = load_node_signing_key(&node_key).expect("load generated node signing key");
+        use ml_dsa::signature::Keypair;
+        let first_public_key = loaded_key.verifying_key().encode();
+
+        ensure_node_signing_key_at(&node_key).expect("reuse node signing key");
+        let reused_key = load_node_signing_key(&node_key).expect("load reused node signing key");
+        assert_eq!(
+            reused_key.verifying_key().encode(),
+            first_public_key,
+            "the same public key must be derived after restart"
+        );
+        assert_eq!(fs::read(&node_key).expect("read reused key"), first_key);
+        assert_eq!(
+            fs::read(&user_identity).expect("read preserved user identity"),
+            b"user identity fixture"
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(fs::metadata(&node_key).unwrap().permissions().mode() & 0o777, 0o600);
+        }
+        fs::remove_dir_all(data_dir).expect("remove isolated data directory");
+    }
+
+    #[test]
+    fn invalid_existing_node_signing_key_is_not_replaced() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock after epoch")
+            .as_nanos();
+        let data_dir = env::temp_dir().join(format!(
+            "rawrarr-invalid-node-signing-key-test-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&data_dir).expect("create isolated data directory");
+        let path = data_dir.join("node-signing-key");
+        fs::write(&path, b"invalid signing key fixture").expect("write invalid fixture");
+
+        assert!(ensure_node_signing_key_at(&path).is_err());
+        assert_eq!(
+            fs::read(&path).expect("read preserved invalid key"),
+            b"invalid signing key fixture"
         );
         fs::remove_dir_all(data_dir).expect("remove isolated data directory");
     }

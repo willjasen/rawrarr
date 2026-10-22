@@ -50,7 +50,7 @@
   <a href="/">← Workspace</a>
   <div class="eyebrow">Your equipment · subscriber setup</div>
   <h1>Set up a rawrarr node</h1>
-  <p>Sign-in uses your passkey. Your age private ID and encrypted signing-root backup stay in this browser while you work through these steps; they are never sent to roarlay. Save both backups somewhere you control.</p>
+  <p>Sign-in uses your passkey. Your age private ID and encrypted user signing-key backup stay in this browser while you work through these steps; they are never sent to roarlay. Save both backups somewhere you control.</p>
 
   <section class="step" id="age-step" aria-labelledby="age-title">
     <div class="step-summary"><p><strong>1. Age ID</strong> · <span id="age-summary"></span></p><button type="button" class="secondary" data-reopen="age-step">Edit</button></div>
@@ -65,16 +65,16 @@
   </section>
 
   <section class="step" id="root-step" aria-labelledby="root-title" hidden>
-    <div class="step-summary"><p><strong>2. Signing root</strong> · <span id="root-summary"></span></p><button type="button" class="secondary" data-reopen="root-step">Edit</button></div>
-    <h2 id="root-title">2. Create or import your encrypted signing root</h2>
-    <p>The owner signing root is separate from age. It will be needed for signed device approvals when that trust flow is released. Only its age-encrypted backup is copied. This preview does not yet pin the public root as an active trust anchor.</p>
-    <div class="actions"><button id="create-root" type="button">Create encrypted root backup</button><button id="copy-root" type="button" hidden>Copy encrypted backup</button></div>
-    <label for="import-root">Or paste an existing encrypted root-key backup</label>
+    <div class="step-summary"><p><strong>2. User signing key</strong> · <span id="root-summary"></span></p><button type="button" class="secondary" data-reopen="root-step">Edit</button></div>
+    <h2 id="root-title">2. Create or import your encrypted user signing key</h2>
+    <p>Your user signing key is separate from age. It will authorize node signing keys when signed device enrollment is released. Only its age-encrypted backup is copied. This preview does not yet pin the public key as an active trust anchor.</p>
+    <div class="actions"><button id="create-root" type="button">Create encrypted user signing-key backup</button><button id="copy-root" type="button" hidden>Copy encrypted backup</button></div>
+    <label for="import-root">Or paste an existing encrypted user signing-key backup</label>
     <textarea id="import-root" spellcheck="false" autocomplete="off" placeholder="-----BEGIN AGE ENCRYPTED FILE-----"></textarea>
     <div class="actions"><button id="use-root" type="button" class="secondary">Verify imported backup</button></div>
     <p id="root-fingerprint" class="status" role="status" aria-live="polite"></p>
-    <p class="warning">Keep both the encrypted root-key backup and the private age ID. Losing either can prevent future device approvals. Rawrarr cannot recover them for you.</p>
-    <label class="check" id="root-backup-label" hidden><input id="root-backed-up" type="checkbox" disabled>I saved the encrypted root backup and understand I need my age ID to unlock it.</label>
+    <p class="warning">Keep both the encrypted user signing-key backup and the private age ID. Losing either can prevent future device approvals. Rawrarr cannot recover them for you.</p>
+    <label class="check" id="root-backup-label" hidden><input id="root-backed-up" type="checkbox" disabled>I saved the encrypted user signing-key backup and understand I need my age ID to unlock it.</label>
   </section>
 
   <section class="step" id="deploy-step" aria-labelledby="deploy-title" hidden>
@@ -107,7 +107,7 @@
       <li id="auth-key-instruction">For internal Tailscale, Compose contains the auth key; restrict the file to your user (for example, <code>chmod 600 compose.yaml</code>) and remove the key after the node joins. Headscale mode uses a separate local secret file.</li>
       <li>Check the media path if you selected boneyard. Keep <code>/shared</code> on a separate Syncthing setup; it is not exposed as a Tailscale share.</li>
       <li>In that folder run <code>docker compose config --quiet</code>, then <code>docker compose up -d</code>.</li>
-      <li>Return to roarlay’s Devices page and approve the pending node. Select the approved node there to continue setup. Direct <code>http://localhost:7297</code> sign-in requires a passkey registered for that localhost origin. Keep the age ID and encrypted root backup with you; do not put either in Compose.</li>
+      <li>Return to roarlay’s Devices page and approve the pending node. Select the approved node there to continue setup. Direct <code>http://localhost:7297</code> sign-in requires a passkey registered for that localhost origin. Keep the age ID and encrypted user signing-key backup with you; do not put either in Compose.</li>
       <li>Set up and verify a separate Syncthing peer before expecting <code>/shared</code> to replicate to another node. This file starts a standalone local volume; it does not join or share a Syncthing folder.</li>
     </ol>
   </section>
