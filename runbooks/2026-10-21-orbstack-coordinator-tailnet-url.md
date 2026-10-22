@@ -28,9 +28,10 @@ Related procedure: [isolated coordinator and two-node test](2026-10-21-orbstack-
 
 - The Tailscale status on the existing MacBook sidecar confirmed tailnet `risk-mermaid.ts.net`; its existing Serve routes were read and left unchanged.
 - The test Compose configuration validates and the coordinator, PostgreSQL, Headscale, and both metadata services report healthy. The coordinator root and `/health` respond on loopback port 17397.
-- The new coordinator Tailscale sidecar is running with a dedicated persistent state volume and a persistent `tailscaled` daemon. The tailnet peer map now contains the coordinator hostname and assigned Tailscale IPs, but the peer has no handshake or active connection. Locally the backend remains `NeedsLogin`, and `tailscale serve` reports `Logged out`; therefore no usable Serve URL is active yet.
+- The coordinator sidecar is authenticated and `Running` on tailnet `willjasen.github`, with MagicDNS name `rawrarr-orbstack-test-coordinator.risk-mermaid.ts.net` and Tailscale IPv4 address `100.123.21.89`.
+- Tailscale Serve status confirms HTTPS port 443 and `/` proxying to `http://127.0.0.1:8080`. From the existing `rawrarr-macbook-tailscale` peer, `wget https://rawrarr-orbstack-test-coordinator.risk-mermaid.ts.net/health` returned HTTP 200 and the Roarlay health page text.
 - Both metadata nodes can reach `http://coordinator:8080/health`; two Tailscale ping requests in each direction through test Headscale succeed; loopback health on `127.0.0.1:17397/health` returns 200.
 
 ## Remaining work
 
-Complete the one-time device authorization, configure HTTPS Serve on the test coordinator identity, verify Serve status and the HTTPS health route, and recheck Headscale peer pings in both directions. Do not change or reset any Serve handler on the existing MacBook Tailscale node.
+The requested test URL is available to devices on the `risk-mermaid.ts.net` tailnet: <https://rawrarr-orbstack-test-coordinator.risk-mermaid.ts.net/>. Keep the coordinator's Tailscale identity and state volume while the test environment is in use. Do not change or reset any Serve handler on the existing MacBook Tailscale node.
