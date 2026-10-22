@@ -1148,7 +1148,11 @@ function renderMovies(movies) {
     const row = document.createElement('tr');
     const titleCell = document.createElement('td'); titleCell.className = 'title-cell';
     const image = document.createElement('img'); image.className = 'poster'; image.alt = ''; image.loading = 'lazy';
-    if (movie.loadArtwork) image.dataset.loadArtwork = 'true';
+    image.decoding = 'async'; image.referrerPolicy = 'no-referrer';
+    if (movie.posterUrl) {
+      image.src = movie.posterUrl;
+      image.addEventListener('error', () => image.remove(), { once: true });
+    }
     titleCell.append(image);
     const title = document.createElement('span'); title.textContent = `${movie.title}${movie.year ? ` (${movie.year})` : ''}`; titleCell.append(title);
     const id = document.createElement('td'); id.textContent = movie.tmdbId ? String(movie.tmdbId) : '—';
@@ -1158,22 +1162,6 @@ function renderMovies(movies) {
     const quality = document.createElement('td'); quality.textContent = movie.qualityProfile;
     const size = document.createElement('td'); size.textContent = movie.hasFile ? formatBytes(movie.sizeOnDisk) : '—';
     row.append(titleCell, id, year, file, monitored, quality, size); moviesPanel.append(row);
-  }
-  const images = [...moviesPanel.querySelectorAll('img[data-load-artwork]')];
-  if ('IntersectionObserver' in window) {
-    const observer = new IntersectionObserver(entries => {
-      for (const entry of entries) if (entry.isIntersecting) {
-        observer.unobserve(entry.target);
-        const movie = movies[images.indexOf(entry.target)];
-        if (movie?.loadArtwork) void movie.loadArtwork().then(url => { entry.target.src = url; }).catch(() => {});
-      }
-    }, { rootMargin: '200px' });
-    images.forEach(image => observer.observe(image));
-  } else {
-    for (const image of images) {
-      const movie = movies[images.indexOf(image)];
-      if (movie?.loadArtwork) void movie.loadArtwork().then(url => { image.src = url; }).catch(() => {});
-    }
   }
 }
 
@@ -1215,13 +1203,9 @@ async function unlockMetadata() {
       ...movie,
       qualityProfile: movie.qualityProfile || '—',
       sizeOnDisk: Number(movie.sizeOnDisk) || 0,
-      loadArtwork: movie.tmdbId && movie.artworkSource ? async () => {
-        const response = await fetch(`${artworkBase}/radarr/live-movies/${encodeURIComponent(movie.tmdbId)}/poster`, {
-          cache: 'no-store', credentials: 'include', redirect: 'error',
-        });
-        if (!response.ok) throw new Error(`Radarr poster request failed (HTTP ${response.status}).`);
-        return URL.createObjectURL(await response.blob());
-      } : null,
+      posterUrl: movie.tmdbId && movie.artworkSource
+        ? `${artworkBase}/radarr/live-movies/${encodeURIComponent(movie.tmdbId)}/poster`
+        : null,
     }));
     if (selectedNode !== nodeId) return;
     renderMovies(movies);

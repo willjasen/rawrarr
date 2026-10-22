@@ -19,6 +19,8 @@ test('coordinator exposes Radarr detail slugs through encrypted and temporary di
   assert.match(main, /async fn radarr_movie_poster_live[\s\S]*?fetch_movie_poster\(&movie\)/);
   assert.match(main, /let direct_protected = Router::new\([\s\S]*?\.route\("\/api\/radarr\/live-library", get\(radarr_movies_live\)\)[\s\S]*?"\/api\/radarr\/live-movies\/\{tmdb_id\}\/poster",[\s\S]*?get\(radarr_movie_poster_live\)/);
   assert.match(script, /arrDirectRequest\('\/radarr\/live-library'\)/);
+  assert.match(script, /posterUrl: movie\.tmdbId && movie\.artworkSource[\s\S]*?radarr\/live-movies/);
+  assert.match(script, /if \(movie\.posterUrl\) \{\s*image\.src = movie\.posterUrl/);
   assert.doesNotMatch(script.match(/async function unlockMetadata\(\)[\s\S]*?\n\}/)?.[0] || '', /loadRadarrLibrary|selectedRoute\.base/);
 });
 
