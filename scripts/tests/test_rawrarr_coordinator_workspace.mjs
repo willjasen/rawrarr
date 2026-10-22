@@ -99,6 +99,10 @@ test('Sonarr settings use only the browser-to-metadata direct route', () => {
   assert.doesNotMatch(coordinator, /"api\/settings\/sonarr"/);
 });
 
+test('encrypted metadata fetches include the direct node browser session cookie', () => {
+  assert.match(metadataExport, /async function fetchBytes\(url\)[\s\S]*?credentials: 'include'/);
+});
+
 test('coordinator serves the profile-color module imported by its workspace script', () => {
   assert.match(workspaceScript, /from '\.\/profile-color\.mjs'/);
   assert.match(coordinator, /\.route\("\/assets\/profile-color\.mjs", get\(coordinator_profile_color_script\)\)/);

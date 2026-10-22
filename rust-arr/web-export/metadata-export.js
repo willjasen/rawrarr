@@ -26,7 +26,7 @@ async function decrypt(identity, ciphertext, type = 'uint8array') {
 }
 
 async function fetchBytes(url) {
-  const response = await fetch(url, { cache: 'no-store', headers: { Accept: 'application/octet-stream' } });
+  const response = await fetch(url, { cache: 'no-store', credentials: 'include', headers: { Accept: 'application/octet-stream' } });
   if (!response.ok) throw new Error(`Could not fetch encrypted metadata (${response.status})`);
   return new Uint8Array(await response.arrayBuffer());
 }
