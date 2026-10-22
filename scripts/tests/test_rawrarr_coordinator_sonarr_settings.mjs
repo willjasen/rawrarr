@@ -4,10 +4,13 @@ import test from 'node:test';
 import { chromium } from '/usr/local/lib/node_modules/playwright-core/index.mjs';
 
 const root = new URL('../../', import.meta.url);
-const [html, script, deviceRoutes] = await Promise.all([
+const [html, script, deviceRoutes, nodeAvatar, profileColor, aiModule] = await Promise.all([
   readFile(new URL('rust-arr/src/coordinator_workspace.html', root), 'utf8'),
   readFile(new URL('rust-arr/src/coordinator-workspace.mjs', root), 'utf8'),
   readFile(new URL('rust-arr/src/coordinator-device-routes.mjs', root), 'utf8'),
+  readFile(new URL('rust-arr/src/coordinator-node-avatar.mjs', root), 'utf8'),
+  readFile(new URL('rust-arr/src/profile-color.mjs', root), 'utf8'),
+  readFile(new URL('rust-arr/src/coordinator-ai.mjs', root), 'utf8'),
 ]);
 
 test('coordinator saves Radarr and Sonarr settings over the direct metadata route only', async t => {
@@ -27,6 +30,9 @@ test('coordinator saves Radarr and Sonarr settings over the direct metadata rout
     if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
     if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-ai.mjs') return route.fulfill({ body: aiModule, contentType: 'text/javascript' });
     if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
     if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }] });
     if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
@@ -172,6 +178,44 @@ test('coordinator opens TV from #tv and upgrades the old #series link', async t 
   await page.goto('http://rawrarr.test/?legacy=1#series');
   assert.equal(await page.locator('#series-view').isVisible(), true);
   assert.equal(new URL(page.url()).hash, '#tv');
+});
+
+test('Movies and TV do not display cached library data without an age ID', async t => {
+  const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  const moviesCache = [{ title: 'Private Movie Cache Fixture', year: 2025, tmdbId: 99901, monitored: true, hasFile: true }];
+  const tvCache = [{ title: 'Private TV Cache Fixture', year: 2025, tvdbId: 99902, monitored: true, episodeFileCount: 1, episodeCount: 1 }];
+  await page.addInitScript(({ moviesCache, tvCache }) => {
+    localStorage.setItem('rawrarr.library-text.v1:metadata-one:movies', JSON.stringify({ savedAt: Date.now(), items: moviesCache }));
+    localStorage.setItem('rawrarr.library-text.v1:metadata-one:tv', JSON.stringify({ savedAt: Date.now(), items: tvCache }));
+  }, { moviesCache, tvCache });
+  await page.route('http://rawrarr.test/**', async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
+    if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-ai.mjs') return route.fulfill({ body: aiModule, contentType: 'text/javascript' });
+    if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
+    if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }] });
+    if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
+    if (url.pathname === '/direct-api/api/direct/health') return route.fulfill({ status: 204 });
+    return route.fulfill({ status: 404, body: 'not found' });
+  });
+
+  await page.goto('http://rawrarr.test/');
+  await page.waitForFunction(() => document.querySelector('[data-node-id="metadata-one"]')?.dataset.selected === 'true');
+  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
+
+  await page.click('[data-view="movies"]');
+  assert.equal(await page.locator('#movies .library-card').count(), 0);
+  assert.doesNotMatch(await page.locator('#movies-view').textContent(), /Private Movie Cache Fixture/);
+
+  await page.click('[data-view="series"]');
+  assert.equal(await page.locator('#sonarr-series .library-card').count(), 0);
+  assert.doesNotMatch(await page.locator('#series-view').textContent(), /Private TV Cache Fixture/);
 });
 
 test('remembered age ID survives a reload and is removed on sign-out', async t => {
