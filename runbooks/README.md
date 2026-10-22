@@ -25,6 +25,8 @@
 
 # Rawrarr runbooks
 
+- [Select subscriber tailnet provider](2026-10-22-select-subscriber-tailnet.md) — Let internal deployments use an owner-controlled Tailscale tailnet while retaining the public Headscale option.
+
 - [Fix node approval when a token is already enrolled](2026-10-22-fix-node-approval-reuse.md) — Let an owner approve a regenerated subscriber request that reuses its existing credential, and accept camelCase registration names.
 
 - [Highlight pending node approvals](2026-10-21-highlight-pending-node-approvals.md) — Place pending node approvals at the top of Devices and highlight the section when action is needed.

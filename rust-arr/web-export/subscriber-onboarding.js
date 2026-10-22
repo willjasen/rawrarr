@@ -107,14 +107,22 @@ byId('node-role').addEventListener('change', () => {
 });
 byId('media-path').addEventListener('input', clearCompose);
 byId('device-name').addEventListener('input', clearCompose);
+byId('network-mode').addEventListener('change', () => {
+  byId('headscale-server-group').hidden = byId('network-mode').value !== 'headscale';
+  clearCompose();
+});
+byId('headscale-server').addEventListener('input', clearCompose);
+byId('network-auth-key').addEventListener('input', clearCompose);
 byId('prepare-compose').addEventListener('click', () => {
   try {
-    const yaml = subscriberCompose({ role: byId('node-role').value, nodeId, coordinatorUrl: location.origin, deviceName: byId('device-name').value, mediaPath: byId('media-path').value });
+    const authKey = byId('network-auth-key').value.trim();
+    if (!authKey) throw new Error('Enter a one-time Tailscale or Headscale auth key.');
+    const yaml = subscriberCompose({ role: byId('node-role').value, nodeId, coordinatorUrl: location.origin, deviceName: byId('device-name').value, mediaPath: byId('media-path').value, networkMode: byId('network-mode').value, controlServer: byId('headscale-server').value.trim() });
     byId('compose-preview').textContent = yaml;
     byId('compose-preview').hidden = false;
     byId('download-compose').hidden = false;
     byId('deploy-instructions').hidden = false;
-    byId('compose-message').textContent = 'Review the file and the image prerequisite before running Docker Compose.';
+    byId('compose-message').textContent = 'Compose references a local secret file. Save the auth key separately as tailscale-authkey; the key is not included in this preview or download.';
   } catch (error) { fail('compose-message', error); }
 });
 byId('download-compose').addEventListener('click', () => {
@@ -125,5 +133,7 @@ byId('download-compose').addEventListener('click', () => {
   link.download = 'compose.yaml';
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  byId('compose-message').textContent = 'Compose downloaded. Save the auth key you entered separately as tailscale-authkey beside compose.yaml; it was not included in the download.';
+  byId('network-auth-key').value = '';
 });
-window.addEventListener('pagehide', () => { ageIdentity = ''; rootBackup = ''; byId('import-age').value = ''; byId('import-root').value = ''; });
+window.addEventListener('pagehide', () => { ageIdentity = ''; rootBackup = ''; byId('import-age').value = ''; byId('import-root').value = ''; byId('network-auth-key').value = ''; });

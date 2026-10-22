@@ -1,5 +1,6 @@
-export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, mediaPath = '' }) {
+export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, mediaPath = '', networkMode, controlServer }) {
   if (!['metadata', 'storage'].includes(role)) throw new Error('Only fossil and boneyard nodes can be installed here.');
+  if (!['internal-tailscale', 'headscale'].includes(networkMode)) throw new Error('Choose internal Tailscale or public Headscale networking.');
   if (!/^device-[0-9a-f]{24}$/.test(nodeId)) throw new Error('Invalid generated device ID.');
   const defaultName = role === 'storage' ? 'My boneyard node' : 'My fossil node';
   const name = String(deviceName ?? defaultName).trim();
@@ -14,6 +15,32 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
     '# Rawrarr subscriber node. Requires the rawrarr:local image until a public release is published.',
     '# This file runs no coordinator, roarlay, or PostgreSQL service.',
     'services:',
+    '  tailscale:',
+    '    image: tailscale/tailscale:stable',
+    `    hostname: ${quote(name.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63) || nodeId)}`,
+    '    environment:',
+    '      TS_STATE_DIR: /var/lib/tailscale',
+    '      TS_AUTHKEY: file:/run/secrets/tailscale-authkey',
+    '      TS_AUTH_ONCE: "true"',
+    '      TS_USERSPACE: "true"',
+  ];
+  const tsArgs = ['--accept-dns=false'];
+  if (networkMode === 'headscale') {
+    let loginServer;
+    try { loginServer = new URL(controlServer); }
+    catch { throw new Error('Enter the HTTPS Headscale control server URL.'); }
+    if (loginServer.protocol !== 'https:' || loginServer.origin !== controlServer || loginServer.username || loginServer.password) throw new Error('Enter the HTTPS Headscale control server URL.');
+    tsArgs.push(`--login-server=${controlServer}`);
+  }
+  lines.push(`      TS_EXTRA_ARGS: ${quote(tsArgs.join(' '))}`);
+  lines.push(
+    '    secrets:',
+    '      - tailscale-authkey',
+    '    volumes:',
+    '      - tailscale-state:/var/lib/tailscale',
+    '    restart: unless-stopped',
+    '    entrypoint: ["/bin/sh", "-c"]',
+    '    command: "/usr/local/bin/containerboot; result=$$?; rm -f /run/secrets/tailscale-authkey; exit $$result"',
     `  ${role === 'storage' ? 'boneyard' : 'fossil'}:`,
     '    image: rawrarr:local',
     '    environment:',
@@ -33,17 +60,28 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
     '      RAWARR_WEBAUTHN_RP_ID: localhost',
     '      RAWARR_WEBAUTHN_ORIGIN: http://localhost:7297',
     '      RAWARR_LOCAL_PLAINTEXT_CONFIG: "false"',
-  ];
+  );
   if (role === 'storage') lines.push('      RAWARR_LIBRARY_PATH: /media');
   lines.push(
-    '    ports:',
-    '      - "127.0.0.1:7297:8080"',
-    '      - "127.0.0.1:7298:8082"',
+    '    network_mode: service:tailscale',
+    '    depends_on:',
+    '      tailscale:',
+    '        condition: service_started',
     '    volumes:',
     '      - rawrarr-data:/data',
     '      - rawrarr-shared:/shared',
   );
   if (role === 'storage') lines.push('      - type: bind', `        source: ${quote(mediaPath.trim())}`, '        target: /media', '        read_only: true', '        bind:', '          create_host_path: false');
-  lines.push('    restart: unless-stopped', 'volumes:', '  rawrarr-data:', '  rawrarr-shared:', '');
+  lines.push(
+    '    restart: unless-stopped',
+    'secrets:',
+    '  tailscale-authkey:',
+    '    file: ./tailscale-authkey',
+    'volumes:',
+    '  tailscale-state:',
+    '  rawrarr-data:',
+    '  rawrarr-shared:',
+    '',
+  );
   return lines.join('\n');
 }
