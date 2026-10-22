@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { subscriberCompose } from '../../rust-arr/web-export/subscriber-compose.js';
 
-const base = { nodeId: `device-${'a'.repeat(24)}`, coordinatorUrl: 'https://rawrarr.example.test', networkMode: 'internal-tailscale', authKey: 'tskey-auth-test-fixture' };
+const base = { nodeId: `device-${'a'.repeat(24)}`, coordinatorUrl: 'https://rawrarr.example.test', networkMode: 'internal-tailscale', authKey: 'tskey-auth-test-fixture', rootFingerprint: 'a'.repeat(64) };
 
 test('subscriber Compose offers fossil and boneyard with private UI update credentials', () => {
   for (const role of ['metadata', 'storage']) {
@@ -19,6 +19,7 @@ test('subscriber Compose offers fossil and boneyard with private UI update crede
     assert.match(yaml, /rawrarr-data:\/data/);
     assert.match(yaml, /rawrarr-shared:\/shared/);
     assert.match(yaml, /RAWARR_NODE_TOKEN_FILE: \/data\/node-token/);
+    assert.match(yaml, new RegExp(`RAWARR_INSTANCE_ROOT_FINGERPRINT: ${'a'.repeat(64)}`));
     assert.match(yaml, /RAWARR_DIRECT_ALLOWED_ORIGIN: "https:\/\/rawrarr\.example\.test"/);
     assert.match(yaml, /RUST_ARR_DIRECT_LISTEN_ADDR: 0\.0\.0\.0:8082/);
     assert.doesNotMatch(yaml, /^\s*(roarlay|coordinator|postgres):/m);
@@ -37,6 +38,7 @@ test('subscriber Compose offers fossil and boneyard with private UI update crede
   assert.match(subscriberCompose({ ...base, role: 'metadata', deviceName: 'Office fossil' }), /RAWARR_DEVICE_NAME: "Office fossil"/);
   assert.throws(() => subscriberCompose({ ...base, role: 'metadata', deviceName: '   ' }), /device name/);
   assert.throws(() => subscriberCompose({ ...base, role: 'metadata', deviceName: 'x'.repeat(65) }), /device name/);
+  assert.throws(() => subscriberCompose({ ...base, rootFingerprint: 'invalid', role: 'metadata' }), /root fingerprint/);
   assert.throws(() => subscriberCompose({ nodeId: base.nodeId, coordinatorUrl: base.coordinatorUrl, role: 'metadata' }), /Choose internal Tailscale/);
 });
 

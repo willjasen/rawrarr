@@ -30,8 +30,10 @@
 
 # Rawrarr runbooks
 
-- [Skip GitHub Actions for Markdown-only changes](2026-10-22-skip-actions-markdown-only.md) — Skip push and pull-request test runs when changes contain only Markdown files.
+- [Skip GitHub Actions for Markdown-only changes](2026-10-22-skip-actions-markdown-only.md) — Skip push and pull-request runs when changes contain only Markdown files.
 
+
+- [Test and deploy GitHub main in OrbStack](2026-10-22-test-deploy-main-orbstack.md) — Run the regression and Playwright suites against clean GitHub `main`, then deploy code-affected internal services and verify their routes.
 
 - [Check GitHub UI releases every minute](2026-10-22-ui-updater-one-minute-poll.md) — Reduce coordinator and node UI bundle detection from five minutes to one minute, with a 60-second minimum.
 
@@ -550,3 +552,6 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Authenticate Rawrarr UI bundle updates](2026-10-22-signed-ui-updates.md) — Verify publisher signatures before activating downloaded UI and display trusted verification state.
 
 - [Use ECDH for encrypted browser library sessions](2026-10-22-ecdh-browser-library-session.md) — Replace only the Radarr browser-response session-key exchange with ephemeral P-256 ECDH and HKDF; retain age identities and encrypted metadata for other features.
+- [Complete per-instance device signing](2026-10-22-complete-device-signing.md) — Resolve GitHub issue #37 with owner-rooted ML-DSA enrollment, signed shared records, and a safe path for existing nodes.
+- [Review remaining local Rawrarr work](2026-10-22-local-work-cleanup-review.md) — Inventory deferred branches, dirty worktrees, and stashes and document a safe integration and cleanup sequence.
+- [Clean up deferred local feature work](2026-10-22-cleanup-deferred-local-work.md) — Remove the five explicitly deferred local feature worktrees and branches while preserving unrelated checkout state.
