@@ -25,6 +25,8 @@
 
 # Rawrarr runbooks
 
+- [Open Devices when the subscriber node connects](2026-10-22-redirect-after-node-online.md) — Show online waiting status and automatically open Devices when the generated node requests approval.
+
 - [Collapse completed node setup sections](2026-10-22-collapse-node-setup-sections.md) — Collapse finished subscriber setup stages and copy generated Compose to the clipboard.
 
 - [Embed internal Tailscale auth key in Compose](2026-10-22-inline-internal-tailscale-auth-key.md) — Put the internal mode key in its generated Compose file and keep Headscale on a separate secret file.

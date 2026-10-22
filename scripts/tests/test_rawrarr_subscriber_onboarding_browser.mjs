@@ -22,6 +22,20 @@ test('first-account subscriber setup gates node choices behind age and root back
   const context = await browser.newContext();
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const page = await context.newPage();
+  let nodePolls = 0;
+  await page.route('**/api/workspace/nodes', async route => {
+    const compose = await page.locator('#compose-preview').innerText();
+    const nodeId = /RAWARR_NODE_ID: (device-[0-9a-f]+)/.exec(compose)?.[1];
+    assert.ok(nodeId, 'generated Compose contains the node ID being monitored');
+    await route.fulfill({ json: [] });
+  });
+  await page.route('**/api/workspace/pending', async route => {
+    nodePolls += 1;
+    const compose = await page.locator('#compose-preview').innerText();
+    const nodeId = /RAWARR_NODE_ID: (device-[0-9a-f]+)/.exec(compose)?.[1];
+    assert.ok(nodeId, 'generated Compose contains the node ID being monitored');
+    await route.fulfill({ json: nodePolls > 1 ? [{ nodeId }] : [] });
+  });
   await page.goto(`http://127.0.0.1:${server.address().port}/setup/node`);
   assert.equal(await page.locator('#root-step').isVisible(), false);
   assert.equal(await page.locator('#deploy-step').isVisible(), false);
@@ -70,13 +84,15 @@ test('first-account subscriber setup gates node choices behind age and root back
   assert.equal(await page.locator('#compose-preview').isVisible(), true);
   await page.getByRole('button', { name: 'Copy compose.yml to clipboard' }).click();
   assert.match(await page.evaluate(() => navigator.clipboard.readText()), /services:/);
-  await page.getByRole('button', { name: 'Mark section complete' }).click();
-  assert.equal(await page.locator('#deploy-step h2').isVisible(), false, 'completed deployment section collapses');
-  assert.match(await page.locator('#deploy-summary').innerText(), /MacBook fossil/);
-  assert.equal((await page.locator('#compose-preview').innerText()).includes('tskey-auth-example-secret'), false);
-  assert.match(await page.locator('#compose-preview').innerText(), /RAWARR_COORDINATOR_URL: "https:\/\/rawrarr-mini\.example-tailnet\.ts\.net"/);
-  assert.match(await page.locator('#compose-preview').innerText(), /TS_AUTHKEY: file:\/run\/secrets\/tailscale-authkey/);
+  await page.locator('#node-online-status').waitFor({ state: 'visible' });
+  await page.getByText('Waiting for node to come online').waitFor();
+  const composePreview = await page.locator('#compose-preview').innerText();
+  assert.equal(composePreview.includes('tskey-auth-example-secret'), false);
+  assert.match(composePreview, /RAWARR_COORDINATOR_URL: "https:\/\/rawrarr-mini\.example-tailnet\.ts\.net"/);
+  assert.match(composePreview, /TS_AUTHKEY: file:\/run\/secrets\/tailscale-authkey/);
   assert.deepEqual(await page.locator('#network-mode option').allTextContents(), ['Internal use · my Tailscale tailnet', 'Public service · Headscale']);
-  assert.deepEqual(requests.filter(path => path !== '/favicon.ico'), ['/setup/node', '/assets/subscriber-onboarding.js'], 'private material never leaves the browser in the setup flow');
+  await page.waitForURL('**/#devices', { timeout: 10000 });
+  assert.equal(nodePolls, 2, 'the page redirects automatically when the generated node appears for approval');
+  assert.deepEqual(requests.filter(path => path !== '/favicon.ico'), ['/setup/node', '/assets/subscriber-onboarding.js', '/'], 'private material never leaves the browser in the setup flow');
   await context.close();
 });

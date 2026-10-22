@@ -34,6 +34,13 @@
     .warning { padding:12px; border:1px solid #a27e35; border-radius:8px; color:#f1d582; background:#322a17 }
     .notice { padding:12px; border:1px solid var(--line); border-radius:8px; background:#101711 }
     .status { min-height:20px; color:var(--green) }
+    .node-wait { display:flex; align-items:center; gap:9px; margin:14px 0; padding:11px 13px; border:1px solid var(--line); border-radius:8px; color:var(--muted); background:#101711 }
+    .node-wait[hidden] { display:none }
+    .node-wait-icon { width:17px; height:17px; flex:none; border:2px solid #607161; border-top-color:var(--green); border-radius:50%; animation:node-spin .9s linear infinite }
+    .node-wait.online { color:var(--green); border-color:#36543d }
+    .node-wait.online .node-wait-icon { border:0; animation:none; width:19px; height:19px }
+    .node-wait.online .node-wait-icon::after { content:"✓"; font-weight:800 }
+    @keyframes node-spin { to { transform:rotate(360deg) } }
     code,pre { overflow-wrap:anywhere }
     pre { white-space:pre-wrap; max-height:320px; overflow:auto; padding:14px; background:#0d120e; border:1px solid var(--line); border-radius:8px; font-size:12px }
   </style>
@@ -89,8 +96,9 @@
     <div id="headscale-server-group" hidden><label for="headscale-server">Headscale control server HTTPS URL</label><input id="headscale-server" type="url" spellcheck="false" placeholder="https://headscale.example.com"></div>
     <div id="media-path-group" hidden><label for="media-path">Absolute media folder path on this computer</label><input id="media-path" type="text" spellcheck="false" placeholder="/srv/media or C:/Media"><p>Docker Desktop must be allowed to access this folder. It mounts read-only.</p></div>
     <p class="notice"><strong>Development preview:</strong> The public Rawrarr image has not been published. This Compose file uses <code>rawrarr:local</code> and will start only when that image is already present on the target computer. Public one-command installation remains pending.</p>
-    <div class="actions"><button id="prepare-compose" type="button">Prepare Compose file</button><button id="copy-compose" type="button" hidden>Copy compose.yml to clipboard</button><button id="download-compose" type="button" hidden>Download compose.yml</button><button id="complete-deploy" type="button" class="secondary" hidden>Mark section complete</button></div>
+    <div class="actions"><button id="prepare-compose" type="button">Prepare Compose file</button><button id="copy-compose" type="button" hidden>Copy compose.yml to clipboard</button><button id="download-compose" type="button" hidden>Download compose.yml</button></div>
     <p id="compose-message" class="status" role="status" aria-live="polite"></p>
+    <div id="node-online-status" class="node-wait" role="status" aria-live="polite" hidden><span class="node-wait-icon" aria-hidden="true"></span><span id="node-online-message">Waiting for node to come online</span></div>
     <pre id="compose-preview" hidden></pre>
     <ol id="deploy-instructions" hidden>
       <li>Install Docker Desktop on macOS or Windows, or Docker Engine with the Compose plugin on Debian.</li>
