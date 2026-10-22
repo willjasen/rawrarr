@@ -545,6 +545,7 @@ async function probeArrBase(service, url) {
 }
 
 function appendArrDetailLink(titleCell, service, item) {
+  if (titleCell.querySelector('.arr-external-link')) return;
   const base = reachableArrBases.get(service);
   if (!base || !item.titleSlug || ['.', '..'].includes(item.titleSlug)) return;
   const link = document.createElement('a');
@@ -556,6 +557,54 @@ function appendArrDetailLink(titleCell, service, item) {
   link.setAttribute('aria-label', link.title);
   link.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6 3H3.75A1.75 1.75 0 0 0 2 4.75v7.5A1.75 1.75 0 0 0 3.75 14h7.5A1.75 1.75 0 0 0 13 12.25V10M8 2h6v6M14 2 7 9"/></svg>';
   titleCell.append(link);
+}
+
+function renderLibraryBrowser({ containerId, searchId, filterId, countId, items, type }) {
+  const container = document.getElementById(containerId);
+  const search = document.getElementById(searchId);
+  const filter = document.getElementById(filterId);
+  const count = document.getElementById(countId);
+  const config = type === 'movie'
+    ? { service:'radarr', available:item => item.hasFile, status:item => item.hasFile ? 'Present' : 'Missing', details:item => [item.year || 'Year unknown', item.qualityProfile || 'Quality unknown', item.hasFile ? formatBytes(item.sizeOnDisk) : 'No file'] }
+    : { service:'sonarr', art:'TV', available:item => Number(item.episodeFileCount) > 0, status:item => `${Number(item.episodeFileCount) || 0} episodes`, details:item => [item.year || 'Year unknown', `${Number(item.episodeFileCount) || 0} / ${Number(item.episodeCount) || 0} episodes`, item.qualityProfile || 'Quality unknown'] };
+  const paint = () => {
+    const query = search.value.trim().toLocaleLowerCase();
+    const mode = filter.value;
+    const visible = items.filter(item => {
+      const available = config.available(item);
+      if (mode === 'available' && !available || mode === 'missing' && available || mode === 'monitored' && !item.monitored) return false;
+      return `${item.title || ''} ${item.year || ''}`.toLocaleLowerCase().includes(query);
+    });
+    container.replaceChildren();
+    count.textContent = `${visible.length.toLocaleString()} of ${items.length.toLocaleString()} ${type === 'movie' ? 'movies' : 'series'}`;
+    if (!visible.length) {
+      const empty = document.createElement('div'); empty.className = 'library-empty';
+      empty.textContent = items.length ? 'No titles match this search or filter.' : `No ${type === 'movie' ? 'movies' : 'series'} in this library yet.`;
+      container.append(empty); return;
+    }
+    for (const item of visible) {
+      const card = document.createElement('article'); card.className = 'library-card';
+      card.dataset.libraryId = String(type === 'movie' ? item.tmdbId || '' : item.tvdbId || '');
+      const art = document.createElement('div'); art.className = 'library-art';
+      const placeholder = document.createElement('span'); placeholder.className = 'library-art-empty'; placeholder.textContent = type === 'movie' ? '▶' : '▤'; placeholder.setAttribute('aria-hidden', 'true'); art.append(placeholder);
+      const poster = document.createElement('img'); poster.className = 'library-poster'; poster.alt = ''; poster.loading = 'lazy'; poster.decoding = 'async'; poster.referrerPolicy = 'no-referrer';
+      if (type === 'movie') { poster.dataset.tmdbId = String(item.tmdbId || ''); if (item.posterUrl) poster.src = item.posterUrl; }
+      else if (Number(item.tvdbId) > 0) poster.dataset.tvdbId = String(item.tvdbId);
+      poster.addEventListener('load', () => { placeholder.hidden = true; }, { once:true });
+      poster.addEventListener('error', () => poster.remove(), { once:true });
+      art.append(poster);
+      const badge = document.createElement('span'); badge.className = 'library-state'; badge.textContent = config.status(item); art.append(badge);
+      const copy = document.createElement('div'); copy.className = 'library-card-copy';
+      const titleRow = document.createElement('div'); titleRow.className = 'library-title-row';
+      const title = document.createElement('span'); title.className = 'library-card-title'; title.textContent = item.title || 'Untitled'; title.title = item.title || 'Untitled'; titleRow.append(title);
+      appendArrDetailLink(titleRow, config.service, item);
+      const meta = document.createElement('div'); meta.className = 'library-card-meta'; meta.textContent = `${item.year || 'Year unknown'}${item.monitored ? ' · Monitored' : ''}`;
+      const detail = document.createElement('div'); detail.className = 'library-card-detail';
+      for (const value of config.details(item)) { const part = document.createElement('span'); part.textContent = value; detail.append(part); }
+      copy.append(titleRow, meta, detail); card.append(art, copy); container.append(card);
+    }
+  };
+  search.oninput = paint; filter.onchange = paint; paint();
 }
 
 async function unlockMetadataVaultForSettings() {
@@ -1085,7 +1134,6 @@ async function attachSonarrPosters(rows) {
 function renderSonarrSeries(series, statusMessage = `Loaded ${series.length} series from Sonarr.`) {
     const rows = document.getElementById('sonarr-series');
     aiSeries = series;
-    rows.replaceChildren();
     let episodesPresent = 0;
     let diskUsage = 0;
     for (const item of series) {
@@ -1094,30 +1142,8 @@ function renderSonarrSeries(series, statusMessage = `Loaded ${series.length} ser
       const sizeOnDisk = Number(item.sizeOnDisk) || 0;
       episodesPresent += episodeFiles;
       diskUsage += sizeOnDisk;
-      const row = document.createElement('tr');
-      const title = document.createElement('td'); title.className = 'title-cell';
-      const titleContent = document.createElement('span'); titleContent.className = 'title-content';
-      if (Number(item.tvdbId) > 0) {
-        const poster = document.createElement('img');
-        poster.className = 'poster'; poster.alt = ''; poster.loading = 'lazy';
-        poster.decoding = 'async'; poster.referrerPolicy = 'no-referrer';
-        poster.dataset.tvdbId = String(item.tvdbId);
-        titleContent.append(poster);
-      }
-      const titleText = document.createElement('span');
-      titleText.textContent = `${item.title || 'Untitled'}${item.year ? ` (${item.year})` : ''}`;
-      titleContent.append(titleText);
-      title.append(titleContent);
-      appendArrDetailLink(title, 'sonarr', item);
-      const tvdbId = document.createElement('td'); tvdbId.textContent = item.tvdbId ? String(item.tvdbId) : '—';
-      const year = document.createElement('td'); year.textContent = item.year ? String(item.year) : '—';
-      const episodes = document.createElement('td'); episodes.textContent = `${episodeFiles} / ${episodeCount}`;
-      const monitored = document.createElement('td'); monitored.textContent = item.monitored ? 'Yes' : 'No';
-      const quality = document.createElement('td'); quality.textContent = item.qualityProfile || '—';
-      const size = document.createElement('td'); size.textContent = sizeOnDisk ? formatBytes(sizeOnDisk) : '—';
-      row.append(title, tvdbId, year, episodes, monitored, quality, size);
-      rows.append(row);
     }
+    renderLibraryBrowser({ containerId:'sonarr-series', searchId:'tv-search', filterId:'tv-filter', countId:'tv-count', items:series, type:'tv' });
     setArrSummaryValues('sonarr', {
       libraryCount: String(series.length),
       filesPresent: String(episodesPresent),
@@ -1216,31 +1242,13 @@ function renderMovies(movies) {
   void loadMetadataSizes();
   void arrDirectRequest('/settings/radarr').then(async settings => {
     await probeArrBase('radarr', settings.url || '');
-    for (const row of moviesPanel.querySelectorAll('tr')) {
-      const id = Number(row.children[1]?.textContent);
-      const movie = movies.find(candidate => Number(candidate.tmdbId) === id);
-      if (movie) appendArrDetailLink(row.children[0], 'radarr', movie);
+    for (const card of moviesPanel.querySelectorAll('.library-card')) {
+      const title = card.querySelector('.library-card-title');
+      const movie = movies.find(candidate => candidate.title === title?.textContent);
+      if (movie) appendArrDetailLink(card.querySelector('.library-title-row'), 'radarr', movie);
     }
   }).catch(() => {});
-  for (const movie of movies) {
-    const row = document.createElement('tr');
-    const titleCell = document.createElement('td'); titleCell.className = 'title-cell';
-    const image = document.createElement('img'); image.className = 'poster'; image.alt = ''; image.loading = 'lazy';
-    image.decoding = 'async'; image.referrerPolicy = 'no-referrer';
-    if (movie.posterUrl) {
-      image.src = movie.posterUrl;
-      image.addEventListener('error', () => image.remove(), { once: true });
-    }
-    titleCell.append(image);
-    const title = document.createElement('span'); title.textContent = `${movie.title}${movie.year ? ` (${movie.year})` : ''}`; titleCell.append(title);
-    const id = document.createElement('td'); id.textContent = movie.tmdbId ? String(movie.tmdbId) : '—';
-    const year = document.createElement('td'); year.textContent = movie.year ? String(movie.year) : '—';
-    const file = document.createElement('td'); file.innerHTML = `<span class="badge">${movie.hasFile ? 'Present' : 'Missing'}</span>`;
-    const monitored = document.createElement('td'); monitored.textContent = movie.monitored ? 'Yes' : 'No';
-    const quality = document.createElement('td'); quality.textContent = movie.qualityProfile;
-    const size = document.createElement('td'); size.textContent = movie.hasFile ? formatBytes(movie.sizeOnDisk) : '—';
-    row.append(titleCell, id, year, file, monitored, quality, size); moviesPanel.append(row);
-  }
+  renderLibraryBrowser({ containerId:'movies', searchId:'movies-search', filterId:'movies-filter', countId:'movies-count', items:movies, type:'movie' });
 }
 
 function renderCachedMovies(nodeId) {
@@ -1308,11 +1316,9 @@ async function attachMoviePosters(movies, nodeId) {
   try {
     const artworkBase = await arrDirectUrl();
     if (selectedNode !== nodeId) return;
-    for (const row of moviesPanel.querySelectorAll('tr')) {
-      const id = Number(row.children[1]?.textContent);
-      const movie = movies.find(candidate => Number(candidate.tmdbId) === id);
-      const image = row.querySelector('img.poster');
-      if (!movie?.tmdbId || !movie.artworkSource || !image?.isConnected) continue;
+    for (const image of moviesPanel.querySelectorAll('img[data-tmdb-id]')) {
+      const movie = movies.find(candidate => String(candidate.tmdbId) === image.dataset.tmdbId);
+      if (!movie?.tmdbId || !movie.artworkSource || image.src || !image.isConnected) continue;
       image.src = `${artworkBase}/radarr/live-movies/${encodeURIComponent(movie.tmdbId)}/poster`;
       image.addEventListener('error', () => image.remove(), { once: true });
     }
