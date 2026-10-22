@@ -17,6 +17,10 @@ test('age-encrypted ML-DSA root backup signs and verifies a device approval', as
   assert.deepEqual(await inspectEncryptedRootBackup(root.encryptedBackup, ageIdentity), {
     algorithm: root.algorithm, publicKey: root.publicKey, fingerprint: root.fingerprint,
   });
+  const foldedBackup = root.encryptedBackup.replace(/\r?\n/g, ' ');
+  assert.deepEqual(await inspectEncryptedRootBackup(foldedBackup, ageIdentity), {
+    algorithm: root.algorithm, publicKey: root.publicKey, fingerprint: root.fingerprint,
+  });
 
   const request = {
     instanceId: 'instance-fixture',
@@ -26,7 +30,7 @@ test('age-encrypted ML-DSA root backup signs and verifies a device approval', as
     displayName: 'Storage fixture',
     publicKey: 'dGVzdA==',
   };
-  const approval = await signDeviceApproval(root.encryptedBackup, ageIdentity, root.fingerprint, request);
+  const approval = await signDeviceApproval(foldedBackup, ageIdentity, root.fingerprint, request);
   assert.equal(approval.rootFingerprint, root.fingerprint);
   assert.equal(verifyDeviceApproval(approval.signature, root.publicKey, approval.signedPayload), true);
   assert.equal(verifyDeviceApproval(approval.signature, root.publicKey, { ...approval.signedPayload, role: 'metadata' }), false);

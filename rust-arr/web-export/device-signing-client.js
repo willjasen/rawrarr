@@ -32,6 +32,18 @@ function canonicalJson(value) {
   return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
 }
 
+function normalizeAgeArmor(value) {
+  const text = value.trim();
+  const header = '-----BEGIN AGE ENCRYPTED FILE-----';
+  const footer = '-----END AGE ENCRYPTED FILE-----';
+  if (!text.startsWith(header) || !text.endsWith(footer)) return text;
+  const body = text.slice(header.length, -footer.length).replace(/\s/g, '');
+  if (!body || body.length % 4 !== 0 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(body)) return text;
+  const lines = body.match(/.{1,64}/g);
+  if (!lines || lines.slice(0, -1).some(line => line.length !== 64)) return text;
+  return `${header}\n${lines.join('\n')}\n${footer}`;
+}
+
 export async function publicKeyFingerprint(publicKey) {
   const key = publicKey instanceof Uint8Array ? publicKey : fromBase64(publicKey, ml_dsa65.lengths.publicKey, 'ML-DSA public key');
   const input = new Uint8Array(ROOT_DOMAIN.length + key.length);
@@ -89,7 +101,7 @@ export async function inspectEncryptedRootBackup(encryptedBackup, ageIdentity) {
   let secretKey;
   let publicKey;
   try {
-    ciphertext = armor.decode(encryptedBackup.trim());
+    ciphertext = armor.decode(normalizeAgeArmor(encryptedBackup));
     const decryptor = new Decrypter();
     decryptor.addIdentity(ageIdentity.trim());
     plaintext = await decryptor.decrypt(ciphertext);
@@ -122,7 +134,7 @@ export async function signDeviceApproval(encryptedBackup, ageIdentity, pinnedFin
   let publicKey;
   let message;
   try {
-    ciphertext = armor.decode(encryptedBackup.trim());
+    ciphertext = armor.decode(normalizeAgeArmor(encryptedBackup));
     const decryptor = new Decrypter();
     decryptor.addIdentity(ageIdentity.trim());
     plaintext = await decryptor.decrypt(ciphertext);

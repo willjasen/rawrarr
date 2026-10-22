@@ -5,7 +5,7 @@
 
 - `test_rawrarr_admin_preview.mjs` — checks sample-only admin content, local-only port publishing, absence of a production data connection, and planned authentication before live reporting. Run with `node --test scripts/tests/test_rawrarr_admin_preview.mjs`.
 - `test_rawrarr_subscriber_compose.mjs` — Validates subscriber-only fossil/boneyard Compose output, local mounts, secret exclusion, and rejection of coordinator role; run with `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
-- `test_rawrarr_subscriber_onboarding_browser.mjs` — Chromium checks local age/root creation, backup gates, private-key display boundaries, and subscriber-only role choices; run in the isolated test image.
+- `test_rawrarr_subscriber_onboarding_browser.mjs` — Chromium checks generated age-ID import, signing-root backup creation and folded-armor import, backup gates, private-key display boundaries, and subscriber-only role choices; run in the isolated test image.
 
 - `test_rawrarr_landing_page.mjs` — Chromium checks for the signed-out landing page, passkey sign-in links, accurate security/maturity disclosure, and mobile layout. Run with `node --test scripts/tests/test_rawrarr_landing_page.mjs` in the isolated test image.
 
@@ -95,7 +95,7 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 
 - `test_coordinator_health.py` — Read-only live coordinator health-page and protected-auth checks; run `python3 scripts/tests/test_coordinator_health.py --base-url https://rawrarr.risk-mermaid.ts.net`. Requires Python 3.
 
-- `test_rawrarr_device_signing_crypto.mjs` — checks owner-side ML-DSA-65 root creation, age-encrypted backup, local approval signing, root fingerprint matching, and tamper rejection; run with `node --test scripts/tests/test_rawrarr_device_signing_crypto.mjs`.
+- `test_rawrarr_device_signing_crypto.mjs` — checks owner-side ML-DSA-65 root creation, age-encrypted backup, folded-armor import and signing, root fingerprint matching, and tamper rejection; run with `node --test scripts/tests/test_rawrarr_device_signing_crypto.mjs`.
 `test_rawrarr_library_detail_link_layout.mjs` checks that Movies and TV display year and Arr detail links in the artwork/title column. Run with `node --test scripts/tests/test_rawrarr_library_detail_link_layout.mjs`.
 
 `test_rawrarr_library_detail_link_layout.mjs` checks that Movies and TV display year and Arr detail links in the artwork/title column. Run with `node --test scripts/tests/test_rawrarr_library_detail_link_layout.mjs`.

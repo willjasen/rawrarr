@@ -32,7 +32,9 @@ test('first-account subscriber setup gates node choices behind age and root back
   const identity = await page.evaluate(() => navigator.clipboard.readText());
   assert.match(identity, /^AGE-SECRET-KEY-PQ-1/);
   assert.equal((await page.locator('body').innerText()).includes(identity), false);
-  await page.locator('#age-backed-up').check();
+  await page.locator('#import-age').fill(identity);
+  await page.getByRole('button', { name: 'Use imported ID' }).click();
+  await page.locator('#age-recipient').getByText(/^Public recipient:/).waitFor();
   await page.locator('#root-step').waitFor({ state: 'visible' });
   await page.getByRole('button', { name: 'Create encrypted root backup' }).click();
   await page.locator('#root-fingerprint').getByText(/Root fingerprint:/).waitFor();
@@ -41,7 +43,9 @@ test('first-account subscriber setup gates node choices behind age and root back
   const backup = await page.evaluate(() => navigator.clipboard.readText());
   assert.match(backup, /^-----BEGIN AGE ENCRYPTED FILE-----/);
   assert.equal((await page.locator('body').innerText()).includes(backup), false);
-  await page.locator('#root-backed-up').check();
+  await page.locator('#import-root').fill(backup.replace(/\r?\n/g, ' '));
+  await page.getByRole('button', { name: 'Verify imported backup' }).click();
+  await page.locator('#root-fingerprint').getByText(/Verified root fingerprint:/).waitFor();
   await page.locator('#deploy-step').waitFor({ state: 'visible' });
   assert.deepEqual(await page.locator('#node-role option').allTextContents(), ['Fossil (metadata)', 'Boneyard (storage)']);
   assert.deepEqual(requests.filter(path => path !== '/favicon.ico'), ['/setup/node', '/assets/subscriber-onboarding.js'], 'private material never leaves the browser in the setup flow');
