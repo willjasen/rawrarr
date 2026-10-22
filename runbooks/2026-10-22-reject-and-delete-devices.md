@@ -13,7 +13,14 @@ Add an owner action to reject pending enrollment requests and a separate action 
 
 ## Verification and deployment
 
-Pending. Record focused checks, commit, deployment health and HTTPS route verification here before completion.
+- `node --test scripts/tests/test_rawrarr_node_approval_ui.mjs`: all eight checks passed, including the owner-scoped Reject and Delete source checks.
+- `git diff --check` passed. Local Rust compilation could not start because the host's Homebrew LLVM dependency cannot load `libz3.5.1.dylib`; the internal coordinator Docker release build compiled successfully with Rust 1.85.
+- Committed implementation and focused checks as `a8416e2` (`Add coordinator device rejection and deletion`).
+- Transferred only the coordinator source files and migration to the Mac mini, preserving source backups under `~/Library/Application Support/rawrarr/internal-coordinator/backups/pre-a8416e2/`.
+- Rebuilt only `roarlay` in `rawrarr-internal-mini`; PostgreSQL and the dedicated Tailscale sidecar remained running. Migration version 6 is present, roarlay is healthy with zero restarts, and local and tailnet `/health` checks returned HTTP 200.
+- Read back Tailscale Serve JSON: `rawrarr.risk-mermaid.ts.net:443` `/` still proxies to `http://127.0.0.1:8080`.
+- Opened a new authenticated Chrome tab at `/#devices`. It showed Reject beside Approve and Delete device on the enrolled node. Neither action was clicked; the existing pending request and device were left unchanged.
+- Released and confirmed removal of the local roarlay deployment marker after verification.
 
 ## Recovery
 
