@@ -4,8 +4,8 @@
 # Rawrarr tests
 
 - `test_rawrarr_admin_preview.mjs` — checks sample-only admin content, local-only port publishing, absence of a production data connection, and planned authentication before live reporting. Run with `node --test scripts/tests/test_rawrarr_admin_preview.mjs`.
-- `test_rawrarr_subscriber_compose.mjs` — Validates subscriber-only fossil/boneyard Compose output, local mounts, secret exclusion, and rejection of coordinator role; run with `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
-- `test_rawrarr_subscriber_onboarding_browser.mjs` — Chromium checks generated age-ID import, signing-root backup creation and folded-armor import, backup gates, private-key display boundaries, and subscriber-only role choices; run in the isolated test image.
+- `test_rawrarr_subscriber_compose.mjs` — Validates subscriber-only fossil/boneyard Compose output, custom device names, browser direct-origin CORS, local mounts, secret exclusion, and rejection of coordinator role; run with `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
+- `test_rawrarr_subscriber_onboarding_browser.mjs` — Chromium checks age-ID and signing-root backup gates, private-key display boundaries, subscriber role choices, and role-aware custom device names; run in the isolated test image.
 
 - `test_rawrarr_landing_page.mjs` — Chromium checks for the signed-out landing page, passkey sign-in links, accurate security/maturity disclosure, and mobile layout. Run with `node --test scripts/tests/test_rawrarr_landing_page.mjs` in the isolated test image.
 
@@ -86,7 +86,7 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 - `test_rawrarr_coordinator_sonarr_settings.mjs`: Chromium flow for Radarr and Sonarr forms on Movies, TV, and Settings; saved URL/key-state confirmation without exposing API keys; age unlock/browser retention; direct metadata save/read-back/clear; and verifying credentials bypass roarlay. Run in the isolated Playwright test image.
 - `test_rawrarr_shared_library.mjs`: Chromium fixture test proving column changes propagate across Radarr and Sonarr, provider-specific values, and navigation; `node --test scripts/tests/test_rawrarr_shared_library.mjs` in the test image.
 - `test_rawrarr_node_enrollment.rs`: strict pending-node payload, age-identity exclusion, and origin/ID validation; included in the isolated Rust suite.
-- `test_rawrarr_node_approval_ui.mjs`: signed-in, account-scoped pending-node approval UI plus enrollment-only metadata pass-through and bounded bearer-token forwarding; included in the isolated Node.js suite.
+- `test_rawrarr_node_approval_ui.mjs`: signed-in, account-scoped pending-node approval UI, enrollment-only metadata pass-through, bounded bearer-token forwarding, and display-name/localhost-route retention after approval; included in the isolated Node.js suite.
 - `test_rawrarr_device_names.mjs` — Verifies device names stay in age config, browser encryption/decryption keeps names out of coordinator service storage, and the coordinator uses a dedicated Devices tab with inline name editing; run with `node --test scripts/tests/test_rawrarr_device_names.mjs`.
 
 - `test_rawrarr_artwork_timing.mjs` — Per-request durations, lazy wait exclusion, missing timing and resource observer collection; run with Node.

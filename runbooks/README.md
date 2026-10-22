@@ -27,6 +27,8 @@
 
 - [Highlight pending node approvals](2026-10-21-highlight-pending-node-approvals.md) — Place pending node approvals at the top of Devices and highlight the section when action is needed.
 
+- [Name subscriber devices before Compose generation](2026-10-21-subscriber-device-name-and-local-route.md) — Set an owner-chosen node name in subscriber Compose and route same-host browsers directly to the approved node.
+
 - [Plan one-line node deployment](2026-10-20-plan-one-line-node-deployment.md) — Plan a generated embedded-Compose installer, Docker setup, safe retries, and explicit owner approval; no runtime changes.
 - [Admin console preview](2026-10-20-admin-console-preview.md) — Add a private, sample-data-only admin dashboard container with a loopback port and Tailscale-only access plan.
 

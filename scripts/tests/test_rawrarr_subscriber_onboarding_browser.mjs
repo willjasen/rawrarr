@@ -48,6 +48,13 @@ test('first-account subscriber setup gates node choices behind age and root back
   await page.locator('#root-fingerprint').getByText(/Verified root fingerprint:/).waitFor();
   await page.locator('#deploy-step').waitFor({ state: 'visible' });
   assert.deepEqual(await page.locator('#node-role option').allTextContents(), ['Fossil (metadata)', 'Boneyard (storage)']);
+  assert.equal(await page.locator('#device-name').inputValue(), 'My fossil node');
+  await page.locator('#node-role').selectOption('storage');
+  assert.equal(await page.locator('#device-name').inputValue(), 'My boneyard node');
+  await page.locator('#node-role').selectOption('metadata');
+  assert.equal(await page.locator('#device-name').inputValue(), 'My fossil node');
+  await page.locator('#device-name').fill('MacBook fossil');
+  assert.equal(await page.locator('#device-name').inputValue(), 'MacBook fossil');
   assert.deepEqual(requests.filter(path => path !== '/favicon.ico'), ['/setup/node', '/assets/subscriber-onboarding.js'], 'private material never leaves the browser in the setup flow');
   await context.close();
 });

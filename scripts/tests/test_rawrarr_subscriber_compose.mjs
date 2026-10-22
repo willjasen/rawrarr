@@ -12,6 +12,9 @@ test('subscriber Compose offers fossil and boneyard without coordinator services
     assert.match(yaml, /rawrarr-data:\/data/);
     assert.match(yaml, /rawrarr-shared:\/shared/);
     assert.match(yaml, /RAWARR_NODE_TOKEN_FILE: \/data\/node-token/);
+    assert.match(yaml, /RAWARR_DIRECT_ALLOWED_ORIGIN: "https:\/\/rawrarr\.example\.test"/);
+    assert.match(yaml, /RUST_ARR_DIRECT_LISTEN_ADDR: 0\.0\.0\.0:8082/);
+    assert.match(yaml, /127\.0\.0\.1:7298:8082/);
     assert.doesNotMatch(yaml, /^\s*(roarlay|coordinator|postgres):/m);
     assert.doesNotMatch(yaml, /AGE-SECRET|PRIVATE KEY|encryptedBackup|password/i);
   }
@@ -25,4 +28,7 @@ test('subscriber Compose offers fossil and boneyard without coordinator services
   assert.throws(() => subscriberCompose({ ...base, role: 'storage', mediaPath: '../media' }), /media folder/);
   assert.throws(() => subscriberCompose({ ...base, role: 'metadata', coordinatorUrl: 'https://rawrarr.example.test/path' }), /HTTPS origin/);
   assert.match(subscriberCompose({ ...base, role: 'storage', mediaPath: 'C:/Media' }), /source: "C:\/Media"/);
+  assert.match(subscriberCompose({ ...base, role: 'metadata', deviceName: 'Office fossil' }), /RAWARR_DEVICE_NAME: "Office fossil"/);
+  assert.throws(() => subscriberCompose({ ...base, role: 'metadata', deviceName: '   ' }), /device name/);
+  assert.throws(() => subscriberCompose({ ...base, role: 'metadata', deviceName: 'x'.repeat(65) }), /device name/);
 });

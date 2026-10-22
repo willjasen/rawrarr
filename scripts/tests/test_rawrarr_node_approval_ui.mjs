@@ -35,6 +35,12 @@ test('coordinator workspace puts pending approvals first and highlights action n
   assert.match(coordinatorWorkspace, /badge\.textContent = 'Needs review'/);
 });
 
+test('approved subscriber identity retains its requested name and localhost browser route', () => {
+  assert.match(coordinator, /COALESCE\(e\.display_name, n\.id\) AS display_name/);
+  assert.match(coordinator, /host_str\(\) != Some\("localhost"\) \|\| parsed\.port\(\) != Some\(7297\)[\s\S]*parsed\.set_port\(Some\(7298\)\)/);
+  assert.match(coordinatorWorkspace, /deviceNames\[node\.nodeId\] \|\| node\.displayName \|\| node\.nodeId/);
+});
+
 test('the coordinator assigns enrollment to the signed-in account and filters approvals by owner', () => {
   assert.match(coordinator, /SELECT id FROM rawrarr_users ORDER BY created_at/);
   assert.match(coordinator, /e\.user_id=\$1/);

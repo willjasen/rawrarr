@@ -819,6 +819,7 @@ async fn coordinator_subscriber_onboarding_script() -> Response {
 #[serde(rename_all = "camelCase")]
 struct WorkspaceNode {
     node_id: String,
+    display_name: String,
     role: NodeRole,
     last_seen: String,
     online: bool,
@@ -900,7 +901,7 @@ async fn workspace_nodes(
     let Some(owner) = crate::auth::authenticated_user_id(&auth, &headers).await else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
-    let rows = match sqlx::query("SELECT id, role, last_seen::text AS last_seen, last_seen > now() - interval '90 seconds' AS online FROM rawrarr_nodes WHERE user_id=$1 ORDER BY CASE role WHEN 'metadata' THEN 0 WHEN 'storage' THEN 1 ELSE 2 END, id")
+    let rows = match sqlx::query("SELECT n.id, n.role, n.last_seen::text AS last_seen, n.last_seen > now() - interval '90 seconds' AS online, n.origin, COALESCE(e.display_name, n.id) AS display_name FROM rawrarr_nodes n LEFT JOIN rawrarr_node_enrollments e ON e.node_id=n.id AND e.user_id=n.user_id WHERE n.user_id=$1 ORDER BY CASE n.role WHEN 'metadata' THEN 0 WHEN 'storage' THEN 1 ELSE 2 END, n.id")
         .bind(owner).fetch_all(&state.pool).await {
             Ok(rows) => rows,
             Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
@@ -908,9 +909,19 @@ async fn workspace_nodes(
     let nodes = rows.into_iter().filter_map(|row| {
         let node_id: String = row.try_get("id").ok()?;
         let role = NodeRole::parse(&row.try_get::<String, _>("role").ok()?).ok()?;
+        let origin: String = row.try_get("origin").unwrap_or_default();
+        let direct_url = state.direct_targets.get(&node_id).map(url::Url::to_string).or_else(|| {
+            let mut parsed = url::Url::parse(&origin).ok()?;
+            if parsed.host_str() != Some("localhost") || parsed.port() != Some(7297) {
+                return None;
+            }
+            parsed.set_port(Some(7298)).ok()?;
+            Some(parsed.to_string())
+        });
         Some(WorkspaceNode {
+            display_name: row.try_get("display_name").unwrap_or_else(|_| node_id.clone()),
             relay_available: state.relay_targets.contains_key(&node_id),
-            direct_url: state.direct_targets.get(&node_id).map(reqwest::Url::to_string),
+            direct_url,
             node_id,
             role,
             last_seen: row.try_get("last_seen").unwrap_or_default(),

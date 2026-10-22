@@ -1341,7 +1341,7 @@ async function loadNodes() {
       const nameInput = document.createElement('input');
       nameInput.className = 'device-name-input';
       nameInput.type = 'text';
-      nameInput.value = deviceNames[node.nodeId] || node.nodeId;
+      nameInput.value = deviceNames[node.nodeId] || node.displayName || node.nodeId;
       nameInput.maxLength = 80;
       nameInput.setAttribute('aria-label', `Name for ${node.nodeId}`);
       nameInput.title = ageIdentity && configNode ? 'Edit the device name; press Enter or leave the field to save.' : 'Unlock the age identity to edit device names.';

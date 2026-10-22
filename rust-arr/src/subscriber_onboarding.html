@@ -68,6 +68,9 @@
     <p>Choose a fossil node for Radarr/Sonarr and encrypted library data, or a boneyard node when this computer has media files. Your account uses the existing roarlay; this installer offers no roarlay or coordinator role.</p>
     <label for="node-role">Node type</label>
     <select id="node-role"><option value="metadata">Fossil (metadata)</option><option value="storage">Boneyard (storage)</option></select>
+    <label for="device-name">Device name</label>
+    <input id="device-name" type="text" maxlength="64" autocomplete="off" value="My fossil node" aria-describedby="device-name-help">
+    <p id="device-name-help">This name appears in the approval request and Devices list. You can change it later.</p>
     <div id="media-path-group" hidden><label for="media-path">Absolute media folder path on this computer</label><input id="media-path" type="text" spellcheck="false" placeholder="/srv/media or C:/Media"><p>Docker Desktop must be allowed to access this folder. It mounts read-only.</p></div>
     <p class="notice"><strong>Development preview:</strong> The public Rawrarr image has not been published. This Compose file uses <code>rawrarr:local</code> and will start only when that image is already present on the target computer. Public one-command installation remains pending.</p>
     <div class="actions"><button id="prepare-compose" type="button">Prepare Compose file</button><button id="download-compose" type="button" hidden>Download compose.yaml</button></div>

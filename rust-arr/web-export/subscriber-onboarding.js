@@ -97,11 +97,19 @@ byId('use-root').addEventListener('click', async () => {
   } catch (error) { fail('root-fingerprint', error); }
 });
 byId('root-backed-up').addEventListener('change', updateSteps);
-byId('node-role').addEventListener('change', () => { byId('media-path-group').hidden = byId('node-role').value !== 'storage'; clearCompose(); });
+let automaticDeviceName = 'My fossil node';
+byId('node-role').addEventListener('change', () => {
+  byId('media-path-group').hidden = byId('node-role').value !== 'storage';
+  const nextDefault = byId('node-role').value === 'storage' ? 'My boneyard node' : 'My fossil node';
+  if (byId('device-name').value === automaticDeviceName) byId('device-name').value = nextDefault;
+  automaticDeviceName = nextDefault;
+  clearCompose();
+});
 byId('media-path').addEventListener('input', clearCompose);
+byId('device-name').addEventListener('input', clearCompose);
 byId('prepare-compose').addEventListener('click', () => {
   try {
-    const yaml = subscriberCompose({ role: byId('node-role').value, nodeId, coordinatorUrl: location.origin, mediaPath: byId('media-path').value });
+    const yaml = subscriberCompose({ role: byId('node-role').value, nodeId, coordinatorUrl: location.origin, deviceName: byId('device-name').value, mediaPath: byId('media-path').value });
     byId('compose-preview').textContent = yaml;
     byId('compose-preview').hidden = false;
     byId('download-compose').hidden = false;
