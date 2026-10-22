@@ -25,7 +25,7 @@ The user requested that Radarr use the same direct browser-to-node route as Sona
 
 ## Rollback
 
-Revert this task's source commits, then rebuild/redeploy only `fossil` in `rawrarr-node-internal` and only `roarlay` in `rawrarr-internal-mini` using the existing projects and their per-container deployment locks. The mini's pre-task workspace asset is preserved at `~/Library/Application Support/rawrarr/internal-coordinator/backups/pre-1fc7a1d/coordinator-workspace.mjs`. Verify Movies through the previous encrypted session path after rollback. The original encrypted implementation remains in `rust-arr/web-export/metadata-export.js` and the existing `POST /api/metadata/session/library` route.
+Revert task commits `09c322b` and then `1fc7a1d` (newest first), then rebuild/redeploy only `fossil` in `rawrarr-node-internal` and only `roarlay` in `rawrarr-internal-mini` using the existing projects and their per-container deployment locks. The mini's pre-task workspace asset is preserved at `~/Library/Application Support/rawrarr/internal-coordinator/backups/pre-1fc7a1d/coordinator-workspace.mjs`. Verify Movies through the previous encrypted session path after rollback. The original encrypted implementation remains in `rust-arr/web-export/metadata-export.js` and the existing `POST /api/metadata/session/library` route.
 
 ## Verification and remaining work
 
