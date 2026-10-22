@@ -4,6 +4,7 @@ use super::{EnrollmentRequest, ciphertext_export_path, encrypted_session_request
 fn coordinator_relay_accepts_only_ciphertext_export_reads() {
     assert!(ciphertext_export_path("api/metadata/export/mini"));
     assert!(ciphertext_export_path("api/metadata/export/config"));
+    assert!(ciphertext_export_path("api/metadata/export/node-recipient"));
     assert!(ciphertext_export_path(&format!("api/metadata/export/ciphertext/text/{}.json.aged", "a".repeat(64))));
     assert!(!ciphertext_export_path(""));
     assert!(!ciphertext_export_path("api/radarr/movies"));

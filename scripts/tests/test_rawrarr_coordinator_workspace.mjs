@@ -180,6 +180,15 @@ test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from th
   assert.match(workspaceScript, /profile-picture\/\$\{profileAvatarSeed\}\/png/);
   assert.doesNotMatch(workspaceScript, /function profilePictureData\(digest\)/);
   assert.match(workspaceScript, /api\/metadata\/export\/recipient/);
+  assert.match(workspaceScript, /deriveNodeAvatarSeed\(node\.nodeId\)/);
+  assert.match(workspaceScript, /device-avatar/);
+  assert.match(workspaceScript, /profile-picture\/\$\{seed\}\/jxl/);
+  assert.match(workspaceScript, /profile-picture\/\$\{seed\}\/png/);
+  assert.match(coordinator, /api\/metadata\/export\/node-recipient/);
+  assert.match(coordinator, /coordinator-node-avatar\.mjs/);
+  assert.match(mainRs, /api\/metadata\/export\/node-recipient/);
+  assert.match(mainRs, /AgeVault::node_identity_recipient/);
+  assert.match(mainRs, /AgeVault::ensure_node_identity\(\)/);
   assert.match(workspaceScript, /crypto\.subtle\.digest\('SHA-256'/);
   assert.match(coordinatorAvatar, /"rsvg-convert"/);
   assert.match(coordinatorAvatar, /"cjxl"/);

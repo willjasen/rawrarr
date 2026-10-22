@@ -228,6 +228,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/assets/rawrarr-logo.png", get(coordinator_rawrarr_logo))
         .route("/assets/rawrarr-logo.jxl", get(coordinator_rawrarr_logo_jxl))
         .route("/assets/coordinator-workspace.mjs", get(coordinator_workspace_script))
+        .route("/assets/coordinator-node-avatar.mjs", get(coordinator_node_avatar_script))
         .route("/assets/coordinator-ai.mjs", get(coordinator_ai_script))
         .route("/assets/coordinator-device-routes.mjs", get(coordinator_device_routes_script))
         .route("/assets/profile-color.mjs", get(coordinator_profile_color_script))
@@ -1144,6 +1145,13 @@ async fn coordinator_workspace_script() -> Response {
     response
 }
 
+async fn coordinator_node_avatar_script() -> Response {
+    let mut response = Response::new(Body::from(include_str!("coordinator-node-avatar.mjs")));
+    response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/javascript; charset=utf-8"));
+    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
 async fn coordinator_ai_script() -> Response {
     let mut response = Response::new(Body::from(include_str!("coordinator-ai.mjs")));
     response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/javascript; charset=utf-8"));
@@ -1349,7 +1357,7 @@ fn storage_scan_relay_allowed(
 }
 
 fn ciphertext_export_path(path: &str) -> bool {
-    matches!(path, "api/metadata/export/mini" | "api/metadata/export/config" | "api/metadata/export/recipient")
+    matches!(path, "api/metadata/export/mini" | "api/metadata/export/config" | "api/metadata/export/recipient" | "api/metadata/export/node-recipient")
         || path.strip_prefix("api/metadata/export/ciphertext/").is_some_and(|tail| {
             let mut parts = tail.split('/');
             let kind = parts.next().unwrap_or_default();

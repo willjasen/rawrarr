@@ -761,6 +761,13 @@ impl AgeVault {
         ensure_node_identity_at(&data_dir.join("node-age-identity"))
     }
 
+    pub fn node_identity_recipient() -> Result<String, VaultError> {
+        let data_dir = env::var_os("RAWARR_DATA_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("data"));
+        node_identity_recipient(&data_dir.join("node-age-identity"))
+    }
+
     pub fn config_exists(&self) -> bool {
         self.config_path.is_file()
     }

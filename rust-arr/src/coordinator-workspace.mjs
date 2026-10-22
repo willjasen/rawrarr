@@ -1,4 +1,5 @@
 import { checkDeviceRoutes } from './coordinator-device-routes.mjs';
+import { deriveNodeAvatarSeed } from './coordinator-node-avatar.mjs';
 import { dinosaurMainColor, dinosaurWingWord } from './profile-color.mjs';
 import { initAiChat } from './coordinator-ai.mjs';
 
@@ -210,6 +211,18 @@ async function loadProfileAvatar() {
     renderProfileAvatar();
   }
 }
+async function loadNodeAvatar(node, pictureSource, image) {
+  if (!node.online || !node.relayAvailable) return;
+  let seedPromise = nodeAvatarSeeds.get(node.nodeId);
+  if (!seedPromise) {
+    seedPromise = deriveNodeAvatarSeed(node.nodeId).catch(() => '');
+    nodeAvatarSeeds.set(node.nodeId, seedPromise);
+  }
+  const seed = await seedPromise;
+  if (!seed) return;
+  pictureSource.srcset = `/api/workspace/profile-picture/${seed}/jxl`;
+  image.src = `/api/workspace/profile-picture/${seed}/png`;
+}
 async function loadProfile() {
   try {
     const profile = await jsonRequest('/api/workspace/profile');
@@ -234,6 +247,7 @@ let workspaceNodes = [];
 const storageScanStatusByNode = new Map();
 const storageScansActive = new Set();
 const syncthingHealthCache = new Map();
+const nodeAvatarSeeds = new Map();
 let deviceRouteStatusByNode = new Map();
 function deviceNameTokens(value) {
   return new Set(String(value || '').toLowerCase().split(/[^a-z0-9]+/).filter(token => token.length >= 4));
@@ -1465,7 +1479,19 @@ async function loadNodes() {
       const detail = document.createElement('small');
       detail.className = 'device-detail';
       detail.textContent = `${roleLabel(node.role)}${node.online ? '' : ' · last seen earlier'}`;
-      card.append(heading, detail);
+      const avatarPicture = document.createElement('picture');
+      avatarPicture.className = 'device-avatar';
+      const avatarSource = document.createElement('source');
+      avatarSource.type = 'image/jxl';
+      const avatar = document.createElement('img');
+      avatar.alt = '';
+      avatar.setAttribute('aria-hidden', 'true');
+      avatarPicture.append(avatarSource, avatar);
+      const identityRow = document.createElement('div');
+      identityRow.className = 'device-identity-row';
+      identityRow.append(avatarPicture, heading);
+      card.append(identityRow, detail);
+      void loadNodeAvatar(node, avatarSource, avatar);
       const deleteButton = document.createElement('button');
       deleteButton.type = 'button';
       deleteButton.className = 'device-delete-button';
