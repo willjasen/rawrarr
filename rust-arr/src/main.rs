@@ -440,6 +440,9 @@ impl ArrClient {
         &self,
         tmdb_id: u64,
     ) -> Result<Option<serde_json::Value>, reqwest::Error> {
+        if let Some(movie) = self.movie_snapshot.poster_movie(tmdb_id).await {
+            return Ok(Some(movie));
+        }
         let movies: Vec<serde_json::Value> = self
             .http
             .get(format!("{}/api/v3/movie", self.base_url))
@@ -902,6 +905,7 @@ async fn radarr_movies_live(
         .map_err(|_| (StatusCode::BAD_GATEWAY, Json(ApiError { error: "Radarr movie library request failed" })))?
         .json().await
         .map_err(|_| (StatusCode::BAD_GATEWAY, Json(ApiError { error: "Radarr movie library response was invalid" })))?;
+    radarr.movie_snapshot.store_poster_movies(movies.clone()).await;
     let profiles_response = radarr
         .http
         .get(format!("{}/api/v3/qualityprofile", radarr.base_url))

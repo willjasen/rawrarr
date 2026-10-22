@@ -17,6 +17,8 @@ test('coordinator exposes Radarr detail slugs through encrypted and temporary di
   assert.doesNotMatch(liveHandler, /quality_profiles::enrich|path:/);
   assert.match(main, /async fn radarr_movies_live[\s\S]*?\.get\(format!\("\{\}\/api\/v3\/movie", radarr\.base_url\)\)[\s\S]*?DirectRadarrMovie/);
   assert.match(main, /async fn radarr_movie_poster_live[\s\S]*?fetch_movie_poster\(&movie\)/);
+  assert.match(main, /radarr\.movie_snapshot\.store_poster_movies\(movies\.clone\(\)\)\.await/);
+  assert.match(main, /async fn movie_by_tmdb_id[\s\S]*?movie_snapshot\.poster_movie\(tmdb_id\)\.await[\s\S]*?\/api\/v3\/movie/);
   assert.match(main, /let direct_protected = Router::new\([\s\S]*?\.route\("\/api\/radarr\/live-library", get\(radarr_movies_live\)\)[\s\S]*?"\/api\/radarr\/live-movies\/\{tmdb_id\}\/poster",[\s\S]*?get\(radarr_movie_poster_live\)/);
   assert.match(script, /arrDirectRequest\('\/radarr\/live-library'\)/);
   assert.match(script, /posterUrl: movie\.tmdbId && movie\.artworkSource[\s\S]*?radarr\/live-movies/);

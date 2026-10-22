@@ -78,7 +78,7 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 
 - `test_setup_local_syncthing.py` — Sanitized local-review bootstrap tests: preserve API key, idempotent folder setup, enable global discovery/public relays/NAT, reject remote peers and unrelated folders. Run `python3 scripts/tests/test_setup_local_syncthing.py`; no Docker required.
 
-- `test_rawrarr_movie_snapshot.rs` — snapshot lifetime, empty libraries, shared client clones, and replacement-client isolation. Run `cargo test movie_snapshot`. The responsiveness browser tests also cover immediate snapshot display and late-response ordering.
+- `test_rawrarr_movie_snapshot.rs` — snapshot lifetime, empty libraries, shared client clones, replacement-client isolation, and direct Radarr poster records cached by TMDb ID. Run `cargo test movie_snapshot`. The responsiveness browser tests also cover immediate snapshot display and late-response ordering.
 
 - `test_rawrarr_sonarr.rs`: Sonarr series normalization and legacy config compatibility; `cargo test sonarr`.
 - `test_rawrarr_sonarr_metadata.rs`: TVDB-domain-separated HMAC names and age-encrypted Sonarr metadata/artwork storage; run `cargo test sonarr_metadata` in the isolated test image.
