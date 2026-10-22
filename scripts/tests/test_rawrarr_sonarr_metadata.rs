@@ -14,6 +14,8 @@ fn tv_metadata_and_artwork_use_separate_opaque_age_encrypted_paths() {
         sonarr: None,
         radarr_url: String::new(),
         radarr_api_key: String::new(),
+        radarr_ui_username: String::new(),
+        radarr_ui_password: String::new(),
         additional_services: Vec::new(),
         needs_migration: false,
         metadata_filename_key: None,

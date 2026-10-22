@@ -47,6 +47,8 @@ async fn server(fail: bool) -> (RadarrClient, Arc<AtomicUsize>, tokio::task::Joi
         movie_snapshot: Default::default(),
         base_url: format!("http://{}", listener.local_addr().unwrap()),
         api_key: reqwest::header::HeaderValue::from_static("fixture"),
+        ui_username: None,
+        ui_password: None,
         http: reqwest::Client::new(),
     };
     let task = tokio::spawn(async move {

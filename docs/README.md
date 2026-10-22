@@ -23,6 +23,7 @@ Start here for the current project state and everyday use:
 - [One-line node deployment plan](one-line-node-deployment-plan.md) — planned curl-based installer containing generated Compose, Docker prerequisite setup, safe reruns, and explicit owner approval.
 - [Device signing design](device-signing-design.md) — proposed signed device enrollment and configuration integrity.
 - [Data domains](data-domains.md) — placement and synchronization boundaries for `/media`, `/metadata`, `/shared`, `/data`, and backups.
+- [Radarr recovery](user-guide.md#recover-radarr-on-a-chosen-node) — age-encrypted shared native backups and user-directed restores to a Radarr deployed on the chosen node.
 - [Shared config schema v1](shared-config-v1.schema.json) — versioned age-encrypted config document with Radarr and Sonarr entries in `services`.
 - [Metadata export plan](metadata-export-plan.md) — browser-side age decryption and ZIP export of indexed movie metadata; includes remaining media classes and scale limits.
 - [Artwork cache plan](artwork-cache-plan.md) — node-local Redis cache for encrypted artwork, sizing, stale-entry handling, operations, and rollout acceptance criteria.

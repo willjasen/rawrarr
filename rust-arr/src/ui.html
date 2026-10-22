@@ -194,6 +194,11 @@
             <label for="radarr-key">Radarr API key</label>
             <input id="radarr-key" name="apiKey" type="password" autocomplete="new-password" required>
             <div id="radarr-key-note" class="settings-key-note">Required for the first encrypted save.</div>
+            <label for="radarr-ui-username">Radarr UI username (optional)</label>
+            <input id="radarr-ui-username" name="uiUsername" type="text" autocomplete="username">
+            <label for="radarr-ui-password">Radarr UI password (optional)</label>
+            <input id="radarr-ui-password" name="uiPassword" type="password" autocomplete="current-password">
+            <div id="radarr-ui-auth-note" class="settings-key-note">Enter both only if Radarr requires a UI login to download backups. Stored in the age-encrypted config.</div>
             <div class="settings-actions"><button id="save-radarr" class="refresh" type="submit">Save and connect</button><button id="clear-radarr" class="refresh" type="button">Clear</button></div>
             <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
             <h3 style="margin:0 0 6px">Your metadata</h3><p class="setup-intro">Decrypt and download all available movie metadata records and matching artwork as a ZIP. Decryption and archive creation happen in this browser.</p><button id="mini-export" class="refresh" type="button">Export metadata</button>
@@ -483,6 +488,11 @@
         document.getElementById('radarr-key-note').textContent = canKeepSavedKey
           ? 'The saved key is loaded and will stay hidden. Leave this blank to keep it, or enter a replacement.'
           : 'Required for the first encrypted save.';
+        document.getElementById('radarr-ui-username').value = '';
+        document.getElementById('radarr-ui-password').value = '';
+        document.getElementById('radarr-ui-auth-note').textContent = settings.hasUiAuth
+          ? 'Leave both blank to keep the encrypted login. Enter both to replace it; clear Radarr settings removes it.'
+          : 'Optional. Enter both only if Radarr requires a UI login to download backups; saved in the age-encrypted config.';
       } catch (_) {
         document.getElementById('radarr-settings-message').textContent = 'Could not load Radarr settings.';
       }
@@ -499,12 +509,16 @@
           method: 'PUT', headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
           body: JSON.stringify({
             url: document.getElementById('radarr-url').value,
-            apiKey: document.getElementById('radarr-key').value
+            apiKey: document.getElementById('radarr-key').value,
+            uiUsername: document.getElementById('radarr-ui-username').value,
+            uiPassword: document.getElementById('radarr-ui-password').value,
           })
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Could not save Radarr settings');
         document.getElementById('radarr-key').value = '';
+        document.getElementById('radarr-ui-username').value = '';
+        document.getElementById('radarr-ui-password').value = '';
         message.textContent = 'Applied immediately without restarting. Checking Radarr…';
         await Promise.all([loadRadarrSettings(), refreshStatus(), loadMetadataInfo()]);
         message.textContent = `Saved encrypted and applied without restart · Radarr: ${state.textContent}.`;
@@ -519,6 +533,8 @@
       const response = await fetch('/api/settings/radarr', { method: 'DELETE', headers: { Accept: 'application/json' } });
       if (response.ok) {
         document.getElementById('radarr-key').value = '';
+        document.getElementById('radarr-ui-username').value = '';
+        document.getElementById('radarr-ui-password').value = '';
         document.getElementById('radarr-settings-message').textContent = 'Cleared Radarr settings. The shared filename secret is preserved. Environment settings may apply again after a restart.';
         await Promise.all([loadRadarrSettings(), refreshStatus(), loadMetadataInfo()]);
       }

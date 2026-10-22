@@ -97,7 +97,8 @@ test('Sonarr settings use only the browser-to-metadata direct route', () => {
   assert.match(workspaceScript, /return `\$\{route\.base\}\/api`/);
   assert.match(workspaceScript, /fetch\(`\$\{base\}\$\{path\}`/);
   assert.match(workspaceScript, /body: JSON\.stringify\(\{ identity, rememberOnDevice: false \}\)/);
-  assert.match(workspaceScript, /body: JSON\.stringify\(\{ url: document\.getElementById\(copy\.url\)/);
+  assert.match(workspaceScript, /apiKey: document\.getElementById\(copy\.key\)\.value/);
+  assert.match(workspaceScript, /uiUsername: document\.getElementById\(copy\.uiUsername\)\.value/);
   assert.match(mainRs, /\.route\("\/api\/settings\/age", get\(get_age_settings\)\.post\(unlock_age_settings\)\)/);
   assert.match(mainRs, /\.route\(\s*"\/api\/settings\/sonarr",[\s\S]*?\.delete\(sonarr::clear\)/);
   assert.match(mainRs, /let direct_protected = Router::new\(\)[\s\S]*?\.route\("\/api\/sonarr\/status", get\(sonarr::status\)\)[\s\S]*?\.route\("\/api\/sonarr\/series", get\(sonarr::series\)\)/);
@@ -293,6 +294,7 @@ test('coordinator workspace selects nodes, reads Radarr directly, and keeps conf
   assert.match(workspaceScript, /if \(location\.hash === '#configuration'\) void loadClusterConfiguration\(\)/);
   assert.match(workspaceScript, /window\.rawrarrMiniExport\.loadSharedConfig\(identity, route\.base\)/);
   assert.match(workspaceScript, /function redactConfigSecrets/);
+  assert.match(workspaceScript, /secretConfigKey = .*username/);
   assert.match(workspaceScript, /'<REDACTED>'/);
   assert.match(metadataExport, /loadSharedConfig/);
   assert.match(workspaceScript, /base: `\/nodes\/\$\{encodeURIComponent\(nodeId\)\}`/);

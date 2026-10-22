@@ -27,10 +27,29 @@
       "additionalProperties": false,
       "required": ["type", "url", "api_key"],
       "properties": {
-      "type": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
         "url": { "type": "string", "format": "uri" },
-        "api_key": { "type": "string", "minLength": 1, "writeOnly": true }
-      }
+        "api_key": { "type": "string", "minLength": 1, "writeOnly": true },
+        "ui_username": { "type": "string", "minLength": 1, "maxLength": 256, "writeOnly": true, "description": "Optional Radarr UI login username, stored only inside age-encrypted shared config." },
+        "ui_password": { "type": "string", "minLength": 1, "maxLength": 4096, "writeOnly": true, "description": "Optional Radarr UI login password, stored only inside age-encrypted shared config." }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "radarr" } },
+            "required": ["type"]
+          },
+          "then": {},
+          "else": {
+            "not": {
+              "anyOf": [
+                { "required": ["ui_username"] },
+                { "required": ["ui_password"] }
+              ]
+            }
+          }
+        }
+      ]
     }
   }
 }

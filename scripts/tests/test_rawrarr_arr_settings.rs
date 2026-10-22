@@ -21,6 +21,8 @@ fn sonarr_and_radarr_updates_preserve_each_other_and_filename_key() {
         device_names: std::collections::HashMap::new(),
         radarr_url: "https://radarr.test".into(),
         radarr_api_key: "radarr-fixture".into(),
+        radarr_ui_username: String::new(),
+        radarr_ui_password: String::new(),
         sonarr: None,
         metadata_filename_key: None,
         additional_services: Vec::new(),

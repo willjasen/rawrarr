@@ -284,13 +284,18 @@
     <section id="movies-view" hidden><h1 class="page-title">Movies</h1>
     <article id="radarr-connection-card" class="connection-card" aria-labelledby="radarr-connection-title" hidden>
       <h2 id="radarr-connection-title">Radarr connection</h2>
-      <p class="connection-intro" id="radarr-node-note">Select an online fossil node in Devices. The URL and API key go directly from this browser to that node; roarlay never receives the API key. Settings are saved in its age-encrypted config.</p>
+      <p class="connection-intro" id="radarr-node-note">Select an online metadata node in Devices. The URL, API key, and optional UI login go directly from this browser to that node; roarlay never receives the credentials. Settings are saved in its age-encrypted config.</p>
       <form id="radarr-settings" class="connection-form">
         <label for="radarr-url">Radarr URL</label>
         <input id="radarr-url" name="url" type="url" placeholder="https://radarr.example.com" autocomplete="url" required>
         <label for="radarr-key">Radarr API key</label>
         <input id="radarr-key" name="apiKey" type="password" autocomplete="new-password" required>
         <p id="radarr-key-note" class="connection-note">Required for the first save.</p>
+        <label for="radarr-ui-username">Radarr UI username (optional)</label>
+        <input id="radarr-ui-username" name="uiUsername" type="text" autocomplete="username">
+        <label for="radarr-ui-password">Radarr UI password (optional)</label>
+        <input id="radarr-ui-password" name="uiPassword" type="password" autocomplete="current-password">
+        <p id="radarr-ui-auth-note" class="connection-note">Enter both only if Radarr requires a UI login to download backups. Stored in the age-encrypted config.</p>
         <div class="connection-actions"><button id="save-radarr" type="submit">Save and connect</button><button id="clear-radarr" type="button">Clear connection</button></div>
         <p id="radarr-settings-message" class="connection-message" role="status" aria-live="polite"></p>
       </form>
@@ -369,18 +374,23 @@
       </article>
       </div>
       <h2 style="margin:26px 0 4px">Media service connections</h2>
-      <p class="connection-intro">Save Radarr and Sonarr details to the selected fossil node's age-encrypted config. API keys go directly from this browser to that node and are never shown after saving.</p>
+      <p class="connection-intro">Save Radarr and Sonarr details to the selected metadata node's age-encrypted config. API keys and the optional Radarr UI login go directly from this browser to that node and are never shown after saving.</p>
       <div class="settings-connections">
         <article class="connection-card" aria-labelledby="settings-radarr-title">
           <h2 id="settings-radarr-title">Radarr</h2>
-          <div id="settings-radarr-saved" class="connection-saved" hidden role="status" aria-live="polite"><strong>Radarr details saved</strong><span id="settings-radarr-saved-url" class="connection-saved-url"></span><span class="connection-saved-note">API key stored in the age-encrypted config.</span></div>
-          <p class="connection-intro" id="settings-radarr-node-note">Select an online fossil node in Devices to manage this connection.</p>
+          <div id="settings-radarr-saved" class="connection-saved" hidden role="status" aria-live="polite"><strong>Radarr details saved</strong><span id="settings-radarr-saved-url" class="connection-saved-url"></span><span class="connection-saved-note">API key and optional UI login stored in the age-encrypted config.</span></div>
+          <p class="connection-intro" id="settings-radarr-node-note">Select an online metadata node in Devices to manage this connection.</p>
           <form id="settings-radarr-settings" class="connection-form">
             <label for="settings-radarr-url">Radarr URL</label>
             <input id="settings-radarr-url" name="url" type="url" placeholder="https://radarr.example.com" autocomplete="url" required>
             <label for="settings-radarr-key">Radarr API key</label>
             <input id="settings-radarr-key" name="apiKey" type="password" autocomplete="new-password">
             <p id="settings-radarr-key-note" class="connection-note">Required for the first save.</p>
+            <label for="settings-radarr-ui-username">Radarr UI username (optional)</label>
+            <input id="settings-radarr-ui-username" name="uiUsername" type="text" autocomplete="username">
+            <label for="settings-radarr-ui-password">Radarr UI password (optional)</label>
+            <input id="settings-radarr-ui-password" name="uiPassword" type="password" autocomplete="current-password">
+            <p id="settings-radarr-ui-auth-note" class="connection-note">Enter both only if Radarr requires a UI login to download backups. Stored in the age-encrypted config.</p>
             <div class="connection-actions"><button id="settings-save-radarr" type="submit">Save and connect</button><button id="settings-clear-radarr" type="button">Clear connection</button></div>
             <p id="settings-radarr-settings-message" class="connection-message" role="status" aria-live="polite"></p>
           </form>
