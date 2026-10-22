@@ -512,8 +512,10 @@ async fn request_enrollment(
         Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
     let approved =
-        sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM rawrarr_nodes WHERE id = $1)")
+        sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM rawrarr_nodes WHERE id = $1 AND (token_sha256 IS DISTINCT FROM $2 OR role <> $3))")
             .bind(&request.node_id)
+            .bind(&digest)
+            .bind(role_name(request.role))
             .fetch_one(&mut *tx)
             .await
             .unwrap_or(true);

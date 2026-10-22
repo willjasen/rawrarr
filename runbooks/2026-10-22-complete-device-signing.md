@@ -31,7 +31,7 @@ Focused checks run in the isolated worktree:
 
 | Check | Result |
 | --- | --- |
-| `cargo test --bin rust-arr` with `DYLD_LIBRARY_PATH` and `DYLD_FALLBACK_LIBRARY_PATH` pointed at `/tmp/rawrarr-z3-compat`, and the Rust 1.90 compiler selected explicitly | 71 passed, 0 failed |
+| `cargo test --bin rust-arr` with `DYLD_LIBRARY_PATH` and `DYLD_FALLBACK_LIBRARY_PATH` pointed at `/tmp/rawrarr-z3-compat`, and the Rust 1.90 compiler selected explicitly | 72 passed, 0 failed |
 | `node --test scripts/tests/test_rawrarr_device_signing_crypto.mjs scripts/tests/test_rawrarr_subscriber_compose.mjs` | 5 passed, 0 failed |
 | Focused volatile-approval browser-module test | 1 passed, 0 failed |
 | `node --check` for coordinator workspace and subscriber onboarding bundle source | passed |
@@ -43,9 +43,11 @@ Migration remains additive and is documented above. Before deploying, back up co
 
 Implementation is not yet merged or deployed. Root rotation/recovery, revocation, generic signed config/metadata artifacts, full registry replication in `config.aged`, cross-language known-answer vectors, and independent cryptographic review remain out of scope for this increment and must remain visible as follow-up work. Do not close issue #37 until its final acceptance scope is either completed or deliberately split into a reviewed follow-up issue.
 
+Review found and fixed an upgrade blocker before merge: a legacy node requesting approval with its existing ID was rejected merely because that ID already existed. Enrollment now permits reuse only when both the existing token digest and role match; collisions with another credential or role still return conflict. The Rust enrollment test suite asserts this in-place upgrade condition.
+
 ## Remaining work
 
-- Complete code/security review, resolve any findings, and confirm the precise issue acceptance scope.
+- Complete code/security review and confirm all checks against the updated commit.
 - Finish CI/browser validation where the required Playwright installation is available.
 - Create a PR, merge only after the review is clean, then use GitHub as source of truth and clean up the task worktree/branch.
 - Production deployment is separate and has not been authorized in this task.

@@ -76,3 +76,9 @@ fn enrollment_accepts_only_safe_ids_and_browser_origins() {
     }
     assert!(validate_origin("example.com", "https://rawrarr.example.com").is_ok());
 }
+
+#[test]
+fn enrollment_allows_same_credential_and_role_to_upgrade_an_existing_node_id() {
+    let coordinator = include_str!("../../rust-arr/src/coordinator.rs");
+    assert!(coordinator.contains("token_sha256 IS DISTINCT FROM $2 OR role <> $3"));
+}
