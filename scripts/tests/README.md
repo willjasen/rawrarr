@@ -1,4 +1,5 @@
 - `test_rawrarr_library_text_cache.mjs` — checks node-scoped browser library text caching, immediate Movies/TV rendering, live refresh, and separately loaded artwork. Run with `node --test scripts/tests/test_rawrarr_library_text_cache.mjs`.
+- `test_rawrarr_library_browser.mjs` — checks that Movies and TV use one responsive, searchable, filterable poster-card renderer with service-specific availability. Run with `node --test scripts/tests/test_rawrarr_library_browser.mjs`.
 - `test_rawrarr_artwork_cache.rs` — checks disabled-cache file reads and disk fallback when Redis is unreachable; runs with the Rust suite or `cargo test artwork_cache` in the isolated test image.
 
 - `test_rawrarr_coordinator_arr_links.mjs` — checks the coordinator's encrypted Radarr slug flow, direct metadata route, browser-only reachability gate, and year-cell icon wiring for Movies and TV. Run with `node --test scripts/tests/test_rawrarr_coordinator_arr_links.mjs`.

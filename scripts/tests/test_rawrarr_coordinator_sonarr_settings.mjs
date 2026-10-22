@@ -96,8 +96,12 @@ test('coordinator saves Radarr and Sonarr settings over the direct metadata rout
   await page.locator('#sonarr-key').fill('sonarr-secret-api-key');
   await page.click('#save-sonarr');
   await page.locator('#sonarr-connection-card').waitFor({ state: 'hidden' });
-  await page.locator('#sonarr-series tr').waitFor();
-  assert.equal(await page.locator('#sonarr-series tr').textContent(), 'Example Show (2024)712320243 / 8YesHD-1080p1.5 KB');
+  await page.locator('#sonarr-series .library-card').waitFor();
+  assert.equal(await page.locator('#sonarr-series .library-card-title').textContent(), 'Example Show');
+  assert.match(await page.locator('#sonarr-series .library-card').textContent(), /2024.*3 \/ 8 episodes.*HD-1080p.*1\.5 KB/);
+  assert.equal(await page.locator('#tv-count').textContent(), '1 of 1 series');
+  await page.locator('#tv-search').fill('absent');
+  assert.equal(await page.locator('#sonarr-series .library-empty').textContent(), 'No titles match this search or filter.');
   assert.equal(await page.locator('#tv-series-count').textContent(), '1');
   assert.equal(await page.locator('#tv-episodes-present').textContent(), '3');
   assert.ok(directRequests.some(request => request.path === '/direct-api/api/sonarr/series' && request.method === 'GET' && !request.body.includes('sonarr-secret-api-key')));

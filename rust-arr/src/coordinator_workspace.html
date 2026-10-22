@@ -136,6 +136,26 @@
     .title-content { display:flex; align-items:center; gap:10px; min-width:220px; white-space:normal }
     .poster { width:38px; height:54px; object-fit:cover; border-radius:4px; background:#202821; flex:none }
     .badge { display:inline-block; border:1px solid var(--line); border-radius:999px; padding:2px 8px; color:var(--muted) }
+    .library-tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:14px 0 12px }
+    .library-search { flex:1 1 240px; min-width:180px; min-height:40px; padding:8px 12px; border:1px solid #46574a; border-radius:8px; color:var(--text); background:#101411; font:inherit }
+    .library-filter { min-height:40px }
+    .library-count { color:var(--muted); font-size:12px; margin-left:auto }
+    .library-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(174px,1fr)); gap:14px; margin-top:14px }
+    .library-card { min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:10px; background:#101411; transition:border-color .15s,transform .15s }
+    .library-card:hover { border-color:#536756; transform:translateY(-2px) }
+    .library-art { position:relative; display:block; aspect-ratio:2/3; overflow:hidden; background:linear-gradient(145deg,#26352a,#151b17 72%) }
+    .library-art img.library-poster { position:relative; z-index:1; display:block; width:100%; height:100%; object-fit:cover }
+    .library-art-empty { position:absolute; z-index:0; inset:0; display:grid; place-items:center; color:#647268; font-size:34px }
+    .library-state { position:absolute; z-index:2; left:8px; top:8px; padding:3px 8px; border:1px solid #ffffff24; border-radius:999px; color:#f0f5ef; background:#101411d9; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em }
+    .library-card-copy { padding:10px 11px 11px }
+    .library-card-title { display:block; overflow:hidden; color:var(--text); font-size:13px; font-weight:700; line-height:1.35; text-decoration:none; text-overflow:ellipsis; white-space:nowrap }
+    .library-title-row { display:flex; align-items:center; gap:5px; min-width:0 }
+    .library-title-row .arr-external-link { flex:none; margin-left:0 }
+    .library-card-title:hover { color:var(--green) }
+    .library-card-meta { margin-top:4px; color:var(--muted); font-size:11px }
+    .library-card-detail { display:flex; flex-wrap:wrap; gap:4px 9px; margin-top:8px; color:#c4cec5; font-size:10px }
+    .library-empty { grid-column:1/-1; padding:34px 16px; border:1px dashed var(--line); border-radius:10px; color:var(--muted); text-align:center }
+    @media(max-width:560px) { .library-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px } .library-count { width:100%; margin-left:0 } }
     .page-title { margin:0 0 18px; font-size:25px }
     .stub { padding:24px; border:1px solid var(--line); border-radius:12px; background:var(--panel); color:var(--muted) }
     .profile-card { display:flex; align-items:center; gap:20px; max-width:620px; padding:22px; border:1px solid var(--line); border-radius:12px; background:var(--panel) }
@@ -278,10 +298,11 @@
       </div></div>
       <p id="content-status" role="status">Enter your age private ID to unlock. If you choose to remember it, it is stored in this browser until you clear it or sign out.</p>
       <section id="radarr-summary" class="summary" aria-label="Radarr movie statistics"></section>
-      <article class="panel"><div class="panel-head"><h2>Radarr movie library</h2><button id="refresh-movies" type="button">Rescan</button></div>
+      <article class="panel library-panel"><div class="panel-head"><h2>Movies</h2><button id="refresh-movies" type="button">Rescan</button></div>
         <p id="radarr-scrape-status" class="scrape-status" role="status" aria-live="polite" hidden></p>
         <progress id="radarr-scrape-progress" class="scrape-progress" aria-label="Radarr metadata and artwork scraping progress" max="1" value="0" hidden></progress>
-        <div class="table-wrap"><table><thead><tr><th>Movie</th><th>TMDb ID</th><th>Year</th><th>File</th><th>Monitored</th><th>Quality profile</th><th>Size</th></tr></thead><tbody id="movies"></tbody></table></div>
+        <div class="library-tools"><input id="movies-search" class="library-search" type="search" placeholder="Search movies" aria-label="Search movies"><select id="movies-filter" class="library-filter" aria-label="Filter movies"><option value="all">All movies</option><option value="available">Available</option><option value="missing">Missing</option><option value="monitored">Monitored</option></select><span id="movies-count" class="library-count" aria-live="polite"></span></div>
+        <div id="movies" class="library-grid" aria-label="Movies"></div>
       </article>
     </section>
     </section>
@@ -301,11 +322,12 @@
       </article>
       <section id="tv-library" hidden aria-label="Sonarr series library">
         <section id="sonarr-summary" class="summary" aria-label="TV library statistics"></section>
-        <article class="panel"><div class="panel-head"><h2>Sonarr series library</h2><button id="refresh-series" type="button">Rescan</button></div>
+        <article class="panel library-panel"><div class="panel-head"><h2>TV</h2><button id="refresh-series" type="button">Rescan</button></div>
           <p id="sonarr-scrape-status" class="scrape-status" role="status" aria-live="polite" hidden></p>
           <progress id="sonarr-scrape-progress" class="scrape-progress" aria-label="Sonarr metadata and artwork scraping progress" max="1" value="0" hidden></progress>
           <p id="series-message" class="connection-message" role="status" aria-live="polite">Loading series…</p>
-          <div class="table-wrap"><table><thead><tr><th>Series</th><th>TVDB ID</th><th>Year</th><th>Episodes</th><th>Monitored</th><th>Quality profile</th><th>Size</th></tr></thead><tbody id="sonarr-series"></tbody></table></div>
+          <div class="library-tools"><input id="tv-search" class="library-search" type="search" placeholder="Search TV" aria-label="Search TV"><select id="tv-filter" class="library-filter" aria-label="Filter TV"><option value="all">All series</option><option value="available">Episodes present</option><option value="missing">No episodes</option><option value="monitored">Monitored</option></select><span id="tv-count" class="library-count" aria-live="polite"></span></div>
+          <div id="sonarr-series" class="library-grid" aria-label="TV series"></div>
         </article>
       </section>
     </section>

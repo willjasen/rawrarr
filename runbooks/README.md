@@ -27,6 +27,8 @@
 
 # Rawrarr runbooks
 
+- [Reuse a live TV style browser for Movies and TV](2026-10-22-live-tv-library-browser.md) — Use one searchable, filterable poster-card layout across both coordinator libraries.
+
 - [Show shared Arr scraping progress on Movies and TV](2026-10-22-shared-arr-scrape-progress.md) — Reuse provider-aware status and progress UI for Radarr and Sonarr metadata artwork scraping.
 
 - [Fix stale device topology labels](2026-10-22-fix-stale-device-topology.md) — Use current coordinator display names in the Devices topology diagram and document deployment verification.

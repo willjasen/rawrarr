@@ -29,7 +29,7 @@ test('coordinator exposes Radarr detail slugs through encrypted and temporary di
 test('Movies and TV add accessible detail icons only after a browser reachability probe', () => {
   assert.match(script, /mode: 'no-cors', credentials: 'omit',[\s\S]*?referrerPolicy: 'no-referrer',[\s\S]*?AbortSignal\.timeout\(3000\)/);
   assert.match(script, /function appendArrDetailLink\(titleCell, service, item\)/);
-  assert.match(script, /appendArrDetailLink\(title, 'sonarr', item\)/);
-  assert.match(script, /appendArrDetailLink\(row\.children\[0\], 'radarr', movie\)/);
+  assert.match(script, /appendArrDetailLink\(titleRow, config\.service, item\)/);
+  assert.match(script, /appendArrDetailLink\(card\.querySelector\('\.library-title-row'\), 'radarr', movie\)/);
   assert.match(workspace, /\.arr-external-link svg/);
 });
