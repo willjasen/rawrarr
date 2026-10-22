@@ -32,6 +32,20 @@ services:
       timeout: 3s
       retries: 10
 
+  tailscale-coordinator:
+    image: tailscale/tailscale:stable
+    hostname: rawrarr-orbstack-test-coordinator
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["exec /usr/local/bin/tailscaled --socket=/tmp/tailscaled.sock --statedir=/var/lib/tailscale --tun=userspace-networking"]
+    volumes:
+      - orbstack-test-ts-coordinator:/var/lib/tailscale
+    networks:
+      default:
+        aliases:
+          - coordinator
+    ports:
+      - "127.0.0.1:17397:8080"
+
   roarlay:
     build:
       context: ./rust-arr
@@ -45,24 +59,21 @@ services:
       RAWARR_PG_DATABASE: rawrarr
       RAWARR_PG_PASSWORD_FILE: /run/secrets/postgres_password
       RAWARR_APPROVED_NODES_FILE: /run/secrets/approved_nodes
-      RAWARR_COORDINATOR_WEB_RP_ID: localhost
-      RAWARR_COORDINATOR_WEB_ORIGIN: http://localhost:17397
+      RAWARR_COORDINATOR_WEB_RP_ID: rawrarr-orbstack-test-coordinator.risk-mermaid.ts.net
+      RAWARR_COORDINATOR_WEB_ORIGIN: https://rawrarr-orbstack-test-coordinator.risk-mermaid.ts.net
       RAWARR_NODE_RELAY_TARGETS: '{"test-metadata-a":"http://tailscale-a:8080","test-metadata-b":"http://tailscale-b:8080"}'
       RAWARR_NODE_DIRECT_TARGETS: "{}"
-    networks:
-      default:
-        aliases:
-          - coordinator
     secrets:
       - postgres_password
       - approved_nodes
-    ports:
-      - "127.0.0.1:17397:8080"
+    network_mode: service:tailscale-coordinator
     depends_on:
       postgres:
         condition: service_healthy
       headscale:
         condition: service_healthy
+      tailscale-coordinator:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--output", "/dev/null", "http://127.0.0.1:8080/health"]
       interval: 10s
@@ -168,6 +179,7 @@ volumes:
   orbstack-test-shared:
   orbstack-test-ts-a:
   orbstack-test-ts-b:
+  orbstack-test-ts-coordinator:
 
 secrets:
   headscale_tls_cert:
