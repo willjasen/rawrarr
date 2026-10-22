@@ -163,14 +163,19 @@ function renderProfileAvatar() {
   if (!profileAvatarSeed) return;
   const [baseFirst = '', baseSecond = ''] = profileBaseName.split('-');
   const words = [dinosaurMainColor(profileAvatarSeed), dinosaurWingWord(profileAvatarSeed), baseFirst, baseSecond];
-  const name = words.join('');
   const profileName = document.getElementById('profile-name');
   profileName.replaceChildren(...[
     document.createTextNode(words.slice(0, 2).join(' ')),
     document.createElement('br'),
     document.createTextNode(words.slice(2).join(' ')),
   ]);
-  document.getElementById('sidebar-profile-name').textContent = name;
+  const sidebarName = document.getElementById('sidebar-profile-name');
+  sidebarName.replaceChildren(...words.map(word => {
+    const part = document.createElement('span');
+    part.textContent = word;
+    return part;
+  }));
+  sidebarName.setAttribute('aria-label', words.join(' '));
   const picture = document.getElementById('profile-picture');
   const jxlUrl = `/api/workspace/profile-picture/${profileAvatarSeed}/jxl`;
   const pngUrl = `/api/workspace/profile-picture/${profileAvatarSeed}/png`;

@@ -154,7 +154,8 @@ test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from th
   assert.match(workspace, /id="sidebar-profile-picture"/);
   assert.doesNotMatch(workspace, /Discovery, libraries, and fulfillment|Early access · Radarr first/);
   assert.match(workspaceScript, /jsonRequest\('\/api\/workspace\/profile'\)/);
-  assert.match(workspaceScript, /sidebar-profile-name'\)\.textContent = name/);
+  assert.match(workspaceScript, /sidebarName\.replaceChildren\(\.\.\.words\.map/);
+  assert.match(workspaceScript, /sidebarName\.setAttribute\('aria-label', words\.join\(' '\)\)/);
   assert.match(workspaceScript, /const words = \[dinosaurMainColor\(profileAvatarSeed\), dinosaurWingWord\(profileAvatarSeed\), baseFirst, baseSecond\]/);
   assert.match(workspaceScript, /words\.join\(''\)/);
   assert.match(workspaceScript, /words\.slice\(0, 2\)\.join\(' '\)/);
@@ -186,6 +187,13 @@ test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from th
   assert.doesNotMatch(workspaceScript, /Generated in this browser from your public age ID\. No image is uploaded\./);
   assert.match(workspaceScript, /profile-avatar-status'\)\.textContent = ''/);
   assert.doesNotMatch(coordinator, /SELECT\s+(?:profile_picture|avatar_seed)/i);
+});
+
+test('sidebar profile name displays four words in two columns with an accessible full name', () => {
+  assert.match(workspace, /\.sidebar-profile-name \{[^}]*display:grid;[^}]*grid-template-columns:max-content max-content/);
+  assert.match(workspaceScript, /const words = \[dinosaurMainColor\(profileAvatarSeed\), dinosaurWingWord\(profileAvatarSeed\), baseFirst, baseSecond\]/);
+  assert.match(workspaceScript, /sidebarName\.replaceChildren\(\.\.\.words\.map\(word =>/);
+  assert.match(workspaceScript, /sidebarName\.setAttribute\('aria-label', words\.join\(' '\)\)/);
 });
 
 test('node list and relay are restricted to the signed-in owner and trusted configured targets', () => {

@@ -26,6 +26,8 @@
 
 # Rawrarr runbooks
 
+- [Show the sidebar profile as four words](2026-10-22-sidebar-profile-four-word-layout.md) — Arrange the generated account name as two words on each of two lines beside its avatar.
+
 - [Render cached Movies and TV text immediately](2026-10-22-cache-library-text-in-browser.md) — Show the last successful node-scoped library text while live records refresh and artwork loads separately.
 
 - [Fix intermittent Sonarr library timeouts](2026-10-22-fix-sonarr-library-timeout.md) — Raise the Arr upstream timeout after live Sonarr listing requests repeatedly exceeded five seconds.
