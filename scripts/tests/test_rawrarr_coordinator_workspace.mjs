@@ -269,7 +269,7 @@ test('coordinator node buttons display accessible direct, relay, and offline rou
   assert.match(deviceRoutes, /status, directRoute/);
   assert.match(workspaceScript, /stateLabel\.textContent = routeLabel/);
   assert.match(workspaceScript, /if \(!node\.relayAvailable && !node\.directUrl\)/);
-  assert.match(workspaceScript, /const canOpenNode = node => node\.relayAvailable \|\| Boolean\(node\.directUrl\)/);
+  assert.match(workspaceScript, /const canOpenNode = node => node\.online && \(node\.relayAvailable \|\| Boolean\(node\.directUrl\)\)/);
   assert.match(workspace, /\.node-state\.online \.node-state-indicator \{ border-color:#a6e3a1; background:#3bc46b/);
   assert.match(workspace, /\.node-state\.offline \.node-state-indicator \{ border-color:#ff9999; background:#ef5c5c/);
   assert.match(workspace, /\.node-state\.direct \.node-state-indicator \{ border-color:#a6e3a1; background:#3bc46b/);
