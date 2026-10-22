@@ -8,10 +8,18 @@ const [main, workspace, script] = await Promise.all([
   read('rust-arr/src/main.rs'), read('rust-arr/src/coordinator_workspace.html'), read('rust-arr/src/coordinator-workspace.mjs')
 ]);
 
-test('coordinator exposes Radarr slugs only through the encrypted library response and direct metadata route', () => {
+test('coordinator exposes Radarr detail slugs through encrypted and temporary direct library responses', () => {
   assert.match(main, /struct BrowserRadarrMovie[\s\S]*?title_slug: &'a Option<String>/);
   assert.match(main, /BrowserRadarrMovie \{[\s\S]*?title_slug: &movie\.title_slug/);
-  assert.match(main, /let direct_protected = Router::new\([\s\S]*?\.route\("\/api\/radarr\/movies", get\(radarr_movies\)\)/);
+  assert.match(main, /struct DirectRadarrMovie[\s\S]*?title_slug: Option<String>[\s\S]*?genres: Vec<String>/);
+  const liveHandler = main.match(/async fn radarr_movies_live[\s\S]*?\n}\n\nasync fn radarr_movie_poster_live/)?.[0] || '';
+  assert.match(liveHandler, /\/api\/v3\/movie/);
+  assert.doesNotMatch(liveHandler, /quality_profiles::enrich|path:/);
+  assert.match(main, /async fn radarr_movies_live[\s\S]*?\.get\(format!\("\{\}\/api\/v3\/movie", radarr\.base_url\)\)[\s\S]*?DirectRadarrMovie/);
+  assert.match(main, /async fn radarr_movie_poster_live[\s\S]*?fetch_movie_poster\(&movie\)/);
+  assert.match(main, /let direct_protected = Router::new\([\s\S]*?\.route\("\/api\/radarr\/live-library", get\(radarr_movies_live\)\)[\s\S]*?"\/api\/radarr\/live-movies\/\{tmdb_id\}\/poster",[\s\S]*?get\(radarr_movie_poster_live\)/);
+  assert.match(script, /arrDirectRequest\('\/radarr\/live-library'\)/);
+  assert.doesNotMatch(script.match(/async function unlockMetadata\(\)[\s\S]*?\n\}/)?.[0] || '', /loadRadarrLibrary|selectedRoute\.base/);
 });
 
 test('Movies and TV add accessible detail icons only after a browser reachability probe', () => {

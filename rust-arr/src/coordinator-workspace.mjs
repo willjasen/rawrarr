@@ -1136,9 +1136,7 @@ function renderMovies(movies) {
   document.getElementById('overview-movie-detail').textContent = `${files.toLocaleString()} with files · ${formatBytes(movies.reduce((total, movie) => total + movie.sizeOnDisk, 0))} on disk`;
   renderGenreBreakdown('overview-movie-genres', movies);
   void loadMetadataSizes();
-  void Promise.all([arrDirectRequest('/radarr/movies'), arrDirectRequest('/settings/radarr')]).then(async ([liveMovies, settings]) => {
-    const slugByTmdbId = new Map(liveMovies.map(movie => [Number(movie.tmdbId), movie.titleSlug]));
-    for (const movie of movies) movie.titleSlug = slugByTmdbId.get(Number(movie.tmdbId)) || null;
+  void arrDirectRequest('/settings/radarr').then(async settings => {
     await probeArrBase('radarr', settings.url || '');
     for (const row of moviesPanel.querySelectorAll('tr')) {
       const id = Number(row.children[1]?.textContent);
@@ -1206,22 +1204,28 @@ async function unlockMetadata() {
   updateAgeIdControls();
   if (location.hash === '#movies') void loadArrSettings('radarr');
   if (location.hash === '#tv' || location.hash === '#series') void loadArrSettings('sonarr');
-  contentStatus.textContent = 'Fetching ciphertext and decrypting in this browser…';
+  contentStatus.textContent = 'Connecting to Radarr through the node direct route…';
   try {
-    await import('/assets/metadata-export.js');
-    const route = await chooseNodeRoute(node, true);
-    let movies;
-    try {
-      movies = await window.rawrarrMiniExport.loadRadarrLibrary(identity, route.base, message => { contentStatus.textContent = message; });
-    } catch (error) {
-      if (!route.direct || selectedNode !== nodeId) throw error;
-      selectedRoute = { nodeId, base: `/nodes/${encodeURIComponent(nodeId)}`, direct: false };
-      contentStatus.textContent = 'Direct request failed; retrying through roarlay…';
-      movies = await window.rawrarrMiniExport.loadRadarrLibrary(identity, selectedRoute.base, message => { contentStatus.textContent = message; });
-    }
+    await unlockMetadataVaultForSettings();
+    const [liveMovies, artworkBase] = await Promise.all([
+      arrDirectRequest('/radarr/live-library'),
+      arrDirectUrl(),
+    ]);
+    const movies = liveMovies.map(movie => ({
+      ...movie,
+      qualityProfile: movie.qualityProfile || '—',
+      sizeOnDisk: Number(movie.sizeOnDisk) || 0,
+      loadArtwork: movie.tmdbId && movie.artworkSource ? async () => {
+        const response = await fetch(`${artworkBase}/radarr/live-movies/${encodeURIComponent(movie.tmdbId)}/poster`, {
+          cache: 'no-store', credentials: 'include', redirect: 'error',
+        });
+        if (!response.ok) throw new Error(`Radarr poster request failed (HTTP ${response.status}).`);
+        return URL.createObjectURL(await response.blob());
+      } : null,
+    }));
     if (selectedNode !== nodeId) return;
     renderMovies(movies);
-    contentStatus.textContent = `${movies.length} encrypted Radarr library entries decrypted locally.`;
+    contentStatus.textContent = `${movies.length} Radarr library entries loaded directly from the node.`;
   } catch (error) {
     if (selectedNode !== nodeId) return;
     moviesPanel.replaceChildren();

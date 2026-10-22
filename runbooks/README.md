@@ -25,6 +25,8 @@
 
 # Rawrarr runbooks
 
+- [Serve the Radarr library through the node direct API](2026-10-22-temporary-direct-radarr-library.md) — Temporarily route Movies through the subscriber node like TV after shared quality-profile writes caused a Radarr library 502; includes rollback steps.
+
 - [Deploy subscriber setup changes to the internal coordinator](2026-10-22-deploy-node-setup-to-internal-coordinator.md) — Deploy the node setup flow to the Mac mini coordinator and verify its live Devices route.
 
 - [Open Devices when the subscriber node connects](2026-10-22-redirect-after-node-online.md) — Show online waiting status and automatically open Devices when the generated node requests approval.

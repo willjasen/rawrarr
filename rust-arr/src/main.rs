@@ -865,6 +865,102 @@ async fn radarr_movies(
     Ok(Json(movies))
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DirectRadarrMovie {
+    title: String,
+    title_slug: Option<String>,
+    year: Option<i64>,
+    monitored: bool,
+    has_file: bool,
+    size_on_disk: u64,
+    quality_profile: Option<String>,
+    added: Option<String>,
+    tmdb_id: Option<i64>,
+    artwork_source: Option<String>,
+    genres: Vec<String>,
+}
+
+async fn radarr_movies_live(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<DirectRadarrMovie>>, (StatusCode, Json<ApiError>)> {
+    let radarr = state.radarr.read().await.clone();
+    let Some(radarr) = radarr else {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ApiError { error: "Radarr is not configured" }),
+        ));
+    };
+    let movies: Vec<serde_json::Value> = radarr
+        .http
+        .get(format!("{}/api/v3/movie", radarr.base_url))
+        .header("X-Api-Key", radarr.api_key.clone())
+        .header(ACCEPT, "application/json")
+        .send().await
+        .map_err(|_| (StatusCode::BAD_GATEWAY, Json(ApiError { error: "Radarr movie library request failed" })))?
+        .error_for_status()
+        .map_err(|_| (StatusCode::BAD_GATEWAY, Json(ApiError { error: "Radarr movie library request failed" })))?
+        .json().await
+        .map_err(|_| (StatusCode::BAD_GATEWAY, Json(ApiError { error: "Radarr movie library response was invalid" })))?;
+    let profiles_response = radarr
+        .http
+        .get(format!("{}/api/v3/qualityprofile", radarr.base_url))
+        .header("X-Api-Key", radarr.api_key.clone())
+        .header(ACCEPT, "application/json")
+        .send().await;
+    let profiles: Vec<serde_json::Value> = match profiles_response {
+        Ok(response) => response.json().await.unwrap_or_default(),
+        Err(_) => Vec::new(),
+    };
+    Ok(Json(movies.into_iter().map(|movie| {
+        let tmdb_id = movie.get("tmdbId").and_then(|v| v.as_i64());
+        let profile_id = movie.get("qualityProfileId").and_then(|v| v.as_i64());
+        let quality_profile = profiles.iter()
+            .find(|profile| profile.get("id").and_then(|v| v.as_i64()) == profile_id)
+            .and_then(|profile| profile.get("name")).and_then(|v| v.as_str())
+            .or_else(|| movie.get("qualityProfile").and_then(|v| v.get("name")).and_then(|v| v.as_str()))
+            .map(str::to_owned);
+        let has_poster = movie.get("images").and_then(serde_json::Value::as_array).is_some_and(|images| images.iter().any(|image| {
+            image.get("coverType").and_then(|v| v.as_str()).is_some_and(|kind| kind.eq_ignore_ascii_case("poster"))
+        }));
+        DirectRadarrMovie {
+            title: movie.get("title").and_then(|v| v.as_str()).unwrap_or("Unknown title").to_owned(),
+            title_slug: movie.get("titleSlug").and_then(|v| v.as_str()).map(str::to_owned),
+            year: movie.get("year").and_then(|v| v.as_i64()),
+            monitored: movie.get("monitored").and_then(|v| v.as_bool()).unwrap_or(false),
+            has_file: movie.get("hasFile").and_then(|v| v.as_bool()).unwrap_or(false),
+            size_on_disk: movie.get("sizeOnDisk").and_then(|v| v.as_u64()).unwrap_or_default(),
+            quality_profile,
+            added: movie.get("added").and_then(|v| v.as_str()).map(str::to_owned),
+            tmdb_id,
+            artwork_source: (has_poster && tmdb_id.is_some()).then(|| "radarr".to_owned()),
+            genres: movie.get("genres").and_then(serde_json::Value::as_array).into_iter().flatten().filter_map(serde_json::Value::as_str).map(str::to_owned).collect(),
+        }
+    }).collect()))
+}
+
+async fn radarr_movie_poster_live(
+    State(state): State<Arc<AppState>>,
+    AxumPath(tmdb_id): AxumPath<u64>,
+) -> Result<Response<Body>, (StatusCode, Json<ApiError>)> {
+    if tmdb_id == 0 {
+        return Err((StatusCode::BAD_REQUEST, Json(ApiError { error: "Invalid movie ID" })));
+    }
+    let radarr = state.radarr.read().await.clone().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(ApiError { error: "Radarr is not configured" }),
+    ))?;
+    let movie = radarr.movie_by_tmdb_id(tmdb_id).await
+        .map_err(|_| (StatusCode::BAD_GATEWAY, Json(ApiError { error: "Radarr poster request failed" })))?
+        .ok_or((StatusCode::NOT_FOUND, Json(ApiError { error: "Movie poster was not found" })))?;
+    let (content_type, bytes) = radarr.fetch_movie_poster(&movie).await
+        .map_err(|_| (StatusCode::BAD_GATEWAY, Json(ApiError { error: "Radarr poster request failed" })))?
+        .ok_or((StatusCode::NOT_FOUND, Json(ApiError { error: "Movie poster was not found" })))?;
+    let mut response = image_response(content_type, bytes)?;
+    response.headers_mut().insert(header::CACHE_CONTROL, header::HeaderValue::from_static("private, no-store"));
+    Ok(response)
+}
+
 async fn radarr_movie_poster(
     State(state): State<Arc<AppState>>,
     AxumPath(tmdb_id): AxumPath<u64>,
@@ -2199,6 +2295,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/sonarr/series", get(sonarr::series))
         .route("/api/sonarr/series/{tvdb_id}/poster", get(get_sonarr_poster))
         .route("/api/radarr/movies", get(radarr_movies))
+        .route("/api/radarr/live-library", get(radarr_movies_live))
+        .route("/api/radarr/live-movies/{tmdb_id}/poster", get(radarr_movie_poster_live))
         .route_layer(middleware::from_fn_with_state(
             auth.clone(),
             node_auth::require_session,
