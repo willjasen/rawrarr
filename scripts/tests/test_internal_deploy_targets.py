@@ -8,7 +8,7 @@ from classify_internal_deploy_targets import classify_paths
 
 class InternalDeployTargetTests(unittest.TestCase):
     def test_coordinator_only_changes_select_coordinator(self):
-        result = classify_paths(["rust-arr/src/coordinator.rs", "docker-compose.internal-mini.yml"])
+        result = classify_paths(["rust-arr/src/coordinator.rs", "rust-arr/src/coordinator-passkey.mjs", "docker-compose.internal-mini.yml"])
         self.assertEqual(result["targets"], ["coordinator"])
 
     def test_node_only_changes_select_nodes(self):

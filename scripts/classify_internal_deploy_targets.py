@@ -17,6 +17,7 @@ COORDINATOR_FILES = {
     "rust-arr/src/coordinator_workspace.html",
     "rust-arr/src/coordinator-workspace.mjs",
     "rust-arr/src/coordinator-device-routes.mjs",
+    "rust-arr/src/coordinator-passkey.mjs",
     "rust-arr/src/profile-color.mjs",
     "docker-compose.internal-mini.yml",
     "docker-compose.coordinator.yml",
