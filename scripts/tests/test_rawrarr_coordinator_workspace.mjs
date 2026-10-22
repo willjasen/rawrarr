@@ -263,14 +263,13 @@ test('coordinator workspace selects nodes, reads Radarr directly, and keeps conf
   assert.match(coordinator, /encrypted_session_request\(&path, &parts\.method, &request_body\)/);
 });
 
-test('browser and metadata node derive the encrypted library key with matching HKDF parameters', () => {
-  assert.match(metadataExport, /generateKey\(\{ name: 'ECDH', namedCurve: 'P-256' \}, true, \['deriveBits'\]\)/);
-  assert.match(metadataExport, /deriveBits\(\{ name: 'ECDH', public: nodePublicKey \}, keyPair\.privateKey, 256\)/);
-  assert.match(metadataExport, /name: 'HKDF', hash: 'SHA-256', salt: hkdfSalt, info: hkdfInfo/);
-  assert.match(metadataExport, /rawrarr-coordinator-session-v1/);
-  assert.match(metadataExport, /radarr-library-response/);
-  assert.match(mainRs, /Hkdf::<sha2::Sha256>::new\(Some\(b"rawrarr-coordinator-session-v1"\)/);
-  assert.match(mainRs, /hkdf\.expand\(b"radarr-library-response"/);
+test('browser wraps the response key to the node age recipient and decrypts AES-GCM response bytes', () => {
+  assert.match(metadataExport, /api\/metadata\/export\/recipient/);
+  assert.match(metadataExport, /new age\.Encrypter\(\)/);
+  assert.match(mainRs, /decrypt_age_input\(&identity, &wrapped_key\)/);
+  assert.match(mainRs, /starts_with\(b"-----BEGIN AGE ENCRYPTED FILE-----/);
+  assert.match(mainRs, /Aes256Gcm::new_from_slice\(&\*session_key\)/);
+  assert.doesNotMatch(metadataExport, /rawrarr-coordinator-session-v1|deriveBits/);
 });
 
 test('coordinator node buttons display accessible direct, relay, and offline route states', () => {

@@ -1144,6 +1144,12 @@ async fn coordinator_workspace_script() -> Response {
     response
 }
 
+async fn coordinator_node_avatar_script() -> Response {
+    let mut response = Response::new(Body::from(include_str!("coordinator-node-avatar.mjs")));
+    response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/javascript; charset=utf-8"));
+    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
 async fn coordinator_ai_script() -> Response {
     let mut response = Response::new(Body::from(crate::ui_assets::text("coordinator-ai.mjs", include_str!("coordinator-ai.mjs")).await));
     response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/javascript; charset=utf-8"));
@@ -1362,9 +1368,8 @@ fn ciphertext_export_path(path: &str) -> bool {
 fn encrypted_session_request(path: &str, method: &Method, body: &[u8]) -> bool {
     path == "api/metadata/session/library"
         && *method == Method::POST
-        && body.len() == 65
-        && body.first() == Some(&4)
-        && p256::PublicKey::from_sec1_bytes(body).is_ok()
+        && (50..=4096).contains(&body.len())
+        && body.starts_with(b"-----BEGIN AGE ENCRYPTED FILE-----\n")
 }
 
 async fn delegated_node_session(

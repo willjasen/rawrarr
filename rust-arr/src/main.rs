@@ -1541,8 +1541,26 @@ async fn encrypted_radarr_library(
     State(state): State<Arc<AppState>>,
     body: axum::body::Bytes,
 ) -> Result<Response<Body>, StatusCode> {
-    if body.len() != 65 || body[0] != 4 { return Err(StatusCode::BAD_REQUEST); }
-    let client_key = p256::PublicKey::from_sec1_bytes(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
+    if body.len() < 50 || body.len() > 4096 || !body.starts_with(b"-----BEGIN AGE ENCRYPTED FILE-----\n") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let wrapped_key = Zeroizing::new(body.to_vec());
+    let identity_path = env::var_os("RAWARR_AGE_IDENTITY_FILE")
+        .filter(|path| !path.is_empty())
+        .or_else(|| {
+            let path = env::var_os("RAWARR_DATA_DIR").map(std::path::PathBuf::from)
+                .unwrap_or_else(|| std::path::PathBuf::from("data")).join("age-identity");
+            path.is_file().then(|| path.into_os_string())
+        }).ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let session_key = tokio::task::spawn_blocking(move || {
+        let identity = Zeroizing::new(std::fs::read(identity_path).map_err(|_| ())?);
+        let output = secure_config::decrypt_age_input(&identity, &wrapped_key).map_err(|_| ())?;
+        if !output.status.success() || output.stdout.len() != 32 { return Err(()); }
+        let mut key = [0u8; 32];
+        key.copy_from_slice(&output.stdout);
+        Ok::<_, ()>(Zeroizing::new(key))
+    }).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
     let radarr = state.radarr.read().await.clone().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
     let vault = state.vault.read().await.clone();
     let movies = radarr.list_movies(vault).await.map_err(|_| StatusCode::BAD_GATEWAY)?;
@@ -1561,19 +1579,12 @@ async fn encrypted_radarr_library(
     }).collect();
     let plaintext = Zeroizing::new(serde_json::to_vec(&browser_movies).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?);
     if plaintext.len() > 8 * 1024 * 1024 { return Err(StatusCode::PAYLOAD_TOO_LARGE); }
-    let ephemeral = p256::ecdh::EphemeralSecret::random(&mut p256::elliptic_curve::rand_core::OsRng);
-    let server_key = p256::PublicKey::from(&ephemeral);
-    let shared = ephemeral.diffie_hellman(&client_key);
-    let hkdf = hkdf::Hkdf::<sha2::Sha256>::new(Some(b"rawrarr-coordinator-session-v1"), shared.raw_secret_bytes());
-    let mut aes_key = Zeroizing::new([0u8; 32]);
-    hkdf.expand(b"radarr-library-response", &mut *aes_key).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let cipher = aes_gcm::Aes256Gcm::new_from_slice(&*aes_key).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let cipher = aes_gcm::Aes256Gcm::new_from_slice(&*session_key).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let mut iv = [0u8; 12];
     p256::elliptic_curve::rand_core::OsRng.fill_bytes(&mut iv);
     use aes_gcm::aead::Aead;
     let encrypted = cipher.encrypt((&iv).into(), plaintext.as_slice()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let mut response = Vec::with_capacity(65 + iv.len() + encrypted.len());
-    response.extend_from_slice(server_key.to_encoded_point(false).as_bytes());
+    let mut response = Vec::with_capacity(iv.len() + encrypted.len());
     response.extend_from_slice(&iv);
     response.extend_from_slice(&encrypted);
     Response::builder().header(header::CONTENT_TYPE, "application/octet-stream").header(header::CACHE_CONTROL, "private, no-store")

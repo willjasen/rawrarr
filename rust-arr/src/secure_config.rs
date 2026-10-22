@@ -1253,6 +1253,11 @@ fn run_with_input(
     wait_with_input(child, input, true)
 }
 
+/// Decrypt a bounded in-memory age payload using an identity supplied by the node-local vault.
+pub(crate) fn decrypt_age_input(identity: &[u8], ciphertext: &[u8]) -> Result<std::process::Output, VaultError> {
+    run_with_input_data("age", &["--decrypt", "--identity"], identity, ciphertext)
+}
+
 fn wait_with_input(
     mut child: std::process::Child,
     input: &[u8],
