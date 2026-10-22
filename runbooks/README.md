@@ -26,6 +26,8 @@
 
 # Rawrarr runbooks
 
+- [Fix intermittent Sonarr library timeouts](2026-10-22-fix-sonarr-library-timeout.md) — Raise the Arr upstream timeout after live Sonarr listing requests repeatedly exceeded five seconds.
+
 - [Throttle Arr metadata scraping](2026-10-22-throttle-arr-scraping.md) — Serialize Radarr and Sonarr record scraping and add a low request rate on metadata nodes.
 
 - [Serve the Radarr library through the node direct API](2026-10-22-temporary-direct-radarr-library.md) — Temporarily route Movies through the subscriber node like TV after shared quality-profile writes caused a Radarr library 502; includes rollback steps.

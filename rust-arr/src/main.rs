@@ -293,7 +293,9 @@ impl ArrClient {
             HeaderValue::from_str(api_key.trim()).map_err(|_| RadarrConfigError::InvalidApiKey)?;
         api_key_header.set_sensitive(true);
         let http = reqwest::Client::builder()
-            .timeout(Duration::from_secs(5))
+            // Arr library endpoints can take several seconds while the service
+            // is scraping metadata; five seconds caused intermittent 502s.
+            .timeout(Duration::from_secs(30))
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|_| RadarrConfigError::InvalidUrl)?;
