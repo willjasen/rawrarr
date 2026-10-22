@@ -766,6 +766,8 @@ function openNode(node) {
     } else {
       void chooseNodeRoute(node);
     }
+    if (location.hash === '#movies') void refreshRadarrBackfillStatus();
+    if (location.hash === '#tv' || location.hash === '#series') void refreshSonarrBackfillStatus();
     if (ageInput.value.trim() || ageIdentityInMemory) void unlockMetadata();
     const currentView = location.hash.slice(1);
     if (currentView === '' || currentView === '#overview' || currentView === 'overview') {
@@ -1154,23 +1156,32 @@ document.getElementById('refresh-series').addEventListener('click', async event 
 });
 
 async function refreshSonarrBackfillStatus() {
+  await refreshArrScrapeStatus('sonarr');
+}
+
+async function refreshRadarrBackfillStatus() {
+  await refreshArrScrapeStatus('radarr');
+}
+
+async function refreshArrScrapeStatus(provider) {
+  const name = provider === 'radarr' ? 'Radarr' : 'Sonarr';
+  const label = document.getElementById(`${provider}-scrape-status`);
+  const bar = document.getElementById(`${provider}-scrape-progress`);
   try {
-    const progress = await arrDirectRequest('/metadata/sonarr/backfill');
-    const label = document.getElementById('sonarr-scrape-status');
-    const bar = document.getElementById('sonarr-scrape-progress');
+    const progress = await arrDirectRequest(provider === 'radarr' ? '/metadata/artwork/backfill' : '/metadata/sonarr/backfill');
     if (!progress.total) { label.hidden = true; bar.hidden = true; return; }
     const complete = progress.scraped >= progress.total;
-    const seriesMessage = document.getElementById('series-message');
+    const libraryMessage = document.getElementById(provider === 'radarr' ? 'content-status' : 'series-message');
     if (complete) {
       label.hidden = true;
       bar.hidden = true;
-      if (seriesMessage.dataset.state !== 'error' && seriesMessage.textContent.startsWith('Loaded ')) {
-        seriesMessage.hidden = true;
+      if (provider === 'sonarr' && libraryMessage.dataset.state !== 'error' && libraryMessage.textContent.startsWith('Loaded ')) {
+        libraryMessage.hidden = true;
       }
       return;
     }
     label.hidden = false;
-    if (seriesMessage.dataset.state !== 'error') seriesMessage.hidden = false;
+    if (provider === 'sonarr' && libraryMessage.dataset.state !== 'error') libraryMessage.hidden = false;
     bar.max = Math.max(1, progress.total);
     bar.value = progress.scraped;
     bar.hidden = !progress.active;
@@ -1178,14 +1189,15 @@ async function refreshSonarrBackfillStatus() {
     const pass = progress.active ? ` · ${progress.completed.toLocaleString()} checked this pass` : '';
     const failures = progress.failed ? ` · ${progress.failed.toLocaleString()} unavailable` : '';
     label.textContent = progress.active
-      ? `Saving Sonarr metadata and artwork to encrypted shared metadata: ${saved}${pass}${failures}`
+      ? `Scraping ${name} metadata and artwork to encrypted shared metadata: ${saved}${pass}${failures}`
       : progress.scraped >= progress.total
-        ? `Sonarr artwork cache complete${failures}`
-        : `Sonarr artwork cache status: ${saved}${failures}`;
+        ? `${name} artwork cache complete${failures}`
+        : `${name} artwork cache status: ${saved}${failures}`;
   } catch { /* The status will refresh on the next poll. */ }
 }
 
 window.setInterval(() => {
+  if (location.hash === '#movies' && selectedNodeDetails?.role === 'metadata') void refreshRadarrBackfillStatus();
   if (location.hash === '#tv' || location.hash === '#series') void refreshSonarrBackfillStatus();
 }, 3000);
 

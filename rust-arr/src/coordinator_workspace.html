@@ -279,6 +279,8 @@
       <p id="content-status" role="status">Enter your age private ID to unlock. If you choose to remember it, it is stored in this browser until you clear it or sign out.</p>
       <section id="radarr-summary" class="summary" aria-label="Radarr movie statistics"></section>
       <article class="panel"><div class="panel-head"><h2>Radarr movie library</h2><button id="refresh-movies" type="button">Rescan</button></div>
+        <p id="radarr-scrape-status" class="scrape-status" role="status" aria-live="polite" hidden></p>
+        <progress id="radarr-scrape-progress" class="scrape-progress" aria-label="Radarr metadata and artwork scraping progress" max="1" value="0" hidden></progress>
         <div class="table-wrap"><table><thead><tr><th>Movie</th><th>TMDb ID</th><th>Year</th><th>File</th><th>Monitored</th><th>Quality profile</th><th>Size</th></tr></thead><tbody id="movies"></tbody></table></div>
       </article>
     </section>

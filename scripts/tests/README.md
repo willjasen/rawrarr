@@ -19,7 +19,7 @@
 
 - `test_rawrarr_metadata_sizes.mjs` — checks the metadata API and Movies/TV cards report separate media-subtree sizes. Run with `node --test scripts/tests/test_rawrarr_metadata_sizes.mjs`.
 
-- `test_rawrarr_sonarr_completion_ui.mjs` — confirms the TV view hides scrape completion and successful-load messages after the Sonarr artwork cache is complete, while retaining errors. Run with `node --test scripts/tests/test_rawrarr_sonarr_completion_ui.mjs`.
+- `test_rawrarr_sonarr_completion_ui.mjs` — confirms Movies and TV use the shared provider-aware scrape status/progress updater, and that the TV view hides scrape completion and successful-load messages after the Sonarr artwork cache is complete while retaining errors. Run with `node --test scripts/tests/test_rawrarr_sonarr_completion_ui.mjs`.
 
 - `test_rawrarr_direct_route.mjs` — static regression checks for Tailscale direct metadata routing, the short-lived node-scoped session, visible automatic selection, and coordinator fallback. Run with `node --test scripts/tests/test_rawrarr_direct_route.mjs`.
 - `test_rawrarr_device_routes.mjs` — checks the shared all-device route-status helper for Direct, Relay, and Offline states, Redis cache reachability in measured node latency, cached probes, and explicit refresh. Run with `node --test scripts/tests/test_rawrarr_device_routes.mjs`.

@@ -12,8 +12,20 @@ test('completed Sonarr artwork scraping hides both completion messages and the p
   const updatedCompleteBranch = source.match(/const complete = progress\.scraped >= progress\.total;([\s\S]*?)label\.hidden = false;/)?.[1];
   assert.ok(updatedCompleteBranch, 'completion branch is present');
   assert.match(updatedCompleteBranch, /if \(complete\)\s*\{[\s\S]*?label\.hidden = true;[\s\S]*?bar\.hidden = true;/);
-  assert.match(updatedCompleteBranch, /seriesMessage\.hidden = true/);
-  assert.match(source, /seriesMessage\.dataset\.state !== 'error'/);
-  assert.match(source, /message\.textContent = `Loaded \$\{series\.length\} series from Sonarr\.`/);
+  assert.match(updatedCompleteBranch, /libraryMessage\.hidden = true/);
+  assert.match(source, /libraryMessage\.dataset\.state !== 'error'/);
+  assert.match(source, /textContent = statusMessage/);
+  assert.match(source, /statusMessage = `Loaded \$\{series\.length\} series from Sonarr\.`/);
   assert.match(workspace, /\.scrape-progress:not\(\[hidden\]\) \{ display:block;/);
+});
+
+test('Movies and TV share the provider-aware scraper status and progress bar updater', () => {
+  assert.match(workspace, /id="radarr-scrape-status"/);
+  assert.match(workspace, /id="radarr-scrape-progress"[^>]*aria-label="Radarr metadata and artwork scraping progress"/);
+  assert.match(workspace, /id="sonarr-scrape-status"/);
+  assert.match(workspace, /id="sonarr-scrape-progress"[^>]*aria-label="Sonarr metadata and artwork scraping progress"/);
+  assert.match(source, /async function refreshArrScrapeStatus\(provider\)/);
+  assert.match(source, /provider === 'radarr' \? '\/metadata\/artwork\/backfill' : '\/metadata\/sonarr\/backfill'/);
+  assert.match(source, /Scraping \$\{name\} metadata and artwork to encrypted shared metadata/);
+  assert.match(source, /location\.hash === '#movies' && selectedNodeDetails\?\.role === 'metadata'\) void refreshRadarrBackfillStatus\(\)/);
 });
