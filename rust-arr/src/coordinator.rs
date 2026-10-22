@@ -284,6 +284,8 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/api/workspace/ui-signature", get(workspace_ui_signature))
         .route("/api/workspace/profile-picture/{seed}/jxl", get(workspace_profile_picture_jxl))
         .route("/api/workspace/profile-picture/{seed}/png", get(workspace_profile_picture_png))
+        .route("/api/workspace/device-picture/{seed}/jxl", get(workspace_device_picture_jxl))
+        .route("/api/workspace/device-picture/{seed}/png", get(workspace_device_picture_png))
         .route("/api/workspace/direct-session", post(direct_session))
         .route("/api/workspace/pending", get(pending_nodes))
         .route("/api/workspace/approve", post(approve_node))
@@ -1040,6 +1042,38 @@ async fn workspace_profile_picture_png(
     }
     if !crate::coordinator_avatar::valid_seed(&seed) { return StatusCode::BAD_REQUEST.into_response(); }
     let encoded = match tokio::task::spawn_blocking(move || crate::coordinator_avatar::render_png(&seed)).await {
+        Ok(Ok(bytes)) => bytes,
+        _ => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+    };
+    workspace_profile_picture_response(encoded, "image/png")
+}
+
+async fn workspace_device_picture_jxl(
+    Extension(auth): Extension<AuthState>,
+    headers: HeaderMap,
+    Path(seed): Path<String>,
+) -> Response {
+    if crate::auth::authenticated_user_id(&auth, &headers).await.is_none() {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    if !crate::coordinator_avatar::valid_seed(&seed) { return StatusCode::BAD_REQUEST.into_response(); }
+    let encoded = match tokio::task::spawn_blocking(move || crate::coordinator_avatar::render_fossil_jxl(&seed)).await {
+        Ok(Ok(bytes)) => bytes,
+        _ => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+    };
+    workspace_profile_picture_response(encoded, "image/jxl")
+}
+
+async fn workspace_device_picture_png(
+    Extension(auth): Extension<AuthState>,
+    headers: HeaderMap,
+    Path(seed): Path<String>,
+) -> Response {
+    if crate::auth::authenticated_user_id(&auth, &headers).await.is_none() {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    if !crate::coordinator_avatar::valid_seed(&seed) { return StatusCode::BAD_REQUEST.into_response(); }
+    let encoded = match tokio::task::spawn_blocking(move || crate::coordinator_avatar::render_fossil_png(&seed)).await {
         Ok(Ok(bytes)) => bytes,
         _ => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };

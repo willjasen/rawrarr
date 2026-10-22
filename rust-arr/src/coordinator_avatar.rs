@@ -138,6 +138,28 @@ fn svg_for_digest(digest: &[u8; 32]) -> String {
     )
 }
 
+fn fossil_svg_for_digest(digest: &[u8; 32]) -> String {
+    let hue = (digest[0] as u16 * 360 / 256 + 24) % 360;
+    let rock = format!("hsl({hue} 24% 31%)");
+    let rock_light = format!("hsl({hue} 26% 43%)");
+    let fossil = format!("hsl({} 48% 73%)", (hue + 34) % 360);
+    let fossil_shadow = format!("hsl({} 35% 48%)", (hue + 34) % 360);
+    let background = format!("hsl({} 35% 15%)", (hue + 175) % 360);
+    let ribs = (0..12)
+        .map(|index| {
+            let angle = index * 30 + (digest[1] as usize % 10);
+            let control_y = 102 - (digest[2] % 7) as i32;
+            let end_y = 102 - (digest[3] % 8) as i32;
+            format!(
+                "<path d=\"M96 102Q124 {control_y} 131 {end_y}\" transform=\"rotate({angle} 96 102)\" fill=\"none\" stroke=\"{fossil_shadow}\" stroke-width=\"2.5\" stroke-linecap=\"round\"/>"
+            )
+        })
+        .collect::<String>();
+    format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 192 192\"><rect width=\"192\" height=\"192\" rx=\"96\" fill=\"{background}\"/><circle cx=\"39\" cy=\"46\" r=\"22\" fill=\"{fossil}\" opacity=\".1\"/><path d=\"M20 139 49 72l32 14 31-29 58 38 8 53-34 20-68-4-47 8z\" fill=\"{rock}\" stroke=\"{rock_light}\" stroke-width=\"4\" stroke-linejoin=\"round\"/><path d=\"m25 140 29-61 25 12m39-30 48 32 8 45m-113 20 53-7 48 10\" fill=\"none\" stroke=\"{rock_light}\" stroke-width=\"2\" opacity=\".8\"/><circle cx=\"96\" cy=\"102\" r=\"43\" fill=\"{fossil}\" stroke=\"{fossil_shadow}\" stroke-width=\"4\"/>{ribs}<path d=\"M96 102c-10-3-19 4-17 14 2 11 16 15 26 9 13-8 13-28 0-37-17-12-41-2-45 19-5 27 20 47 46 39 29-8 39-43 23-67-18-27-57-31-81-10\" fill=\"none\" stroke=\"{fossil_shadow}\" stroke-width=\"5\" stroke-linecap=\"round\"/><circle cx=\"96\" cy=\"102\" r=\"4\" fill=\"{fossil_shadow}\"/><path d=\"m47 151 10-4 7 5m66-83 8-5 7 7\" fill=\"none\" stroke=\"{fossil}\" stroke-width=\"3\" stroke-linecap=\"round\" opacity=\".85\"/></svg>"
+    )
+}
+
 fn parse_seed(seed: &str) -> Option<[u8; 32]> {
     if seed.len() != 64 || !seed.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return None;
@@ -153,9 +175,12 @@ pub fn valid_seed(seed: &str) -> bool {
     parse_seed(seed).is_some()
 }
 
-fn rasterize(seed: &str) -> Result<(std::path::PathBuf, DirectoryCleanup), ()> {
+fn rasterize_with(
+    seed: &str,
+    renderer: fn(&[u8; 32]) -> String,
+) -> Result<(std::path::PathBuf, DirectoryCleanup), ()> {
     let digest = parse_seed(seed).ok_or(())?;
-    let svg = svg_for_digest(&digest);
+    let svg = renderer(&digest);
     let directory = std::env::temp_dir().join(format!("rawrarr-avatar-{}", Uuid::new_v4()));
     fs::create_dir(&directory).map_err(|_| ())?;
     let _cleanup = DirectoryCleanup(directory.clone());
@@ -175,6 +200,14 @@ fn rasterize(seed: &str) -> Result<(std::path::PathBuf, DirectoryCleanup), ()> {
         return Err(());
     }
     Ok((png_path, _cleanup))
+}
+
+fn rasterize(seed: &str) -> Result<(std::path::PathBuf, DirectoryCleanup), ()> {
+    rasterize_with(seed, svg_for_digest)
+}
+
+fn rasterize_fossil(seed: &str) -> Result<(std::path::PathBuf, DirectoryCleanup), ()> {
+    rasterize_with(seed, fossil_svg_for_digest)
 }
 
 pub fn render_png(seed: &str) -> Result<Vec<u8>, ()> {
@@ -202,6 +235,31 @@ pub fn render_jxl(seed: &str) -> Result<Vec<u8>, ()> {
     fs::read(jxl_path).map_err(|_| ())
 }
 
+pub fn render_fossil_png(seed: &str) -> Result<Vec<u8>, ()> {
+    let (png_path, _cleanup) = rasterize_fossil(seed)?;
+    fs::read(png_path).map_err(|_| ())
+}
+
+pub fn render_fossil_jxl(seed: &str) -> Result<Vec<u8>, ()> {
+    let (png_path, _cleanup) = rasterize_fossil(seed)?;
+    let jxl_path = png_path.parent().ok_or(())?.join("avatar.jxl");
+    let encoded = Command::new("cjxl")
+        .arg(&png_path)
+        .arg(&jxl_path)
+        .arg("-d")
+        .arg("0")
+        .arg("-e")
+        .arg("7")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map_err(|_| ())?;
+    if !encoded.success() {
+        return Err(());
+    }
+    fs::read(jxl_path).map_err(|_| ())
+}
+
 struct DirectoryCleanup(std::path::PathBuf);
 impl Drop for DirectoryCleanup {
     fn drop(&mut self) {
@@ -211,7 +269,7 @@ impl Drop for DirectoryCleanup {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_seed, svg_for_digest};
+    use super::{fossil_svg_for_digest, parse_seed, svg_for_digest};
     use sha2::{Digest, Sha256};
     use std::collections::BTreeSet;
 
@@ -220,6 +278,17 @@ mod tests {
         assert!(parse_seed(&"ab".repeat(32)).is_some());
         assert!(parse_seed("abcd").is_none());
         assert!(parse_seed(&"zz".repeat(32)).is_none());
+    }
+
+    #[test]
+    fn fossil_device_art_is_deterministic_and_uses_a_shell_fossil() {
+        let digest: [u8; 32] = Sha256::digest("device-fossil").into();
+        let fossil = fossil_svg_for_digest(&digest);
+        assert_eq!(fossil, fossil_svg_for_digest(&digest));
+        assert!(fossil.contains("<circle cx=\"96\" cy=\"102\" r=\"43\""));
+        assert!(fossil.contains("stroke-linecap=\"round\""));
+        assert!(!fossil.contains("<ellipse cx=\"96\" cy=\"119\""));
+        assert_ne!(fossil, svg_for_digest(&digest));
     }
 
     #[test]

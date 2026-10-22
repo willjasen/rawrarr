@@ -188,8 +188,10 @@ test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from th
   assert.match(workspaceScript, /api\/metadata\/export\/recipient/);
   assert.match(workspaceScript, /deriveNodeAvatarSeed\(node\.nodeId\)/);
   assert.match(workspaceScript, /device-avatar/);
-  assert.match(workspaceScript, /profile-picture\/\$\{seed\}\/jxl/);
-  assert.match(workspaceScript, /profile-picture\/\$\{seed\}\/png/);
+  assert.match(workspaceScript, /device-picture\/\$\{seed\}\/jxl/);
+  assert.match(workspaceScript, /device-picture\/\$\{seed\}\/png/);
+  assert.match(coordinator, /device-picture\/\{seed\}\/jxl/);
+  assert.match(coordinator, /device-picture\/\{seed\}\/png/);
   assert.match(coordinator, /api\/metadata\/export\/node-recipient/);
   assert.match(coordinator, /coordinator-node-avatar\.mjs/);
   assert.match(mainRs, /api\/metadata\/export\/node-recipient/);
@@ -199,6 +201,8 @@ test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from th
   assert.match(coordinatorAvatar, /"rsvg-convert"/);
   assert.match(coordinatorAvatar, /"cjxl"/);
   assert.match(coordinatorAvatar, /fn svg_for_digest/);
+  assert.match(coordinatorAvatar, /fn fossil_svg_for_digest/);
+  assert.match(coordinatorAvatar, /fossil_device_art_is_deterministic_and_uses_a_shell_fossil/);
   assert.match(coordinatorAvatar, /if wings\.is_empty\(\)/);
   assert.match(coordinatorAvatar, /encodes_generated_avatar_as_a_jpeg_xl_codestream/);
   assert.match(coordinator, /private, max-age=31536000, immutable/);
@@ -206,6 +210,19 @@ test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from th
   assert.doesNotMatch(workspaceScript, /Generated in this browser from your public age ID\. No image is uploaded\./);
   assert.match(workspaceScript, /profile-avatar-status'\)\.textContent = ''/);
   assert.doesNotMatch(coordinator, /SELECT\s+(?:profile_picture|avatar_seed)/i);
+});
+
+test('device pictures use the deterministic fossil renderer while profile pictures retain dinosaurs', () => {
+  assert.match(workspaceScript, /device-picture\/\$\{seed\}\/jxl/);
+  assert.match(workspaceScript, /device-picture\/\$\{seed\}\/png/);
+  assert.match(coordinator, /device-picture\/\{seed\}\/jxl/);
+  assert.match(coordinator, /device-picture\/\{seed\}\/png/);
+  assert.match(coordinatorAvatar, /pub fn render_fossil_jxl/);
+  assert.match(coordinatorAvatar, /pub fn render_fossil_png/);
+  assert.match(coordinatorAvatar, /fn fossil_svg_for_digest/);
+  assert.match(coordinatorAvatar, /fossil_device_art_is_deterministic_and_uses_a_shell_fossil/);
+  assert.match(workspaceScript, /profile-picture\/\$\{profileAvatarSeed\}\/jxl/);
+  assert.match(workspaceScript, /profile-picture\/\$\{profileAvatarSeed\}\/png/);
 });
 
 test('sidebar profile name displays four words in two columns with an accessible full name', () => {

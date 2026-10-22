@@ -237,8 +237,8 @@ async function loadNodeAvatar(node, pictureSource, image) {
   }
   const seed = await seedPromise;
   if (!seed) return;
-  pictureSource.srcset = `/api/workspace/profile-picture/${seed}/jxl`;
-  image.src = `/api/workspace/profile-picture/${seed}/png`;
+  pictureSource.srcset = `/api/workspace/device-picture/${seed}/jxl`;
+  image.src = `/api/workspace/device-picture/${seed}/png`;
 }
 async function loadProfile() {
   try {

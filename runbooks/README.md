@@ -41,6 +41,7 @@
 
 
 - [Docker peer connectivity tests by node type](2026-10-22-docker-peer-connectivity-tests.md) — Capture isolated Docker test requirements for Syncthing connectivity among fossil peers and boneyard peers.
+- [Render device pictures as fossils](2026-10-22-fossil-device-pictures.md) — Use deterministic ammonite fossil art for enrolled device cards while preserving dinosaur profile pictures.
 
 - [Age-wrapped browser response session](2026-10-22-age-wrapped-browser-response-session.md) — Wrap a per-request response key to the user's age recipient so nodes encrypt browser responses end to end through the coordinator.
 
