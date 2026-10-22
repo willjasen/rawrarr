@@ -290,24 +290,37 @@ export async function loadRadarrLibrary(identity, base = '', onProgress = () => 
   if (!identity.trim().startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('Paste a post-quantum age private ID.');
   const url = path => `${base}${path}`;
   onProgress('Fetching encrypted Radarr library…');
-  const sessionKeyBytes = crypto.getRandomValues(new Uint8Array(32));
-  const wrappedKey = await encrypt(await fetchBytes(url('/api/metadata/export/recipient')).then(bytes => {
-    const recipient = decoder.decode(bytes).trim();
-    bytes.fill(0);
-    return recipient;
-  }), sessionKeyBytes);
+  const keyPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+  const browserPublicKey = new Uint8Array(await crypto.subtle.exportKey('raw', keyPair.publicKey));
   const libraryResponse = await fetch(url('/api/metadata/session/library'), {
     method: 'POST', cache: 'no-store',
     headers: { 'Content-Type': 'application/octet-stream', Accept: 'application/octet-stream' },
-    body: wrappedKey,
+    body: browserPublicKey,
   });
-  wrappedKey.fill(0);
-  if (!libraryResponse.ok) { sessionKeyBytes.fill(0); throw new Error(`Could not establish the encrypted library session (${libraryResponse.status}).`); }
+  browserPublicKey.fill(0);
+  if (!libraryResponse.ok) throw new Error(`Could not establish the encrypted library session (${libraryResponse.status}).`);
   const encryptedLibrary = new Uint8Array(await libraryResponse.arrayBuffer());
-  const sessionKey = await crypto.subtle.importKey('raw', sessionKeyBytes, 'AES-GCM', false, ['decrypt']);
-  sessionKeyBytes.fill(0);
-  const iv = encryptedLibrary.slice(0, 12);
-  const encryptedPayload = encryptedLibrary.slice(12);
+  const nodePublicKey = await crypto.subtle.importKey('raw', encryptedLibrary.subarray(0, 65), { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+  const sharedSecret = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: nodePublicKey }, keyPair.privateKey, 256));
+  const hkdfSalt = new TextEncoder().encode('rawrarr-coordinator-session-v1');
+  const hkdfInfo = new TextEncoder().encode('radarr-library-response');
+  let sessionKey;
+  try {
+    const hkdfMaterial = await crypto.subtle.importKey('raw', sharedSecret, 'HKDF', false, ['deriveKey']);
+    sessionKey = await crypto.subtle.deriveKey(
+      { name: 'HKDF', hash: 'SHA-256', salt: hkdfSalt, info: hkdfInfo },
+      hkdfMaterial,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['decrypt'],
+    );
+  } finally {
+    sharedSecret.fill(0);
+    hkdfSalt.fill(0);
+    hkdfInfo.fill(0);
+  }
+  const iv = encryptedLibrary.slice(65, 77);
+  const encryptedPayload = encryptedLibrary.slice(77);
   encryptedLibrary.fill(0);
   let libraryBytes;
   try { libraryBytes = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, sessionKey, encryptedPayload)); }
