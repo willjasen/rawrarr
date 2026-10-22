@@ -41,6 +41,14 @@ test('approved subscriber identity retains its requested name and localhost brow
   assert.match(coordinatorWorkspace, /deviceNames\[node\.nodeId\] \|\| node\.displayName \|\| node\.nodeId/);
 });
 
+test('approved node registration synchronizes its configured name without breaking older clients', async () => {
+  const nodeAuth = await readFile(new URL('../../rust-arr/src/node_auth.rs', import.meta.url), 'utf8');
+  assert.match(nodeAuth, /"role": role,\s*"displayName": &self\.display_name/);
+  assert.match(coordinator, /display_name: Option<String>/);
+  assert.match(coordinator, /UPDATE rawrarr_node_enrollments SET display_name=\$2 WHERE node_id=\$1 AND approved_at IS NOT NULL/);
+  assert.match(coordinator, /#\[serde\(default\)\][\s\S]*display_name: Option<String>/);
+});
+
 test('the coordinator assigns enrollment to the signed-in account and filters approvals by owner', () => {
   assert.match(coordinator, /SELECT id FROM rawrarr_users ORDER BY created_at/);
   assert.match(coordinator, /e\.user_id=\$1/);

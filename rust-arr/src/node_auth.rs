@@ -18,6 +18,7 @@ pub struct NodeAuth {
     client: reqwest::Client,
     base: reqwest::Url,
     token: Arc<Zeroizing<String>>,
+    display_name: String,
 }
 
 impl NodeAuth {
@@ -54,6 +55,7 @@ impl NodeAuth {
             client: builder.build()?,
             base,
             token: Arc::new(token),
+            display_name: display_name.to_owned(),
         };
         match auth.register(role).await {
             Ok(()) => {
@@ -188,8 +190,11 @@ impl NodeAuth {
                 reqwest::Method::POST,
                 "/api/nodes/register",
                 &HeaderMap::new(),
-                serde_json::to_vec(&serde_json::json!({"role": role}))
-                    .map_err(|_| "invalid node role")?,
+                serde_json::to_vec(&serde_json::json!({
+                    "role": role,
+                    "displayName": &self.display_name
+                }))
+                .map_err(|_| "invalid node role")?,
             )
             .await
             .map_err(|_| "coordinator unavailable; node registration failed")?;

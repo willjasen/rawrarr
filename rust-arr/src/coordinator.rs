@@ -600,6 +600,8 @@ async fn logout(
 #[serde(deny_unknown_fields)]
 struct Registration {
     role: NodeRole,
+    #[serde(default)]
+    display_name: Option<String>,
 }
 async fn register(
     Extension(auth): Extension<AuthState>,
@@ -608,6 +610,23 @@ async fn register(
 ) -> StatusCode {
     if request.role != role {
         return StatusCode::FORBIDDEN;
+    }
+    let display_name = request.display_name.map(|name| name.trim().to_owned());
+    if display_name.as_ref().is_some_and(|name| {
+        name.is_empty() || name.chars().count() > 64 || name.chars().any(char::is_control)
+    }) {
+        return StatusCode::BAD_REQUEST;
+    }
+    if let Some(display_name) = display_name {
+        if sqlx::query("UPDATE rawrarr_node_enrollments SET display_name=$2 WHERE node_id=$1 AND approved_at IS NOT NULL")
+            .bind(&auth.node_id)
+            .bind(display_name)
+            .execute(&auth.pool)
+            .await
+            .is_err()
+        {
+            return StatusCode::SERVICE_UNAVAILABLE;
+        }
     }
     match sqlx::query("UPDATE rawrarr_nodes SET last_seen=now() WHERE id=$1 AND role=$2")
         .bind(&auth.node_id)
