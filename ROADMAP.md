@@ -4,12 +4,13 @@ This document is the single index of what the repository has completed and what 
 
 ## Recommended next work
 
-1. **Verify an unattended storage scan.** Source and the standalone storage Compose file schedule a bounded scan after the first 24-hour interval, or at an owner-configured interval. The [manual Mini scan](runbooks/2026-10-18-clarify-storage-scan-action.md) completed and synced three encrypted sidecars, and the [later container update](runbooks/2026-10-18-update-mac-mini-containers.md) rebuilt storage. A scheduled run on that image has not yet been observed.
-2. **Build a durable cross-node catalog.** Owner-approved node enrollment, heartbeats, selected-node pages, direct routes, and scan commands exist. Add persistent library/device records, scan generations, stale/offline inventory, and reconciliation without moving media bytes through roarlay.
-3. **Finish export beyond movies.** Settings can export all indexed movie text and matching available artwork in a browser-built ZIP. Add other metadata classes, cancellation, bounded streaming, and explicit partial-failure reporting before calling it a complete archive.
-4. **Verify the intended public reverse-proxy route.** The local Tailscale HTTPS route is distinct from the planned Cloudflare/public route. Test `/api/events` streaming, reconnects, buffering, and timeouts through the exact public proxy configuration.
+1. **Triage and integrate remaining local work.** Preserve the dirty shared checkout and uncommitted feature-branch changes, resolve overlapping browser-access/account-tailnet/coordinator-migration stacks, then verify desired work on GitHub `main` before local cleanup. Review both stashes before dropping them. See the [local work cleanup plan](docs/local-work-cleanup-plan.md).
+2. **Verify an unattended storage scan.** Source and the standalone storage Compose file schedule a bounded scan after the first 24-hour interval, or at an owner-configured interval. The [manual Mini scan](runbooks/2026-10-18-clarify-storage-scan-action.md) completed and synced three encrypted sidecars, and the [later container update](runbooks/2026-10-18-update-mac-mini-containers.md) rebuilt storage. A scheduled run on that image has not yet been observed.
+3. **Build a durable cross-node catalog.** Owner-approved node enrollment, heartbeats, selected-node pages, direct routes, and scan commands exist. Add persistent library/device records, scan generations, stale/offline inventory, and reconciliation without moving media bytes through roarlay.
+4. **Finish export beyond movies.** Settings can export all indexed movie text and matching available artwork in a browser-built ZIP. Add other metadata classes, cancellation, bounded streaming, and explicit partial-failure reporting before calling it a complete archive.
+5. **Verify the intended public reverse-proxy route.** The local Tailscale HTTPS route is distinct from the planned Cloudflare/public route. Test `/api/events` streaming, reconnects, buffering, and timeouts through the exact public proxy configuration.
 
-This sequence verifies deployed storage behavior, then addresses the missing catalog and export durability. Revisit it if product priorities change.
+This sequence first protects and resolves the local integration backlog, then verifies deployed storage behavior and addresses catalog and export durability. Revisit it if product priorities change.
 
 5. **Evolve profile dinosaur generations through visual comparison.** Keep the public-age-recipient digest as the stable identity seed. Build named renderer generations and a fixed-seed preview that compares controlled mutations in dinosaur anatomy, pose, palette, lighting, texture, framing, and prehistoric backgrounds. Use human-selected improvements as the parent for later generations; promote a generation only after visual review at sidebar and profile sizes. The current style direction is premium 3D with cinematic violet-blue lighting and varied prehistoric trees. See [avatar generation comparison](runbooks/2026-10-21-version-avatar-generations.md).
 
@@ -82,6 +83,7 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 
 ## Related documentation
 
+- [Local work cleanup and integration plan](docs/local-work-cleanup-plan.md) — current remaining local branches, overlap groups, preserved dirty work, and safe integration/cleanup acceptance criteria.
 - [Device and service architecture](docs/device-architecture.md) — current local prototype boundaries and target node model.
 - [Product direction](docs/product-direction.md) — long-term product goals and trust boundaries.
 - [Product and interface design](docs/DESIGN.md) — user-facing principles and flows.
