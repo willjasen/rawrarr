@@ -1170,6 +1170,18 @@ mod direct_route_tests {
             &Method::POST,
             b"{}"
         ));
+        assert!(storage_scan_relay_allowed(
+            "storage",
+            "api/library/scan/schedule",
+            &Method::GET,
+            b""
+        ));
+        assert!(storage_scan_relay_allowed(
+            "storage",
+            "api/library/scan/schedule",
+            &Method::PUT,
+            br#"{"frequency":"daily","time":"04:00","timeZone":"America/New_York","weekday":null}"#
+        ));
         assert!(!storage_scan_relay_allowed(
             "metadata",
             "api/library/scan/missing",
@@ -1686,6 +1698,12 @@ fn storage_scan_relay_allowed(
         }
         "api/library/scan/status" => *method == Method::GET && body.is_empty(),
         "api/library/scan/cancel" => *method == Method::POST && body == b"{}",
+        "api/library/scan/schedule" if *method == Method::GET => body.is_empty(),
+        "api/library/scan/schedule" if *method == Method::PUT => {
+            body.len() <= 1024
+                && serde_json::from_slice::<crate::storage_node::ScanSchedule>(body)
+                    .is_ok_and(|schedule| schedule.validate().is_ok())
+        }
         _ => false,
     }
 }

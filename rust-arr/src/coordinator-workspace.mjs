@@ -267,6 +267,7 @@ let savingDeviceName = false;
 let workspaceNodes = [];
 const storageScanStatusByNode = new Map();
 const storageScansActive = new Set();
+const storageScheduleDrafts = new Map();
 const syncthingHealthCache = new Map();
 const nodeAvatarSeeds = new Map();
 let deviceRouteStatusByNode = new Map();
@@ -880,7 +881,7 @@ function setStorageScanBusy(nodeId, busy) {
 async function storageScanJson(response) {
   const body = await response.text();
   if (!body.trim()) {
-    throw new Error(`Boneyard node returned an empty scan response (HTTP ${response.status}); its scan service may need updating.`);
+    throw new Error(`Storage node returned an empty API response (HTTP ${response.status}); its storage service may need updating.`);
   }
   try {
     return JSON.parse(body);
@@ -891,13 +892,14 @@ async function storageScanJson(response) {
 
 async function storageScanRequest(node, path, options, method = options ? 'POST' : 'GET') {
   const route = await chooseNodeRoute(node);
-  if (!route) throw new Error('No route is available to this boneyard node.');
+  if (!route) throw new Error('No route is available to this storage node.');
+  const hasBody = method === 'POST' || method === 'PUT';
   const send = target => fetch(`${target.base}${path}`, {
     method,
     cache: 'no-store',
     credentials: target.direct ? 'include' : 'same-origin',
-    headers: method === 'POST' ? { Accept: 'application/json', 'Content-Type': 'application/json' } : { Accept: 'application/json' },
-    ...(method === 'POST' ? { body: JSON.stringify(options || {}) } : {}),
+    headers: hasBody ? { Accept: 'application/json', 'Content-Type': 'application/json' } : { Accept: 'application/json' },
+    ...(hasBody ? { body: JSON.stringify(options || {}) } : {}),
   });
   try {
     let response = await send(route);
@@ -915,6 +917,117 @@ async function storageScanRequest(node, path, options, method = options ? 'POST'
     const fallback = { nodeId: node.nodeId, base: `/nodes/${encodeURIComponent(node.nodeId)}`, direct: false };
     selectedRoute = fallback;
     return send(fallback);
+  }
+}
+
+const scanWeekdays = [
+  ['monday', 'Monday'],
+  ['tuesday', 'Tuesday'],
+  ['wednesday', 'Wednesday'],
+  ['thursday', 'Thursday'],
+  ['friday', 'Friday'],
+  ['saturday', 'Saturday'],
+  ['sunday', 'Sunday'],
+];
+
+function formatStorageScanTime(value, timeZone) {
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone,
+    }).format(new Date(value));
+  } catch (_) {
+    return value;
+  }
+}
+
+function setStorageScheduleForm(form, schedule) {
+  form.querySelector('[name="frequency"]').value = schedule.frequency;
+  form.querySelector('[name="time"]').value = schedule.time;
+  form.querySelector('[name="weekday"]').value = schedule.weekday || 'monday';
+  form.querySelector('[name="weekday"]').parentElement.hidden = schedule.frequency !== 'weekly';
+  form.querySelector('.storage-scan-schedule-timezone').textContent = `Times use ${schedule.timeZone}.`;
+  form.dataset.timeZone = schedule.timeZone;
+}
+
+function storageScheduleCadence(schedule) {
+  return schedule.frequency === 'weekly'
+    ? `Weekly on ${schedule.weekday[0].toUpperCase()}${schedule.weekday.slice(1)}`
+    : 'Daily';
+}
+
+function storageScheduleDraft(form) {
+  const frequency = form.querySelector('[name="frequency"]').value;
+  return {
+    frequency,
+    time: form.querySelector('[name="time"]').value,
+    timeZone: form.dataset.timeZone,
+    weekday: frequency === 'weekly' ? form.querySelector('[name="weekday"]').value : null,
+  };
+}
+
+async function refreshStorageSchedule(node, form, summary, scanStatus) {
+  if (!node.online) {
+    summary.textContent = 'Schedule unavailable while this node is offline.';
+    for (const control of form.querySelectorAll('select,input,button')) control.disabled = true;
+    return;
+  }
+  for (const control of form.querySelectorAll('select,input,button')) control.disabled = true;
+  try {
+    const response = await storageScanRequest(node, '/api/library/scan/schedule');
+    if (!response.ok) throw new Error(`Could not read scan schedule (HTTP ${response.status}).`);
+    const state = await storageScanJson(response);
+    const draft = storageScheduleDrafts.get(node.nodeId);
+    const schedule = draft || state.schedule;
+    setStorageScheduleForm(form, schedule);
+    form.dataset.timeZone = schedule.timeZone;
+    form.querySelector('.storage-scan-schedule-timezone').textContent = `Times use ${schedule.timeZone}.`;
+    for (const control of form.querySelectorAll('select,input,button')) control.disabled = false;
+    const nextScan = formatStorageScanTime(state.nextRunAt, state.schedule.timeZone);
+    summary.textContent = draft
+      ? `Unsaved changes · Current schedule: ${storageScheduleCadence(state.schedule)} · Next scan ${nextScan}.`
+      : `${storageScheduleCadence(schedule)} · Next scan ${nextScan}.`;
+    if (state.scan?.active) {
+      setStorageScanBusy(node.nodeId, true);
+      const progress = state.scan.filesTotal > 0
+        ? ` ${state.scan.filesCompleted} of ${state.scan.filesTotal}`
+        : '';
+      const trigger = state.scan.scheduled ? 'Scheduled scan' : 'Storage scan';
+      scanStatus.textContent = `${trigger} is running…${progress}`;
+      const progressBar = scanStatus.parentElement?.querySelector('.storage-scan-progress');
+      if (progressBar) {
+        progressBar.hidden = false;
+        progressBar.setAttribute('aria-valuetext', `${trigger} is running${progress}`);
+      }
+    } else if (state.scan?.scheduled && state.lastScheduledRunAt) {
+      setStorageScanBusy(node.nodeId, false);
+      scanStatus.textContent = `Last scheduled scan started ${formatStorageScanTime(state.lastScheduledRunAt, state.schedule.timeZone)}.`;
+    } else {
+      setStorageScanBusy(node.nodeId, false);
+    }
+  } catch (error) {
+    summary.textContent = error.message || 'Could not load the scan schedule.';
+  }
+}
+
+async function saveStorageSchedule(node, form, summary, saveButton, scanStatus) {
+  saveButton.disabled = true;
+  const schedule = storageScheduleDraft(form);
+  try {
+    const response = await storageScanRequest(node, '/api/library/scan/schedule', schedule, 'PUT');
+    if (!response.ok) {
+      const detail = (await response.text()).trim();
+      throw new Error(detail || `Could not save scan schedule (HTTP ${response.status}).`);
+    }
+    const state = await storageScanJson(response);
+    storageScheduleDrafts.delete(node.nodeId);
+    setStorageScheduleForm(form, state.schedule);
+    summary.textContent = `Schedule saved. Next scan ${formatStorageScanTime(state.nextRunAt, state.schedule.timeZone)}.`;
+  } catch (error) {
+    summary.textContent = error.message || 'Could not save the scan schedule.';
+  } finally {
+    saveButton.disabled = false;
   }
 }
 
@@ -1622,7 +1735,70 @@ async function loadNodes() {
         scanProgressIndicator.className = 'storage-scan-progress-indicator';
         scanProgress.append(scanProgressIndicator);
         scanStatus.append(scanMessage, scanProgress);
-        card.append(scanActions, scanStatus);
+        const scheduleForm = document.createElement('form');
+        scheduleForm.className = 'storage-scan-schedule';
+        scheduleForm.dataset.timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        const frequencyLabel = document.createElement('label');
+        frequencyLabel.append(document.createTextNode('Frequency'));
+        const frequencyInput = document.createElement('select');
+        frequencyInput.name = 'frequency';
+        for (const [value, label] of [['daily', 'Daily'], ['weekly', 'Weekly']]) {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = label;
+          frequencyInput.append(option);
+        }
+        frequencyLabel.append(frequencyInput);
+        const weekdayLabel = document.createElement('label');
+        weekdayLabel.append(document.createTextNode('Day'));
+        const weekdayInput = document.createElement('select');
+        weekdayInput.name = 'weekday';
+        for (const [value, label] of scanWeekdays) {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = label;
+          weekdayInput.append(option);
+        }
+        weekdayLabel.append(weekdayInput);
+        weekdayLabel.hidden = true;
+        const timeLabel = document.createElement('label');
+        timeLabel.append(document.createTextNode('Time'));
+        const timeInput = document.createElement('input');
+        timeInput.name = 'time';
+        timeInput.type = 'time';
+        timeInput.required = true;
+        timeLabel.append(timeInput);
+        const scheduleSummary = document.createElement('p');
+        scheduleSummary.className = 'storage-scan-schedule-summary';
+        scheduleSummary.setAttribute('role', 'status');
+        scheduleSummary.setAttribute('aria-live', 'polite');
+        scheduleSummary.textContent = 'Loading scan schedule…';
+        const timezoneNote = document.createElement('p');
+        timezoneNote.className = 'storage-scan-schedule-timezone';
+        const scheduleActions = document.createElement('div');
+        scheduleActions.className = 'storage-scan-schedule-actions';
+        const saveScheduleButton = document.createElement('button');
+        saveScheduleButton.type = 'submit';
+        saveScheduleButton.textContent = 'Save schedule';
+        for (const control of [frequencyInput, weekdayInput, timeInput, saveScheduleButton]) {
+          control.disabled = true;
+        }
+        scheduleActions.append(saveScheduleButton);
+        scheduleForm.append(frequencyLabel, weekdayLabel, timeLabel, scheduleActions, timezoneNote, scheduleSummary);
+        const rememberScheduleDraft = () => {
+          weekdayLabel.hidden = frequencyInput.value !== 'weekly';
+          storageScheduleDrafts.set(node.nodeId, storageScheduleDraft(scheduleForm));
+        };
+        frequencyInput.addEventListener('change', rememberScheduleDraft);
+        timeInput.addEventListener('input', rememberScheduleDraft);
+        weekdayInput.addEventListener('change', rememberScheduleDraft);
+        scheduleForm.addEventListener('submit', event => {
+          event.preventDefault();
+          event.stopPropagation();
+          void saveStorageSchedule(node, scheduleForm, scheduleSummary, saveScheduleButton, scanMessage);
+        });
+        card.append(scanActions, scanStatus, scheduleForm);
+        void refreshStorageSchedule(node, scheduleForm, scheduleSummary, scanMessage);
       }
       card.addEventListener('click', event => {
         if (event.target !== nameInput) openNode(node);
