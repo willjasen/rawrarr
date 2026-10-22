@@ -63,7 +63,18 @@
 
 - [Headscale container client staging](2026-10-18-headscale-container-client-staging.md) — Add isolated Docker Tailscale clients on both Macs to Headscale through the Caddy coordinator route, preserving current app sidecars during the transition.
 
+- [Merge AI chat work into main](2026-10-22-merge-ai-chat-into-main.md) — Integrate the AI chat, voice, quota, and tool-support work while preserving concurrent main-worktree edits.
+
+- [Record AI chat fallback and tool support direction](2026-10-18-ai-chat-tool-support.md) — Capture the canned response, recommend scoped Responses function tools for roarlay, and reserve MCP as an interop adapter for owner-run agents.
+
+- [Improve AI answers and split chat and voice](2026-10-18-improve-ai-chat-voice-tabs.md) — Answer Movies-versus-TV disk usage questions and give chat and voice separate tabs without a consent checkbox.
+
 - [Subscriber node onboarding on roarlay](2026-10-18-subscriber-node-onboarding.md) — Guide passkey owners through local age/root backup and offer subscriber-only Compose deployment instructions.
+- [Implement OpenAI chat and voice](2026-10-18-implement-openai-chat-and-voice.md) — Build the authenticated request path, usage accounting, and browser interface.
+
+- [Limit trial AI chat to five daily questions](2026-10-18-trial-ai-chat-daily-limit.md) — Define a shared text-and-voice trial allowance, request counting, and reset behavior.
+
+- [Plan AI chat, voice, and request review](2026-10-18-plan-ai-chat-request-review.md) — Define library answers, a talking voice mode, a PostgreSQL review inbox, and owner-approved agent actions.
 
 - [Add three music albums to the MacBook replica](2026-10-18-add-three-music-albums.md) — Expand the existing Syncthing filter to three selected album directories and verify their transfer.
 

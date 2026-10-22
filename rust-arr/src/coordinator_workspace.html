@@ -18,6 +18,16 @@
     .nav-item:hover { color:var(--text); background:#1a231d }
     .nav-item.active { color:var(--text); background:#202a23; box-shadow:inset 2px 0 var(--green) }
     .nav-icon { width:17px; text-align:center }
+    .ai-panel { width:100%; min-height:calc(100vh - 170px); padding:24px; border:1px solid var(--line); border-radius:12px; background:var(--panel) }
+    .ai-tabs { display:flex; gap:8px; border-bottom:1px solid var(--line); margin:18px 0; padding-bottom:8px }
+    .ai-tabs button[aria-selected="true"] { border-color:var(--green); color:var(--text); background:#202a23 }
+    .ai-tab-panel[hidden] { display:none }
+    .ai-form { display:grid; gap:12px }
+    .ai-form textarea { width:100%; min-height:120px; padding:12px; border:1px solid #46574a; border-radius:8px; color:var(--text); background:#101411; font:inherit; resize:vertical }
+    .ai-actions { display:flex; flex-wrap:wrap; gap:10px }
+    .ai-note,.ai-history { color:var(--muted); font-size:13px }
+    .ai-answer { min-height:380px; max-height:60vh; overflow:auto; margin:16px 0; padding:18px; border:1px solid var(--line); border-radius:10px; background:#101411; white-space:pre-wrap }
+    .ai-history li { margin:8px 0 }
     .sidebar-bottom { position:fixed; bottom:20px; display:flex; align-items:center; gap:10px; width:202px; border-top:1px solid var(--line); padding:14px 10px 0; color:var(--text) }
     .sidebar-profile-picture { width:38px; height:38px; flex:none; border:1px solid #ffffff18; border-radius:50%; background:#202821; object-fit:cover }
     .sidebar-profile-name { min-width:0; overflow:hidden; color:var(--text); font-size:12px; font-weight:600; text-overflow:ellipsis; white-space:nowrap }
@@ -169,7 +179,7 @@
     .profile-name { display:grid; grid-template-columns:repeat(2,minmax(0,max-content)); column-gap:14px; margin:0; font-size:23px; line-height:1.35 }
     @media(max-width:850px) { .app { grid-template-columns:70px minmax(0,1fr) } aside { padding:22px 10px } .brand { width:42px; padding:0 0 28px; margin:0 auto } .brand img { height:42px; object-fit:cover; object-position:left center } .section-label,.nav-text,.sidebar-bottom { display:none } .nav-item { justify-content:center; padding:0 } main { padding:24px } }
     @media(max-width:760px) { .summary { grid-template-columns:repeat(2,minmax(0,1fr)) } }
-    @media(max-width:640px) { .app { display:block } aside { position:sticky; z-index:2; top:0; height:60px; display:flex; align-items:center; border-right:0; border-bottom:1px solid var(--line); padding:0 10px } .brand { font-size:13px; padding:0; margin-right:auto } .section-label { display:none } .nav-item { width:40px; min-height:40px; margin:0 2px } .nav-text { display:none } .nav-item.active { box-shadow:inset 0 -2px var(--green) } header { padding:12px } main { padding:12px } .topology-section { padding:14px } .topology-graph { min-height:340px } .topology-device { width:min(150px,36%); padding:9px; font-size:13px } }
+    @media(max-width:640px) { .app { display:block } aside { position:sticky; z-index:2; top:0; height:60px; display:flex; align-items:center; border-right:0; border-bottom:1px solid var(--line); padding:0 10px } .brand { font-size:13px; padding:0; margin-right:auto } .section-label { display:none } .nav-item { width:40px; min-height:40px; margin:0 2px } .nav-text { display:none } .nav-item.active { box-shadow:inset 0 -2px var(--green) } header { padding:12px } main { padding:12px } .ai-panel { min-height:calc(100vh - 130px); padding:14px } .ai-answer { min-height:260px; max-height:50vh } .topology-section { padding:14px } .topology-graph { min-height:340px } .topology-device { width:min(150px,36%); padding:9px; font-size:13px } }
   </style>
 </head>
 <body>
@@ -180,6 +190,7 @@
     <button class="nav-item" data-view="devices"><span class="nav-icon">◫</span><span class="nav-text">Devices</span></button>
     <button class="nav-item" data-view="movies"><span class="nav-icon">▧</span><span class="nav-text">Movies</span></button>
     <button class="nav-item" data-view="series"><span class="nav-icon">▧</span><span class="nav-text">TV</span></button>
+    <button class="nav-item" data-view="assistant"><span class="nav-icon">✦</span><span class="nav-text">rawrs</span></button>
     <button class="nav-item" data-view="configuration"><span class="nav-icon">◇</span><span class="nav-text">Configuration</span></button>
     <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span><span class="nav-text">Settings</span></button>
     <button class="nav-item" data-view="about"><span class="nav-icon">ⓘ</span><span class="nav-text">About</span></button>
@@ -196,6 +207,34 @@
         <article class="overview-card"><h2>Sonarr</h2><div id="overview-series-count" class="overview-value">—</div><div id="overview-series-detail" class="overview-detail">TV library statistics</div></article>
         <article class="overview-card overview-genre-card"><h2>Radarr genres</h2><div id="overview-movie-genres" class="overview-genre-chart overview-detail" aria-live="polite">Genre breakdown loads with the movie library.</div></article>
         <article class="overview-card overview-genre-card"><h2>Sonarr genres</h2><div id="overview-series-genres" class="overview-genre-chart overview-detail" aria-live="polite">Genre breakdown loads with the TV library.</div></article>
+      </div>
+    </section>
+    <section id="assistant-view" hidden><h1 class="page-title">rawrs</h1>
+      <div class="ai-panel">
+        <p>Ask about your library. Try “Which of my movies were made in the 90s?” or “What percentage of my file sizes is Movies versus TV?”</p>
+        <p id="ai-quota" class="ai-note" role="status">Checking daily allowance…</p>
+        <p class="ai-note">Sending a question or using rawrs sends your words or recording to OpenAI. Roarlay saves the question and interpreted request in its private PostgreSQL inbox. Movie titles and library sizes stay in this browser. Unlock Movies before asking.</p>
+        <div class="ai-tabs" role="tablist" aria-label="Assistant mode">
+          <button id="ai-tab-chat" type="button" role="tab" aria-selected="true" aria-controls="ai-chat-panel">Chat</button>
+          <button id="ai-tab-voice" type="button" role="tab" aria-selected="false" aria-controls="ai-voice-panel" tabindex="-1">rawrs</button>
+        </div>
+        <section id="ai-chat-panel" class="ai-tab-panel" role="tabpanel" aria-labelledby="ai-tab-chat">
+          <div id="ai-answer" class="ai-answer" role="status" aria-live="polite"></div>
+          <form id="ai-form" class="ai-form">
+            <label for="ai-question">Your question</label>
+            <textarea id="ai-question" maxlength="500" required></textarea>
+            <div class="ai-actions"><button id="ai-submit" type="submit">Ask</button></div>
+          </form>
+        </section>
+        <section id="ai-voice-panel" class="ai-tab-panel" role="tabpanel" aria-labelledby="ai-tab-voice" hidden>
+          <button id="ai-talk" type="button" hidden>Talk</button>
+          <p class="ai-note">Talk uses your microphone. Spoken answers use a local browser voice when available; otherwise only a generic message is spoken and the full answer appears below.</p>
+          <p id="ai-voice-transcript" class="ai-note" role="status"></p>
+          <div id="ai-voice-answer" class="ai-answer" role="status" aria-live="polite"></div>
+        </section>
+        <p><button id="ai-open-movies" type="button">Unlock Movies</button></p>
+        <details><summary>Request inbox</summary><p class="ai-note">Questions and interpreted filters stay in roarlay’s PostgreSQL database for review.</p>
+          <ol id="ai-history" class="ai-history"></ol></details>
       </div>
     </section>
     <section id="devices-view" hidden><h1 class="page-title">Devices</h1>
