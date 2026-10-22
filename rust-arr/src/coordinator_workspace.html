@@ -39,7 +39,7 @@
     #status { min-height:22px; color:var(--muted); font-size:13px }
     #nodes { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 }
     .node { min-width:220px; text-align:left }
-    .device-card { flex:1 1 280px; width:min(380px,100%); max-width:480px; padding:18px; border:1px solid var(--line); border-radius:12px; background:var(--panel); cursor:pointer; transition:border-color .15s,background .15s }
+    .device-card { display:flex; flex-direction:column; flex:1 1 280px; width:min(380px,100%); max-width:480px; padding:18px; border:1px solid var(--line); border-radius:12px; background:var(--panel); cursor:pointer; transition:border-color .15s,background .15s }
     .device-card:hover { border-color:#46574a; background:#1a211c }
     .device-card:focus-visible { outline:2px solid var(--green); outline-offset:2px }
     .device-card[data-selected="true"] { border-color:var(--green); box-shadow:inset 0 0 0 1px var(--green) }
@@ -48,7 +48,7 @@
     .device-name-input:hover,.device-name-input:focus { border-bottom-color:#46574a; outline:none }
     .device-name-input:focus { border-bottom-color:var(--green) }
     .device-detail { display:block; color:var(--muted); margin-top:8px; font-size:13px }
-    .device-delete-button { margin-top:12px; border-color:#744747; color:#ffb0b0; padding:6px 9px; font-size:12px }
+    .device-delete-button { align-self:flex-end; margin-top:12px; border-color:#744747; color:#ffb0b0; padding:6px 9px; font-size:12px }
     .device-delete-button:hover,.reject-button:hover { border-color:#ff9999; background:#392323 }
     .storage-scan-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px }
     .storage-scan-status { display:block; color:var(--muted); margin-top:8px; font-size:12px }

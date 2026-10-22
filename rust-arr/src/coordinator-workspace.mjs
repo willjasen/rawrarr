@@ -1456,7 +1456,6 @@ async function loadNodes() {
           status.textContent = error.message || 'Could not delete this device.';
         }
       });
-      card.append(deleteButton);
       const syncHealth = document.createElement('small');
       syncHealth.className = 'device-detail device-sync-health';
       const setSyncHealth = parts => {
@@ -1498,6 +1497,7 @@ async function loadNodes() {
         setSyncHealth(['No shared folders configured']);
       }
       card.append(syncHealth);
+      card.append(deleteButton);
       if (node.role === 'storage') {
         const scanActions = document.createElement('div');
         scanActions.className = 'storage-scan-actions';
