@@ -22,12 +22,17 @@ The owner specifically authorized deleting these worktrees and local branches ev
 
 ## Actions
 
-Pending. Record the exact worktree and branch removals here after completion.
+- Removed the five named worktrees with `git worktree remove --force` after the owner explicitly authorized discarding their unmerged commits and local edits.
+- Removed the five corresponding local branches with `git branch -D`.
+- Left their remote branches untouched. Left the primary `main` checkout, two unrelated PR worktrees, and both stashes untouched.
 
 ## Verification
 
-Pending. Confirm each named path and local branch is absent, and confirm the unrelated main checkout, two PR worktrees, and stashes remain.
+- `git worktree list` no longer contains any of the five removed paths; it still contains the primary checkout and the two unrelated PR worktrees.
+- `git branch -vv` no longer lists any of the five feature branches.
+- `git stash list` still contains both original stash entries.
+- `git status --short --branch` in the primary checkout still shows its pre-existing changes; no files there were staged, modified, or removed by this cleanup.
 
 ## Final state and recovery
 
-Pending. This cleanup permanently removes uncommitted edits and makes these unmerged commits unavailable from the local branches. The roadmap plan remains on GitHub `main` as the record of deferred scope.
+The five feature branches and their local worktrees are removed. Their uncommitted edits and unmerged commits are no longer available from local branches. The cleanup plan remains on GitHub `main` as the record of deferred scope. The primary checkout, unrelated worktrees, and stashes remain available.
