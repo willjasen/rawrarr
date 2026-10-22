@@ -5,6 +5,7 @@
 - `test_rawrarr_coordinator_arr_links.mjs` — checks the coordinator's encrypted Radarr slug flow, direct metadata route, browser-only reachability gate, and year-cell icon wiring for Movies and TV. Run with `node --test scripts/tests/test_rawrarr_coordinator_arr_links.mjs`.
 # Rawrarr tests
 
+- `test_internal_deploy_targets.py` — checks coordinator-only, node-only, shared/unknown runtime, documentation-only, and mixed-change target classification. Run `python3 scripts/tests/test_internal_deploy_targets.py`.
 - `test_rawrarr_node_avatar.mjs` — verifies node-recipient validation, encoded relay route, no-store fetching, and deterministic SHA-256 avatar seed derivation; run with `node --test scripts/tests/test_rawrarr_node_avatar.mjs`.
 
 - `secure_config::tests::node_identity_is_created_once_and_existing_identity_is_reused` and `invalid_existing_node_identity_is_not_replaced` — Subscriber startup age identity generation, persistence/reuse, separation from the user identity, file permissions, and fail-closed invalid-file behavior; run with `cargo test --locked --manifest-path rust-arr/Cargo.toml node_identity` in the Rust test environment.
@@ -38,6 +39,7 @@
 - `test_rawrarr_storage_node.rs` — validates daily storage scan interval settings, bounded movie sample filtering, opaque cache keys, and standard MD5/SHA-1/SHA-256 output. Runs through the Rust test suite.
 - `test_rawrarr_storage_scan_ui.mjs` — checks the Devices scan actions, bounded 1–2 GB movie sample, progress routes, and storage-only coordinator relay gate. Run `node --test scripts/tests/test_rawrarr_storage_scan_ui.mjs`.
 - `test_rawrarr_coordinator_workspace.mjs` — coordinator passkey landing page, owner-scoped node list and relay, roarlay/fossil/boneyard UI labels and Compose names, browser-profile age-key sharing and clearing, persisted age-ID rehydration and Movies unlock behavior, browser-side cluster config decryption and secret redaction, authenticated coordinator JPEG XL avatar delivery with PNG fallback from a public-age-ID digest, Tailscale SOCKS routing, delegated node sessions, accessible online/offline indicators, configured Radarr/Sonarr media-tab form visibility, and Sonarr series rows/summary rendering from the direct metadata API. Run `node --test scripts/tests/test_rawrarr_coordinator_workspace.mjs`; Rust avatar tests cover deterministic dinosaur traits, rarity, six scenes, spike/wings rules, and raster output formats.
+- `test_rawrarr_node_enrollment.rs` — coordinator relay bounds and session-key age armor validation, node-side age unwrap round-trip when the age CLI is installed, and strict node enrollment payload validation; included in the isolated Rust suite.
 
 - `test_provision_node.py` — dry-run, protected token/verifier, duplicate preservation, and invalid scope tests; run `python3 scripts/tests/test_provision_node.py`.
 - `test_rawrarr_node_roles.rs` and `test_rawrarr_node_auth.rs` — role/media boundaries and authentication proxy/transport allowlists; run `cargo test node_` in the isolated test image.
@@ -107,3 +109,4 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 `test_rawrarr_library_detail_link_layout.mjs` checks that Movies and TV display year and Arr detail links in the artwork/title column. Run with `node --test scripts/tests/test_rawrarr_library_detail_link_layout.mjs`.
 
 `test_rawrarr_library_detail_link_layout.mjs` checks that Movies and TV display year and Arr detail links in the artwork/title column. Run with `node --test scripts/tests/test_rawrarr_library_detail_link_layout.mjs`.
+- `test_ui_bundle.py` — Verifies the UI package allowlist/checksum, dry-run and verified install behavior, checksum rejection, and ZIP path traversal rejection. Run `python3 scripts/tests/test_ui_bundle.py -v`.

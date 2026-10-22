@@ -18,6 +18,7 @@ pub mod secure_config;
 pub mod shared_logs;
 pub mod storage_node;
 pub mod syncthing;
+mod ui_assets;
 
 use axum::middleware::Next;
 use axum::{
@@ -534,8 +535,8 @@ async fn direct_health(State(state): State<Arc<AppState>>) -> Response {
     })).into_response()
 }
 
-fn static_asset(content_type: &'static str, data: &'static [u8]) -> Response<Body> {
-    let mut response = Response::new(Body::from(data));
+fn static_asset(content_type: &'static str, data: impl Into<Body>) -> Response<Body> {
+    let mut response = Response::new(data.into());
     response.headers_mut().insert(
         header::CONTENT_TYPE,
         axum::http::HeaderValue::from_static(content_type),
@@ -548,31 +549,31 @@ fn static_asset(content_type: &'static str, data: &'static [u8]) -> Response<Bod
 }
 
 async fn rawrarr_logo() -> Response<Body> {
-    static_asset("image/png", include_bytes!("assets/rawrarr-logo.png"))
+    static_asset("image/png", ui_assets::bytes("assets/rawrarr-logo.png", include_bytes!("assets/rawrarr-logo.png")).await)
 }
 
 async fn rawrarr_logo_jxl() -> Response<Body> {
-    static_asset("image/jxl", include_bytes!("assets/rawrarr-logo.jxl"))
+    static_asset("image/jxl", ui_assets::bytes("assets/rawrarr-logo.jxl", include_bytes!("assets/rawrarr-logo.jxl")).await)
 }
 
 async fn rawrarr_favicon() -> Response<Body> {
     static_asset(
         "image/svg+xml",
-        include_str!("assets/rawrarr-favicon.svg").as_bytes(),
+        ui_assets::text("assets/rawrarr-favicon.svg", include_str!("assets/rawrarr-favicon.svg")).await.into_bytes(),
     )
 }
 
 async fn passkey_client_js() -> Response<Body> {
     static_asset(
         "text/javascript; charset=utf-8",
-        include_str!("passkey-client.mjs").as_bytes(),
+        ui_assets::text("passkey-client.mjs", include_str!("passkey-client.mjs")).await.into_bytes(),
     )
 }
 
 async fn metadata_export_js() -> Response<Body> {
     let mut response = static_asset(
         "text/javascript; charset=utf-8",
-        include_bytes!("assets/metadata-export.js"),
+        ui_assets::bytes("assets/metadata-export.js", include_bytes!("assets/metadata-export.js")).await,
     );
     response.headers_mut().insert(
         header::CACHE_CONTROL,
@@ -588,7 +589,7 @@ async fn auth_page(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Re
         }
         return Redirect::to("/setup/age").into_response();
     }
-    auth::auth_html().into_response()
+    auth::auth_html().await.into_response()
 }
 
 async fn dashboard(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response<Body> {
@@ -598,14 +599,14 @@ async fn dashboard(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Re
     if state.vault.read().await.is_none() {
         return Redirect::to("/setup/age").into_response();
     }
-    Html(include_str!("ui.html")).into_response()
+    Html(ui_assets::text("ui.html", include_str!("ui.html")).await).into_response()
 }
 
 async fn age_setup_page(State(state): State<Arc<AppState>>) -> Response<Body> {
     if state.vault.read().await.is_some() {
         return Redirect::to("/").into_response();
     }
-    auth::age_setup_html().into_response()
+    auth::age_setup_html().await.into_response()
 }
 
 async fn logout(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response<Body> {
@@ -1540,8 +1541,26 @@ async fn encrypted_radarr_library(
     State(state): State<Arc<AppState>>,
     body: axum::body::Bytes,
 ) -> Result<Response<Body>, StatusCode> {
-    if body.len() != 65 || body[0] != 4 { return Err(StatusCode::BAD_REQUEST); }
-    let client_key = p256::PublicKey::from_sec1_bytes(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
+    if body.len() < 50 || body.len() > 4096 || !body.starts_with(b"-----BEGIN AGE ENCRYPTED FILE-----\n") {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let wrapped_key = Zeroizing::new(body.to_vec());
+    let identity_path = env::var_os("RAWARR_AGE_IDENTITY_FILE")
+        .filter(|path| !path.is_empty())
+        .or_else(|| {
+            let path = env::var_os("RAWARR_DATA_DIR").map(std::path::PathBuf::from)
+                .unwrap_or_else(|| std::path::PathBuf::from("data")).join("age-identity");
+            path.is_file().then(|| path.into_os_string())
+        }).ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let session_key = tokio::task::spawn_blocking(move || {
+        let identity = Zeroizing::new(std::fs::read(identity_path).map_err(|_| ())?);
+        let output = secure_config::decrypt_age_input(&identity, &wrapped_key).map_err(|_| ())?;
+        if !output.status.success() || output.stdout.len() != 32 { return Err(()); }
+        let mut key = [0u8; 32];
+        key.copy_from_slice(&output.stdout);
+        Ok::<_, ()>(Zeroizing::new(key))
+    }).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
     let radarr = state.radarr.read().await.clone().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
     let vault = state.vault.read().await.clone();
     let movies = radarr.list_movies(vault).await.map_err(|_| StatusCode::BAD_GATEWAY)?;
@@ -1560,19 +1579,12 @@ async fn encrypted_radarr_library(
     }).collect();
     let plaintext = Zeroizing::new(serde_json::to_vec(&browser_movies).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?);
     if plaintext.len() > 8 * 1024 * 1024 { return Err(StatusCode::PAYLOAD_TOO_LARGE); }
-    let ephemeral = p256::ecdh::EphemeralSecret::random(&mut p256::elliptic_curve::rand_core::OsRng);
-    let server_key = p256::PublicKey::from(&ephemeral);
-    let shared = ephemeral.diffie_hellman(&client_key);
-    let hkdf = hkdf::Hkdf::<sha2::Sha256>::new(Some(b"rawrarr-coordinator-session-v1"), shared.raw_secret_bytes());
-    let mut aes_key = Zeroizing::new([0u8; 32]);
-    hkdf.expand(b"radarr-library-response", &mut *aes_key).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let cipher = aes_gcm::Aes256Gcm::new_from_slice(&*aes_key).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let cipher = aes_gcm::Aes256Gcm::new_from_slice(&*session_key).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let mut iv = [0u8; 12];
     p256::elliptic_curve::rand_core::OsRng.fill_bytes(&mut iv);
     use aes_gcm::aead::Aead;
     let encrypted = cipher.encrypt((&iv).into(), plaintext.as_slice()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let mut response = Vec::with_capacity(65 + iv.len() + encrypted.len());
-    response.extend_from_slice(server_key.to_encoded_point(false).as_bytes());
+    let mut response = Vec::with_capacity(iv.len() + encrypted.len());
     response.extend_from_slice(&iv);
     response.extend_from_slice(&encrypted);
     Response::builder().header(header::CONTENT_TYPE, "application/octet-stream").header(header::CACHE_CONTROL, "private, no-store")
