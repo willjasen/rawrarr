@@ -44,3 +44,10 @@ test('public mode configures the selected Headscale control server without embed
   assert.throws(() => subscriberCompose({ ...base, role: 'metadata', networkMode: 'headscale' }), /Headscale control server URL/);
   assert.throws(() => subscriberCompose({ ...base, role: 'metadata', networkMode: 'headscale', controlServer: 'http://headscale.example.test' }), /HTTPS Headscale/);
 });
+
+test('internal mode uses the Mac mini Tailscale HTTPS coordinator origin', () => {
+  const coordinatorUrl = 'https://rawrarr-mini.example-tailnet.ts.net';
+  const yaml = subscriberCompose({ ...base, role: 'metadata', coordinatorUrl, networkMode: 'internal-tailscale' });
+  assert.match(yaml, /RAWARR_COORDINATOR_URL: "https:\/\/rawrarr-mini\.example-tailnet\.ts\.net"/);
+  assert.match(yaml, /RAWARR_DIRECT_ALLOWED_ORIGIN: "https:\/\/rawrarr-mini\.example-tailnet\.ts\.net"/);
+});

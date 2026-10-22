@@ -4,7 +4,7 @@
 # Rawrarr tests
 
 - `test_rawrarr_admin_preview.mjs` — checks sample-only admin content, local-only port publishing, absence of a production data connection, and planned authentication before live reporting. Run with `node --test scripts/tests/test_rawrarr_admin_preview.mjs`.
-- `test_rawrarr_subscriber_compose.mjs` — Validates subscriber fossil/boneyard Compose output, internal Tailscale and selected Headscale modes, secret-file auth, node-local Tailscale state, custom device names, and invalid network settings; run with `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
+- `test_rawrarr_subscriber_compose.mjs` — Validates subscriber fossil/boneyard Compose output, internal Tailscale coordinator URL and selected Headscale modes, secret-file auth, node-local Tailscale state, custom device names, and invalid network settings; run with `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
 - `test_rawrarr_subscriber_onboarding_browser.mjs` — Chromium checks age-ID and signing-root backup gates, private-key display boundaries, subscriber role choices, network-mode selection, auth-key omission from generated Compose, and device names; run in the isolated test image.
 
 - `test_rawrarr_landing_page.mjs` — Chromium checks for the signed-out landing page, passkey sign-in links, accurate security/maturity disclosure, and mobile layout. Run with `node --test scripts/tests/test_rawrarr_landing_page.mjs` in the isolated test image.

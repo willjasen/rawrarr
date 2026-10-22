@@ -25,6 +25,8 @@
 
 # Rawrarr runbooks
 
+- [Internal Mac mini coordinator on Tailscale](2026-10-22-internal-mini-coordinator-tailnet.md) — Point internal subscriber nodes at a Mac mini coordinator over the owner's Tailscale tailnet; record that live role migration remains separate.
+
 - [Select subscriber tailnet provider](2026-10-22-select-subscriber-tailnet.md) — Let internal deployments use an owner-controlled Tailscale tailnet while retaining the public Headscale option.
 
 - [Fix node approval when a token is already enrolled](2026-10-22-fix-node-approval-reuse.md) — Let an owner approve a regenerated subscriber request that reuses its existing credential, and accept camelCase registration names.

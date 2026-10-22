@@ -59,6 +59,8 @@ Before updating the persistent project, read each running service's `com.docker.
 
 ## Prepare the Mac mini
 
+For the internal-use coordinator topology, use a coordinator deployment on the Mac mini behind its own Tailscale identity and private HTTPS Serve endpoint. Subscriber installers must be given that HTTPS tailnet URL and enrolled in the same owner-controlled tailnet. This is distinct from the current boneyard-on-mini instructions below: the existing storage deployment is not automatically converted, and the switch does not migrate PostgreSQL, node registrations, passkeys, or existing persistent data. Plan and verify that role/data migration before changing the live mini.
+
 The Mini runs `docker-compose.storage.yml`, with no PostgreSQL or roarlay container. It does not create an account or require the node to know a username: the healthy coordinator maps it to its existing owner and exposes it for approval.
 
 1. On the Mini, verify OrbStack, free loopback port 7297, and the real `/Volumes/silo/Media/data` mount. Preserve other consumers of the disk. Obtain the source checkout or a tested locally built image; public registry publishing remains planned.

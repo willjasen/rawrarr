@@ -56,6 +56,7 @@ test('first-account subscriber setup gates node choices behind age and root back
   await page.locator('#device-name').fill('MacBook fossil');
   assert.equal(await page.locator('#device-name').inputValue(), 'MacBook fossil');
   await page.locator('#network-auth-key').fill('tskey-auth-example-secret');
+  await page.locator('#internal-coordinator-url').fill('https://rawrarr-mini.example-tailnet.ts.net');
   await page.locator('#network-mode').selectOption('headscale');
   await page.locator('#headscale-server').fill('https://headscale.example.test');
   await page.locator('#prepare-compose').click();
@@ -64,6 +65,7 @@ test('first-account subscriber setup gates node choices behind age and root back
   await page.locator('#prepare-compose').click();
   assert.equal(await page.locator('#compose-preview').isVisible(), true);
   assert.equal((await page.locator('#compose-preview').innerText()).includes('tskey-auth-example-secret'), false);
+  assert.match(await page.locator('#compose-preview').innerText(), /RAWARR_COORDINATOR_URL: "https:\/\/rawrarr-mini\.example-tailnet\.ts\.net"/);
   assert.match(await page.locator('#compose-preview').innerText(), /TS_AUTHKEY: file:\/run\/secrets\/tailscale-authkey/);
   assert.deepEqual(await page.locator('#network-mode option').allTextContents(), ['Internal use · my Tailscale tailnet', 'Public service · Headscale']);
   assert.deepEqual(requests.filter(path => path !== '/favicon.ico'), ['/setup/node', '/assets/subscriber-onboarding.js'], 'private material never leaves the browser in the setup flow');

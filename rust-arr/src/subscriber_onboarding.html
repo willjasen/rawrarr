@@ -74,6 +74,7 @@
     <label for="network-mode">Node network</label>
     <select id="network-mode"><option value="internal-tailscale">Internal use · my Tailscale tailnet</option><option value="headscale">Public service · Headscale</option></select>
     <p>Each node gets its own Tailscale identity and state. Enter a one-time auth key for the selected network; Compose will reference a local secret file without including the key itself.</p>
+    <div id="internal-coordinator-group"><label for="internal-coordinator-url">Mac mini coordinator HTTPS tailnet URL</label><input id="internal-coordinator-url" type="url" spellcheck="false" placeholder="https://rawrarr-mini.example-tailnet.ts.net"><p>Use the mini coordinator's Tailscale Serve URL. Nodes will use this address to register and contact their coordinator.</p></div>
     <label for="network-auth-key">One-time network auth key</label>
     <input id="network-auth-key" type="password" autocomplete="off" spellcheck="false" aria-describedby="network-auth-key-help">
     <p id="network-auth-key-help">The key stays in this browser until you download the files. Save it locally as <code>tailscale-authkey</code> beside <code>compose.yaml</code>, then remove it after the node joins.</p>

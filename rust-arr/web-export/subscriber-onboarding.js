@@ -109,15 +109,19 @@ byId('media-path').addEventListener('input', clearCompose);
 byId('device-name').addEventListener('input', clearCompose);
 byId('network-mode').addEventListener('change', () => {
   byId('headscale-server-group').hidden = byId('network-mode').value !== 'headscale';
+  byId('internal-coordinator-group').hidden = byId('network-mode').value !== 'internal-tailscale';
   clearCompose();
 });
 byId('headscale-server').addEventListener('input', clearCompose);
+byId('internal-coordinator-url').addEventListener('input', clearCompose);
 byId('network-auth-key').addEventListener('input', clearCompose);
 byId('prepare-compose').addEventListener('click', () => {
   try {
     const authKey = byId('network-auth-key').value.trim();
     if (!authKey) throw new Error('Enter a one-time Tailscale or Headscale auth key.');
-    const yaml = subscriberCompose({ role: byId('node-role').value, nodeId, coordinatorUrl: location.origin, deviceName: byId('device-name').value, mediaPath: byId('media-path').value, networkMode: byId('network-mode').value, controlServer: byId('headscale-server').value.trim() });
+    const mode = byId('network-mode').value;
+    const coordinatorUrl = mode === 'internal-tailscale' ? byId('internal-coordinator-url').value.trim().replace(/\/$/, '') : location.origin;
+    const yaml = subscriberCompose({ role: byId('node-role').value, nodeId, coordinatorUrl, deviceName: byId('device-name').value, mediaPath: byId('media-path').value, networkMode: mode, controlServer: byId('headscale-server').value.trim() });
     byId('compose-preview').textContent = yaml;
     byId('compose-preview').hidden = false;
     byId('download-compose').hidden = false;
