@@ -1470,7 +1470,7 @@ async function loadNodes() {
       indicator.setAttribute('aria-hidden', 'true');
       const stateLabel = document.createElement('span');
       stateLabel.className = 'node-state-label';
-      stateLabel.textContent = latencyLabel ? `${routeLabel} · ${latencyLabel}` : routeLabel;
+      stateLabel.textContent = latencyLabel || routeLabel;
       state.append(indicator, stateLabel);
       const nameInput = document.createElement('input');
       nameInput.className = 'device-name-input';

@@ -30,6 +30,8 @@
 
 # Rawrarr runbooks
 
+- [Show only device route latency](2026-10-22-show-only-device-route-latency.md) — Remove the Direct prefix from directly reachable device status while retaining the measured milliseconds.
+
 - [Age ID library visibility regression](2026-10-22-age-id-library-visibility-regression.md) — Keep coordinator Movies and TV library content hidden until an age ID is loaded.
 - [Create persistent node signing keys](2026-10-22-create-node-signing-keys.md) — Generate a node-local ML-DSA-65 signing key at subscriber startup and reuse it safely across restarts.
 
