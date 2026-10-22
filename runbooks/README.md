@@ -1,3 +1,5 @@
+- [Integrate scheduled storage scan controls](2026-10-22-integrate-scheduled-storage-scan.md) — Port configurable daily and weekly storage scan schedules onto current `main` and verify through a focused pull request.
+
 - [Deploy persistent node age identity](2026-10-22-deploy-node-age-identity.md) — Deploy the committed subscriber-only identity creation to internal fossil and verify persistence and health.
 
 - [Deploy main to the internal Mac services](2026-10-22-deploy-main-to-internal-macs.md) — Update the Mac mini roarlay coordinator and MacBook fossil end-user node from one committed main revision.
