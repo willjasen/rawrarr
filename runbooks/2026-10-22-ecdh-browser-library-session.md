@@ -13,10 +13,14 @@ Work is isolated in `codex/ecdh-browser-library-session`, based on GitHub `main`
 - Coordinator relay only forwards this route when the method is POST and the body is a valid uncompressed P-256 public key.
 - Browser bundle and focused source assertions are kept aligned. Age identity support for metadata decryption and other features remains intact.
 
-## Verification
+## Verification and merge result
 
-Focused ECDH JavaScript assertions pass, browser source and generated bundle pass `node --check`, bundle regeneration completed, and `git diff --check` passes. The broad coordinator workspace test has six unrelated baseline failures where existing assertions expect UI/access patterns not present in GitHub `main`; the ECDH-specific assertion passes independently. Rust formatting and tests could not start because the local `rustc`/`rustfmt` runtime aborts while loading a missing `libz3.5.1.dylib`; GitHub CI must verify the Rust changes.
+- Focused ECDH JavaScript assertions pass; browser source and generated bundle pass `node --check`; bundle regeneration and `git diff --check` pass.
+- GitHub PR [#36](https://github.com/willjasen/rawrarr/pull/36) merged into `main` on 2026-10-22 as merge commit `97481c52241038f57211fa8778dfd565137b4279`. `origin/main` was fetched and verified at this commit. GitHub's `Basic script tests` check passed; this workflow runs standard-library Python tests, not Rust.
+- The isolated test runner's Playwright browser test passed. Its aggregate Node.js suite reported 69 passing and 23 failing tests, including fixture/UI assertions that do not match the current repository snapshot. The focused ECDH assertion passed independently.
+- Rust tests did not compile: offline Cargo could not find cached crate `mime_guess`, and the test container has no network. Local `cargo fmt`/`cargo test` also could not start because the host Rust tools abort while loading missing `libz3.5.1.dylib`.
+- Full project verification remains incomplete. Resolve the Rust test environment and investigate the unrelated Node.js suite failures separately.
 
 ## Recovery
 
-Until merge, the branch can be recreated from `origin/main` and the focused commit. The shared checkout and unrelated worktrees were not changed.
+The code change is merged; use GitHub `main` at `97481c5` as source of truth. The ECDH task worktree and local branch were removed after merge. The shared checkout and unrelated worktrees were not changed by this task.
