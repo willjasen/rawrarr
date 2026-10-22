@@ -1656,6 +1656,21 @@ async fn export_age_recipient() -> Result<Response<Body>, StatusCode> {
         .body(Body::from(recipient.trim().to_owned())).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
+async fn export_node_age_recipient() -> Result<Response<Body>, StatusCode> {
+    let recipient = tokio::task::spawn_blocking(secure_config::AgeVault::node_identity_recipient)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    if !recipient.starts_with("age1pq1") {
+        return Err(StatusCode::SERVICE_UNAVAILABLE);
+    }
+    Response::builder()
+        .header(header::CONTENT_TYPE, "text/plain; charset=utf-8")
+        .header(header::CACHE_CONTROL, "private, no-store")
+        .body(Body::from(recipient))
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
 async fn replace_config_ciphertext(body: Bytes) -> Result<StatusCode, StatusCode> {
     const MAGIC: &[u8] = b"age-encryption.org/v1\n";
     if body.len() < MAGIC.len() || body.len() > 2 * 1024 * 1024 || !body.starts_with(MAGIC) {
@@ -2260,6 +2275,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/metadata/session/library", axum::routing::post(encrypted_radarr_library))
         .route("/api/metadata/export/config", get(export_config_ciphertext).put(replace_config_ciphertext))
         .route("/api/metadata/export/recipient", get(export_age_recipient))
+        .route("/api/metadata/export/node-recipient", get(export_node_age_recipient))
         .route("/api/metadata/export/ciphertext/{kind}/{filename}", get(export_ciphertext))
         .route("/api/metadata/storage", get(metadata_storage_status))
         .route("/api/metadata/artwork/backfill", get(metadata_artwork_backfill_status))
@@ -2313,6 +2329,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/metadata/session/library", post(encrypted_radarr_library))
         .route("/api/metadata/export/config", get(export_config_ciphertext).put(replace_config_ciphertext))
         .route("/api/metadata/export/recipient", get(export_age_recipient))
+        .route("/api/metadata/export/node-recipient", get(export_node_age_recipient))
         .route("/api/metadata/export/ciphertext/{kind}/{filename}", get(export_ciphertext))
         .route("/api/settings/age", get(get_age_settings).post(unlock_age_settings))
         .route(
