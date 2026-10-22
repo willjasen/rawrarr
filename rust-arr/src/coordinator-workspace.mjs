@@ -10,6 +10,24 @@ const contentStatus = document.getElementById('content-status');
 const moviesPanel = document.getElementById('movies');
 let aiMovies = null;
 let aiSeries = null;
+const libraryTextCachePrefix = 'rawrarr.library-text.v1';
+function libraryTextCacheKey(nodeId, mediaType) {
+  return `${libraryTextCachePrefix}:${encodeURIComponent(nodeId)}:${mediaType}`;
+}
+function readLibraryTextCache(nodeId, mediaType) {
+  if (!nodeId) return null;
+  try {
+    const cached = JSON.parse(localStorage.getItem(libraryTextCacheKey(nodeId, mediaType)) || 'null');
+    if (!cached || !Array.isArray(cached.items)) return null;
+    return cached.items;
+  } catch { return null; }
+}
+function writeLibraryTextCache(nodeId, mediaType, items) {
+  if (!nodeId || !Array.isArray(items)) return;
+  try {
+    localStorage.setItem(libraryTextCacheKey(nodeId, mediaType), JSON.stringify({ savedAt: Date.now(), items }));
+  } catch { /* Storage can be disabled or full; live library rendering still works. */ }
+}
 const aiChat = initAiChat({
   getMovies: () => aiMovies,
   getSeries: () => aiSeries,
@@ -108,9 +126,15 @@ function showView(name, updateHash = true) {
     // in-memory copy was cleared by pagehide. Rehydrate it before unlocking.
     if (!ageIdentityInMemory) ageIdentityInMemory = localStorage.getItem(ageSessionKey) || '';
     updateAgeIdControls();
+    if (selectedNode) renderCachedMovies(selectedNode);
     if (ageIdentityInMemory && selectedNode) void unlockMetadata();
   }
   if (view === 'series' && updateHash) {
+    const cachedSeries = readLibraryTextCache(selectedNode, 'tv');
+    if (cachedSeries) {
+      renderSonarrSeries(cachedSeries, 'Cached TV library. Updating…');
+      void attachSonarrPosters(document.getElementById('sonarr-series'));
+    }
     void loadArrSettings('sonarr');
     if (selectedNodeDetails) void chooseNodeRoute(selectedNodeDetails, true);
   }
@@ -1015,17 +1039,44 @@ async function loadSonarrSeries() {
   const nodeId = selectedNode;
   const message = document.getElementById('series-message');
   const rows = document.getElementById('sonarr-series');
+  const cachedSeries = readLibraryTextCache(nodeId, 'tv');
+  if (cachedSeries) {
+    renderSonarrSeries(cachedSeries, 'Cached TV library. Updating…');
+    void attachSonarrPosters(rows);
+  }
   message.hidden = false;
   message.dataset.state = '';
-  message.textContent = 'Loading series from Sonarr…';
+  message.textContent = cachedSeries ? 'Cached TV library. Updating…' : 'Loading series from Sonarr…';
   try {
     await unlockMetadataVaultForSettings();
     const series = await arrDirectRequest('/sonarr/series');
-    const sonarrSettings = await arrDirectRequest('/settings/sonarr');
-    await probeArrBase('sonarr', sonarrSettings.url || '');
     if (generation !== sonarrLoadGeneration || selectedNode !== nodeId) return;
+    writeLibraryTextCache(nodeId, 'tv', series);
+    renderSonarrSeries(series, `Loaded ${series.length} series from Sonarr.`);
+    void attachSonarrPosters(rows);
+  } catch (error) {
+    if (generation !== sonarrLoadGeneration || selectedNode !== nodeId) return;
+    message.hidden = false;
+    message.dataset.state = 'error';
+    message.textContent = error.message || 'Could not load the Sonarr series library.';
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function attachSonarrPosters(rows) {
+  try {
     const artworkBase = await arrDirectUrl();
-    if (generation !== sonarrLoadGeneration || selectedNode !== nodeId) return;
+    for (const poster of rows.querySelectorAll('img[data-tvdb-id]')) {
+      if (!poster.isConnected || poster.src) continue;
+      poster.src = `${artworkBase}/sonarr/series/${encodeURIComponent(poster.dataset.tvdbId)}/poster`;
+      poster.addEventListener('error', () => poster.remove(), { once: true });
+    }
+  } catch { /* Text rows remain useful when artwork routing is unavailable. */ }
+}
+
+function renderSonarrSeries(series, statusMessage = `Loaded ${series.length} series from Sonarr.`) {
+    const rows = document.getElementById('sonarr-series');
     aiSeries = series;
     rows.replaceChildren();
     let episodesPresent = 0;
@@ -1043,8 +1094,7 @@ async function loadSonarrSeries() {
         const poster = document.createElement('img');
         poster.className = 'poster'; poster.alt = ''; poster.loading = 'lazy';
         poster.decoding = 'async'; poster.referrerPolicy = 'no-referrer';
-        poster.src = `${artworkBase}/sonarr/series/${encodeURIComponent(item.tvdbId)}/poster`;
-        poster.addEventListener('error', () => poster.remove(), { once: true });
+        poster.dataset.tvdbId = String(item.tvdbId);
         titleContent.append(poster);
       }
       const titleText = document.createElement('span');
@@ -1069,17 +1119,11 @@ async function loadSonarrSeries() {
     document.getElementById('overview-series-count').textContent = String(series.length);
     document.getElementById('overview-series-detail').textContent = `${episodesPresent.toLocaleString()} episodes · ${formatBytes(diskUsage)} on disk`;
     renderGenreBreakdown('overview-series-genres', series);
+    const message = document.getElementById('series-message');
     message.hidden = false;
-    message.textContent = `Loaded ${series.length} series from Sonarr.`;
+    message.dataset.state = '';
+    message.textContent = statusMessage;
     void refreshSonarrBackfillStatus();
-  } catch (error) {
-    if (generation !== sonarrLoadGeneration || selectedNode !== nodeId) return;
-    message.hidden = false;
-    message.dataset.state = 'error';
-    message.textContent = error.message || 'Could not load the Sonarr series library.';
-  } finally {
-    button.disabled = false;
-  }
 }
 document.getElementById('refresh-series').addEventListener('click', async event => {
   const button = event.currentTarget;
@@ -1092,6 +1136,7 @@ document.getElementById('refresh-series').addEventListener('click', async event 
     message.textContent = `Requesting a TV metadata rescan from ${nodeId}…`;
     await unlockMetadataVaultForSettings();
     await arrDirectRequest('/metadata/sonarr/rescan', { method: 'POST' });
+    localStorage.removeItem(libraryTextCacheKey(nodeId, 'tv'));
     message.textContent = `TV metadata rescan started on ${nodeId}.`;
     button.disabled = false;
     await loadSonarrSeries();
@@ -1181,6 +1226,15 @@ function renderMovies(movies) {
   }
 }
 
+function renderCachedMovies(nodeId) {
+  const cached = readLibraryTextCache(nodeId, 'movies');
+  if (!cached) return false;
+  renderMovies(cached.map(movie => ({ ...movie, posterUrl: null })));
+  contentStatus.textContent = 'Showing cached movie library while updating…';
+  void attachMoviePosters(cached, nodeId);
+  return true;
+}
+
 async function loadMetadataSizes() {
   const node = selectedNodeDetails;
   if (!node) return;
@@ -1201,6 +1255,7 @@ async function unlockMetadata() {
   const nodeId = selectedNode;
   const node = selectedNodeDetails;
   if (!node || node.nodeId !== nodeId) return;
+  const hasCachedMovies = renderCachedMovies(nodeId);
   ageIdentityInMemory = identity;
   if (rememberAgeId.checked) localStorage.setItem(ageSessionKey, identity);
   else localStorage.removeItem(ageSessionKey);
@@ -1208,30 +1263,43 @@ async function unlockMetadata() {
   updateAgeIdControls();
   if (location.hash === '#movies') void loadArrSettings('radarr');
   if (location.hash === '#tv' || location.hash === '#series') void loadArrSettings('sonarr');
-  contentStatus.textContent = 'Connecting to Radarr through the node direct route…';
+  contentStatus.textContent = hasCachedMovies ? 'Showing cached movie library while updating…' : 'Connecting to Radarr through the node direct route…';
   try {
     await unlockMetadataVaultForSettings();
-    const [liveMovies, artworkBase] = await Promise.all([
-      arrDirectRequest('/radarr/live-library'),
-      arrDirectUrl(),
-    ]);
+    const liveMovies = await arrDirectRequest('/radarr/live-library');
+    if (selectedNode !== nodeId) return;
     const movies = liveMovies.map(movie => ({
       ...movie,
       qualityProfile: movie.qualityProfile || '—',
       sizeOnDisk: Number(movie.sizeOnDisk) || 0,
-      posterUrl: movie.tmdbId && movie.artworkSource
-        ? `${artworkBase}/radarr/live-movies/${encodeURIComponent(movie.tmdbId)}/poster`
-        : null,
+      posterUrl: null,
     }));
     if (selectedNode !== nodeId) return;
+    writeLibraryTextCache(nodeId, 'movies', movies.map(({ posterUrl: _posterUrl, ...movie }) => movie));
     renderMovies(movies);
+    void attachMoviePosters(movies, nodeId);
     contentStatus.textContent = `${movies.length} Radarr library entries loaded directly from the node.`;
   } catch (error) {
     if (selectedNode !== nodeId) return;
-    moviesPanel.replaceChildren();
+    if (!hasCachedMovies) moviesPanel.replaceChildren();
     updateAgeIdControls();
     contentStatus.textContent = error.message || 'Could not decrypt metadata in this browser.';
   }
+}
+
+async function attachMoviePosters(movies, nodeId) {
+  try {
+    const artworkBase = await arrDirectUrl();
+    if (selectedNode !== nodeId) return;
+    for (const row of moviesPanel.querySelectorAll('tr')) {
+      const id = Number(row.children[1]?.textContent);
+      const movie = movies.find(candidate => Number(candidate.tmdbId) === id);
+      const image = row.querySelector('img.poster');
+      if (!movie?.tmdbId || !movie.artworkSource || !image?.isConnected) continue;
+      image.src = `${artworkBase}/radarr/live-movies/${encodeURIComponent(movie.tmdbId)}/poster`;
+      image.addEventListener('error', () => image.remove(), { once: true });
+    }
+  } catch { /* Text rows remain useful when artwork routing is unavailable. */ }
 }
 
 document.getElementById('unlock').addEventListener('click', () => { void unlockMetadata(); });
@@ -1243,6 +1311,7 @@ document.getElementById('refresh-movies').addEventListener('click', async event 
   try {
     await unlockMetadataVaultForSettings();
     await arrDirectRequest('/metadata/artwork/rescan', { method: 'POST' });
+    localStorage.removeItem(libraryTextCacheKey(nodeId, 'movies'));
     contentStatus.textContent = `Movie metadata rescan started on ${nodeId}.`;
     await unlockMetadata();
   } catch (error) {

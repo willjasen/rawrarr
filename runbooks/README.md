@@ -26,6 +26,8 @@
 
 # Rawrarr runbooks
 
+- [Render cached Movies and TV text immediately](2026-10-22-cache-library-text-in-browser.md) — Show the last successful node-scoped library text while live records refresh and artwork loads separately.
+
 - [Fix intermittent Sonarr library timeouts](2026-10-22-fix-sonarr-library-timeout.md) — Raise the Arr upstream timeout after live Sonarr listing requests repeatedly exceeded five seconds.
 
 - [Throttle Arr metadata scraping](2026-10-22-throttle-arr-scraping.md) — Serialize Radarr and Sonarr record scraping and add a low request rate on metadata nodes.
