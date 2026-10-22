@@ -14,4 +14,8 @@ Add persistent age identities to subscriber startup and use their public recipie
 
 ## Deployment and recovery
 
-Deployment pending. Deploy only the existing `fossil` service in Compose project `rawrarr-node-internal` and `roarlay` in `rawrarr-internal-mini`, preserving `/data`, `/shared`, PostgreSQL, Tailscale state, and the user's browser windows. Verify both app health endpoints and the Mac mini Tailscale Serve route. If deployment fails, restore the prior committed source and rebuild only the affected app service under its own deployment marker.
+- Deployed commit `af90ce4` to the existing internal `roarlay` and `fossil` app containers. Coordinator source was staged under a task-specific build directory on the Mac mini; the existing `github-source` checkout was not changed. The Mac mini Docker credential-helper configuration initially prevented a build; an isolated Docker config retained its Compose plugin and context while omitting the unavailable keychain helper.
+- `roarlay` is healthy with zero restarts. Tailscale Serve read-back confirms `rawrarr.risk-mermaid.ts.net:443` `/` proxies to `http://127.0.0.1:8080`; the HTTPS health page responds and identifies Roarlay. Both new coordinator JavaScript assets return HTTP 200.
+- `fossil` is healthy with zero restarts on the image built from this commit. `/data/node-age-identity` exists with mode `600` and its existing 2084-byte content was retained through container recreation. The node recipient endpoint returns HTTP 401 without a user session, as expected for its authentication requirement.
+- Deployment locks were used for their respective services and released after verification. PostgreSQL, Tailscale state, `/data`, and `/shared` were preserved; no browser windows were changed.
+- The node card/avatar appearance was not visually verified in an authenticated browser session. Sign in to the internal UI and open Devices to confirm the owner-visible cards and generated images in the browser.
