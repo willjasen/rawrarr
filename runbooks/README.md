@@ -30,6 +30,9 @@
 
 # Rawrarr runbooks
 
+- [Verify GitHub UI refreshes](2026-10-22-ui-github-refresh-regression-test.md) — Regression coverage for GitHub release download, authenticated asset requests, installed bundle metadata, and repeat checks.
+
+
 - [Docker peer connectivity tests by node type](2026-10-22-docker-peer-connectivity-tests.md) — Capture isolated Docker test requirements for Syncthing connectivity among fossil peers and boneyard peers.
 
 - [Age-wrapped browser response session](2026-10-22-age-wrapped-browser-response-session.md) — Wrap a per-request response key to the user's age recipient so nodes encrypt browser responses end to end through the coordinator.

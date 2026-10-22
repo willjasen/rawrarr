@@ -4,6 +4,7 @@ import io
 import json
 import pathlib
 import tempfile
+import urllib.request
 import unittest
 import zipfile
 from unittest.mock import patch
@@ -46,6 +47,59 @@ class UiBundleTests(unittest.TestCase):
                 self.assertEqual(updater.update("owner/repo", token, root, True), "installed")
             self.assertEqual((root / "current" / "ui.html").read_text(), "<h1>new</h1>")
             self.assertEqual((root / "current" / "bundle.sha256").read_text().strip(), digest.decode())
+
+    def test_github_release_refresh_installs_and_recognizes_current_version(self):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            archive.writestr("coordinator.html", "<h1>GitHub release UI</h1>")
+        bundle = buffer.getvalue()
+        digest = hashlib.sha256(bundle).hexdigest()
+        release = {
+            "tag_name": "ui-abc123",
+            "target_commitish": "abc123",
+            "assets": [
+                {"name": "ui-bundle.zip", "id": 41},
+                {"name": "ui-bundle.zip.sha256", "id": 42},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as folder:
+            token_file = pathlib.Path(folder) / "github-token"
+            token_file.write_text("protected-test-token\n")
+            root = pathlib.Path(folder) / "ui"
+            requests = []
+
+            def github_fetch(url, token, *, accept="application/vnd.github+json"):
+                requests.append((url, token, accept))
+                if url == "https://api.github.com/repos/owner/repo/releases/latest":
+                    return json.dumps(release).encode()
+                if url.endswith("/assets/41"):
+                    return bundle
+                if url.endswith("/assets/42"):
+                    return f"{digest}  ui-bundle.zip\n".encode()
+                self.fail(f"unexpected GitHub API request: {url}")
+
+            with patch.object(updater, "fetch", side_effect=github_fetch):
+                self.assertEqual(updater.update("owner/repo", token_file, root, True), "installed")
+
+            self.assertEqual(
+                [request[0] for request in requests],
+                [
+                    "https://api.github.com/repos/owner/repo/releases/latest",
+                    "https://api.github.com/repos/owner/repo/releases/assets/41",
+                    "https://api.github.com/repos/owner/repo/releases/assets/42",
+                ],
+            )
+            self.assertTrue(all(request[1] == "protected-test-token" for request in requests))
+            self.assertEqual(requests[0][2], "application/vnd.github+json")
+            self.assertTrue(all(request[2] == "application/octet-stream" for request in requests[1:]))
+            self.assertEqual((root / "current" / "coordinator.html").read_text(), "<h1>GitHub release UI</h1>")
+            self.assertEqual((root / "current" / "bundle.version").read_text().strip(), "abc123")
+            self.assertEqual((root / "current" / "bundle.sha256").read_text().strip(), digest)
+
+            requests.clear()
+            with patch.object(updater, "fetch", side_effect=github_fetch):
+                self.assertEqual(updater.update("owner/repo", token_file, root, True), "current")
+            self.assertEqual(len(requests), 3)
 
     def test_rejects_bad_checksum_and_traversal(self):
         buffer = io.BytesIO()
