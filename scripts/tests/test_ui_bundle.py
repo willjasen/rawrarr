@@ -21,6 +21,12 @@ package = load("package_ui_bundle", "scripts/package_ui_bundle.py")
 updater = load("update_ui_bundle", "rust-arr/update_ui_bundle.py")
 
 class UiBundleTests(unittest.TestCase):
+    def test_ui_release_poll_interval_defaults_to_one_minute_and_has_a_floor(self):
+        self.assertEqual(updater.DEFAULT_POLL_INTERVAL_SECONDS, 60)
+        self.assertEqual(updater.poll_interval_seconds(updater.DEFAULT_POLL_INTERVAL_SECONDS), 60)
+        self.assertEqual(updater.poll_interval_seconds(1), 60)
+        self.assertEqual(updater.poll_interval_seconds(120), 120)
+
     def setUp(self):
         self.keys = tempfile.TemporaryDirectory()
         self.key_dir = pathlib.Path(self.keys.name)
