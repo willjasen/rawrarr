@@ -99,15 +99,24 @@ jobs:
       - uses: actions/checkout@v4
       - name: Package same-origin UI assets
         run: python3 scripts/package_ui_bundle.py --output "$RUNNER_TEMP/ui-bundle.zip"
+      - name: Sign UI bundle
+        env:
+          RAWARR_UI_SIGNING_KEY: ${{ secrets.RAWRARR_UI_SIGNING_KEY }}
+        run: |
+          test -n "$RAWARR_UI_SIGNING_KEY"
+          printf '%s\n' "$RAWARR_UI_SIGNING_KEY" > "$RUNNER_TEMP/ui-signing-key.pem"
+          chmod 600 "$RUNNER_TEMP/ui-signing-key.pem"
+          openssl pkeyutl -sign -rawin -inkey "$RUNNER_TEMP/ui-signing-key.pem" -in "$RUNNER_TEMP/ui-bundle.zip" -out "$RUNNER_TEMP/ui-bundle.zip.sig"
       - name: Publish rolling UI release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ui-${{ github.sha }}
           target_commitish: ${{ github.sha }}
           name: Rawrarr UI ${{ github.sha }}
-          body: Automatically published same-origin UI assets. Nodes verify the bundle checksum before installing it.
+          body: Automatically published same-origin UI assets. The coordinator verifies the publisher signature and bundle checksum before installing it.
           files: |
             ${{ runner.temp }}/ui-bundle.zip
             ${{ runner.temp }}/ui-bundle.zip.sha256
+            ${{ runner.temp }}/ui-bundle.zip.sig
           overwrite_files: true
           make_latest: true

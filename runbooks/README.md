@@ -538,3 +538,4 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Move the device delete button to the card corner](2026-10-22-device-delete-button-position.md) — Place Delete device at the bottom-right of coordinator Devices cards.
 - [Separate UI updates from node images through GitHub](2026-10-22-github-ui-distribution.md) — Publish private UI bundles through GitHub Actions and refresh node-local UI files without routine application image rebuilds.
 - [Deploy GitHub UI updates to internal nodes](2026-10-22-deploy-github-ui-to-internal-coordinator.md) — Main-only source convergence and verified coordinator/subscriber deployment.
+- [Authenticate Rawrarr UI bundle updates](2026-10-22-signed-ui-updates.md) — Verify publisher signatures before activating downloaded UI and display trusted verification state.
