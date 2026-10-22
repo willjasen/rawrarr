@@ -25,6 +25,8 @@
 
 # Rawrarr runbooks
 
+- [Deploy internal Mac mini coordinator](2026-10-22-deploy-internal-mini-coordinator.md) — Deploy an isolated coordinator project behind a dedicated Tailscale sidecar and HTTPS Serve route.
+
 - [Internal Mac mini coordinator on Tailscale](2026-10-22-internal-mini-coordinator-tailnet.md) — Point internal subscriber nodes at a Mac mini coordinator over the owner's Tailscale tailnet; record that live role migration remains separate.
 
 - [Select subscriber tailnet provider](2026-10-22-select-subscriber-tailnet.md) — Let internal deployments use an owner-controlled Tailscale tailnet while retaining the public Headscale option.

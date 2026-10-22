@@ -1,0 +1,74 @@
+# Private Mac mini coordinator with its own isolated Tailscale identity.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: rawrarr
+      POSTGRES_USER: rawrarr
+      POSTGRES_PASSWORD_FILE: /run/secrets/rawrarr_postgres_password
+    secrets:
+      - rawrarr_postgres_password
+    volumes:
+      - rawrarr-internal-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rawrarr -d rawrarr"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  tailscale:
+    image: tailscale/tailscale:stable
+    hostname: rawrarr
+    environment:
+      TS_HOSTNAME: rawrarr
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_AUTH_ONCE: "true"
+      TS_AUTHKEY: file:/run/secrets/rawrarr_tailscale_authkey
+      TS_USERSPACE: "true"
+    secrets:
+      - rawrarr_tailscale_authkey
+    volumes:
+      - rawrarr-internal-mini-tailscale-state:/var/lib/tailscale
+    ports:
+      - "127.0.0.1:${RAWARR_INTERNAL_COORDINATOR_PORT:-7298}:8080"
+    restart: unless-stopped
+
+  roarlay:
+    build:
+      context: ./rust-arr
+    image: rawrarr:internal-mini
+    environment:
+      RAWARR_ROLE: coordinator
+      RUST_ARR_LISTEN_ADDR: 0.0.0.0:8080
+      RAWARR_PG_HOST: postgres
+      RAWARR_PG_PORT: 5432
+      RAWARR_PG_USER: rawrarr
+      RAWARR_PG_DATABASE: rawrarr
+      RAWARR_PG_PASSWORD_FILE: /run/secrets/rawrarr_postgres_password
+      RAWARR_APPROVED_NODES_FILE: /run/secrets/rawrarr_approved_nodes
+      RAWARR_COORDINATOR_WEB_RP_ID: ${RAWARR_COORDINATOR_WEB_RP_ID:-risk-mermaid.ts.net}
+      RAWARR_COORDINATOR_WEB_ORIGIN: ${RAWARR_COORDINATOR_WEB_ORIGIN:-https://rawrarr.risk-mermaid.ts.net}
+      RAWARR_NODE_RELAY_TARGETS: "{}"
+    secrets:
+      - rawrarr_postgres_password
+      - rawrarr_approved_nodes
+    network_mode: service:tailscale
+    depends_on:
+      postgres:
+        condition: service_healthy
+      tailscale:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  rawrarr-internal-postgres-data:
+  rawrarr-internal-mini-tailscale-state:
+
+secrets:
+  rawrarr_tailscale_authkey:
+    file: ${RAWARR_TAILSCALE_AUTHKEY_PATH:?Set RAWARR_TAILSCALE_AUTHKEY_PATH to the protected Tailscale auth-key file}
+  rawrarr_postgres_password:
+    file: ${RAWARR_POSTGRES_PASSWORD_FILE:?Set RAWARR_POSTGRES_PASSWORD_FILE to a protected password file}
+  rawrarr_approved_nodes:
+    file: ${RAWARR_APPROVED_NODES_PATH:?Set RAWARR_APPROVED_NODES_PATH to the protected approved-node registry}
