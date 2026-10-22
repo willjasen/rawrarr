@@ -1353,6 +1353,32 @@ async function loadNodes() {
       detail.className = 'device-detail';
       detail.textContent = `${roleLabel(node.role)}${node.online ? '' : ' · last seen earlier'}`;
       card.append(heading, detail);
+      const deleteButton = document.createElement('button');
+      deleteButton.type = 'button';
+      deleteButton.className = 'device-delete-button';
+      deleteButton.textContent = 'Delete device';
+      deleteButton.setAttribute('aria-label', `Delete ${deviceNames[node.nodeId] || node.displayName || node.nodeId}`);
+      deleteButton.addEventListener('click', async event => {
+        event.stopPropagation();
+        const displayName = deviceNames[node.nodeId] || node.displayName || node.nodeId;
+        if (!window.confirm(`Remove ${displayName} from Rawrarr? This revokes coordinator access but does not delete data on the device.`)) return;
+        deleteButton.disabled = true;
+        try {
+          await jsonRequest(`/api/workspace/nodes/${encodeURIComponent(node.nodeId)}`, { method: 'DELETE' });
+          if (selectedNode === node.nodeId) {
+            selectedNode = null;
+            selectedNodeDetails = null;
+            selectedRoute = null;
+            contentPanel.hidden = true;
+          }
+          delete deviceNames[node.nodeId];
+          await loadNodes();
+        } catch (error) {
+          deleteButton.disabled = false;
+          status.textContent = error.message || 'Could not delete this device.';
+        }
+      });
+      card.append(deleteButton);
       const syncHealth = document.createElement('small');
       syncHealth.className = 'device-detail device-sync-health';
       const setSyncHealth = parts => {
@@ -1591,7 +1617,26 @@ async function loadPending() {
           status.textContent = error.message || 'Could not approve this node.';
         }
       });
-      item.append(label, approve);
+      const reject = document.createElement('button');
+      reject.type = 'button';
+      reject.className = 'reject-button';
+      reject.textContent = 'Reject';
+      reject.addEventListener('click', async () => {
+        approve.disabled = true;
+        reject.disabled = true;
+        try {
+          await jsonRequest('/api/workspace/reject', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: node.requestId }) });
+          await loadPending();
+        } catch (error) {
+          approve.disabled = false;
+          reject.disabled = false;
+          status.textContent = error.message || 'Could not reject this node request.';
+        }
+      });
+      const actions = document.createElement('div');
+      actions.className = 'pending-actions';
+      actions.append(approve, reject);
+      item.append(label, actions);
       pendingPanel.append(item);
     }
   } catch (_) {

@@ -61,6 +61,25 @@ test('the coordinator assigns enrollment to the signed-in account and filters ap
   assert.match(coordinator, /rawrarr_nodes\(id, role, token_sha256, origin, rp_id, user_id\)/);
 });
 
+test('reject removes only an owner-scoped pending request without approving it', () => {
+  assert.match(coordinator, /\.route\("\/api\/workspace\/reject", post\(reject_node\)\)/);
+  assert.match(coordinator, /DELETE FROM rawrarr_node_enrollments WHERE request_id=\$1 AND user_id=\$2 AND approved_at IS NULL/);
+  assert.match(coordinatorWorkspace, /reject\.textContent = 'Reject'/);
+  assert.match(coordinatorWorkspace, /jsonRequest\('\/api\/workspace\/reject', \{ method: 'POST'/);
+  assert.match(coordinatorWorkspace, /pending-actions/);
+});
+
+test('delete revokes an owner device, clears sessions, and survives startup registry loading', () => {
+  assert.match(coordinator, /\.route\("\/api\/workspace\/nodes\/\{node_id\}", delete\(delete_workspace_node\)\)/);
+  assert.match(coordinator, /DELETE FROM rawrarr_nodes WHERE id=\$1 AND user_id=\$2 RETURNING token_sha256/);
+  assert.match(coordinator, /DELETE FROM rawrarr_sessions WHERE node_id=\$1/);
+  assert.match(coordinator, /state\.approved\.write\(\)\.await\.retain\(\|entry\| entry\.auth\.node_id != node_id\)/);
+  assert.match(coordinator, /SELECT EXISTS\(SELECT 1 FROM rawrarr_revoked_nodes WHERE node_id=\$1 AND token_sha256=\$2\)/);
+  assert.match(coordinatorWorkspace, /textContent = 'Delete device'/);
+  assert.match(coordinatorWorkspace, /method: 'DELETE'/);
+  assert.match(coordinatorWorkspace, /does not delete data on the device/);
+});
+
 test('metadata enrollment pass-through preserves only a new node bearer token', async () => {
   const auth = await readFile(new URL('../../rust-arr/src/node_auth.rs', import.meta.url), 'utf8');
   assert.match(auth, /matches!\(path, "\/api\/nodes\/enroll" \| "\/api\/nodes\/enroll\/status"\)/);

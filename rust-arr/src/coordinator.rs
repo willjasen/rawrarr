@@ -7,7 +7,7 @@ use axum::{
     http::{HeaderMap, HeaderValue, Method, StatusCode, header},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{any, get, post},
+    routing::{any, delete, get, post},
 };
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -128,6 +128,11 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
             return Err("invalid or duplicate approved node".into());
         }
         let origin = validate_origin(&node.rp_id, &node.origin)?;
+        let revoked = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM rawrarr_revoked_nodes WHERE node_id=$1 AND token_sha256=$2)")
+            .bind(&node.id).bind(node.token_sha256.to_lowercase()).fetch_one(&pool).await?;
+        if revoked {
+            continue;
+        }
         sqlx::query("INSERT INTO rawrarr_nodes(id, role, token_sha256, origin, rp_id) VALUES ($1, $2, $3, $4, $5) ON CONFLICT(id) DO UPDATE SET token_sha256 = COALESCE(rawrarr_nodes.token_sha256, EXCLUDED.token_sha256), origin = COALESCE(rawrarr_nodes.origin, EXCLUDED.origin), rp_id = COALESCE(rawrarr_nodes.rp_id, EXCLUDED.rp_id) WHERE rawrarr_nodes.role = EXCLUDED.role")
             .bind(&node.id).bind(role_name(node.role)).bind(node.token_sha256.to_lowercase()).bind(node.origin).bind(node.rp_id)
             .execute(&pool).await?;
@@ -270,12 +275,14 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/api/auth/session", get(session))
         .route("/api/auth/logout", post(logout))
         .route("/api/workspace/nodes", get(workspace_nodes))
+        .route("/api/workspace/nodes/{node_id}", delete(delete_workspace_node))
         .route("/api/workspace/profile", get(workspace_profile))
         .route("/api/workspace/profile-picture/{seed}/jxl", get(workspace_profile_picture_jxl))
         .route("/api/workspace/profile-picture/{seed}/png", get(workspace_profile_picture_png))
         .route("/api/workspace/direct-session", post(direct_session))
         .route("/api/workspace/pending", get(pending_nodes))
         .route("/api/workspace/approve", post(approve_node))
+        .route("/api/workspace/reject", post(reject_node))
         .layer(middleware::from_fn_with_state(
             state.coordinator_auth.clone(),
             coordinator_auth_context,
@@ -615,6 +622,69 @@ async fn approve_node(
         },
     });
     StatusCode::NO_CONTENT.into_response()
+}
+
+async fn reject_node(
+    State(state): State<CoordinatorState>,
+    Extension(auth): Extension<AuthState>,
+    headers: HeaderMap,
+    Json(request): Json<ApproveRequest>,
+) -> StatusCode {
+    let Some(owner_user_id) = crate::auth::authenticated_user_id(&auth, &headers).await else {
+        return StatusCode::UNAUTHORIZED;
+    };
+    match sqlx::query("DELETE FROM rawrarr_node_enrollments WHERE request_id=$1 AND user_id=$2 AND approved_at IS NULL")
+        .bind(request.request_id).bind(owner_user_id).execute(&state.pool).await
+    {
+        Ok(result) if result.rows_affected() == 1 => StatusCode::NO_CONTENT,
+        Ok(_) => StatusCode::NOT_FOUND,
+        Err(_) => StatusCode::SERVICE_UNAVAILABLE,
+    }
+}
+
+async fn delete_workspace_node(
+    State(state): State<CoordinatorState>,
+    Extension(auth): Extension<AuthState>,
+    headers: HeaderMap,
+    Path(node_id): Path<String>,
+) -> StatusCode {
+    let Some(owner_user_id) = crate::auth::authenticated_user_id(&auth, &headers).await else {
+        return StatusCode::UNAUTHORIZED;
+    };
+    let mut tx = match state.pool.begin().await {
+        Ok(tx) => tx,
+        Err(_) => return StatusCode::SERVICE_UNAVAILABLE,
+    };
+    let node = match sqlx::query("DELETE FROM rawrarr_nodes WHERE id=$1 AND user_id=$2 RETURNING token_sha256")
+        .bind(&node_id).bind(owner_user_id).fetch_optional(&mut *tx).await
+    {
+        Ok(Some(row)) => row,
+        Ok(None) => return StatusCode::NOT_FOUND,
+        Err(_) => return StatusCode::SERVICE_UNAVAILABLE,
+    };
+    let token_sha256: Option<String> = match node.try_get("token_sha256") {
+        Ok(value) => value,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    if let Some(token_sha256) = token_sha256 {
+        if sqlx::query("INSERT INTO rawrarr_revoked_nodes(node_id, token_sha256) VALUES ($1,$2) ON CONFLICT(node_id) DO UPDATE SET token_sha256=EXCLUDED.token_sha256, revoked_at=now()")
+            .bind(&node_id).bind(token_sha256).execute(&mut *tx).await.is_err()
+        {
+            return StatusCode::SERVICE_UNAVAILABLE;
+        }
+    }
+    if sqlx::query("DELETE FROM rawrarr_sessions WHERE node_id=$1")
+        .bind(&node_id).execute(&mut *tx).await.is_err()
+        || sqlx::query("DELETE FROM rawrarr_node_enrollments WHERE node_id=$1 AND user_id=$2")
+            .bind(&node_id).bind(owner_user_id).execute(&mut *tx).await.is_err()
+    {
+        return StatusCode::SERVICE_UNAVAILABLE;
+    }
+    if tx.commit().await.is_err() {
+        return StatusCode::SERVICE_UNAVAILABLE;
+    }
+    state.approved.write().await.retain(|entry| entry.auth.node_id != node_id);
+    StatusCode::NO_CONTENT
 }
 
 async fn session(Extension(auth): Extension<AuthState>, headers: HeaderMap) -> StatusCode {
