@@ -52,8 +52,8 @@ test('first-account subscriber setup gates node choices behind age and root back
   await page.locator('#root-step').waitFor({ state: 'visible' });
   await page.locator('#age-step').waitForFunction(el => el.classList.contains('completed'));
   assert.equal(await page.locator('#age-step h2').isVisible(), false, 'completed age step collapses');
-  await page.getByRole('button', { name: 'Create encrypted root backup' }).click();
-  await page.locator('#root-fingerprint').getByText(/Root fingerprint:/).waitFor();
+  await page.getByRole('button', { name: 'Create encrypted user signing-key backup' }).click();
+  await page.locator('#root-fingerprint').getByText(/User signing-key fingerprint:/).waitFor();
   assert.equal(await page.locator('#deploy-step').isVisible(), false);
   await page.getByRole('button', { name: 'Copy encrypted backup' }).click();
   const backup = await page.evaluate(() => navigator.clipboard.readText());

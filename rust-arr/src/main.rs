@@ -2131,6 +2131,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     secure_config::AgeVault::ensure_node_identity()?;
+    secure_config::AgeVault::ensure_node_signing_key()?;
     if arguments == ["storage-scan-once"] {
         let device_id = devices::load_or_create_device_id()?;
         let logger =
