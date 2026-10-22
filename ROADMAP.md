@@ -8,8 +8,13 @@ This document is the single index of what the repository has completed and what 
 2. **Build a durable cross-node catalog.** Owner-approved node enrollment, heartbeats, selected-node pages, direct routes, and scan commands exist. Add persistent library/device records, scan generations, stale/offline inventory, and reconciliation without moving media bytes through roarlay.
 3. **Finish export beyond movies.** Settings can export all indexed movie text and matching available artwork in a browser-built ZIP. Add other metadata classes, cancellation, bounded streaming, and explicit partial-failure reporting before calling it a complete archive.
 4. **Verify the intended public reverse-proxy route.** The local Tailscale HTTPS route is distinct from the planned Cloudflare/public route. Test `/api/events` streaming, reconnects, buffering, and timeouts through the exact public proxy configuration.
+1. **Recreate deferred private-access and node-coordination work from the retained plans.** The previously local browser-access, account-tailnet, coordinator-migration, and node-RPC implementation branches were removed after explicit owner authorization; those code changes are not on GitHub `main`. Use the [local work cleanup plan](docs/local-work-cleanup-plan.md) to understand the intended scope and overlap before starting fresh issue-scoped work. The [cleanup runbook](runbooks/2026-10-22-cleanup-deferred-local-work.md) records what was removed. Two unrelated stashes remain unreviewed.
+2. **Verify an unattended storage scan.** Source and the standalone storage Compose file schedule a bounded scan after the first 24-hour interval, or at an owner-configured interval. The [manual Mini scan](runbooks/2026-10-18-clarify-storage-scan-action.md) completed and synced three encrypted sidecars, and the [later container update](runbooks/2026-10-18-update-mac-mini-containers.md) rebuilt storage. A scheduled run on that image has not yet been observed.
+3. **Build a durable cross-node catalog.** Owner-approved node enrollment, heartbeats, selected-node pages, direct routes, and scan commands exist. Add persistent library/device records, scan generations, stale/offline inventory, and reconciliation without moving media bytes through roarlay.
+4. **Finish export beyond movies.** Settings can export all indexed movie text and matching available artwork in a browser-built ZIP. Add other metadata classes, cancellation, bounded streaming, and explicit partial-failure reporting before calling it a complete archive.
+5. **Verify the intended public reverse-proxy route.** The local Tailscale HTTPS route is distinct from the planned Cloudflare/public route. Test `/api/events` streaming, reconnects, buffering, and timeouts through the exact public proxy configuration.
 
-This sequence verifies deployed storage behavior, then addresses the missing catalog and export durability. Revisit it if product priorities change.
+This sequence first protects and resolves the local integration backlog, then verifies deployed storage behavior and addresses catalog and export durability. Revisit it if product priorities change.
 
 5. **Evolve profile dinosaur generations through visual comparison.** Keep the public-age-recipient digest as the stable identity seed. Build named renderer generations and a fixed-seed preview that compares controlled mutations in dinosaur anatomy, pose, palette, lighting, texture, framing, and prehistoric backgrounds. Use human-selected improvements as the parent for later generations; promote a generation only after visual review at sidebar and profile sizes. The current style direction is premium 3D with cinematic violet-blue lighting and varied prehistoric trees. See [avatar generation comparison](runbooks/2026-10-21-version-avatar-generations.md).
 
@@ -55,6 +60,7 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 - Cloudflare/reverse-proxy support for the intended public hostname, including verified SSE streaming behavior.
 - Productionize the existing local Tailscale sidecars and tailnet-scoped routes while keeping transport separate from Rawrarr authorization and age-key access.
 - Operator service node running SwarmSail/Headscale account coordination, with a one-time, revocable node claim flow.
+- **Provision account-bound subscriber tailnets.** Define eligibility, isolation, naming, client-key lifecycle, and revocation, then provision one private Headscale tailnet per eligible Rawrarr account with verified least-privilege ACLs. See the [account tailnet provisioning plan](docs/account-tailnet-provisioning-plan.md); implementation remains future work.
 - Provision a restrictive ACL with every Swarmsail-managed Headscale tailnet: allow nodes on that tailnet to communicate with one another only on TCP 443 and TCP 22000 (Syncthing), deny other traffic by default, and do not report provisioning complete until the ACL is applied and verified.
 - Integrate one shared CrowdSec engine with SwarmSail-provisioned Headscale instances: register each instance's security logs when provisioned and remove the source when retired, then apply remediation at the serving ingress with decisions scoped to avoid unintended cross-user blocking.
 - Blind relay and portal for reaching subscriber nodes through outbound tunnels. The subscriber node must retain application authentication and TLS termination; the relay must not decrypt or store subscriber app data or proxy media.
@@ -81,6 +87,7 @@ This sequence verifies deployed storage behavior, then addresses the missing cat
 
 ## Related documentation
 
+- [Local work cleanup and integration plan](docs/local-work-cleanup-plan.md) — current remaining local branches, overlap groups, preserved dirty work, and safe integration/cleanup acceptance criteria.
 - [Device and service architecture](docs/device-architecture.md) — current local prototype boundaries and target node model.
 - [Product direction](docs/product-direction.md) — long-term product goals and trust boundaries.
 - [Product and interface design](docs/DESIGN.md) — user-facing principles and flows.
