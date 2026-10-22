@@ -509,6 +509,10 @@ async fn approve_node(
         Ok(v) => v,
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
+    let display_name: String = match row.try_get("display_name") {
+        Ok(v) => v,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
     let origin_text: String = match row.try_get("origin") {
         Ok(v) => v,
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
@@ -525,6 +529,58 @@ async fn approve_node(
         Ok(value) if value == owner_user_id => value,
         _ => return StatusCode::NOT_FOUND.into_response(),
     };
+    // A subscriber may retain a token from an earlier node ID while its
+    // Compose configuration is regenerated. In that case the credential is
+    // already loaded for its original identity; approving this request should
+    // refresh that identity's public name rather than collide with the unique
+    // token index and leave the button appearing inert.
+    let existing = sqlx::query("SELECT id, role, user_id FROM rawrarr_nodes WHERE token_sha256=$1")
+        .bind(&token_sha256)
+        .fetch_optional(&mut *tx)
+        .await;
+    let existing = match existing {
+        Ok(existing) => existing,
+        Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+    };
+    if let Some(existing) = existing {
+        let existing_role: String = match existing.try_get("role") {
+            Ok(value) => value,
+            Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        };
+        let existing_user_id: Uuid = match existing.try_get("user_id") {
+            Ok(value) => value,
+            Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        };
+        if existing_role != role_name(role) || existing_user_id != owner_user_id {
+            return StatusCode::CONFLICT.into_response();
+        }
+        let existing_node_id: String = match existing.try_get("id") {
+            Ok(value) => value,
+            Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        };
+        if sqlx::query("UPDATE rawrarr_node_enrollments SET display_name=$2 WHERE node_id=$1 AND user_id=$3 AND approved_at IS NOT NULL")
+            .bind(existing_node_id)
+            .bind(display_name)
+            .bind(owner_user_id)
+            .execute(&mut *tx)
+            .await
+            .is_err()
+        {
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
+        if sqlx::query("UPDATE rawrarr_node_enrollments SET approved_at=now() WHERE request_id=$1")
+            .bind(request.request_id)
+            .execute(&mut *tx)
+            .await
+            .is_err()
+        {
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
+        return match tx.commit().await {
+            Ok(()) => StatusCode::NO_CONTENT.into_response(),
+            Err(_) => StatusCode::SERVICE_UNAVAILABLE.into_response(),
+        };
+    }
     let inserted = sqlx::query("INSERT INTO rawrarr_nodes(id, role, token_sha256, origin, rp_id, user_id) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT(id) DO NOTHING")
         .bind(&node_id).bind(role_name(role)).bind(&token_sha256).bind(&origin_text).bind(&rp_id).bind(row_owner_user_id).execute(&mut *tx).await;
     if !matches!(inserted, Ok(ref result) if result.rows_affected() == 1) {
@@ -597,7 +653,7 @@ async fn logout(
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Registration {
     role: NodeRole,
     #[serde(default)]

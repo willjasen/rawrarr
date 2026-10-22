@@ -47,6 +47,10 @@ test('approved node registration synchronizes its configured name without breaki
   assert.match(coordinator, /display_name: Option<String>/);
   assert.match(coordinator, /UPDATE rawrarr_node_enrollments SET display_name=\$2 WHERE node_id=\$1 AND approved_at IS NOT NULL/);
   assert.match(coordinator, /#\[serde\(default\)\][\s\S]*display_name: Option<String>/);
+  assert.match(coordinator, /#\[serde\(rename_all = "camelCase", deny_unknown_fields\)\][\s\S]*struct Registration/);
+  assert.match(coordinator, /SELECT id, role, user_id FROM rawrarr_nodes WHERE token_sha256=\$1/);
+  assert.match(coordinator, /already loaded for its original identity/);
+  assert.match(coordinator, /SET display_name=\$2 WHERE node_id=\$1 AND user_id=\$3 AND approved_at IS NOT NULL/);
 });
 
 test('the coordinator assigns enrollment to the signed-in account and filters approvals by owner', () => {

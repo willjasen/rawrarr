@@ -25,6 +25,8 @@
 
 # Rawrarr runbooks
 
+- [Fix node approval when a token is already enrolled](2026-10-22-fix-node-approval-reuse.md) — Let an owner approve a regenerated subscriber request that reuses its existing credential, and accept camelCase registration names.
+
 - [Highlight pending node approvals](2026-10-21-highlight-pending-node-approvals.md) — Place pending node approvals at the top of Devices and highlight the section when action is needed.
 
 - [Name subscriber devices before Compose generation](2026-10-21-subscriber-device-name-and-local-route.md) — Set an owner-chosen node name in subscriber Compose and route same-host browsers directly to the approved node.
