@@ -1,3 +1,5 @@
+- [Deploy persistent node age identity](2026-10-22-deploy-node-age-identity.md) — Deploy the committed subscriber-only identity creation to internal fossil and verify persistence and health.
+
 - [Deploy main to the internal Mac services](2026-10-22-deploy-main-to-internal-macs.md) — Update the Mac mini roarlay coordinator and MacBook fossil end-user node from one committed main revision.
 - [Version avatar generations](2026-10-21-version-avatar-generations.md) — Keep avatar identity stable while creating renderer generations that can be compared visually over time.
 - [Serve the OrbStack coordinator on the existing tailnet](2026-10-21-orbstack-coordinator-tailnet-url.md) — Give the isolated coordinator its own operator-tailnet identity and HTTPS Serve route, separate from test Headscale nodes.
