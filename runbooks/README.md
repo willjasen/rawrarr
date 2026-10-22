@@ -30,6 +30,9 @@
 
 # Rawrarr runbooks
 
+- [Skip GitHub Actions for Markdown-only changes](2026-10-22-skip-actions-markdown-only.md) — Skip push and pull-request runs when changes contain only Markdown files.
+
+
 - [Test and deploy GitHub main in OrbStack](2026-10-22-test-deploy-main-orbstack.md) — Run the regression and Playwright suites against clean GitHub `main`, then deploy code-affected internal services and verify their routes.
 
 - [Check GitHub UI releases every minute](2026-10-22-ui-updater-one-minute-poll.md) — Reduce coordinator and node UI bundle detection from five minutes to one minute, with a 60-second minimum.
