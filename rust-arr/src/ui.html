@@ -111,7 +111,10 @@
     .about-copy { padding: 20px; color: #b5c0b7; font-size: 12px; line-height: 1.75; }
     .about-copy p { margin: 0 0 14px; }
     .about-copy p:last-child { margin-bottom: 0; }
-    .pending-approvals { border-top: 1px solid var(--line); padding: 14px 18px 4px; }
+    .pending-approvals { margin: 12px 14px 0; border: 1px solid transparent; border-radius: 10px; padding: 12px; transition: background-color .2s ease, border-color .2s ease; }
+    .pending-approvals.has-pending { border-color: #77613a; background: linear-gradient(110deg, #30291d, #25231c 72%, #22231d); }
+    .pending-approvals-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0; font-size: 12px; }
+    .pending-approvals-badge { border: 1px solid #77613a; border-radius: 999px; background: #3a3020; color: #f3d18c; padding: 4px 8px; font-size: 9px; font-weight: 650; white-space: nowrap; }
     .approval-button { margin-top: 9px; border: 1px solid #536c3e; border-radius: 6px; background: #23301f; color: #d9f7c4; padding: 7px 10px; font: inherit; cursor: pointer; }
     .approval-button:disabled { opacity: .55; cursor: wait; }
     .artwork-backfill { padding: 12px 18px; border-bottom: 1px solid var(--line); }
@@ -161,12 +164,12 @@
         </article>
         <article class="panel">
           <div class="panel-head"><h2>Devices</h2><span id="device-count">—</span></div>
-          <div id="device-list" class="device-list"><div class="device-meta">Loading nodes…</div></div>
           <section class="pending-approvals" aria-labelledby="pending-approvals-heading">
-            <h3 id="pending-approvals-heading">Pending node approvals</h3>
+            <h3 id="pending-approvals-heading" class="pending-approvals-heading">Pending node approvals <span id="pending-approvals-badge" class="pending-approvals-badge" hidden>Needs review</span></h3>
             <p class="device-meta">New nodes are associated with your signed-in account by roarlay. A joining node cannot select its owner.</p>
             <div id="pending-node-list" class="device-meta" role="status" aria-live="polite">Checking for new nodes…</div>
           </section>
+          <div id="device-list" class="device-list"><div class="device-meta">Loading nodes…</div></div>
           <form id="syncthing-share" class="settings-form" style="border-top:1px solid var(--line)">
             <h3 style="margin:0">Share metadata with a boneyard node</h3>
             <p class="setup-intro">Configure a local Syncthing API in the web container, then enter the boneyard node API and peer addresses reachable on port 22000. Use HTTPS or a trusted private network for the remote API. The key is used for this request and is not saved.</p>
@@ -591,6 +594,10 @@
         const response = await fetch('/api/nodes/pending', { headers: { Accept: 'application/json' }, cache: 'no-store' });
         if (!response.ok) throw new Error('Could not check for pending nodes.');
         const nodes = await response.json();
+        const approvalsSection = document.querySelector('.pending-approvals');
+        const approvalBadge = document.getElementById('pending-approvals-badge');
+        approvalsSection.classList.toggle('has-pending', nodes.length > 0);
+        approvalBadge.hidden = nodes.length === 0;
         list.replaceChildren();
         if (nodes.length === 0) {
           list.textContent = 'No nodes are waiting for approval.';

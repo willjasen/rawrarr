@@ -3,12 +3,19 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
 const ui = await readFile(new URL('../../rust-arr/src/ui.html', import.meta.url), 'utf8');
+const coordinatorUi = await readFile(new URL('../../rust-arr/src/coordinator_workspace.html', import.meta.url), 'utf8');
+const coordinatorWorkspace = await readFile(new URL('../../rust-arr/src/coordinator-workspace.mjs', import.meta.url), 'utf8');
 const main = await readFile(new URL('../../rust-arr/src/main.rs', import.meta.url), 'utf8');
 const coordinator = await readFile(new URL('../../rust-arr/src/coordinator.rs', import.meta.url), 'utf8');
 
 test('signed-in workspace displays and refreshes pending node approvals', () => {
   assert.match(ui, /Pending node approvals/);
   assert.match(ui, /id="pending-node-list"/);
+  assert.ok(ui.indexOf('class="pending-approvals"') < ui.indexOf('id="device-list"'), 'pending approvals should appear before connected nodes');
+  assert.match(ui, /\.pending-approvals\.has-pending\s*\{[^}]*background:/);
+  assert.match(ui, /id="pending-approvals-badge"[^>]*hidden>Needs review/);
+  assert.match(ui, /approvalsSection\.classList\.toggle\('has-pending', nodes\.length > 0\)/);
+  assert.match(ui, /approvalBadge\.hidden = nodes\.length === 0/);
   assert.match(ui, /fetch\('\/api\/nodes\/pending'/);
   assert.match(ui, /setInterval\(loadPendingNodes, 10000\)/);
   assert.match(ui, /New nodes are associated with your signed-in account by roarlay/);
@@ -19,6 +26,13 @@ test('signed-in workspace displays and refreshes pending node approvals', () => 
   assert.match(main, /\.route\("\/api\/nodes\/approve", post\(node_auth::proxy\)\)/);
   assert.match(main, /\.route\("\/api\/nodes\/enroll", post\(node_auth::enrollment_proxy\)\)/);
   assert.match(main, /"\/api\/nodes\/enroll\/status",\s*post\(node_auth::enrollment_proxy\)/);
+});
+
+test('coordinator workspace puts pending approvals first and highlights action needed', () => {
+  assert.ok(coordinatorUi.indexOf('id="pending"') < coordinatorUi.indexOf('id="status"'), 'pending approvals should appear before connected nodes');
+  assert.match(coordinatorUi, /#pending\.has-pending\s*\{[^}]*background:/);
+  assert.match(coordinatorWorkspace, /pendingPanel\.classList\.toggle\('has-pending', pending\.length > 0\)/);
+  assert.match(coordinatorWorkspace, /badge\.textContent = 'Needs review'/);
 });
 
 test('the coordinator assigns enrollment to the signed-in account and filters approvals by owner', () => {

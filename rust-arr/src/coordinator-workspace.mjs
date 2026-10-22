@@ -1560,11 +1560,18 @@ async function loadPending() {
   try {
     const pending = await jsonRequest('/api/workspace/pending');
     pendingPanel.hidden = pending.length === 0;
+    pendingPanel.classList.toggle('has-pending', pending.length > 0);
     pendingPanel.replaceChildren();
     if (!pending.length) return;
+    const heading = document.createElement('div');
+    heading.className = 'pending-heading';
     const title = document.createElement('strong');
     title.textContent = 'Nodes waiting for approval';
-    pendingPanel.append(title);
+    const badge = document.createElement('span');
+    badge.className = 'pending-badge';
+    badge.textContent = 'Needs review';
+    heading.append(title, badge);
+    pendingPanel.append(heading);
     for (const node of pending) {
       const item = document.createElement('div');
       item.className = 'pending-item';

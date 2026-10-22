@@ -77,8 +77,11 @@
     .node-state.relay .node-state-indicator { border-color:#78b8ec; background:#528fc0; box-shadow:0 0 0 3px #528fc040 }
     .node-state.relay .node-state-label { color:#a9d3f3 }
     .node small { display:block; color:var(--muted); margin-top:3px }
-    #pending { margin:12px 0; padding:12px; border:1px solid var(--line); border-radius:10px; background:var(--panel) }
+    #pending { margin:12px 0; padding:14px 16px; border:1px solid transparent; border-radius:10px; background:var(--panel) }
+    #pending.has-pending { border-color:#77613a; background:linear-gradient(110deg,#30291d,#25231c 72%,#22231d) }
     #pending[hidden] { display:none }
+    .pending-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:15px }
+    .pending-badge { border:1px solid #77613a; border-radius:999px; background:#3a3020; color:#f3d18c; padding:4px 9px; font-size:11px; font-weight:650; white-space:nowrap }
     .pending-item { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid var(--line) }
     .pending-item:last-child { border-bottom:0 }
     #content { margin-top:16px; padding:16px; background:var(--panel); border:1px solid var(--line); border-radius:12px }
@@ -192,6 +195,7 @@
       </div>
     </section>
     <section id="devices-view" hidden><h1 class="page-title">Devices</h1>
+    <section id="pending" aria-label="Nodes waiting for approval" hidden></section>
     <div id="status" role="status" aria-live="polite">Loading your connected nodes…</div>
     <section id="nodes" aria-label="Connected nodes"></section>
     <section id="device-topology" class="topology-section" aria-labelledby="device-topology-title">
@@ -200,7 +204,6 @@
       <div id="device-topology-content"></div>
     </section>
     <p id="device-name-status" role="status" aria-live="polite"></p>
-    <section id="pending" aria-label="Nodes waiting for approval" hidden></section>
     </section>
     <section id="movies-view" hidden><h1 class="page-title">Movies</h1>
     <article id="radarr-connection-card" class="connection-card" aria-labelledby="radarr-connection-title" hidden>
