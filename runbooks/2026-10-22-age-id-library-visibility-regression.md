@@ -14,14 +14,15 @@ GitHub issue search and creation were attempted for `willjasen/rawrarr` but the 
 
 ## Actions
 
-- Gate cached TV library rendering on an age ID already loaded in browser memory.
-- Add a regression assertion covering the Movies unlock guard and both page entry paths.
+- Gate cached Movies and TV library rendering and TV refresh loading on an age ID already loaded in browser memory.
+- Add source-level and Playwright regression coverage using seeded private cache entries without an age ID.
 
 ## Verification
 
-- Focused regression test passed: `node --test --test-name-pattern='Movies and TV cached library data stays hidden' scripts/tests/test_rawrarr_coordinator_workspace.mjs` (1 pass).
+- Focused source regression passed: `node --test --test-name-pattern='Movies and TV cached library data stays hidden' scripts/tests/test_rawrarr_coordinator_workspace.mjs` (1 pass).
+- Focused Chromium Playwright regression passed in the isolated `rawrarr-testing-base:local` container: `node --experimental-global-webcrypto --test --test-name-pattern='Movies and TV do not display cached library data without an age ID' scripts/tests/test_rawrarr_coordinator_sonarr_settings.mjs` (1 pass). The test seeds distinct Movies and TV cache entries, confirms the age ID is absent, and verifies neither page displays its fixture.
 - `git diff --check` passed.
-- The complete coordinator workspace test file was attempted and has seven unrelated pre-existing failures because this detached base commit predates the current coordinator workspace contracts; the new regression assertion passed in that run.
+- The complete coordinator workspace test file was attempted earlier and had seven unrelated failures because this detached base commit predates the current coordinator workspace contracts; the new source assertion passed in that run.
 
 ## Recovery
 

@@ -1102,6 +1102,12 @@ async function loadOverviewMetadata() {
 
 let sonarrLoadGeneration = 0;
 async function loadSonarrSeries() {
+  if (!ageIdentityInMemory) {
+    const message = document.getElementById('series-message');
+    message.hidden = false;
+    message.textContent = 'Enter your age private ID to unlock the TV library in this browser.';
+    return;
+  }
   const button = document.getElementById('refresh-series');
   if (button.disabled) return;
   button.disabled = true;
@@ -1266,6 +1272,7 @@ function renderMovies(movies) {
 }
 
 function renderCachedMovies(nodeId) {
+  if (!ageIdentityInMemory) return false;
   const cached = readLibraryTextCache(nodeId, 'movies');
   if (!cached) return false;
   renderMovies(cached.map(movie => ({ ...movie, posterUrl: null })));
