@@ -36,6 +36,8 @@ test('first-account subscriber setup gates node choices behind age and root back
   await page.getByRole('button', { name: 'Use imported ID' }).click();
   await page.locator('#age-recipient').getByText(/^Public recipient:/).waitFor();
   await page.locator('#root-step').waitFor({ state: 'visible' });
+  await page.locator('#age-step').waitForFunction(el => el.classList.contains('completed'));
+  assert.equal(await page.locator('#age-step h2').isVisible(), false, 'completed age step collapses');
   await page.getByRole('button', { name: 'Create encrypted root backup' }).click();
   await page.locator('#root-fingerprint').getByText(/Root fingerprint:/).waitFor();
   assert.equal(await page.locator('#deploy-step').isVisible(), false);
@@ -47,6 +49,8 @@ test('first-account subscriber setup gates node choices behind age and root back
   await page.getByRole('button', { name: 'Verify imported backup' }).click();
   await page.locator('#root-fingerprint').getByText(/Verified root fingerprint:/).waitFor();
   await page.locator('#deploy-step').waitFor({ state: 'visible' });
+  await page.locator('#root-step').waitForFunction(el => el.classList.contains('completed'));
+  assert.equal(await page.locator('#root-step h2').isVisible(), false, 'completed root step collapses');
   assert.deepEqual(await page.locator('#node-role option').allTextContents(), ['Fossil (metadata)', 'Boneyard (storage)']);
   assert.equal(await page.locator('#device-name').inputValue(), 'My fossil node');
   await page.locator('#node-role').selectOption('storage');
@@ -64,6 +68,11 @@ test('first-account subscriber setup gates node choices behind age and root back
   await page.locator('#network-mode').selectOption('internal-tailscale');
   await page.locator('#prepare-compose').click();
   assert.equal(await page.locator('#compose-preview').isVisible(), true);
+  await page.getByRole('button', { name: 'Copy compose.yml to clipboard' }).click();
+  assert.match(await page.evaluate(() => navigator.clipboard.readText()), /services:/);
+  await page.getByRole('button', { name: 'Mark section complete' }).click();
+  assert.equal(await page.locator('#deploy-step h2').isVisible(), false, 'completed deployment section collapses');
+  assert.match(await page.locator('#deploy-summary').innerText(), /MacBook fossil/);
   assert.equal((await page.locator('#compose-preview').innerText()).includes('tskey-auth-example-secret'), false);
   assert.match(await page.locator('#compose-preview').innerText(), /RAWARR_COORDINATOR_URL: "https:\/\/rawrarr-mini\.example-tailnet\.ts\.net"/);
   assert.match(await page.locator('#compose-preview').innerText(), /TS_AUTHKEY: file:\/run\/secrets\/tailscale-authkey/);

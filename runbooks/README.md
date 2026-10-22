@@ -25,6 +25,8 @@
 
 # Rawrarr runbooks
 
+- [Collapse completed node setup sections](2026-10-22-collapse-node-setup-sections.md) — Collapse finished subscriber setup stages and copy generated Compose to the clipboard.
+
 - [Embed internal Tailscale auth key in Compose](2026-10-22-inline-internal-tailscale-auth-key.md) — Put the internal mode key in its generated Compose file and keep Headscale on a separate secret file.
 
 - [Fix subscriber coordinator origin validation](2026-10-22-fix-subscriber-coordinator-origin.md) — Accept and normalize the internal coordinator URL with an optional trailing slash.

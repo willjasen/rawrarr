@@ -16,6 +16,11 @@
     p,li { color:var(--muted) }
     .eyebrow { color:var(--green); text-transform:uppercase; font-size:12px; font-weight:700; letter-spacing:.1em }
     .step { margin:20px 0; padding:24px; background:var(--panel); border:1px solid var(--line); border-radius:14px }
+    .step.completed { padding:12px 16px; margin:12px 0 }
+    .step.completed > :not(.step-summary) { display:none }
+    .step-summary { display:none; align-items:center; justify-content:space-between; gap:12px }
+    .step.completed .step-summary { display:flex }
+    .step-summary p { margin:0 }
     .step[hidden], [hidden] { display:none !important }
     .actions { display:flex; flex-wrap:wrap; gap:9px; margin:14px 0 }
     button { min-height:42px; padding:9px 14px; border:1px solid #6b916f; border-radius:8px; color:#101711; background:var(--green); font:650 14px system-ui; cursor:pointer }
@@ -41,6 +46,7 @@
   <p>Sign-in uses your passkey. Your age private ID and encrypted signing-root backup stay in this browser while you work through these steps; they are never sent to roarlay. Save both backups somewhere you control.</p>
 
   <section class="step" id="age-step" aria-labelledby="age-title">
+    <div class="step-summary"><p><strong>1. Age ID</strong> · <span id="age-summary"></span></p><button type="button" class="secondary" data-reopen="age-step">Edit</button></div>
     <h2 id="age-title">1. Create or import your age ID</h2>
     <p>This ID unlocks encrypted rawrarr data. Keep a recoverable copy outside this browser.</p>
     <div class="actions"><button id="create-age" type="button">Create age ID</button></div>
@@ -52,6 +58,7 @@
   </section>
 
   <section class="step" id="root-step" aria-labelledby="root-title" hidden>
+    <div class="step-summary"><p><strong>2. Signing root</strong> · <span id="root-summary"></span></p><button type="button" class="secondary" data-reopen="root-step">Edit</button></div>
     <h2 id="root-title">2. Create or import your encrypted signing root</h2>
     <p>The owner signing root is separate from age. It will be needed for signed device approvals when that trust flow is released. Only its age-encrypted backup is copied. This preview does not yet pin the public root as an active trust anchor.</p>
     <div class="actions"><button id="create-root" type="button">Create encrypted root backup</button><button id="copy-root" type="button" hidden>Copy encrypted backup</button></div>
@@ -64,6 +71,7 @@
   </section>
 
   <section class="step" id="deploy-step" aria-labelledby="deploy-title" hidden>
+    <div class="step-summary"><p><strong>3. Compose</strong> · <span id="deploy-summary"></span></p><button type="button" class="secondary" data-reopen="deploy-step">Edit</button></div>
     <h2 id="deploy-title">3. Deploy on your own computer</h2>
     <p>Choose a fossil node for Radarr/Sonarr and encrypted library data, or a boneyard node when this computer has media files. Your account uses the existing roarlay; this installer offers no roarlay or coordinator role.</p>
     <label for="node-role">Node type</label>
@@ -81,7 +89,7 @@
     <div id="headscale-server-group" hidden><label for="headscale-server">Headscale control server HTTPS URL</label><input id="headscale-server" type="url" spellcheck="false" placeholder="https://headscale.example.com"></div>
     <div id="media-path-group" hidden><label for="media-path">Absolute media folder path on this computer</label><input id="media-path" type="text" spellcheck="false" placeholder="/srv/media or C:/Media"><p>Docker Desktop must be allowed to access this folder. It mounts read-only.</p></div>
     <p class="notice"><strong>Development preview:</strong> The public Rawrarr image has not been published. This Compose file uses <code>rawrarr:local</code> and will start only when that image is already present on the target computer. Public one-command installation remains pending.</p>
-    <div class="actions"><button id="prepare-compose" type="button">Prepare Compose file</button><button id="download-compose" type="button" hidden>Download compose.yaml</button></div>
+    <div class="actions"><button id="prepare-compose" type="button">Prepare Compose file</button><button id="copy-compose" type="button" hidden>Copy compose.yml to clipboard</button><button id="download-compose" type="button" hidden>Download compose.yml</button><button id="complete-deploy" type="button" class="secondary" hidden>Mark section complete</button></div>
     <p id="compose-message" class="status" role="status" aria-live="polite"></p>
     <pre id="compose-preview" hidden></pre>
     <ol id="deploy-instructions" hidden>
