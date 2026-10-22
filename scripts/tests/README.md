@@ -110,3 +110,5 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 
 `test_rawrarr_library_detail_link_layout.mjs` checks that Movies and TV display year and Arr detail links in the artwork/title column. Run with `node --test scripts/tests/test_rawrarr_library_detail_link_layout.mjs`.
 - `test_ui_bundle.py` — Verifies the UI package allowlist/checksum, GitHub release and asset requests, protected token propagation, installed release metadata, repeat checks, checksum rejection, and ZIP path traversal rejection. Run `python3 scripts/tests/test_ui_bundle.py -v`.
+
+- `test_rawrarr_coordinator_workspace.mjs` — Checks that Movies unlocking requires an age ID and that cached TV data is not rendered without one; run `node --test scripts/tests/test_rawrarr_coordinator_workspace.mjs`.

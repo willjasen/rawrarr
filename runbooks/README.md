@@ -30,6 +30,8 @@
 
 # Rawrarr runbooks
 
+- [Age ID library visibility regression](2026-10-22-age-id-library-visibility-regression.md) — Keep coordinator Movies and TV library content hidden until an age ID is loaded.
+
 - [Verify GitHub UI refreshes](2026-10-22-ui-github-refresh-regression-test.md) — Regression coverage for GitHub release download, authenticated asset requests, installed bundle metadata, and repeat checks.
 
 

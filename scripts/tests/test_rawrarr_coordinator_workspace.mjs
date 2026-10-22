@@ -47,6 +47,12 @@ test('coordinator labels the Sonarr section TV in navigation and its page headin
   assert.match(workspaceScript, /catch \(error\) \{[\s\S]*?moviesPanel\.replaceChildren\(\);\s*updateAgeIdControls\(\);\s*contentStatus\.textContent/);
 });
 
+test('Movies and TV cached library data stays hidden until an age ID is loaded', () => {
+  assert.match(workspaceScript, /async function unlockMetadata\(\) \{[\s\S]*?if \(!selectedNode \|\| !identity\) return;/);
+  assert.match(workspaceScript, /if \(view === 'movies' && updateHash\) \{[\s\S]*?if \(ageIdentityInMemory && selectedNode\) void unlockMetadata\(\)/);
+  assert.match(workspaceScript, /if \(view === 'series' && updateHash\) \{\s*const cachedSeries = ageIdentityInMemory \? readLibraryTextCache\(selectedNode, 'tv'\) : null;/);
+});
+
 test('device shared-folder health is concise and formatted without exposing the folder ID', () => {
   assert.match(workspace, /\.device-sync-health \{ display:flex; flex-wrap:wrap; align-items:center; gap:4px/);
   assert.match(workspaceScript, /const setSyncHealth = parts =>/);

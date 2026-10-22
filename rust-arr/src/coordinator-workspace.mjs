@@ -131,7 +131,7 @@ function showView(name, updateHash = true) {
     if (ageIdentityInMemory && selectedNode) void unlockMetadata();
   }
   if (view === 'series' && updateHash) {
-    const cachedSeries = readLibraryTextCache(selectedNode, 'tv');
+    const cachedSeries = ageIdentityInMemory ? readLibraryTextCache(selectedNode, 'tv') : null;
     if (cachedSeries) {
       renderSonarrSeries(cachedSeries, 'Cached TV library. Updating…');
       void attachSonarrPosters(document.getElementById('sonarr-series'));
