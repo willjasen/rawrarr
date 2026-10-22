@@ -18,6 +18,8 @@ Use the user's public age recipient to wrap a fresh symmetric response key for e
 - The full browser suite reports 7 failures in existing expectations for unrelated coordinator page/workspace behavior; 13 of 20 tests pass.
 - Rust tests could not start because the host `rustc` aborts while loading LLVM due to missing `/usr/local/opt/z3/lib/libz3.5.1.dylib`.
 - `npm run build` could not run because the worktree has no installed `esbuild` binary; the source change was reflected in the embedded bundle directly and both files pass syntax checks.
+- Initial internal rollout used the task commit directly before the GitHub-first deployment instruction was added. Roarlay rebuilt successfully in `rawrarr-internal-mini`; image `sha256:7bb53c97907e3e1b72f725f249dc1b39a6767869d9bd0cb6884114c7476f43f6` became healthy with zero restarts. HTTPS `/health` returned HTTP 200 and Serve remained `/` -> `http://127.0.0.1:8080`.
+- At the user's direction, the task commit was replayed on current `origin/main` as a focused branch. The mini source is being updated from that published GitHub revision and roarlay rebuilt again to establish GitHub as the deployment source.
 
 ## Security notes and remaining work
 
