@@ -209,7 +209,7 @@ test('coordinator relay can reach tailnet nodes through its Tailscale SOCKS5 sid
   assert.match(compose, /RAWARR_NODE_RELAY_SOCKS5_URL/);
 });
 
-test('coordinator workspace selects nodes and decrypts relayed ciphertext in the browser', () => {
+test('coordinator workspace selects nodes, reads Radarr directly, and keeps configuration decryption in the browser', () => {
   assert.match(workspaceScript, /Choose a connected fossil or boneyard node/);
   assert.match(workspaceScript, /roleLabel\(role\)/);
   assert.match(workspaceScript, /'coordinator' \? 'roarlay' : role === 'storage' \? 'boneyard' : 'fossil'/);
@@ -219,7 +219,8 @@ test('coordinator workspace selects nodes and decrypts relayed ciphertext in the
   assert.match(boneyardCompose, /  boneyard:\n/);
   assert.match(tailscaleCompose, /aliases:\n          - coordinator/);
   assert.match(workspaceScript, /ageIdentityInMemory = identity/);
-  assert.match(workspaceScript, /window\.rawrarrMiniExport\.loadRadarrLibrary\(identity, route\.base/);
+  assert.match(workspaceScript, /arrDirectRequest\('\/radarr\/live-library'\)/);
+  assert.doesNotMatch(workspaceScript, /window\.rawrarrMiniExport\.loadRadarrLibrary/);
   assert.match(workspace, /Cluster configuration/);
   assert.doesNotMatch(workspace, /refresh-configuration|Load cluster configuration/);
   assert.match(workspaceScript, /if \(view === 'configuration' && updateHash\) void loadClusterConfiguration\(\)/);
