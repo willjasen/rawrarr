@@ -40,6 +40,8 @@ services:
     image: rawrarr:internal-mini
     environment:
       RAWARR_ROLE: coordinator
+      RAWARR_UI_GITHUB_REPO: willjasen/rawrarr
+      RAWARR_UI_GITHUB_TOKEN_FILE: /run/secrets/rawrarr_ui_github_token
       RUST_ARR_LISTEN_ADDR: 0.0.0.0:8080
       RAWARR_PG_HOST: postgres
       RAWARR_PG_PORT: 5432
@@ -54,6 +56,9 @@ services:
     secrets:
       - rawrarr_postgres_password
       - rawrarr_approved_nodes
+      - rawrarr_ui_github_token
+    volumes:
+      - rawrarr-internal-ui:/ui
     network_mode: service:tailscale
     depends_on:
       postgres:
@@ -65,6 +70,7 @@ services:
 volumes:
   rawrarr-internal-postgres-data:
   rawrarr-internal-mini-tailscale-state:
+  rawrarr-internal-ui:
 
 secrets:
   rawrarr_tailscale_authkey:
@@ -73,3 +79,5 @@ secrets:
     file: ${RAWARR_POSTGRES_PASSWORD_FILE:?Set RAWARR_POSTGRES_PASSWORD_FILE to a protected password file}
   rawrarr_approved_nodes:
     file: ${RAWARR_APPROVED_NODES_PATH:?Set RAWARR_APPROVED_NODES_PATH to the protected approved-node registry}
+  rawrarr_ui_github_token:
+    file: ${RAWARR_UI_GITHUB_TOKEN_PATH:?Set RAWARR_UI_GITHUB_TOKEN_PATH to a fine-grained read-only GitHub token file}

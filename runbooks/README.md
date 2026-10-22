@@ -526,4 +526,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Fix Radarr and Sonarr poster delivery](2026-10-22-fix-arr-posters.md) — Restore direct Radarr poster delivery and verify that the metadata node writes encrypted artwork into the intended shared folder.
 - [Merge the Rawrarr landing tagline](2026-10-22-merge-landing-tagline.md) — Integrate the tagline into current `main`, preserving concurrent work and excluding an obsolete migration change.
 - [Move the device delete button to the card corner](2026-10-22-device-delete-button-position.md) — Place Delete device at the bottom-right of coordinator Devices cards.
+- [Separate UI updates from node images through GitHub](2026-10-22-github-ui-distribution.md) — Publish private UI bundles through GitHub Actions and refresh node-local UI files without routine application image rebuilds.
 - [Deploy GitHub UI updates to the internal coordinator](2026-10-22-deploy-github-ui-to-internal-coordinator.md) — Internal deployment status, prerequisites, and verification plan.

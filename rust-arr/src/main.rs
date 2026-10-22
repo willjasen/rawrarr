@@ -18,6 +18,7 @@ pub mod secure_config;
 pub mod shared_logs;
 pub mod storage_node;
 pub mod syncthing;
+mod ui_assets;
 
 use axum::middleware::Next;
 use axum::{
@@ -534,8 +535,8 @@ async fn direct_health(State(state): State<Arc<AppState>>) -> Response {
     })).into_response()
 }
 
-fn static_asset(content_type: &'static str, data: &'static [u8]) -> Response<Body> {
-    let mut response = Response::new(Body::from(data));
+fn static_asset(content_type: &'static str, data: impl Into<Body>) -> Response<Body> {
+    let mut response = Response::new(data.into());
     response.headers_mut().insert(
         header::CONTENT_TYPE,
         axum::http::HeaderValue::from_static(content_type),
@@ -548,31 +549,31 @@ fn static_asset(content_type: &'static str, data: &'static [u8]) -> Response<Bod
 }
 
 async fn rawrarr_logo() -> Response<Body> {
-    static_asset("image/png", include_bytes!("assets/rawrarr-logo.png"))
+    static_asset("image/png", ui_assets::bytes("assets/rawrarr-logo.png", include_bytes!("assets/rawrarr-logo.png")).await)
 }
 
 async fn rawrarr_logo_jxl() -> Response<Body> {
-    static_asset("image/jxl", include_bytes!("assets/rawrarr-logo.jxl"))
+    static_asset("image/jxl", ui_assets::bytes("assets/rawrarr-logo.jxl", include_bytes!("assets/rawrarr-logo.jxl")).await)
 }
 
 async fn rawrarr_favicon() -> Response<Body> {
     static_asset(
         "image/svg+xml",
-        include_str!("assets/rawrarr-favicon.svg").as_bytes(),
+        ui_assets::text("assets/rawrarr-favicon.svg", include_str!("assets/rawrarr-favicon.svg")).await.into_bytes(),
     )
 }
 
 async fn passkey_client_js() -> Response<Body> {
     static_asset(
         "text/javascript; charset=utf-8",
-        include_str!("passkey-client.mjs").as_bytes(),
+        ui_assets::text("passkey-client.mjs", include_str!("passkey-client.mjs")).await.into_bytes(),
     )
 }
 
 async fn metadata_export_js() -> Response<Body> {
     let mut response = static_asset(
         "text/javascript; charset=utf-8",
-        include_bytes!("assets/metadata-export.js"),
+        ui_assets::bytes("assets/metadata-export.js", include_bytes!("assets/metadata-export.js")).await,
     );
     response.headers_mut().insert(
         header::CACHE_CONTROL,
@@ -588,7 +589,7 @@ async fn auth_page(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Re
         }
         return Redirect::to("/setup/age").into_response();
     }
-    auth::auth_html().into_response()
+    auth::auth_html().await.into_response()
 }
 
 async fn dashboard(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response<Body> {
@@ -598,14 +599,14 @@ async fn dashboard(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Re
     if state.vault.read().await.is_none() {
         return Redirect::to("/setup/age").into_response();
     }
-    Html(include_str!("ui.html")).into_response()
+    Html(ui_assets::text("ui.html", include_str!("ui.html")).await).into_response()
 }
 
 async fn age_setup_page(State(state): State<Arc<AppState>>) -> Response<Body> {
     if state.vault.read().await.is_some() {
         return Redirect::to("/").into_response();
     }
-    auth::age_setup_html().into_response()
+    auth::age_setup_html().await.into_response()
 }
 
 async fn logout(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response<Body> {

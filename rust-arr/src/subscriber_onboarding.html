@@ -102,6 +102,7 @@
     <pre id="compose-preview" hidden></pre>
     <ol id="deploy-instructions" hidden>
       <li>Install Docker Desktop on macOS or Windows, or Docker Engine with the Compose plugin on Debian.</li>
+      <li>Create a fine-grained GitHub token with Contents: read access to <code>willjasen/rawrarr</code>, save it to a protected local file, and set <code>RAWARR_UI_GITHUB_TOKEN_PATH</code> to that file before starting Compose. The token is mounted only as a Docker secret.</li>
       <li>Make the <code>rawrarr:local</code> image available on this computer. Confirm with <code>docker image inspect rawrarr:local</code>.</li>
       <li id="auth-key-instruction">For internal Tailscale, Compose contains the auth key; restrict the file to your user (for example, <code>chmod 600 compose.yaml</code>) and remove the key after the node joins. Headscale mode uses a separate local secret file.</li>
       <li>Check the media path if you selected boneyard. Keep <code>/shared</code> on a separate Syncthing setup; it is not exposed as a Tailscale share.</li>

@@ -105,3 +105,4 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 `test_rawrarr_library_detail_link_layout.mjs` checks that Movies and TV display year and Arr detail links in the artwork/title column. Run with `node --test scripts/tests/test_rawrarr_library_detail_link_layout.mjs`.
 
 `test_rawrarr_library_detail_link_layout.mjs` checks that Movies and TV display year and Arr detail links in the artwork/title column. Run with `node --test scripts/tests/test_rawrarr_library_detail_link_layout.mjs`.
+- `test_ui_bundle.py` — Verifies the UI package allowlist/checksum, dry-run and verified install behavior, checksum rejection, and ZIP path traversal rejection. Run `python3 scripts/tests/test_ui_bundle.py -v`.
