@@ -30,6 +30,9 @@
 
 # Rawrarr runbooks
 
+- [Skip GitHub Actions for Markdown-only changes](2026-10-22-skip-actions-markdown-only.md) — Skip push and pull-request test runs when changes contain only Markdown files.
+
+
 - [Check GitHub UI releases every minute](2026-10-22-ui-updater-one-minute-poll.md) — Reduce coordinator and node UI bundle detection from five minutes to one minute, with a 60-second minimum.
 
 - [Show only device route latency](2026-10-22-show-only-device-route-latency.md) — Remove the Direct prefix from directly reachable device status while retaining the measured milliseconds.
