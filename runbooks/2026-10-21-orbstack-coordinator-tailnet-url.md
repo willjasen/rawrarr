@@ -28,7 +28,7 @@ Related procedure: [isolated coordinator and two-node test](2026-10-21-orbstack-
 
 - The Tailscale status on the existing MacBook sidecar confirmed tailnet `risk-mermaid.ts.net`; its existing Serve routes were read and left unchanged.
 - The test Compose configuration validates and the coordinator, PostgreSQL, Headscale, and both metadata services report healthy. The coordinator root and `/health` respond on loopback port 17397.
-- The new coordinator Tailscale sidecar is running with a dedicated persistent state volume and a persistent `tailscaled` daemon. The `tailscale up` flow is waiting for interactive authorization. No operator-tailnet membership or Serve URL is claimed until that authorization is reflected as online and the route is verified.
+- The new coordinator Tailscale sidecar is running with a dedicated persistent state volume and a persistent `tailscaled` daemon. The tailnet peer map now contains the coordinator hostname and assigned Tailscale IPs, but the peer has no handshake or active connection. Locally the backend remains `NeedsLogin`, and `tailscale serve` reports `Logged out`; therefore no usable Serve URL is active yet.
 - Both metadata nodes can reach `http://coordinator:8080/health`; two Tailscale ping requests in each direction through test Headscale succeed; loopback health on `127.0.0.1:17397/health` returns 200.
 
 ## Remaining work
