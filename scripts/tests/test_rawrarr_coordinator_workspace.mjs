@@ -310,8 +310,8 @@ test('default metadata selection measures online direct metadata nodes and selec
   assert.match(deviceRoutes, /signal: AbortSignal\.timeout\(2500\)/);
   assert.match(deviceRoutes, /probeCacheMilliseconds = 15_000/);
   assert.match(workspaceScript, /checkDeviceRoutes\(workspaceNodes, \{ refresh \}\)/);
-  assert.match(workspaceScript, /Direct Tailscale route active \(\$\{route\.latencyMs\.toFixed\(0\)} ms\)/);
-  assert.match(workspaceScript, /Roarlay relay route active \(direct session unavailable\)/);
+  assert.match(workspaceScript, /stateLabel\.textContent = latencyLabel \|\| routeLabel/);
+  assert.match(workspaceScript, /Direct Tailscale route active \(\$\{latencyLabel\}\)/);
 });
 
 test('overview distinguishes an available metadata node from no online metadata node', () => {
