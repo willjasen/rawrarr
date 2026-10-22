@@ -6,6 +6,8 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Redirect, Response},
 };
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use sha2::{Digest, Sha256};
 use std::{
     env, fs, io::ErrorKind, os::unix::fs::OpenOptionsExt, path::PathBuf, sync::Arc, time::Duration,
 };
@@ -19,6 +21,9 @@ pub struct NodeAuth {
     base: reqwest::Url,
     token: Arc<Zeroizing<String>>,
     display_name: String,
+    node_id: Arc<std::sync::RwLock<String>>,
+    root_fingerprint: Option<String>,
+    signing_certificate: Arc<std::sync::RwLock<Option<serde_json::Value>>>,
 }
 
 impl NodeAuth {
@@ -56,9 +61,13 @@ impl NodeAuth {
             base,
             token: Arc::new(token),
             display_name: display_name.to_owned(),
+            node_id: Arc::new(std::sync::RwLock::new(node_id.to_owned())),
+            root_fingerprint: env::var("RAWARR_INSTANCE_ROOT_FINGERPRINT").ok().map(|value| value.trim().to_ascii_lowercase()),
+            signing_certificate: Arc::new(std::sync::RwLock::new(None)),
         };
         match auth.register(role).await {
             Ok(()) => {
+                auth.refresh_signing_certificate().await?;
                 auth.start_heartbeat(role);
                 return Ok(auth);
             }
@@ -70,7 +79,20 @@ impl NodeAuth {
         let rp_id = env::var("RAWARR_WEBAUTHN_RP_ID").unwrap_or_else(|_| "localhost".into());
         // Keep this payload deliberately limited to public node metadata. In
         // particular, age identities and shared app data stay on this node.
-        let payload = serde_json::json!({"nodeId":node_id,"role":role,"displayName":display_name,"origin":origin,"rpId":rp_id});
+        let public_key = crate::secure_config::AgeVault::node_signing_public_key()?;
+        let proof_payload = serde_json::json!({
+            "domain": "rawrarr-node-enrollment-proof-v1",
+            "nodeId": node_id,
+            "role": role,
+            "publicKeyHex": encode_hex(&public_key),
+        });
+        let proof_message = crate::device_signing::canonical_json(&proof_payload)?;
+        let proof_signature = crate::secure_config::AgeVault::sign_node_message(&proof_message)?;
+        let payload = serde_json::json!({
+            "nodeId":node_id,"role":role,"displayName":display_name,"origin":origin,"rpId":rp_id,
+            "signingPublicKeyHex": encode_hex(&public_key),
+            "keyProofSignatureHex": encode_hex(&proof_signature),
+        });
         let request = auth
             .client
             .post(auth.base.join("/api/nodes/enroll")?)
@@ -114,9 +136,13 @@ impl NodeAuth {
             let bytes = to_bytes(response.into_body(), 64 * 1024).await?;
             let status: EnrollmentStatus = serde_json::from_slice(&bytes)?;
             if status.status == "approved" {
+                if let Some(canonical_node_id) = status.node_id {
+                    *auth.node_id.write().unwrap_or_else(|poisoned| poisoned.into_inner()) = canonical_node_id;
+                }
                 auth.register(role)
                     .await
                     .map_err(|_| "approved node could not register with coordinator")?;
+                auth.refresh_signing_certificate().await?;
                 auth.start_heartbeat(role);
                 return Ok(auth);
             }
@@ -135,11 +161,32 @@ impl NodeAuth {
         if !allowed_path(path) {
             return Err(());
         }
+        let upstream_path = coordinator_path(path);
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default().as_secs();
+        let nonce = Uuid::new_v4().to_string();
+        let body_hash = Sha256::digest(&body).iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+        let signed_payload = serde_json::json!({
+            "domain": "rawrarr-coordination-request-v1",
+            "nodeId": self.node_id(),
+            "method": method.as_str(),
+            "path": upstream_path,
+            "bodyHash": body_hash,
+            "timestamp": timestamp,
+            "nonce": nonce,
+        });
+        let signed_bytes = crate::device_signing::canonical_json(&signed_payload).map_err(|_| ())?;
+        let signature = crate::secure_config::AgeVault::sign_node_message(&signed_bytes).map_err(|_| ())?;
         let mut request = self
             .client
-            .request(method, self.base.join(coordinator_path(path)).map_err(|_| ())?)
+            .request(method, self.base.join(upstream_path).map_err(|_| ())?)
             .bearer_auth(self.token.as_str())
-            .header(header::CONTENT_TYPE, "application/json");
+            .header(header::CONTENT_TYPE, "application/json")
+            .header("x-rawarr-node-id", self.node_id())
+            .header("x-rawarr-timestamp", timestamp)
+            .header("x-rawarr-nonce", nonce)
+            .header("x-rawarr-signature", encode_hex(&signature));
         // Forward only Rawrarr's opaque session, never arbitrary cookies or proxy headers.
         if let Some(cookie) = crate::auth::cookie_token(headers) {
             request = request.header(header::COOKIE, format!("rawrarr_session={cookie}"));
@@ -162,6 +209,10 @@ impl NodeAuth {
             bytes.extend_from_slice(&chunk);
         }
         response.body(Body::from(bytes)).map_err(|_| ())
+    }
+
+    fn node_id(&self) -> String {
+        self.node_id.read().unwrap_or_else(|poisoned| poisoned.into_inner()).clone()
     }
 
     pub async fn authenticated(&self, headers: &HeaderMap) -> bool {
@@ -201,7 +252,50 @@ impl NodeAuth {
         if response.status() != StatusCode::NO_CONTENT {
             return Err("coordinator rejected node credential or role");
         }
+        self.verify_instance_root().await?;
         Ok(())
+    }
+
+    async fn verify_instance_root(&self) -> Result<(), &'static str> {
+        let Some(expected) = self.root_fingerprint.as_deref().filter(|value| {
+            value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+        }) else {
+            return Err("set RAWARR_INSTANCE_ROOT_FINGERPRINT to the independently saved instance root fingerprint");
+        };
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct RootResponse { algorithm: String, public_key: String, fingerprint: String }
+        let response = self.client.get(self.base.join("/api/nodes/signing-root").map_err(|_| "invalid coordinator URL")?)
+            .send().await.map_err(|_| "could not verify the instance signing root")?;
+        if !response.status().is_success() { return Err("coordinator has no initialized instance signing root"); }
+        let root = response.json::<RootResponse>().await.map_err(|_| "coordinator returned an invalid instance signing root")?;
+        let public_key = BASE64.decode(root.public_key).map_err(|_| "coordinator returned an invalid instance signing root")?;
+        let mut hash = Sha256::new();
+        hash.update(b"rawrarr-instance-root-v1\0");
+        hash.update(public_key);
+        let actual = hash.finalize().iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+        if root.algorithm != "ML-DSA-65" || actual != root.fingerprint || actual != expected {
+            return Err("instance signing root does not match the independently saved fingerprint");
+        }
+        Ok(())
+    }
+
+    async fn refresh_signing_certificate(&self) -> Result<(), &'static str> {
+        let response = self.send(reqwest::Method::GET, "/api/nodes/signing-certificate", &HeaderMap::new(), Vec::new())
+            .await.map_err(|_| "coordinator unavailable while loading the node signing certificate")?;
+        if !response.status().is_success() { return Err("coordinator did not return the approved node signing certificate"); }
+        let bytes = to_bytes(response.into_body(), 64 * 1024).await.map_err(|_| "invalid node signing certificate response")?;
+        let certificate: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| "invalid node signing certificate response")?;
+        let Some(expected) = self.root_fingerprint.as_deref() else { return Err("instance signing root fingerprint is missing"); };
+        if !crate::device_signing::verify_certificate(&certificate, expected) {
+            return Err("coordinator node certificate is not signed by the pinned instance root");
+        }
+        *self.signing_certificate.write().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(certificate);
+        Ok(())
+    }
+
+    pub fn signing_certificate(&self) -> Option<serde_json::Value> {
+        self.signing_certificate.read().unwrap_or_else(|poisoned| poisoned.into_inner()).clone()
     }
 
     fn start_heartbeat(&self, role: crate::node_role::NodeRole) {
@@ -252,9 +346,22 @@ impl NodeAuth {
     }
 }
 
+fn encode_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut result = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        result.push(HEX[(byte >> 4) as usize] as char);
+        result.push(HEX[(byte & 15) as usize] as char);
+    }
+    result
+}
+
 #[derive(serde::Deserialize)]
 struct EnrollmentStatus {
     status: String,
+    #[serde(default)]
+    #[serde(rename = "nodeId")]
+    node_id: Option<String>,
 }
 
 fn create_node_token(
@@ -365,6 +472,7 @@ fn allowed_path(path: &str) -> bool {
             | "/api/auth/session"
             | "/api/auth/logout"
             | "/api/nodes/register"
+            | "/api/nodes/signing-certificate"
             | "/api/nodes/enroll"
             | "/api/nodes/enroll/status"
             | "/api/nodes/pending"

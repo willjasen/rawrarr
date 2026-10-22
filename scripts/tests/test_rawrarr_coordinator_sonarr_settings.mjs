@@ -90,7 +90,7 @@ test('coordinator saves Radarr and Sonarr settings over the direct metadata rout
   await page.waitForFunction(() => document.querySelector('[data-node-id="metadata-one"]')?.dataset.selected === 'true');
   await page.click('[data-view="movies"]');
   assert.equal(await page.locator('#radarr-connection-card').isVisible(), false, 'Radarr form must start hidden until its saved state is loaded');
-  assert.equal(await page.locator('#remember-age-id').isChecked(), false);
+  assert.equal(await page.locator('#remember-age-id').count(), 0);
   await page.locator('#age-id').fill(identity);
   await page.locator('#unlock').click();
   await page.waitForFunction(() => document.getElementById('age-id').value === '');
@@ -218,7 +218,7 @@ test('Movies and TV do not display cached library data without an age ID', async
   assert.doesNotMatch(await page.locator('#series-view').textContent(), /Private TV Cache Fixture/);
 });
 
-test('remembered age ID survives a reload and is removed on sign-out', async t => {
+test('age ID stays in page memory only and is cleared on reload', async t => {
   const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
   t.after(() => browser.close());
   const page = await browser.newPage();
@@ -228,7 +228,6 @@ test('remembered age ID survives a reload and is removed on sign-out', async t =
     const request = route.request();
     const url = new URL(request.url());
     if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
-    if (url.pathname === '/auth') return route.fulfill({ status: 200, body: 'signed out' });
     if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
     if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: 'window.rawrarrMiniExport = { loadRadarrLibrary: async () => [] };' });
@@ -252,20 +251,18 @@ test('remembered age ID survives a reload and is removed on sign-out', async t =
 
   await page.goto('http://rawrarr.test/#movies');
   await page.waitForFunction(() => document.querySelector('[data-node-id="metadata-one"]')?.dataset.selected === 'true');
-  await page.locator('#remember-age-id').check();
   await page.locator('#age-id').fill(identity);
   await page.click('#unlock');
-  await page.waitForFunction(() => localStorage.getItem('rawrarr.browser.age-id')?.includes('remembered-test-fixture'));
+  await page.waitForFunction(() => document.getElementById('age-id').value === '');
+  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
   await page.reload();
   await page.waitForFunction(() => document.querySelector('[data-node-id="metadata-one"]')?.dataset.selected === 'true');
-  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), identity);
-  assert.equal(await page.locator('#remember-age-id').isChecked(), true);
-  await page.click('#sign-out');
-  await page.waitForURL('**/auth');
+  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
+  assert.equal(await page.locator('#age-id-entry').isVisible(), true);
   assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
 });
 
-test('Settings reports age ID storage and validates before saving or removing it', async t => {
+test('Settings validates age ID for this tab without storing it', async t => {
   const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
   t.after(() => browser.close());
   const page = await browser.newPage();
@@ -301,18 +298,18 @@ test('Settings reports age ID storage and validates before saving or removing it
   await page.getByText('Age private ID is not stored in this browser.').waitFor();
   await page.locator('#settings-age-id').fill(identity);
   await page.click('#save-age-id');
-  await page.getByText('Age private ID saved in this browser.').waitFor();
-  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), identity);
+  await page.getByText('Age private ID validated and kept in memory for this tab.').waitFor();
+  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
   assert.equal(await page.locator('#settings-age-id').inputValue(), '');
-  assert.equal(await page.locator('#remember-age-id').isChecked(), true);
+  assert.equal(await page.locator('#remember-age-id').count(), 0);
 
   await page.click('[data-view="movies"]');
   await page.getByText('0 encrypted Radarr library entries decrypted locally.').waitFor();
   assert.equal(await page.locator('#age-id-entry').isVisible(), false);
   await page.click('[data-view="settings"]');
   await page.click('#remove-age-id');
-  await page.getByText('Age private ID removed from this browser.').waitFor();
+  await page.getByText('Age private ID removed from this tab.').waitFor();
   assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
-  assert.equal(await page.locator('#remember-age-id').isChecked(), false);
+  assert.equal(await page.locator('#remember-age-id').count(), 0);
   assert.match(await page.locator('#content-status').textContent(), /metadata is locked/);
 });

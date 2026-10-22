@@ -11,6 +11,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{any, delete, get, post},
 };
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -34,6 +35,7 @@ struct ApprovedAuth {
     digest: String,
     auth: AuthState,
     role: NodeRole,
+    signing_public_key: Option<Vec<u8>>,
 }
 
 #[derive(Clone)]
@@ -56,6 +58,8 @@ struct EnrollmentRequest {
     display_name: String,
     rp_id: String,
     origin: String,
+    signing_public_key_hex: String,
+    key_proof_signature_hex: String,
 }
 
 #[derive(Deserialize)]
@@ -68,6 +72,8 @@ struct EnrollmentStatusRequest {
 #[serde(rename_all = "camelCase")]
 struct EnrollmentStatus {
     status: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    node_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -75,17 +81,45 @@ struct EnrollmentStatus {
 struct PendingNode {
     request_id: Uuid,
     node_id: String,
+    requested_node_id: String,
     role: NodeRole,
     display_name: String,
     owner_display_name: String,
     origin: String,
     requested_at: String,
+    signing_public_key_hex: String,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ApproveRequest {
     request_id: Uuid,
+    root_public_key: String,
+    root_fingerprint: String,
+    signature: String,
+    signed_payload: serde_json::Value,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InstanceSigningRoot {
+    algorithm: &'static str,
+    public_key: String,
+    fingerprint: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SigningCertificate {
+    algorithm: &'static str,
+    root_public_key: String,
+    root_fingerprint: String,
+    node_id: String,
+    role: String,
+    signing_public_key_hex: String,
+    signing_fingerprint: String,
+    signed_payload: serde_json::Value,
+    signature: String,
 }
 
 #[derive(Deserialize)]
@@ -140,7 +174,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
             .execute(&pool).await?;
         let _ = origin;
     }
-    let rows = sqlx::query("SELECT id, role, token_sha256, origin, rp_id FROM rawrarr_nodes WHERE token_sha256 IS NOT NULL")
+    let rows = sqlx::query("SELECT id, role, token_sha256, origin, rp_id, signing_public_key FROM rawrarr_nodes WHERE token_sha256 IS NOT NULL")
         .fetch_all(&pool).await?;
     let mut approved = Vec::new();
     for row in rows {
@@ -149,6 +183,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         let digest: String = row.try_get("token_sha256")?;
         let origin_text: String = row.try_get("origin")?;
         let rp_id: String = row.try_get("rp_id")?;
+        let signing_public_key: Option<Vec<u8>> = row.try_get("signing_public_key")?;
         let origin = validate_origin(&rp_id, &origin_text)?;
         let webauthn = webauthn_rs::prelude::WebauthnBuilder::new(&rp_id, &origin)?
             .rp_name("rawrarr")
@@ -156,6 +191,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         approved.push(ApprovedAuth {
             digest,
             role,
+            signing_public_key,
             auth: AuthState {
                 pool: pool.clone(),
                 webauthn,
@@ -234,6 +270,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/assets/profile-color.mjs", get(coordinator_profile_color_script))
         .route("/assets/metadata-export.js", get(coordinator_metadata_export_js))
         .route("/assets/subscriber-onboarding.js", get(coordinator_subscriber_onboarding_script))
+        .route("/assets/device-signing-client.js", get(coordinator_device_signing_script))
         .route("/nodes/{node_id}", any(node_proxy_root))
         .route("/nodes/{node_id}/", any(node_proxy_root))
         .route("/nodes/{node_id}/{*path}", any(node_proxy))
@@ -256,6 +293,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         )
         .route("/api/nodes/enroll", post(request_enrollment))
         .route("/api/nodes/enroll/status", post(enrollment_status))
+        .route("/api/nodes/signing-root", get(instance_signing_root))
         .with_state(state.clone());
     let coordinator_browser = Router::new()
         .route("/setup/node", get(coordinator_subscriber_onboarding_page))
@@ -319,6 +357,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/api/nodes/auth/session", get(session))
         .route("/api/nodes/auth/logout", post(logout))
         .route("/api/nodes/register", post(register))
+        .route("/api/nodes/signing-certificate", get(node_signing_certificate))
         .route("/api/nodes/pending", get(pending_nodes))
         .route("/api/nodes/approve", post(approve_node))
         .route(
@@ -366,6 +405,48 @@ async fn authorize_node(
     let Some(node) = node else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
+    if let Some(public_key) = node.signing_public_key.as_deref() {
+        let (parts, body) = request.into_parts();
+        let Ok(body) = to_bytes(body, 256 * 1024).await else {
+            return StatusCode::PAYLOAD_TOO_LARGE.into_response();
+        };
+        let value = |name: &str| parts.headers.get(name).and_then(|header| header.to_str().ok());
+        let Some(signed_node_id) = value("x-rawarr-node-id") else { return StatusCode::UNAUTHORIZED.into_response(); };
+        let Some(timestamp_text) = value("x-rawarr-timestamp") else { return StatusCode::UNAUTHORIZED.into_response(); };
+        let Some(nonce) = value("x-rawarr-nonce") else { return StatusCode::UNAUTHORIZED.into_response(); };
+        let Some(signature_hex) = value("x-rawarr-signature") else { return StatusCode::UNAUTHORIZED.into_response(); };
+        let Ok(timestamp) = timestamp_text.parse::<i64>() else { return StatusCode::UNAUTHORIZED.into_response(); };
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default().as_secs() as i64;
+        if signed_node_id != node.auth.node_id || now.abs_diff(timestamp) > 60 {
+            return StatusCode::UNAUTHORIZED.into_response();
+        }
+        let Ok(nonce_id) = Uuid::parse_str(nonce) else { return StatusCode::UNAUTHORIZED.into_response(); };
+        let Some(signature) = decode_hex(signature_hex) else { return StatusCode::UNAUTHORIZED.into_response(); };
+        let body_hash = Sha256::digest(&body).iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+        let signed_payload = serde_json::json!({
+            "domain": "rawrarr-coordination-request-v1",
+            "nodeId": signed_node_id,
+            "method": parts.method.as_str(),
+            "path": parts.uri.path(),
+            "bodyHash": body_hash,
+            "timestamp": timestamp,
+            "nonce": nonce,
+        });
+        let Ok(signed_bytes) = crate::device_signing::canonical_json(&signed_payload) else {
+            return StatusCode::BAD_REQUEST.into_response();
+        };
+        if !crate::device_signing::verify(public_key, &signature, &signed_bytes) {
+            return StatusCode::UNAUTHORIZED.into_response();
+        }
+        let inserted = sqlx::query_scalar::<_, Uuid>("INSERT INTO rawrarr_node_request_nonces(node_id, nonce, expires_at) VALUES ($1,$2,now() + interval '2 minutes') ON CONFLICT(node_id, nonce) DO NOTHING RETURNING nonce")
+            .bind(&node.auth.node_id).bind(nonce_id).fetch_optional(&node.auth.pool).await;
+        if !matches!(inserted, Ok(Some(_))) { return StatusCode::UNAUTHORIZED.into_response(); }
+        let _ = sqlx::query("DELETE FROM rawrarr_node_request_nonces WHERE expires_at < now()")
+            .execute(&node.auth.pool).await;
+        request = Request::from_parts(parts, Body::from(body));
+    }
     request.extensions_mut().insert(node.auth);
     request.extensions_mut().insert(node.role);
     next.run(request).await
@@ -388,6 +469,26 @@ async fn request_enrollment(
     }
     if validate_origin(&request.rp_id, &request.origin).is_err() {
         return StatusCode::BAD_REQUEST.into_response();
+    }
+    let Some(signing_public_key) = decode_hex(&request.signing_public_key_hex) else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    let Some(key_proof_signature) = decode_hex(&request.key_proof_signature_hex) else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    let proof_payload = serde_json::json!({
+        "domain": "rawrarr-node-enrollment-proof-v1",
+        "nodeId": request.node_id,
+        "role": request.role,
+        "publicKeyHex": request.signing_public_key_hex,
+    });
+    let Ok(proof_message) = crate::device_signing::canonical_json(&proof_payload) else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    if signing_public_key.len() != 1952 || key_proof_signature.len() != 3309
+        || !crate::device_signing::verify(&signing_public_key, &key_proof_signature, &proof_message)
+    {
+        return StatusCode::UNAUTHORIZED.into_response();
     }
     let digest = format!("{:x}", Sha256::digest(token.as_bytes()));
     let request_id = Uuid::new_v4();
@@ -429,13 +530,27 @@ async fn request_enrollment(
     if count >= 50 {
         return StatusCode::TOO_MANY_REQUESTS.into_response();
     }
-    let row = sqlx::query("INSERT INTO rawrarr_node_enrollments(request_id, node_id, role, display_name, token_sha256, origin, rp_id, expires_at, user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,now() + interval '15 minutes',$8) ON CONFLICT(node_id) DO UPDATE SET request_id=EXCLUDED.request_id, role=EXCLUDED.role, display_name=EXCLUDED.display_name, token_sha256=EXCLUDED.token_sha256, origin=EXCLUDED.origin, rp_id=EXCLUDED.rp_id, requested_at=now(), expires_at=EXCLUDED.expires_at, user_id=EXCLUDED.user_id WHERE rawrarr_node_enrollments.approved_at IS NULL RETURNING request_id")
+    let row = sqlx::query("INSERT INTO rawrarr_node_enrollments(request_id, node_id, role, display_name, token_sha256, origin, rp_id, expires_at, user_id, signing_public_key, key_proof_signature) VALUES ($1,$2,$3,$4,$5,$6,$7,now() + interval '15 minutes',$8,$9,$10) ON CONFLICT(node_id) DO UPDATE SET request_id=EXCLUDED.request_id, role=EXCLUDED.role, display_name=EXCLUDED.display_name, token_sha256=EXCLUDED.token_sha256, origin=EXCLUDED.origin, rp_id=EXCLUDED.rp_id, requested_at=now(), expires_at=EXCLUDED.expires_at, user_id=EXCLUDED.user_id, signing_public_key=EXCLUDED.signing_public_key, key_proof_signature=EXCLUDED.key_proof_signature WHERE rawrarr_node_enrollments.approved_at IS NULL RETURNING request_id")
         .bind(request_id).bind(&request.node_id).bind(role_name(request.role)).bind(request.display_name.trim())
-        .bind(digest).bind(&request.origin).bind(&request.rp_id).bind(owner_user_id)
+        .bind(digest).bind(&request.origin).bind(&request.rp_id).bind(owner_user_id).bind(&signing_public_key).bind(&key_proof_signature)
         .fetch_optional(&mut *tx).await;
     match row {
         Ok(Some(row)) => match tx.commit().await { Ok(()) => (StatusCode::CREATED, Json(serde_json::json!({"requestId": row.try_get::<Uuid, _>("request_id").unwrap_or(request_id)}))).into_response(), Err(_) => StatusCode::SERVICE_UNAVAILABLE.into_response() },
         Ok(None) => StatusCode::CONFLICT.into_response(),
+        Err(_) => StatusCode::SERVICE_UNAVAILABLE.into_response(),
+    }
+}
+
+async fn instance_signing_root(State(state): State<CoordinatorState>) -> Response {
+    let row = sqlx::query("SELECT public_key, fingerprint FROM rawrarr_instance_signing_root WHERE singleton=TRUE")
+        .fetch_optional(&state.pool).await;
+    match row {
+        Ok(Some(row)) => {
+            let Ok(public_key) = row.try_get::<Vec<u8>, _>("public_key") else { return StatusCode::SERVICE_UNAVAILABLE.into_response(); };
+            let Ok(fingerprint) = row.try_get::<String, _>("fingerprint") else { return StatusCode::SERVICE_UNAVAILABLE.into_response(); };
+            Json(InstanceSigningRoot { algorithm: "ML-DSA-65", public_key: BASE64.encode(public_key), fingerprint }).into_response()
+        }
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(_) => StatusCode::SERVICE_UNAVAILABLE.into_response(),
     }
 }
@@ -449,13 +564,15 @@ async fn enrollment_status(
         return StatusCode::UNAUTHORIZED.into_response();
     };
     let digest = format!("{:x}", Sha256::digest(token.as_bytes()));
-    let row = sqlx::query("SELECT approved_at IS NOT NULL AS approved FROM rawrarr_node_enrollments WHERE request_id=$1 AND token_sha256=$2 AND expires_at > now()")
+    let row = sqlx::query("SELECT e.approved_at IS NOT NULL AS approved, n.id AS node_id FROM rawrarr_node_enrollments e LEFT JOIN rawrarr_nodes n ON n.token_sha256=e.token_sha256 WHERE e.request_id=$1 AND e.token_sha256=$2 AND e.expires_at > now()")
         .bind(request.request_id).bind(digest).fetch_optional(&state.pool).await;
     match row {
         Ok(Some(row)) => {
             let approved: bool = row.try_get("approved").unwrap_or(false);
+            let node_id: Option<String> = row.try_get("node_id").ok();
             Json(EnrollmentStatus {
                 status: if approved { "approved" } else { "pending" },
+                node_id: if approved { node_id } else { None },
             })
             .into_response()
         }
@@ -472,7 +589,7 @@ async fn pending_nodes(
     let Some(owner_user_id) = crate::auth::authenticated_user_id(&auth, &headers).await else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
-    let rows = match sqlx::query("SELECT e.request_id, e.node_id, e.role, e.display_name, e.origin, e.requested_at::text AS requested_at, u.display_name AS owner_display_name FROM rawrarr_node_enrollments e JOIN rawrarr_users u ON u.id=e.user_id WHERE e.user_id=$1 AND e.approved_at IS NULL AND e.expires_at > now() ORDER BY e.requested_at")
+    let rows = match sqlx::query("SELECT e.request_id, COALESCE(n.id,e.node_id) AS node_id, e.node_id AS requested_node_id, e.role, e.display_name, e.origin, e.requested_at::text AS requested_at, e.signing_public_key, u.display_name AS owner_display_name FROM rawrarr_node_enrollments e JOIN rawrarr_users u ON u.id=e.user_id LEFT JOIN rawrarr_nodes n ON n.token_sha256=e.token_sha256 WHERE e.user_id=$1 AND e.approved_at IS NULL AND e.expires_at > now() ORDER BY e.requested_at")
         .bind(owner_user_id).fetch_all(&state.pool).await { Ok(rows) => rows, Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response() };
     let mut pending = Vec::with_capacity(rows.len());
     for row in rows {
@@ -483,11 +600,13 @@ async fn pending_nodes(
         pending.push(PendingNode {
             request_id: row.try_get("request_id").unwrap_or_else(|_| Uuid::nil()),
             node_id: row.try_get("node_id").unwrap_or_default(),
+            requested_node_id: row.try_get("requested_node_id").unwrap_or_default(),
             role,
             display_name: row.try_get("display_name").unwrap_or_default(),
             owner_display_name: row.try_get("owner_display_name").unwrap_or_default(),
             origin: row.try_get("origin").unwrap_or_default(),
             requested_at: row.try_get("requested_at").unwrap_or_default(),
+            signing_public_key_hex: row.try_get::<Vec<u8>, _>("signing_public_key").map(|bytes| encode_hex(&bytes)).unwrap_or_default(),
         });
     }
     Json(pending).into_response()
@@ -506,7 +625,7 @@ async fn approve_node(
         Ok(tx) => tx,
         Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
-    let row = sqlx::query("SELECT node_id, role, display_name, token_sha256, origin, rp_id, user_id FROM rawrarr_node_enrollments WHERE request_id=$1 AND user_id=$2 AND approved_at IS NULL AND expires_at > now() FOR UPDATE")
+    let row = sqlx::query("SELECT node_id, role, display_name, token_sha256, origin, rp_id, user_id, signing_public_key FROM rawrarr_node_enrollments WHERE request_id=$1 AND user_id=$2 AND approved_at IS NULL AND expires_at > now() FOR UPDATE")
         .bind(request.request_id).bind(owner_user_id).fetch_optional(&mut *tx).await;
     let Ok(Some(row)) = row else {
         return StatusCode::NOT_FOUND.into_response();
@@ -546,12 +665,87 @@ async fn approve_node(
         Ok(value) if value == owner_user_id => value,
         _ => return StatusCode::NOT_FOUND.into_response(),
     };
+    let signing_public_key: Vec<u8> = match row.try_get::<Vec<u8>, _>("signing_public_key") {
+        Ok(value) if value.len() == 1952 => value,
+        _ => return StatusCode::UNAUTHORIZED.into_response(),
+    };
+    let canonical_node_id = match sqlx::query_scalar::<_, String>("SELECT id FROM rawrarr_nodes WHERE token_sha256=$1")
+        .bind(&token_sha256).fetch_optional(&mut *tx).await {
+        Ok(Some(id)) => id,
+        Ok(None) => node_id.clone(),
+        Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+    };
+    let expected_payload = serde_json::json!({
+        "domain": "rawrarr-device-approval-v1",
+        "requestId": request.request_id.to_string(),
+        "nodeId": canonical_node_id,
+        "role": role_name(role),
+        "displayName": display_name,
+        "publicKeyHex": encode_hex(&signing_public_key),
+    });
+    if request.signed_payload != expected_payload {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+    let Ok(root_public_key) = BASE64.decode(&request.root_public_key) else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    let Ok(root_signature) = BASE64.decode(&request.signature) else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    if root_public_key.len() != 1952
+        || crate::device_signing::fingerprint(&root_public_key) != request.root_fingerprint
+    {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+    let Ok(approval_bytes) = crate::device_signing::canonical_json(&request.signed_payload) else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    if !crate::device_signing::verify(&root_public_key, &root_signature, &approval_bytes) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let pinned_root = sqlx::query("SELECT public_key, fingerprint, owner_user_id FROM rawrarr_instance_signing_root WHERE singleton=TRUE FOR UPDATE")
+        .fetch_optional(&mut *tx).await;
+    let pinned_root = match pinned_root {
+        Ok(value) => value,
+        Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+    };
+    if let Some(pinned_root) = pinned_root {
+        let stored_key: Vec<u8> = match pinned_root.try_get("public_key") {
+            Ok(value) => value,
+            Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        };
+        let stored_fingerprint: String = match pinned_root.try_get("fingerprint") {
+            Ok(value) => value,
+            Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        };
+        let stored_owner: Uuid = match pinned_root.try_get("owner_user_id") {
+            Ok(value) => value,
+            Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        };
+        if stored_key != root_public_key || stored_fingerprint != request.root_fingerprint || stored_owner != owner_user_id {
+            return StatusCode::FORBIDDEN.into_response();
+        }
+    } else if sqlx::query("INSERT INTO rawrarr_instance_signing_root(singleton, algorithm, public_key, fingerprint, owner_user_id) VALUES (TRUE, 'ML-DSA-65', $1, $2, $3) ON CONFLICT(singleton) DO NOTHING")
+        .bind(&root_public_key).bind(&request.root_fingerprint).bind(owner_user_id)
+        .execute(&mut *tx).await.is_err()
+    {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    }
+    let root_check = sqlx::query("SELECT public_key, fingerprint, owner_user_id FROM rawrarr_instance_signing_root WHERE singleton=TRUE FOR UPDATE")
+        .fetch_optional(&mut *tx).await;
+    let Ok(Some(root_check)) = root_check else { return StatusCode::SERVICE_UNAVAILABLE.into_response(); };
+    let checked_key: Vec<u8> = match root_check.try_get("public_key") { Ok(value) => value, Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response() };
+    let checked_fingerprint: String = match root_check.try_get("fingerprint") { Ok(value) => value, Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response() };
+    let checked_owner: Uuid = match root_check.try_get("owner_user_id") { Ok(value) => value, Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response() };
+    if checked_key != root_public_key || checked_fingerprint != request.root_fingerprint || checked_owner != owner_user_id {
+        return StatusCode::FORBIDDEN.into_response();
+    }
     // A subscriber may retain a token from an earlier node ID while its
     // Compose configuration is regenerated. In that case the credential is
     // already loaded for its original identity; approving this request should
     // refresh that identity's public name rather than collide with the unique
     // token index and leave the button appearing inert.
-    let existing = sqlx::query("SELECT id, role, user_id FROM rawrarr_nodes WHERE token_sha256=$1")
+    let existing = sqlx::query("SELECT id, role, user_id, signing_public_key FROM rawrarr_nodes WHERE token_sha256=$1")
         .bind(&token_sha256)
         .fetch_optional(&mut *tx)
         .await;
@@ -575,6 +769,20 @@ async fn approve_node(
             Ok(value) => value,
             Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
         };
+        let existing_public_key: Option<Vec<u8>> = match existing.try_get("signing_public_key") {
+            Ok(value) => value,
+            Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        };
+        if existing_public_key.as_ref().is_some_and(|key| key != &signing_public_key) {
+            return StatusCode::CONFLICT.into_response();
+        }
+        if sqlx::query("UPDATE rawrarr_nodes SET signing_public_key=$2, signing_fingerprint=$3, signing_approval_payload=$4, signing_approval_signature=$5 WHERE id=$1 AND signing_public_key IS NULL")
+            .bind(&existing_node_id).bind(&signing_public_key).bind(crate::device_signing::node_fingerprint(&signing_public_key))
+            .bind(&request.signed_payload).bind(&root_signature)
+            .execute(&mut *tx).await.is_err()
+        {
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
         if sqlx::query("UPDATE rawrarr_node_enrollments SET display_name=$2 WHERE node_id=$1 AND user_id=$3 AND approved_at IS NOT NULL")
             .bind(existing_node_id)
             .bind(display_name)
@@ -594,12 +802,19 @@ async fn approve_node(
             return StatusCode::SERVICE_UNAVAILABLE.into_response();
         }
         return match tx.commit().await {
-            Ok(()) => StatusCode::NO_CONTENT.into_response(),
+            Ok(()) => {
+                for entry in state.approved.write().await.iter_mut().filter(|entry| entry.digest == token_sha256) {
+                    entry.signing_public_key = Some(signing_public_key.clone());
+                }
+                StatusCode::NO_CONTENT.into_response()
+            }
             Err(_) => StatusCode::SERVICE_UNAVAILABLE.into_response(),
         };
     }
-    let inserted = sqlx::query("INSERT INTO rawrarr_nodes(id, role, token_sha256, origin, rp_id, user_id) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT(id) DO NOTHING")
-        .bind(&node_id).bind(role_name(role)).bind(&token_sha256).bind(&origin_text).bind(&rp_id).bind(row_owner_user_id).execute(&mut *tx).await;
+    let inserted = sqlx::query("INSERT INTO rawrarr_nodes(id, role, token_sha256, origin, rp_id, user_id, signing_public_key, signing_fingerprint, signing_approval_payload, signing_approval_signature) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(id) DO NOTHING")
+        .bind(&node_id).bind(role_name(role)).bind(&token_sha256).bind(&origin_text).bind(&rp_id).bind(row_owner_user_id)
+        .bind(&signing_public_key).bind(crate::device_signing::node_fingerprint(&signing_public_key))
+        .bind(&request.signed_payload).bind(&root_signature).execute(&mut *tx).await;
     if !matches!(inserted, Ok(ref result) if result.rows_affected() == 1) {
         return StatusCode::CONFLICT.into_response();
     }
@@ -623,6 +838,7 @@ async fn approve_node(
     state.approved.write().await.push(ApprovedAuth {
         digest: token_sha256,
         role,
+        signing_public_key: Some(signing_public_key),
         auth: AuthState {
             pool: state.pool.clone(),
             webauthn,
@@ -742,6 +958,7 @@ struct Registration {
 async fn register(
     Extension(auth): Extension<AuthState>,
     Extension(role): Extension<NodeRole>,
+    headers: HeaderMap,
     Json(request): Json<Registration>,
 ) -> StatusCode {
     if request.role != role {
@@ -752,6 +969,13 @@ async fn register(
         name.is_empty() || name.chars().count() > 64 || name.chars().any(char::is_control)
     }) {
         return StatusCode::BAD_REQUEST;
+    }
+    let has_signing_key = sqlx::query_scalar::<_, bool>("SELECT signing_public_key IS NOT NULL FROM rawrarr_nodes WHERE id=$1")
+        .bind(&auth.node_id).fetch_optional(&auth.pool).await;
+    match has_signing_key {
+        Ok(Some(false)) if headers.contains_key("x-rawarr-signature") => return StatusCode::PRECONDITION_REQUIRED,
+        Ok(Some(_)) => {},
+        _ => return StatusCode::SERVICE_UNAVAILABLE,
     }
     if let Some(display_name) = display_name {
         if sqlx::query("UPDATE rawrarr_node_enrollments SET display_name=$2 WHERE node_id=$1 AND approved_at IS NOT NULL")
@@ -776,6 +1000,36 @@ async fn register(
     }
 }
 
+async fn node_signing_certificate(Extension(auth): Extension<AuthState>) -> Response {
+    let row = sqlx::query("SELECT n.id, n.role, n.signing_public_key, n.signing_fingerprint, n.signing_approval_payload, n.signing_approval_signature, r.public_key AS root_public_key, r.fingerprint AS root_fingerprint FROM rawrarr_nodes n JOIN rawrarr_instance_signing_root r ON r.singleton=TRUE WHERE n.id=$1 AND n.signing_public_key IS NOT NULL")
+        .bind(&auth.node_id).fetch_optional(&auth.pool).await;
+    match row {
+        Ok(Some(row)) => {
+            let Ok(node_id) = row.try_get::<String, _>("id") else { return StatusCode::SERVICE_UNAVAILABLE.into_response(); };
+            let Ok(role) = row.try_get::<String, _>("role") else { return StatusCode::SERVICE_UNAVAILABLE.into_response(); };
+            let Ok(public_key) = row.try_get::<Vec<u8>, _>("signing_public_key") else { return StatusCode::SERVICE_UNAVAILABLE.into_response(); };
+            let Ok(fingerprint) = row.try_get::<String, _>("signing_fingerprint") else { return StatusCode::SERVICE_UNAVAILABLE.into_response(); };
+            let Ok(signed_payload) = row.try_get::<serde_json::Value, _>("signing_approval_payload") else { return StatusCode::SERVICE_UNAVAILABLE.into_response(); };
+            let Ok(signature) = row.try_get::<Vec<u8>, _>("signing_approval_signature") else { return StatusCode::SERVICE_UNAVAILABLE.into_response(); };
+            let Ok(root_public_key) = row.try_get::<Vec<u8>, _>("root_public_key") else { return StatusCode::SERVICE_UNAVAILABLE.into_response(); };
+            let Ok(root_fingerprint) = row.try_get::<String, _>("root_fingerprint") else { return StatusCode::SERVICE_UNAVAILABLE.into_response(); };
+            Json(SigningCertificate {
+                algorithm: "ML-DSA-65",
+                root_public_key: BASE64.encode(root_public_key),
+                root_fingerprint,
+                node_id,
+                role,
+                signing_public_key_hex: encode_hex(&public_key),
+                signing_fingerprint: fingerprint,
+                signed_payload,
+                signature: BASE64.encode(signature),
+            }).into_response()
+        }
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Err(_) => StatusCode::SERVICE_UNAVAILABLE.into_response(),
+    }
+}
+
 fn bearer_token(headers: &HeaderMap) -> Option<&str> {
     headers
         .get(header::AUTHORIZATION)?
@@ -793,6 +1047,28 @@ fn valid_node_id(value: &str) -> bool {
 }
 fn valid_digest(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+fn decode_hex(value: &str) -> Option<Vec<u8>> {
+    if value.len() % 2 != 0 { return None; }
+    value.as_bytes().chunks_exact(2).map(|pair| {
+        let digit = |byte: u8| match byte {
+            b'0'..=b'9' => Some(byte - b'0'),
+            b'a'..=b'f' => Some(byte - b'a' + 10),
+            _ => None,
+        };
+        Some(digit(pair[0])? * 16 + digit(pair[1])?)
+    }).collect()
+}
+
+fn encode_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut result = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        result.push(HEX[(byte >> 4) as usize] as char);
+        result.push(HEX[(byte & 15) as usize] as char);
+    }
+    result
 }
 
 fn validate_direct_target(origin: &str, target: &str) -> Result<reqwest::Url, &'static str> {
@@ -925,11 +1201,13 @@ async fn coordinator_home(
     State(state): State<CoordinatorState>,
     headers: HeaderMap,
 ) -> Response {
-    if crate::auth::is_authenticated(&state.coordinator_auth, &headers).await {
+    let mut response = if crate::auth::is_authenticated(&state.coordinator_auth, &headers).await {
         axum::response::Html(crate::ui_assets::text("coordinator_workspace.html", include_str!("coordinator_workspace.html")).await).into_response()
     } else {
         axum::response::Html(crate::ui_assets::text("landing.html", include_str!("landing.html")).await).into_response()
-    }
+    };
+    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
 }
 
 async fn coordinator_auth_page(
@@ -967,6 +1245,16 @@ async fn coordinator_subscriber_onboarding_script() -> Response {
     response
         .headers_mut()
         .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+async fn coordinator_device_signing_script() -> Response {
+    let mut response = Response::new(Body::from(crate::ui_assets::text(
+        "assets/device-signing-client.js",
+        include_str!("assets/device-signing-client.js"),
+    ).await));
+    response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/javascript; charset=utf-8"));
+    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
 }
 

@@ -50,7 +50,7 @@
   <a href="/">← Workspace</a>
   <div class="eyebrow">Your equipment · subscriber setup</div>
   <h1>Set up a rawrarr node</h1>
-  <p>Sign-in uses your passkey. Your age private ID and encrypted user signing-key backup stay in this browser while you work through these steps; they are never sent to roarlay. Save both backups somewhere you control.</p>
+  <p>Sign-in uses your passkey. Your age private ID and encrypted instance-root backup stay in this tab's memory while you work; neither private key is sent to roarlay. Save the age ID, encrypted root backup, and root fingerprint somewhere you control. Losing either key backup can prevent recovery or future device approvals.</p>
 
   <section class="step" id="age-step" aria-labelledby="age-title">
     <div class="step-summary"><p><strong>1. Age ID</strong> · <span id="age-summary"></span></p><button type="button" class="secondary" data-reopen="age-step">Edit</button></div>
@@ -65,16 +65,17 @@
   </section>
 
   <section class="step" id="root-step" aria-labelledby="root-title" hidden>
-    <div class="step-summary"><p><strong>2. User signing key</strong> · <span id="root-summary"></span></p><button type="button" class="secondary" data-reopen="root-step">Edit</button></div>
-    <h2 id="root-title">2. Create or import your encrypted user signing key</h2>
-    <p>Your user signing key is separate from age. It will authorize node signing keys when signed device enrollment is released. Only its age-encrypted backup is copied. This preview does not yet pin the public key as an active trust anchor.</p>
-    <div class="actions"><button id="create-root" type="button">Create encrypted user signing-key backup</button><button id="copy-root" type="button" hidden>Copy encrypted backup</button></div>
-    <label for="import-root">Or paste an existing encrypted user signing-key backup</label>
+    <div class="step-summary"><p><strong>2. Instance signing root</strong> · <span id="root-summary"></span></p><button type="button" class="secondary" data-reopen="root-step">Edit</button></div>
+    <h2 id="root-title">2. Create or import your encrypted instance signing root</h2>
+    <p>This per-instance root signing key authorizes node signing keys and their roles. The private key is encrypted to your age recipient in the backup; Rawrarr stores only its public key after the first signed approval.</p>
+    <div class="actions"><button id="create-root" type="button">Create encrypted instance-root backup</button><button id="copy-root" type="button" hidden>Copy encrypted backup</button></div>
+    <label for="import-root">Or paste an existing encrypted instance-root backup</label>
     <textarea id="import-root" spellcheck="false" autocomplete="off" placeholder="-----BEGIN AGE ENCRYPTED FILE-----"></textarea>
     <div class="actions"><button id="use-root" type="button" class="secondary">Verify imported backup</button></div>
     <p id="root-fingerprint" class="status" role="status" aria-live="polite"></p>
-    <p class="warning">Keep both the encrypted user signing-key backup and the private age ID. Losing either can prevent future device approvals. Rawrarr cannot recover them for you.</p>
-    <label class="check" id="root-backup-label" hidden><input id="root-backed-up" type="checkbox" disabled>I saved the encrypted user signing-key backup and understand I need my age ID to unlock it.</label>
+    <div class="actions"><button id="copy-root-fingerprint" type="button" class="secondary" hidden>Copy root fingerprint</button></div>
+    <p class="warning">Keep the encrypted root backup, root fingerprint, and private age ID in separate safe places. Losing the age ID prevents decrypting your data; losing either the age ID or encrypted root backup can prevent future device approvals. Rawrarr cannot recover them for you.</p>
+    <label class="check" id="root-backup-label" hidden><input id="root-backed-up" type="checkbox" disabled>I saved the encrypted root backup and its fingerprint somewhere outside this browser, and understand I need my age ID to unlock it.</label>
   </section>
 
   <section class="step" id="deploy-step" aria-labelledby="deploy-title" hidden>
@@ -86,6 +87,9 @@
     <label for="device-name">Device name</label>
     <input id="device-name" type="text" maxlength="64" autocomplete="off" value="My fossil node" aria-describedby="device-name-help">
     <p id="device-name-help">This name appears in the approval request and Devices list. You can change it later.</p>
+    <label for="root-fingerprint-confirm">Re-enter the root fingerprint you saved separately</label>
+    <input id="root-fingerprint-confirm" type="text" inputmode="text" pattern="[0-9a-fA-F]{64}" autocomplete="off" spellcheck="false" placeholder="64 hexadecimal characters">
+    <p>This independently pins the root key for the node. Keep the same fingerprint in future node Compose files.</p>
     <label for="network-mode">Node network</label>
     <select id="network-mode"><option value="internal-tailscale">Internal use · my Tailscale tailnet</option><option value="headscale">Public service · Headscale</option></select>
     <p>Each node gets its own Tailscale identity and state. Enter a one-time auth key for the selected network. Internal Tailscale mode embeds the key in Compose; Headscale mode uses a local secret file.</p>
