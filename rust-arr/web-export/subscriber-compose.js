@@ -1,10 +1,12 @@
-export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, mediaPath = '', networkMode, controlServer }) {
+export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, mediaPath = '', networkMode, controlServer, authKey }) {
   if (!['metadata', 'storage'].includes(role)) throw new Error('Only fossil and boneyard nodes can be installed here.');
   if (!['internal-tailscale', 'headscale'].includes(networkMode)) throw new Error('Choose internal Tailscale or public Headscale networking.');
   if (!/^device-[0-9a-f]{24}$/.test(nodeId)) throw new Error('Invalid generated device ID.');
   const defaultName = role === 'storage' ? 'My boneyard node' : 'My fossil node';
   const name = String(deviceName ?? defaultName).trim();
   if (!name || name.length > 64 || /[\u0000-\u001f\u007f]/.test(name)) throw new Error('Enter a device name of 1 to 64 characters without control characters.');
+  const networkAuthKey = String(authKey ?? '').trim();
+  if (!networkAuthKey) throw new Error('Enter a one-time Tailscale or Headscale auth key.');
   let origin;
   try { origin = new URL(coordinatorUrl); }
   catch { throw new Error('The coordinator must have an HTTPS origin.'); }
@@ -12,16 +14,21 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
   coordinatorUrl = origin.origin;
   if (role === 'storage' && (!/^(?:\/[^\0-\x1f]*|[A-Za-z]:[\\/][^\0-\x1f]+)$/.test(mediaPath.trim()))) throw new Error('Enter the absolute path to your media folder.');
   const quote = value => JSON.stringify(value);
+  const baseHostname = name.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63) || nodeId;
+  const hostname = networkMode === 'internal-tailscale' && !baseHostname.startsWith('rawrarr-')
+    ? `rawrarr-${baseHostname}`.slice(0, 63)
+    : baseHostname;
   const lines = [
     '# Rawrarr subscriber node. Requires the rawrarr:local image until a public release is published.',
     '# This file runs no coordinator, roarlay, or PostgreSQL service.',
     'services:',
     '  tailscale:',
     '    image: tailscale/tailscale:stable',
-    `    hostname: ${quote(name.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63) || nodeId)}`,
+    `    hostname: ${quote(hostname)}`,
     '    environment:',
+    `      TS_HOSTNAME: ${hostname}`,
     '      TS_STATE_DIR: /var/lib/tailscale',
-    '      TS_AUTHKEY: file:/run/secrets/tailscale-authkey',
+    `      TS_AUTHKEY: ${networkMode === 'internal-tailscale' ? quote(networkAuthKey) : 'file:/run/secrets/tailscale-authkey'}`,
     '      TS_AUTH_ONCE: "true"',
     '      TS_USERSPACE: "true"',
   ];
@@ -34,14 +41,19 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
     tsArgs.push(`--login-server=${loginServer.origin}`);
   }
   lines.push(`      TS_EXTRA_ARGS: ${quote(tsArgs.join(' '))}`);
+  if (networkMode === 'headscale') lines.push('    secrets:', '      - tailscale-authkey');
   lines.push(
-    '    secrets:',
-    '      - tailscale-authkey',
     '    volumes:',
     '      - tailscale-state:/var/lib/tailscale',
     '    restart: unless-stopped',
-    '    entrypoint: ["/bin/sh", "-c"]',
-    '    command: "/usr/local/bin/containerboot; result=$$?; rm -f /run/secrets/tailscale-authkey; exit $$result"',
+  );
+  if (networkMode === 'headscale') {
+    lines.push(
+      '    entrypoint: ["/bin/sh", "-c"]',
+      '    command: "/usr/local/bin/containerboot; result=$$?; rm -f /run/secrets/tailscale-authkey; exit $$result"',
+    );
+  }
+  lines.push(
     `  ${role === 'storage' ? 'boneyard' : 'fossil'}:`,
     '    image: rawrarr:local',
     '    environment:',
@@ -73,11 +85,9 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
     '      - rawrarr-shared:/shared',
   );
   if (role === 'storage') lines.push('      - type: bind', `        source: ${quote(mediaPath.trim())}`, '        target: /media', '        read_only: true', '        bind:', '          create_host_path: false');
+  lines.push('    restart: unless-stopped');
+  if (networkMode === 'headscale') lines.push('secrets:', '  tailscale-authkey:', '    file: ./tailscale-authkey');
   lines.push(
-    '    restart: unless-stopped',
-    'secrets:',
-    '  tailscale-authkey:',
-    '    file: ./tailscale-authkey',
     'volumes:',
     '  tailscale-state:',
     '  rawrarr-data:',

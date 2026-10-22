@@ -121,12 +121,18 @@ byId('prepare-compose').addEventListener('click', () => {
     if (!authKey) throw new Error('Enter a one-time Tailscale or Headscale auth key.');
     const mode = byId('network-mode').value;
     const coordinatorUrl = mode === 'internal-tailscale' ? byId('internal-coordinator-url').value.trim().replace(/\/$/, '') : location.origin;
-    const yaml = subscriberCompose({ role: byId('node-role').value, nodeId, coordinatorUrl, deviceName: byId('device-name').value, mediaPath: byId('media-path').value, networkMode: mode, controlServer: byId('headscale-server').value.trim() });
+    const yaml = subscriberCompose({ role: byId('node-role').value, nodeId, coordinatorUrl, deviceName: byId('device-name').value, mediaPath: byId('media-path').value, networkMode: mode, controlServer: byId('headscale-server').value.trim(), authKey });
     byId('compose-preview').textContent = yaml;
     byId('compose-preview').hidden = false;
     byId('download-compose').hidden = false;
     byId('deploy-instructions').hidden = false;
-    byId('compose-message').textContent = 'Compose references a local secret file. Save the auth key separately as tailscale-authkey; the key is not included in this preview or download.';
+    const inlineKey = mode === 'internal-tailscale';
+    byId('compose-message').textContent = inlineKey
+      ? 'The internal Tailscale auth key is included in this Compose preview and download. Keep the file private and remove the key after the node joins.'
+      : 'Compose references a local secret file. Save the Headscale auth key separately as tailscale-authkey; the key is not included in this preview or download.';
+    byId('auth-key-instruction').textContent = inlineKey
+      ? 'The internal Tailscale auth key is embedded in compose.yaml. Restrict the file to your user (for example, chmod 600 compose.yaml), and remove the key from the file after the node joins.'
+      : 'Save the Headscale auth key you entered as tailscale-authkey beside compose.yaml, restrict it to your user (for example, chmod 600 tailscale-authkey), and remove it after the node joins.';
   } catch (error) { fail('compose-message', error); }
 });
 byId('download-compose').addEventListener('click', () => {
@@ -137,7 +143,13 @@ byId('download-compose').addEventListener('click', () => {
   link.download = 'compose.yaml';
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  byId('compose-message').textContent = 'Compose downloaded. Save the auth key you entered separately as tailscale-authkey beside compose.yaml; it was not included in the download.';
+  const inlineKey = byId('network-mode').value === 'internal-tailscale';
+  byId('compose-message').textContent = inlineKey
+    ? 'Compose downloaded with the internal Tailscale auth key embedded. Keep this file private and remove the key from it after the node joins.'
+    : 'Compose downloaded. Save the Headscale auth key separately as tailscale-authkey beside compose.yaml; it was not included in the download.';
   byId('network-auth-key').value = '';
+  byId('compose-preview').textContent = '';
+  byId('compose-preview').hidden = true;
+  byId('download-compose').hidden = true;
 });
 window.addEventListener('pagehide', () => { ageIdentity = ''; rootBackup = ''; byId('import-age').value = ''; byId('import-root').value = ''; byId('network-auth-key').value = ''; });

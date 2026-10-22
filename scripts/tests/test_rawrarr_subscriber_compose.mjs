@@ -2,15 +2,16 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { subscriberCompose } from '../../rust-arr/web-export/subscriber-compose.js';
 
-const base = { nodeId: `device-${'a'.repeat(24)}`, coordinatorUrl: 'https://rawrarr.example.test', networkMode: 'internal-tailscale' };
+const base = { nodeId: `device-${'a'.repeat(24)}`, coordinatorUrl: 'https://rawrarr.example.test', networkMode: 'internal-tailscale', authKey: 'tskey-auth-test-fixture' };
 
 test('subscriber Compose offers fossil and boneyard without coordinator services or secrets', () => {
   for (const role of ['metadata', 'storage']) {
     const yaml = subscriberCompose({ ...base, role, mediaPath: '/srv/media' });
     assert.match(yaml, new RegExp(`RAWARR_ROLE: ${role}`));
     assert.match(yaml, /network_mode: service:tailscale/);
-    assert.match(yaml, /TS_AUTHKEY: file:\/run\/secrets\/tailscale-authkey/);
-    assert.match(yaml, /file: \.\/tailscale-authkey/);
+    assert.match(yaml, /TS_AUTHKEY: "tskey-auth-test-fixture"/);
+    assert.doesNotMatch(yaml, /tailscale-authkey|secrets:/);
+    assert.match(yaml, /TS_HOSTNAME: rawrarr-my-fossil-node/);
     assert.match(yaml, /tailscale-state:\/var\/lib\/tailscale/);
     assert.match(yaml, /rawrarr-data:\/data/);
     assert.match(yaml, /rawrarr-shared:\/shared/);
@@ -50,4 +51,6 @@ test('internal mode uses the Mac mini Tailscale HTTPS coordinator origin', () =>
   const yaml = subscriberCompose({ ...base, role: 'metadata', coordinatorUrl, networkMode: 'internal-tailscale' });
   assert.match(yaml, /RAWARR_COORDINATOR_URL: "https:\/\/rawrarr-mini\.example-tailnet\.ts\.net"/);
   assert.match(yaml, /RAWARR_DIRECT_ALLOWED_ORIGIN: "https:\/\/rawrarr-mini\.example-tailnet\.ts\.net"/);
+  assert.match(yaml, /TS_HOSTNAME: rawrarr-my-fossil-node/);
+  assert.match(yaml, /TS_AUTHKEY: "tskey-auth-test-fixture"/);
 });
