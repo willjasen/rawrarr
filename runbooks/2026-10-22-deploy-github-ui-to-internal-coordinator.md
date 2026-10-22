@@ -1,26 +1,28 @@
-# Deploy GitHub UI updates to the internal coordinator
+# Deploy GitHub UI updates to internal nodes
 
-## Objective
+## Objective and issue
 
-Deploy the private GitHub UI update mechanism to the internal coordinator (`roarlay` in Compose project `rawrarr-internal-mini`) so UI changes published from GitHub can update without a node image rebuild for every release.
+Deploy private GitHub UI bundle updates and converge the internal coordinator and affected subscriber code on GitHub `main`. Issue [#13](https://github.com/willjasen/rawrarr/issues/13) tracks the work. Coordinator and subscriber services must be deployed only from a clean, published `main` commit. Local `main` and `origin/main` must point to the same final commit.
 
-## Initial state and blockers
+## Initial state
 
-- The implementation is committed as `8c05fe620975c55e346b57f9ed77fae54891ae2d` on local branch `codex/github-ui-updates`; the shared `main` checkout is dirty with unrelated task changes. The implementation has not been pushed or merged, so GitHub Actions has not published the private UI release.
-- No `RAWARR_UI_GITHUB_TOKEN_PATH` file exists in the local protected Rawrarr application-support directory or the Mac mini's coordinator secrets directory. No token contents were read or logged.
-- GitHub issue search and creation through the connected account both failed (422 and 404). The proposed issue is: "Deploy private GitHub UI updates to the internal coordinator", with acceptance criteria to publish/fetch the private bundle, update only roarlay, verify health and tailnet route, and document rollback/signature follow-up.
-- Local SSH to `brandons-mac-mini` succeeds. The mini has existing internal-coordinator source/backups, but its SSH login shell could not resolve the `docker` command. The live service could not be inspected or deployed in this session.
-- A local `.container-rebuild-fossil.lock` exists and belongs to another task; it was left untouched. No roarlay deployment marker was found on the mini.
+- GitHub `main` was `5ba6f80`, with UI bundle release `ui-5ba6f80daae78da1a18da79f1febcaec6047d3d8`.
+- The Mac mini `github-source` checkout was on `codex/age-session-response-github` at `933d905`; its Compose build overlay pointed to a separate avatar branch. Active age-wrapped browser-session and node-avatar changes were missing from `main`.
+- The mini's `roarlay`, PostgreSQL, and Tailscale sidecar were running; roarlay was healthy. Tailscale Serve mapped HTTPS 443 `/` to `http://127.0.0.1:8080`.
+- The MacBook `fossil` project used `/Users/willjasen/rawrarr-node-internal/compose.yml`. Its `github-source` checkout had local modifications on the age-session branch; these were preserved.
+- The mini's fine-grained GitHub read token was present with mode 600. The roarlay deployment lock was claimed before its rebuild. The fossil deployment lock was free before its rebuild.
 
-## Required continuation
+## Changes and deployments
 
-1. Push/merge the implementation commit to `main` through the repository's normal workflow. Preserve unrelated shared-checkout edits and do not push them.
-2. Configure a fine-grained, Contents: Read GitHub token in a protected file on the Mac mini, and set `RAWARR_UI_GITHUB_TOKEN_PATH` to that file in the deployment environment. Never place the token in Git, Compose text, or logs.
-3. Confirm the release assets `ui-bundle.zip` and `ui-bundle.zip.sha256` are published and accessible to the node token.
-4. Establish Docker CLI availability on the mini's supported OrbStack/Compose environment; inspect existing project/container state and verify the roarlay rebuild marker is absent, then atomically claim it.
-5. Deploy only `roarlay` in the existing `rawrarr-internal-mini` Compose project. Preserve PostgreSQL, Tailscale state, the live `Serve` route, and browser windows.
-6. Verify roarlay health, `tailscale serve status --json`, HTTPS `/health`, and the UI bundle version/assets. Release the marker after verification.
+- Added age-wrapped browser session and node-avatar changes to `main`, retained the UI updater, and documented that deploys must use published `main` and that local `main` must match GitHub `main`.
+- Pushed task commits through `02e8187`. GitHub Actions run [39854511390](https://github.com/willjasen/rawrarr/actions/runs/39854511390) passed and published `ui-02e818731a491f6427518f2102355f728273ae97`. PR #14 later advanced `main` to `06762cb` with deployment-target classification; it added no runtime files. That merge was included in the local `main` synchronization.
+- Built roarlay from a clean detached mini worktree at `02e8187` using the main Compose file and no branch overlay. Recreated only `roarlay` with `--no-deps`. The PostgreSQL and Tailscale container IDs remained unchanged with zero restarts. Afterward, moved the mini's standard `github-source` checkout to a clean `main` branch at `06762cb`.
+- The deployment-target classifier selected both coordinator and nodes. Built `rawrarr:local` from a clean detached worktree of published `main` at `06762cb` and recreated only `fossil` in `rawrarr-node-internal` with `--no-deps`. The MacBook Tailscale container ID stayed unchanged with zero restarts. The existing dirty `github-source` checkout was not modified.
+- Removed both deployment locks after service verification. Removed the task-created temporary build worktrees.
 
-## Verification and rollback
+## Verification and recovery
 
-The implementation checks SHA-256 integrity and keeps `/ui/previous`; it does not yet provide publisher-authenticating signatures or browser-side signature verification. See [the implementation design and tests](2026-10-22-github-ui-distribution.md). No internal coordinator services were changed in this attempt because the release, token, and Docker CLI prerequisites were unavailable.
+- Focused checks: UI bundle tests 3/3; node-avatar and subscriber Compose tests 6/6. The broader coordinator workspace test file reported 19 passes and 7 failures, including mismatches between legacy assertions and current page markup; these remain unresolved. GitHub Actions basic tests and bundle publication passed.
+- Verified the GitHub bundle SHA-256, installed `/ui/current/bundle.version` and `.sha256`, and matched the served coordinator workspace module SHA-256 to the bundle asset.
+- Roarlay was healthy with zero restarts; HTTPS `/health` returned 200; Tailscale Serve still mapped coordinator HTTPS 443 `/` to `http://127.0.0.1:8080`. Fossil was healthy with zero restarts; its Tailscale Serve configuration was unchanged and its HTTPS `/health` returned 200.
+- Bundle updates verify SHA-256 and retain `/ui/previous`; publisher-authenticating signatures and browser-side signature verification remain future work. See [UI distribution design and tests](2026-10-22-github-ui-distribution.md).
