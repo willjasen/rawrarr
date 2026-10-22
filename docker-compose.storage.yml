@@ -6,6 +6,8 @@ services:
     image: rawrarr:local
     environment:
       RAWARR_ROLE: storage
+      RAWARR_UI_GITHUB_REPO: willjasen/rawrarr
+      RAWARR_UI_GITHUB_TOKEN_FILE: /run/secrets/rawrarr_ui_github_token
       RUST_ARR_LISTEN_ADDR: 127.0.0.1:8080
       RAWARR_DATA_DIR: /data
       RAWARR_SHARED_DATA_DIR: /shared
@@ -26,6 +28,7 @@ services:
       RAWARR_LOCAL_PLAINTEXT_CONFIG: "false"
     volumes:
       - rawrarr-data:/data
+      - rawrarr-ui:/ui
       - type: bind
         source: "${RAWARR_SHARED_DATA_PATH:-${HOME}/Library/Application Support/rawrarr/shared-data}"
         target: /shared
@@ -41,5 +44,11 @@ services:
     # The service shares the Tailscale sidecar namespace and binds loopback only.
     # The coordinator can relay over Tailscale; the host cannot connect directly.
     restart: unless-stopped
+    secrets:
+      - rawrarr_ui_github_token
 volumes:
   rawrarr-data:
+  rawrarr-ui:
+secrets:
+  rawrarr_ui_github_token:
+    file: ${RAWARR_UI_GITHUB_TOKEN_PATH:?Set RAWARR_UI_GITHUB_TOKEN_PATH to a fine-grained read-only GitHub token file}

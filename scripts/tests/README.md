@@ -6,6 +6,9 @@
 # Rawrarr tests
 
 - `test_internal_deploy_targets.py` — checks coordinator-only, node-only, shared/unknown runtime, documentation-only, and mixed-change target classification. Run `python3 scripts/tests/test_internal_deploy_targets.py`.
+- `test_rawrarr_node_avatar.mjs` — verifies node-recipient validation, encoded relay route, no-store fetching, and deterministic SHA-256 avatar seed derivation; run with `node --test scripts/tests/test_rawrarr_node_avatar.mjs`.
+
+- `secure_config::tests::node_identity_is_created_once_and_existing_identity_is_reused` and `invalid_existing_node_identity_is_not_replaced` — Subscriber startup age identity generation, persistence/reuse, separation from the user identity, file permissions, and fail-closed invalid-file behavior; run with `cargo test --locked --manifest-path rust-arr/Cargo.toml node_identity` in the Rust test environment.
 
 - `test_rawrarr_admin_preview.mjs` — checks sample-only admin content, local-only port publishing, absence of a production data connection, and planned authentication before live reporting. Run with `node --test scripts/tests/test_rawrarr_admin_preview.mjs`.
 - `test_rawrarr_subscriber_compose.mjs` — Validates subscriber fossil/boneyard Compose output, internal Tailscale coordinator URL and selected Headscale modes, secret-file auth, node-local Tailscale state, custom device names, and invalid network settings; run with `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
@@ -106,3 +109,4 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 `test_rawrarr_library_detail_link_layout.mjs` checks that Movies and TV display year and Arr detail links in the artwork/title column. Run with `node --test scripts/tests/test_rawrarr_library_detail_link_layout.mjs`.
 
 `test_rawrarr_library_detail_link_layout.mjs` checks that Movies and TV display year and Arr detail links in the artwork/title column. Run with `node --test scripts/tests/test_rawrarr_library_detail_link_layout.mjs`.
+- `test_ui_bundle.py` — Verifies the UI package allowlist/checksum, dry-run and verified install behavior, checksum rejection, and ZIP path traversal rejection. Run `python3 scripts/tests/test_ui_bundle.py -v`.

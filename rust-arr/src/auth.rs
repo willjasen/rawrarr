@@ -551,17 +551,17 @@ pub(super) async fn is_authenticated(auth: &AuthState, headers: &HeaderMap) -> b
     authenticated_user_id(auth, headers).await.is_some()
 }
 
-pub(super) fn auth_html() -> impl IntoResponse {
+pub(super) async fn auth_html() -> impl IntoResponse {
     (
         [(header::CACHE_CONTROL, "no-store")],
-        axum::response::Html(include_str!("auth.html")),
+        axum::response::Html(crate::ui_assets::text("auth.html", include_str!("auth.html")).await),
     )
 }
 
-pub(super) fn age_setup_html() -> impl IntoResponse {
+pub(super) async fn age_setup_html() -> impl IntoResponse {
     (
         [(header::CACHE_CONTROL, "no-store")],
-        axum::response::Html(include_str!("age_setup.html")),
+        axum::response::Html(crate::ui_assets::text("age_setup.html", include_str!("age_setup.html")).await),
     )
 }
 

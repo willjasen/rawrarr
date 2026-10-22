@@ -1,0 +1,17 @@
+# Node age identities and avatars
+
+## Objective and initial state
+
+Add persistent age identities to subscriber startup and use their public recipients to generate node avatars with the existing deterministic coordinator avatar renderer. The existing user age identity remains independent. Deployment target is the internal MacBook fossil subscriber; coordinator UI and renderer routes deploy to Mac mini roarlay. Existing local edits in the main checkout are unrelated and remain untouched.
+
+## Implementation and verification
+
+- Subscriber startup creates `/data/node-age-identity` when missing and retains it on subsequent starts. It is independent of `/data/age-identity`, the user's vault identity.
+- An authenticated subscriber route exposes only the node identity's public age recipient. Roarlay relays this owner-scoped read through the existing allowlist.
+- The Devices view hashes each reachable node recipient with SHA-256 and requests the same coordinator-rendered JPEG XL/PNG image used for the user profile. A session cache avoids repeated recipient requests while cards refresh.
+- Added `test_rawrarr_node_avatar.mjs`; all three test cases passed. The focused node identity Rust tests passed (2/2), and the coordinator relay allowlist test passed (1/1). Full Rust suite passed (66/66). JavaScript syntax checks and `git diff --check` passed.
+- An earlier run of the full legacy coordinator workspace Node test file has existing failures before the new avatar assertions (for example, stale navigation/status expectations); the new standalone avatar tests pass.
+
+## Deployment and recovery
+
+Deployment pending. Deploy only the existing `fossil` service in Compose project `rawrarr-node-internal` and `roarlay` in `rawrarr-internal-mini`, preserving `/data`, `/shared`, PostgreSQL, Tailscale state, and the user's browser windows. Verify both app health endpoints and the Mac mini Tailscale Serve route. If deployment fails, restore the prior committed source and rebuild only the affected app service under its own deployment marker.

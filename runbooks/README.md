@@ -1,4 +1,7 @@
+- [Deploy persistent node age identity](2026-10-22-deploy-node-age-identity.md) — Deploy the committed subscriber-only identity creation to internal fossil and verify persistence and health.
+
 - [Deploy main to the internal Mac services](2026-10-22-deploy-main-to-internal-macs.md) — Update the Mac mini roarlay coordinator and MacBook fossil end-user node from one committed main revision.
+- [Node age identities and avatars](2026-10-22-node-age-avatars.md) — Create persistent node age identities and generate node profile art from their public recipients.
 - [Version avatar generations](2026-10-21-version-avatar-generations.md) — Keep avatar identity stable while creating renderer generations that can be compared visually over time.
 - [Serve the OrbStack coordinator on the existing tailnet](2026-10-21-orbstack-coordinator-tailnet-url.md) — Give the isolated coordinator its own operator-tailnet identity and HTTPS Serve route, separate from test Headscale nodes.
 - [Clean up obsolete Rawrarr containers on the MacBook](2026-10-21-cleanup-old-macbook-rawrarr-containers.md) — Remove the old port-owning Tailscale sidecar and stale Rawrarr test containers while preserving active test services and stored state.
@@ -30,6 +33,8 @@
 - [Age-wrapped browser response session](2026-10-22-age-wrapped-browser-response-session.md) — Wrap a per-request response key to the user's age recipient so nodes encrypt browser responses end to end through the coordinator.
 
 - [Reuse a live TV style browser for Movies and TV](2026-10-22-live-tv-library-browser.md) — Use one searchable, filterable poster-card layout across both coordinator libraries.
+- [Node and app age identity design exploration](2026-10-22-node-and-app-age-identities.md) — Record startup creation and persistence of a separate node age identity, plus conditional Radarr/Sonarr identities.
+
 
 - [Show shared Arr scraping progress on Movies and TV](2026-10-22-shared-arr-scrape-progress.md) — Reuse provider-aware status and progress UI for Radarr and Sonarr metadata artwork scraping.
 
@@ -524,3 +529,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Fix Radarr and Sonarr poster delivery](2026-10-22-fix-arr-posters.md) — Restore direct Radarr poster delivery and verify that the metadata node writes encrypted artwork into the intended shared folder.
 - [Merge the Rawrarr landing tagline](2026-10-22-merge-landing-tagline.md) — Integrate the tagline into current `main`, preserving concurrent work and excluding an obsolete migration change.
 - [Move the device delete button to the card corner](2026-10-22-device-delete-button-position.md) — Place Delete device at the bottom-right of coordinator Devices cards.
+- [Separate UI updates from node images through GitHub](2026-10-22-github-ui-distribution.md) — Publish private UI bundles through GitHub Actions and refresh node-local UI files without routine application image rebuilds.
+- [Deploy GitHub UI updates to the internal coordinator](2026-10-22-deploy-github-ui-to-internal-coordinator.md) — Internal deployment status, prerequisites, and verification plan.

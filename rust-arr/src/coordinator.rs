@@ -228,6 +228,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/assets/rawrarr-logo.png", get(coordinator_rawrarr_logo))
         .route("/assets/rawrarr-logo.jxl", get(coordinator_rawrarr_logo_jxl))
         .route("/assets/coordinator-workspace.mjs", get(coordinator_workspace_script))
+        .route("/assets/coordinator-node-avatar.mjs", get(coordinator_node_avatar_script))
         .route("/assets/coordinator-ai.mjs", get(coordinator_ai_script))
         .route("/assets/coordinator-device-routes.mjs", get(coordinator_device_routes_script))
         .route("/assets/profile-color.mjs", get(coordinator_profile_color_script))
@@ -913,8 +914,8 @@ mod direct_route_tests {
 #[path = "../../scripts/tests/test_rawrarr_node_enrollment.rs"]
 mod tests;
 
-async fn coordinator_health() -> axum::response::Html<&'static str> {
-    axum::response::Html(include_str!("coordinator_health.html"))
+async fn coordinator_health() -> axum::response::Html<String> {
+    axum::response::Html(crate::ui_assets::text("coordinator_health.html", include_str!("coordinator_health.html")).await)
 }
 
 async fn coordinator_home(
@@ -922,9 +923,9 @@ async fn coordinator_home(
     headers: HeaderMap,
 ) -> Response {
     if crate::auth::is_authenticated(&state.coordinator_auth, &headers).await {
-        axum::response::Html(include_str!("coordinator_workspace.html")).into_response()
+        axum::response::Html(crate::ui_assets::text("coordinator_workspace.html", include_str!("coordinator_workspace.html")).await).into_response()
     } else {
-        axum::response::Html(include_str!("landing.html")).into_response()
+        axum::response::Html(crate::ui_assets::text("landing.html", include_str!("landing.html")).await).into_response()
     }
 }
 
@@ -935,7 +936,7 @@ async fn coordinator_auth_page(
     if crate::auth::is_authenticated(&state.coordinator_auth, &headers).await {
         axum::response::Redirect::to("/").into_response()
     } else {
-        crate::auth::auth_html().into_response()
+        crate::auth::auth_html().await.into_response()
     }
 }
 
@@ -946,7 +947,7 @@ async fn coordinator_subscriber_onboarding_page(
     if !crate::auth::is_authenticated(&state.coordinator_auth, &headers).await {
         return axum::response::Redirect::to("/auth").into_response();
     }
-    let mut response = axum::response::Html(include_str!("subscriber_onboarding.html"))
+    let mut response = axum::response::Html(crate::ui_assets::text("subscriber_onboarding.html", include_str!("subscriber_onboarding.html")).await)
         .into_response();
     response
         .headers_mut()
@@ -955,7 +956,7 @@ async fn coordinator_subscriber_onboarding_page(
 }
 
 async fn coordinator_subscriber_onboarding_script() -> Response {
-    let mut response = Response::new(Body::from(include_str!("assets/subscriber-onboarding.js")));
+    let mut response = Response::new(Body::from(crate::ui_assets::text("assets/subscriber-onboarding.js", include_str!("assets/subscriber-onboarding.js")).await));
     response.headers_mut().insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static("text/javascript; charset=utf-8"),
@@ -1138,49 +1139,55 @@ async fn direct_session(
 }
 
 async fn coordinator_workspace_script() -> Response {
-    let mut response = axum::response::Response::new(Body::from(include_str!("coordinator-workspace.mjs")));
+    let mut response = axum::response::Response::new(Body::from(crate::ui_assets::text("coordinator-workspace.mjs", include_str!("coordinator-workspace.mjs")).await));
     response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/javascript; charset=utf-8"));
     response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
 }
 
+async fn coordinator_node_avatar_script() -> Response {
+    let mut response = Response::new(Body::from(include_str!("coordinator-node-avatar.mjs")));
+    response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/javascript; charset=utf-8"));
+    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
 async fn coordinator_ai_script() -> Response {
-    let mut response = Response::new(Body::from(include_str!("coordinator-ai.mjs")));
+    let mut response = Response::new(Body::from(crate::ui_assets::text("coordinator-ai.mjs", include_str!("coordinator-ai.mjs")).await));
     response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/javascript; charset=utf-8"));
     response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
 }
 
 async fn coordinator_device_routes_script() -> Response {
-    let mut response = Response::new(Body::from(include_str!("coordinator-device-routes.mjs")));
+    let mut response = Response::new(Body::from(crate::ui_assets::text("coordinator-device-routes.mjs", include_str!("coordinator-device-routes.mjs")).await));
     response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/javascript; charset=utf-8"));
     response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
 }
 
 async fn coordinator_profile_color_script() -> Response {
-    let mut response = Response::new(Body::from(include_str!("profile-color.mjs")));
+    let mut response = Response::new(Body::from(crate::ui_assets::text("profile-color.mjs", include_str!("profile-color.mjs")).await));
     response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/javascript; charset=utf-8"));
     response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
 }
 
 async fn coordinator_metadata_export_js() -> Response {
-    let mut response = Response::new(Body::from(include_bytes!("assets/metadata-export.js").as_slice()));
+    let mut response = Response::new(Body::from(crate::ui_assets::bytes("assets/metadata-export.js", include_bytes!("assets/metadata-export.js")).await));
     response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/javascript; charset=utf-8"));
     response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("private, no-cache"));
     response
 }
 
 async fn coordinator_rawrarr_logo() -> Response {
-    let mut response = Response::new(Body::from(include_bytes!("assets/rawrarr-logo.png").as_slice()));
+    let mut response = Response::new(Body::from(crate::ui_assets::bytes("assets/rawrarr-logo.png", include_bytes!("assets/rawrarr-logo.png")).await));
     response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("image/png"));
     response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=3600"));
     response
 }
 
 async fn coordinator_rawrarr_logo_jxl() -> Response {
-    let mut response = Response::new(Body::from(include_bytes!("assets/rawrarr-logo.jxl").as_slice()));
+    let mut response = Response::new(Body::from(crate::ui_assets::bytes("assets/rawrarr-logo.jxl", include_bytes!("assets/rawrarr-logo.jxl")).await));
     response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("image/jxl"));
     response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=3600"));
     response
@@ -1349,7 +1356,7 @@ fn storage_scan_relay_allowed(
 }
 
 fn ciphertext_export_path(path: &str) -> bool {
-    matches!(path, "api/metadata/export/mini" | "api/metadata/export/config" | "api/metadata/export/recipient")
+    matches!(path, "api/metadata/export/mini" | "api/metadata/export/config" | "api/metadata/export/recipient" | "api/metadata/export/node-recipient")
         || path.strip_prefix("api/metadata/export/ciphertext/").is_some_and(|tail| {
             let mut parts = tail.split('/');
             let kind = parts.next().unwrap_or_default();
@@ -1474,7 +1481,7 @@ async fn create_coordinator_passkey_link(
 }
 
 async fn coordinator_passkey_page() -> Response {
-    let mut response = axum::response::Html(include_str!("coordinator_passkey.html"))
+    let mut response = axum::response::Html(crate::ui_assets::text("coordinator_passkey.html", include_str!("coordinator_passkey.html")).await)
         .into_response();
     response.headers_mut().insert(
         header::CACHE_CONTROL,
@@ -1493,7 +1500,7 @@ async fn coordinator_passkey_page() -> Response {
 
 async fn coordinator_passkey_client() -> Response {
     let mut response = axum::response::Response::new(
-        axum::body::Body::from(include_str!("passkey-client.mjs")),
+        axum::body::Body::from(crate::ui_assets::text("passkey-client.mjs", include_str!("passkey-client.mjs")).await),
     );
     response.headers_mut().insert(
         header::CONTENT_TYPE,
@@ -1507,9 +1514,7 @@ async fn coordinator_passkey_client() -> Response {
 }
 
 async fn coordinator_passkey_script() -> Response {
-    let mut response = axum::response::Response::new(axum::body::Body::from(include_str!(
-        "coordinator-passkey.mjs"
-    )));
+    let mut response = axum::response::Response::new(axum::body::Body::from(crate::ui_assets::text("coordinator-passkey.mjs", include_str!("coordinator-passkey.mjs")).await));
     response.headers_mut().insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static("text/javascript; charset=utf-8"),
