@@ -22,6 +22,8 @@ services:
     image: rawrarr:local
     environment:
       RAWARR_ROLE: coordinator
+      RAWARR_UI_GITHUB_REPO: willjasen/rawrarr
+      RAWARR_UI_GITHUB_TOKEN_FILE: /run/secrets/rawrarr_ui_github_token
       RUST_ARR_LISTEN_ADDR: 0.0.0.0:8080
       RAWARR_PG_HOST: postgres
       RAWARR_PG_PORT: 5432
@@ -36,6 +38,9 @@ services:
     secrets:
       - rawrarr_postgres_password
       - rawrarr_approved_nodes
+      - rawrarr_ui_github_token
+    volumes:
+      - rawrarr-roarlay-ui:/ui
     ports:
       - "127.0.0.1:7298:8080"
     depends_on:
@@ -61,6 +66,8 @@ services:
       RAWARR_SYNCTHING_API_KEY: ${RAWARR_SYNCTHING_API_KEY:-}
       RAWARR_SYNCTHING_API_KEY_FILE: /run/secrets/rawrarr_syncthing_api_key
       RAWARR_ROLE: metadata
+      RAWARR_UI_GITHUB_REPO: willjasen/rawrarr
+      RAWARR_UI_GITHUB_TOKEN_FILE: /run/secrets/rawrarr_ui_github_token
       RAWARR_COORDINATOR_URL: ${RAWARR_COORDINATOR_URL:-https://swarmsail.willjasen.net}
       RAWARR_NODE_TOKEN_FILE: /run/secrets/rawrarr_node_token
       RAWARR_WEBAUTHN_RP_ID: localhost
@@ -68,8 +75,10 @@ services:
     secrets:
       - rawrarr_node_token
       - rawrarr_syncthing_api_key
+      - rawrarr_ui_github_token
     volumes:
       - rawrarr-data:/data
+      - rawrarr-fossil-ui:/ui
       - type: bind
         source: "${RAWARR_SHARED_DATA_PATH:-${HOME}/Library/Application Support/rawrarr/shared-data}"
         target: /shared
@@ -78,6 +87,8 @@ services:
     restart: unless-stopped
 
 volumes:
+  rawrarr-roarlay-ui:
+  rawrarr-fossil-ui:
   rawrarr-data:
   rawrarr-postgres-data:
 
@@ -90,3 +101,5 @@ secrets:
     file: "${RAWARR_NODE_TOKEN_PATH:-${HOME}/Library/Application Support/rawrarr/nodes/macbook-metadata/token}"
   rawrarr_syncthing_api_key:
     file: "${RAWARR_SYNCTHING_API_KEY_SECRET_FILE:-${HOME}/Library/Application Support/rawrarr/syncthing-api-key}"
+  rawrarr_ui_github_token:
+    file: ${RAWARR_UI_GITHUB_TOKEN_PATH:?Set RAWARR_UI_GITHUB_TOKEN_PATH to a fine-grained read-only GitHub token file}

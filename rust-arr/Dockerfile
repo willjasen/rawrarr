@@ -16,20 +16,23 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
 
 FROM debian:bookworm-slim
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg libssl3 librsvg2-bin libjxl-tools \
+    && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg libssl3 librsvg2-bin libjxl-tools python3 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin rustarr \
-    && mkdir -p /data /shared \
+    && mkdir -p /data /shared /ui \
     && ln -s /shared/metadata /metadata \
-    && chown 10001:10001 /data /shared
+    && chown 10001:10001 /data /shared /ui
 COPY --from=builder /rust-arr /usr/local/bin/rust-arr
 COPY --from=age-builder /go/bin/age /go/bin/age-keygen /usr/local/bin/
+COPY update_ui_bundle.py /usr/local/bin/rawrarr-update-ui
+COPY container-entrypoint.sh /usr/local/bin/rawrarr-entrypoint
+RUN chmod 755 /usr/local/bin/rawrarr-entrypoint /usr/local/bin/rawrarr-update-ui
 USER 10001:10001
 EXPOSE 8080
 ENV RUST_ARR_LISTEN_ADDR=0.0.0.0:8080
 ENV RAWARR_DATA_DIR=/data
 ENV RAWARR_SHARED_DATA_DIR=/shared
 ENV RAWARR_METADATA_DIR=/metadata
-ENTRYPOINT ["/usr/local/bin/rust-arr"]
+ENTRYPOINT ["/usr/local/bin/rawrarr-entrypoint"]
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=5 \
     CMD ["curl", "--fail", "--silent", "--show-error", "--output", "/dev/null", "http://127.0.0.1:8080/health"]

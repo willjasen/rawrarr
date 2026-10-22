@@ -22,8 +22,16 @@ Allow UI changes merged to GitHub to reach coordinator and subscriber nodes with
 
 ## Implementation status
 
-Planning recorded. No application code or live deployment changed yet. The architecture requires a coordinated first-time service and Compose change; publishing an artifact alone would not update running nodes. Before implementation, inventory all UI templates/assets and all supported Compose generation paths, then build and validate the updater and dynamic asset loader as one cohesive change.
+- Added a strict allowlist and packaging script for the current HTML, JS modules, and image assets. GitHub Actions publishes a private release for commits to `main`.
+- Added a Rust UI loader that reads the per-node `/ui/current` tree for all existing UI routes and falls back to the embedded files. API routes and authentication remain on the same origin.
+- Added an updater to the application image. When the private GitHub token secret is mounted, it checks the latest release every five minutes, downloads the bundle and checksum through the GitHub API, rejects path traversal and oversized content, and swaps the staged directory atomically. The previous bundle is retained; rollback uses `RAWARR_UI_DIR=/ui/previous` and `RAWARR_UI_UPDATES_ENABLED=false`.
+- Added token and UI-volume wiring to coordinator, metadata, storage, local Compose files, and subscriber Compose generation. Each service uses a separate volume to avoid concurrent updater writes.
+- Added focused updater/package tests and updated deployment guidance. No live service was rebuilt or deployed; every node still needs the one-time image/Compose update and a protected token file.
+
+## Signature hardening consideration
+
+The current SHA-256 sidecar detects accidental or in-transit corruption only; it does not prove publisher identity because the same GitHub release can replace both files. Before treating this as authenticated UI delivery, add a detached signature over the complete bundle and verify it on the node before installation. Browser verification needs a small stable verifier and public key pinned in the application image; the verifier must be available before any downloaded UI executes. Keep the signing private key in a protected release signing environment, never in node containers. A valid signature authenticates the publisher's code but does not limit what that browser code can read or transmit.
 
 ## Verification and recovery
 
-Not yet performed. The implementation must test checksum rejection, interrupted downloads, unsafe archive paths, rollback to the previous bundle, embedded fallback, and UI-only publication without application image rebuild. Deployment rollback is to disable the updater and serve the retained prior bundle or embedded UI.
+Focused Python bundle/updater tests (3/3) and subscriber Compose generator tests (3/3) pass. The Rust release image built successfully in Docker, and the updater `--help` runs in the host Python environment. Host `cargo check` is unavailable because the installed LLVM cannot load its missing Z3 dylib. Compose parsing passed for the main coordinator, internal-mini coordinator, metadata, storage, and MacBook-storage files. GitHub Actions has not run yet, and no live node refresh has been verified. The current implementation uses checksums, not digital signatures; the signed browser verification is a follow-up security enhancement.
