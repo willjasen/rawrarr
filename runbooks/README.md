@@ -567,3 +567,4 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Review remaining local Rawrarr work](2026-10-22-local-work-cleanup-review.md) — Inventory deferred branches, dirty worktrees, and stashes and document a safe integration and cleanup sequence.
 - [Clean up deferred local feature work](2026-10-22-cleanup-deferred-local-work.md) — Remove the five explicitly deferred local feature worktrees and branches while preserving unrelated checkout state.
 - [Rerun local OrbStack tests](2026-10-25-rerun-local-orbstack-tests.md) — Record results from the required regression project and the blocked full coordinator/two-node environment build.
+- [Fix the OrbStack test runner copy step](2026-10-22-fix-test-runner-copy.md) — Remove duplicate `web-export` staging and verify the current checkout can start an isolated OrbStack test run.
