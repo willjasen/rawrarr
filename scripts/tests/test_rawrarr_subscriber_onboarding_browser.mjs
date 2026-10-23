@@ -7,7 +7,7 @@ import { chromium } from '/usr/local/lib/node_modules/playwright-core/index.mjs'
 const html = await readFile(new URL('../../rust-arr/src/subscriber_onboarding.html', import.meta.url));
 const script = await readFile(new URL('../../rust-arr/src/assets/subscriber-onboarding.js', import.meta.url));
 
-test('first-account subscriber setup gates node choices behind age and root backups', async t => {
+test('first-account setup finishes on Devices before optional node Compose setup', async t => {
   const requests = [];
   const server = createServer((request, response) => {
     requests.push(request.url);
@@ -62,8 +62,13 @@ test('first-account subscriber setup gates node choices behind age and root back
   await page.locator('#import-root').fill(backup.replace(/\r?\n/g, ' '));
   await page.getByRole('button', { name: 'Verify imported backup' }).click();
   await page.locator('#root-fingerprint').getByText(/Verified root fingerprint:/).waitFor();
-  await page.locator('#deploy-step').waitFor({ state: 'visible' });
+  await page.locator('#setup-complete-actions').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#deploy-step').isVisible(), false, 'Compose is no longer part of required first-account setup');
   await page.locator('#root-step').waitForFunction(el => el.classList.contains('completed'));
+  await page.getByRole('link', { name: 'Continue to Devices' }).click();
+  await page.waitForURL('**/#devices');
+  await page.getByRole('button', { name: 'Set up a node now' }).click();
+  await page.locator('#deploy-step').waitFor({ state: 'visible' });
   assert.equal(await page.locator('#root-step h2').isVisible(), false, 'completed root step collapses');
   assert.deepEqual(await page.locator('#node-role option').allTextContents(), ['Fossil (metadata)', 'Boneyard (storage)']);
   assert.equal(await page.locator('#device-name').inputValue(), 'My fossil node');
