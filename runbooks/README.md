@@ -35,6 +35,8 @@
 
 # Rawrarr runbooks
 
+- [Remove Swarmsail OrbStack projects](2026-10-22-remove-swarmsail-orbstack-projects.md) — Remove the unused local Swarmsail and isolated E2E Compose projects while preserving the local Swarmsail host data and verifying the Rawrarr node.
+
 - [Skip GitHub Actions for Markdown-only changes](2026-10-22-skip-actions-markdown-only.md) — Skip push and pull-request runs when changes contain only Markdown files.
 
 
