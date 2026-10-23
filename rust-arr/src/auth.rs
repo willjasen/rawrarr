@@ -345,7 +345,7 @@ pub(super) async fn finish_registration(
     let token = issue_session(&mut transaction, user_id, &auth.node_id).await?;
     transaction.commit().await.map_err(|_| invalid_auth())?;
     let next = if auth.node_id == "coordinator" {
-        "/#devices"
+        "/setup/node"
     } else {
         auth.next_path
     };

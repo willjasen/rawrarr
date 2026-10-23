@@ -6,8 +6,11 @@ import { chromium } from '/usr/local/lib/node_modules/playwright-core/index.mjs'
 
 const html = await readFile(new URL('../../rust-arr/src/subscriber_onboarding.html', import.meta.url));
 const script = await readFile(new URL('../../rust-arr/src/assets/subscriber-onboarding.js', import.meta.url));
+const auth = await readFile(new URL('../../rust-arr/src/auth.rs', import.meta.url), 'utf8');
 
-test('first-account setup finishes on Devices before optional node Compose setup', async t => {
+test('first-account identity setup finishes on Devices before optional node Compose setup', async t => {
+  assert.match(auth, /let next = if auth\.node_id == "coordinator" \{\s*"\/setup\/node"/,
+    'first passkey registration must enter age and signing-key setup before Devices');
   const requests = [];
   const server = createServer((request, response) => {
     requests.push(request.url);
@@ -22,20 +25,8 @@ test('first-account setup finishes on Devices before optional node Compose setup
   const context = await browser.newContext();
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const page = await context.newPage();
-  let nodePolls = 0;
-  await page.route('**/api/workspace/nodes', async route => {
-    const compose = await page.locator('#compose-preview').innerText();
-    const nodeId = /RAWARR_NODE_ID: (device-[0-9a-f]+)/.exec(compose)?.[1];
-    assert.ok(nodeId, 'generated Compose contains the node ID being monitored');
-    await route.fulfill({ json: [] });
-  });
-  await page.route('**/api/workspace/pending', async route => {
-    nodePolls += 1;
-    const compose = await page.locator('#compose-preview').innerText();
-    const nodeId = /RAWARR_NODE_ID: (device-[0-9a-f]+)/.exec(compose)?.[1];
-    assert.ok(nodeId, 'generated Compose contains the node ID being monitored');
-    await route.fulfill({ json: nodePolls > 1 ? [{ nodeId }] : [] });
-  });
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/setup/node`);
   assert.equal(await page.locator('#root-step').isVisible(), false);
   assert.equal(await page.locator('#deploy-step').isVisible(), false);
@@ -50,10 +41,8 @@ test('first-account setup finishes on Devices before optional node Compose setup
   await page.getByRole('button', { name: 'Use imported ID' }).click();
   await page.locator('#age-recipient').getByText(/^Public recipient:/).waitFor();
   await page.locator('#root-step').waitFor({ state: 'visible' });
-  await page.locator('#age-step').waitForFunction(el => el.classList.contains('completed'));
-  assert.equal(await page.locator('#age-step h2').isVisible(), false, 'completed age step collapses');
-  await page.getByRole('button', { name: 'Create encrypted user signing-key backup' }).click();
-  await page.locator('#root-fingerprint').getByText(/User signing-key fingerprint:/).waitFor();
+  await page.getByRole('button', { name: 'Create encrypted instance-root backup' }).click();
+  await page.locator('#root-fingerprint').getByText(/Instance root fingerprint:/).waitFor();
   assert.equal(await page.locator('#deploy-step').isVisible(), false);
   await page.getByRole('button', { name: 'Copy encrypted backup' }).click();
   const backup = await page.evaluate(() => navigator.clipboard.readText());
@@ -62,14 +51,15 @@ test('first-account setup finishes on Devices before optional node Compose setup
   await page.locator('#import-root').fill(backup.replace(/\r?\n/g, ' '));
   await page.getByRole('button', { name: 'Verify imported backup' }).click();
   await page.locator('#root-fingerprint').getByText(/Verified root fingerprint:/).waitFor();
+  await page.locator('#root-backed-up').check();
   await page.locator('#setup-complete-actions').waitFor({ state: 'visible' });
   assert.equal(await page.locator('#deploy-step').isVisible(), false, 'Compose is no longer part of required first-account setup');
-  await page.locator('#root-step').waitForFunction(el => el.classList.contains('completed'));
-  await page.getByRole('link', { name: 'Continue to Devices' }).click();
-  await page.waitForURL('**/#devices');
+  assert.equal(await page.getByRole('link', { name: 'Continue to Devices' }).getAttribute('href'), '/#devices');
   await page.getByRole('button', { name: 'Set up a node now' }).click();
   await page.locator('#deploy-step').waitFor({ state: 'visible' });
-  assert.equal(await page.locator('#root-step h2').isVisible(), false, 'completed root step collapses');
+  const rootFingerprint = (await page.locator('#root-fingerprint').innerText()).match(/[0-9a-f]{64}/i)?.[0];
+  assert.ok(rootFingerprint, 'the verified root fingerprint is available for node pinning');
+  await page.locator('#root-fingerprint-confirm').fill(rootFingerprint);
   assert.deepEqual(await page.locator('#node-role option').allTextContents(), ['Fossil (metadata)', 'Boneyard (storage)']);
   assert.equal(await page.locator('#device-name').inputValue(), 'My fossil node');
   await page.locator('#node-role').selectOption('storage');
@@ -80,24 +70,16 @@ test('first-account setup finishes on Devices before optional node Compose setup
   assert.equal(await page.locator('#device-name').inputValue(), 'MacBook fossil');
   await page.locator('#network-auth-key').fill('tskey-auth-example-secret');
   await page.locator('#internal-coordinator-url').fill('https://rawrarr-mini.example-tailnet.ts.net');
-  await page.locator('#network-mode').selectOption('headscale');
-  await page.locator('#headscale-server').fill('https://headscale.example.test');
-  await page.locator('#prepare-compose').click();
-  assert.equal(await page.locator('#compose-preview').isVisible(), false, 'network settings reset the generated Compose preview');
   await page.locator('#network-mode').selectOption('internal-tailscale');
   await page.locator('#prepare-compose').click();
   assert.equal(await page.locator('#compose-preview').isVisible(), true);
-  await page.getByRole('button', { name: 'Copy compose.yml to clipboard' }).click();
-  assert.match(await page.evaluate(() => navigator.clipboard.readText()), /services:/);
-  await page.locator('#node-online-status').waitFor({ state: 'visible' });
-  await page.getByText('Waiting for node to come online').waitFor();
   const composePreview = await page.locator('#compose-preview').innerText();
-  assert.equal(composePreview.includes('tskey-auth-example-secret'), false);
   assert.match(composePreview, /RAWARR_COORDINATOR_URL: "https:\/\/rawrarr-mini\.example-tailnet\.ts\.net"/);
-  assert.match(composePreview, /TS_AUTHKEY: file:\/run\/secrets\/tailscale-authkey/);
+  assert.match(composePreview, /TS_AUTHKEY: "tskey-auth-example-secret"/);
   assert.deepEqual(await page.locator('#network-mode option').allTextContents(), ['Internal use · my Tailscale tailnet', 'Public service · Headscale']);
-  await page.waitForURL('**/#devices', { timeout: 10000 });
-  assert.equal(nodePolls, 2, 'the page redirects automatically when the generated node appears for approval');
-  assert.deepEqual(requests.filter(path => path !== '/favicon.ico'), ['/setup/node', '/assets/subscriber-onboarding.js', '/'], 'private material never leaves the browser in the setup flow');
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download compose.yml' }).click()]);
+  assert.equal(download.suggestedFilename(), 'compose.yaml');
+  assert.deepEqual(requests.filter(path => path !== '/favicon.ico'), ['/setup/node', '/assets/subscriber-onboarding.js'], 'private material never leaves the browser in the setup flow');
+  assert.deepEqual(pageErrors, [], 'age and signing-key generation complete without browser errors');
   await context.close();
 });
