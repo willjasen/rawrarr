@@ -1,3 +1,4 @@
+- [Simplify first-account onboarding](2026-10-22-simplify-first-account-onboarding.md) — Finish passkey, age ID, and signing-key setup on Devices, with subscriber Docker Compose setup available when the owner chooses to add a node.
 - [Integrate shared Radarr recovery](2026-10-22-integrate-radarr-shared-recovery.md) — Port owner-authenticated backup download, progress reporting, and scoped restore behavior onto current `main` through a focused pull request.
 - [Integrate scheduled storage scan controls](2026-10-22-integrate-scheduled-storage-scan.md) — Port configurable daily and weekly storage scan schedules onto current `main` and verify through a focused pull request.
 

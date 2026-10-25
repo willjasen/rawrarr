@@ -93,6 +93,7 @@
     .topology-legend .connected-line { background:var(--green) }
     .topology-legend .disconnected-line { background:#ef7777 }
     .topology-empty { margin:14px 0 0 }
+    .button-link { display:inline-block; padding:10px 14px; border:1px solid #6b916f; border-radius:8px; color:#101711; background:var(--green); font-weight:650; text-decoration:none }
     .node-state { display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:12px; font-weight:650 }
     .node-state-indicator { flex:0 0 13px; width:13px; height:13px; border:1px solid #ffffff90; border-radius:50%; background:#8b9290; box-shadow:0 0 0 3px #ffffff18 }
     .node-state.online .node-state-indicator { border-color:#a6e3a1; background:#3bc46b; box-shadow:0 0 0 3px #3bc46b40 }
@@ -273,6 +274,11 @@
     <section id="devices-view" hidden><h1 class="page-title">Devices</h1>
     <section id="pending" aria-label="Nodes waiting for approval" hidden></section>
     <div id="status" role="status" aria-live="polite">Loading your connected nodes…</div>
+    <article id="empty-devices" class="connection-card" hidden aria-labelledby="empty-devices-title">
+      <h2 id="empty-devices-title">Add your first node</h2>
+      <p class="connection-intro">Your account is ready. Add a fossil for Radarr/Sonarr and encrypted library data, or a boneyard for a computer that stores media.</p>
+      <p><a class="button-link" href="/setup/node">Set up a node and get its Docker Compose file</a></p>
+    </article>
     <section id="nodes" aria-label="Connected nodes"></section>
     <section id="device-topology" class="topology-section" aria-labelledby="device-topology-title">
       <h2 id="device-topology-title">Topology</h2>

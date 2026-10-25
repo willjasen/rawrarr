@@ -30,6 +30,10 @@ struct ApprovedNode {
     origin: String,
 }
 
+fn parse_approved_nodes(registry: &str) -> Result<Vec<ApprovedNode>, serde_json::Error> {
+    serde_json::from_str(registry)
+}
+
 #[derive(Clone)]
 struct ApprovedAuth {
     digest: String,
@@ -130,11 +134,7 @@ struct DirectSessionRequest {
 
 pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
     let registry = std::fs::read_to_string(std::env::var("RAWARR_APPROVED_NODES_FILE")?)?;
-    let nodes: Vec<ApprovedNode> =
-        serde_json::from_str(&registry).map_err(|_| "invalid approved-node registry")?;
-    if nodes.is_empty() {
-        return Err("approve at least one node before starting the coordinator".into());
-    }
+    let nodes = parse_approved_nodes(&registry).map_err(|_| "invalid approved-node registry")?;
     let pool = crate::auth::database_pool().await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
     let web_rp_id = std::env::var("RAWARR_COORDINATOR_WEB_RP_ID")
@@ -1125,6 +1125,21 @@ fn validate_origin(rp_id: &str, value: &str) -> Result<url::Url, &'static str> {
         );
     }
     Ok(origin)
+}
+
+#[cfg(test)]
+mod approved_node_registry_tests {
+    use super::parse_approved_nodes;
+
+    #[test]
+    fn empty_registry_is_valid_before_the_owner_adds_a_node() {
+        assert!(parse_approved_nodes("[]").unwrap().is_empty());
+    }
+
+    #[test]
+    fn malformed_registry_is_still_rejected() {
+        assert!(parse_approved_nodes("{}").is_err());
+    }
 }
 
 #[cfg(test)]

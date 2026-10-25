@@ -157,6 +157,7 @@ function showView(name, updateHash = true) {
   if (view === 'assistant') void aiChat.refresh();
   if ((view === 'movies' || view === 'series') && updateHash) void loadMetadataSizes();
 }
+window.addEventListener('hashchange', () => showView(location.hash.slice(1) || 'overview', false));
 document.querySelectorAll('.nav-item[data-view]').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
 document.getElementById('configure-sonarr')?.addEventListener('click', () => showView('settings'));
 showView(location.hash.slice(1) || 'overview', false);
@@ -1553,9 +1554,11 @@ async function loadNodes() {
       } catch (_) { /* Names remain editable when the encrypted config is unavailable. */ }
     }
     nodesPanel.replaceChildren();
+    const emptyDevices = document.getElementById('empty-devices');
+    emptyDevices.hidden = nodes.length !== 0;
     if (nodes.length === 0) {
       renderDeviceTopology([], [], {});
-      status.textContent = 'No fossil or boneyard nodes are connected to this account yet.';
+      status.textContent = 'No nodes yet. Add a fossil or boneyard to get started.';
       contentPanel.hidden = true;
       return;
     }
