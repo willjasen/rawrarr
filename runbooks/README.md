@@ -1,3 +1,5 @@
+- [Defer subscriber Compose deployment work](2026-10-25-defer-subscriber-compose.md) — Track the remaining optional installer gaps in the roadmap and clean up the completed onboarding branch.
+- [Simplify first-account onboarding](2026-10-22-simplify-first-account-onboarding.md) — Finish passkey, age ID, and signing-key setup on Devices, with subscriber Docker Compose setup available when the owner chooses to add a node.
 - [Integrate shared Radarr recovery](2026-10-22-integrate-radarr-shared-recovery.md) — Port owner-authenticated backup download, progress reporting, and scoped restore behavior onto current `main` through a focused pull request.
 - [Integrate scheduled storage scan controls](2026-10-22-integrate-scheduled-storage-scan.md) — Port configurable daily and weekly storage scan schedules onto current `main` and verify through a focused pull request.
 
@@ -34,6 +36,8 @@
 - [Improve the device topology diagram](2026-10-18-improve-device-topology-diagram.md) — Show enrolled devices in a network diagram with one line per device pair and live peer-state coloring.
 
 # Rawrarr runbooks
+
+- [Remove Swarmsail OrbStack projects](2026-10-22-remove-swarmsail-orbstack-projects.md) — Remove the unused local Swarmsail and isolated E2E Compose projects while preserving the local Swarmsail host data and verifying the Rawrarr node.
 
 - [Skip GitHub Actions for Markdown-only changes](2026-10-22-skip-actions-markdown-only.md) — Skip push and pull-request runs when changes contain only Markdown files.
 
@@ -561,3 +565,4 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Complete per-instance device signing](2026-10-22-complete-device-signing.md) — Resolve GitHub issue #37 with owner-rooted ML-DSA enrollment, signed shared records, and a safe path for existing nodes.
 - [Review remaining local Rawrarr work](2026-10-22-local-work-cleanup-review.md) — Inventory deferred branches, dirty worktrees, and stashes and document a safe integration and cleanup sequence.
 - [Clean up deferred local feature work](2026-10-22-cleanup-deferred-local-work.md) — Remove the five explicitly deferred local feature worktrees and branches while preserving unrelated checkout state.
+- [Rerun local OrbStack tests](2026-10-25-rerun-local-orbstack-tests.md) — Record results from the required regression project and the blocked full coordinator/two-node environment build.
