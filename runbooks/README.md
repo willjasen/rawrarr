@@ -565,3 +565,4 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Complete per-instance device signing](2026-10-22-complete-device-signing.md) — Resolve GitHub issue #37 with owner-rooted ML-DSA enrollment, signed shared records, and a safe path for existing nodes.
 - [Review remaining local Rawrarr work](2026-10-22-local-work-cleanup-review.md) — Inventory deferred branches, dirty worktrees, and stashes and document a safe integration and cleanup sequence.
 - [Clean up deferred local feature work](2026-10-22-cleanup-deferred-local-work.md) — Remove the five explicitly deferred local feature worktrees and branches while preserving unrelated checkout state.
+- [Rerun local OrbStack tests](2026-10-25-rerun-local-orbstack-tests.md) — Record results from the required regression project and the blocked full coordinator/two-node environment build.
