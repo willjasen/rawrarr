@@ -7,6 +7,7 @@ const base = { nodeId: `device-${'a'.repeat(24)}`, coordinatorUrl: 'https://rawr
 test('subscriber Compose offers fossil and boneyard with private UI update credentials', () => {
   for (const role of ['metadata', 'storage']) {
     const yaml = subscriberCompose({ ...base, role, mediaPath: '/srv/media' });
+    assert.doesNotMatch(yaml, /^\s*ports\s*:/m, `${role} subscriber Compose must not publish any container port to the host`);
     assert.match(yaml, new RegExp(`RAWARR_ROLE: ${role}`));
     assert.match(yaml, /network_mode: service:tailscale/);
     assert.match(yaml, /TS_AUTHKEY: "tskey-auth-test-fixture"/);

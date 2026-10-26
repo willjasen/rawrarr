@@ -43,6 +43,7 @@
 
 # Rawrarr runbooks
 
+- [Test fossil host port isolation](2026-10-26-fossil-port-forward-tests.md) — Add generated-Compose regression and live two-fossil OrbStack checks for host-published ports (issue [#126](https://github.com/willjasen/rawrarr/issues/126)).
 - [Polish the About page layout](2026-10-26-about-page-visual-polish.md) — Present the current web app flow in a responsive hero, workflow cards, and privacy callout.
 - [Complete OrbStack Arr connection testing](2026-10-26-complete-orbstack-arr-connections.md) — Exercise fossil's encrypted Radarr/Sonarr connection, status, and library paths through a private test CA (issue [#99](https://github.com/willjasen/rawrarr/issues/99)).
 
