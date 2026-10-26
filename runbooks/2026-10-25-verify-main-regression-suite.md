@@ -28,4 +28,6 @@ Result: Node 122/122 passed; Playwright browser 1/1 passed; Rust 82/82 passed. P
 
 ## Final state
 
-The candidate branch is based directly on local `main` and now has a passing local regression run. The main checkout and pre-existing dirty worktrees were left untouched. All task changes remain uncommitted in the candidate worktree; nothing was pushed. The branch is available as a starting point for later review and merging. No deployment was performed.
+The regression changes were committed as `a599749` and merged to GitHub `main` through [PR #64](https://github.com/willjasen/rawrarr/pull/64), producing squash commit `6ffed1623ad46fad739bf87944032293118b5b8e`. The required GitHub check passed; the private UI bundle publishing job was skipped. Issue [#63](https://github.com/willjasen/rawrarr/issues/63) is closed. The passing local suite ran against the exact source changes in that merge. No deployment was performed.
+
+The shared main checkout and the two pre-existing dirty worktrees were left untouched during regression work. The task branch was pushed and merged; there are no remaining uncommitted regression changes in its original worktree.
