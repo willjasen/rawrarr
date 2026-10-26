@@ -45,6 +45,7 @@
 - If `gh auth status` fails inside a sandbox but succeeds when run with approved host access, treat that as a sandbox Keychain/network restriction rather than an invalid credential. Request the narrow host access needed for GitHub operations; do not log out, replace, or reauthenticate the saved credential based only on a sandbox failure.
 - Diagnose connectivity separately from authentication: `gh auth status` checks the CLI credential, while `git fetch origin <ref>` confirms Git remote access. A DNS failure or GitHub API rate limit is not evidence that the saved credential is invalid; retry after the reported rate-limit reset where needed.
 - Prefer `gh` for private repository issues, pull requests, Actions, and metadata. Use the GitHub app connector only when it has access to the specific repository; a 404 on a private repository can mean the connector lacks access.
+- On the Mac mini, the stored `gh` credential currently reports invalid and HTTPS Git fetch cannot authenticate. To build a published revision there, use authenticated `gh api repos/willjasen/rawrarr/tarball/<full-commit-sha>` from a host with working GitHub access, verify the archive is for that commit, transfer it through the verified `brandons-mac-mini` SSH alias, and unpack it into a new unused `builds/github-main-<short-sha>` directory. Build only from that archive; do not copy working-tree files or credentials.
 
 ## Serialized container deployments
 
