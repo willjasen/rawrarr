@@ -13,6 +13,10 @@ test('subscriber Compose offers fossil and boneyard without coordinator GitHub u
     assert.match(yaml, /TS_AUTHKEY: "tskey-auth-test-fixture"/);
     assert.doesNotMatch(yaml, /tailscale-authkey/);
     assert.match(yaml, /rawrarr-ui:\/ui/);
+    assert.match(yaml, /image: ghcr\.io\/willjasen\/rawrarr:main/);
+    assert.match(yaml, /pull_policy: always/);
+    assert.match(yaml, /read:packages access before the first pull/);
+    assert.doesNotMatch(yaml, /rawrarr:local/);
     assert.doesNotMatch(yaml, /RAWARR_UI_GITHUB_TOKEN|rawrarr_ui_github_token/);
     assert.match(yaml, new RegExp(`TS_HOSTNAME: rawrarr-my-${role === 'storage' ? 'boneyard' : 'fossil'}-node`));
     assert.match(yaml, /tailscale-state:\/var\/lib\/tailscale/);
