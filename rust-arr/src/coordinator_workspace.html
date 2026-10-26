@@ -31,9 +31,6 @@
     .sidebar-bottom { position:fixed; bottom:20px; display:flex; align-items:center; gap:10px; width:202px; border-top:1px solid var(--line); padding:14px 10px 0; color:var(--text) }
     .sidebar-profile-picture { width:38px; height:38px; flex:none; border:1px solid #ffffff18; border-radius:50%; background:#202821; object-fit:cover }
     .sidebar-profile-name { min-width:0; display:grid; grid-template-columns:max-content max-content; align-content:center; gap:0 5px; color:var(--text); font-size:11px; font-weight:600; line-height:1.25; overflow-wrap:anywhere }
-    .sidebar-signature-status { grid-column:1/-1; margin-top:4px; color:#f0c77c; font-size:10px; font-weight:650 }
-    .sidebar-signature-status[data-status="signed"] { color:#a6e3a1 }
-    .sidebar-signature-status[data-status="rejected"] { color:#ff8a8a }
     .workspace { min-width:0 }
     #coordinator-pending-dialog { width:min(520px,calc(100vw - 32px)); border:1px solid var(--line); border-radius:14px; padding:26px; color:var(--text); background:var(--panel); box-shadow:0 20px 70px #0009 }
     #coordinator-pending-dialog::backdrop { background:#101411f2 }
@@ -240,7 +237,7 @@
     <button class="nav-item" data-view="configuration"><span class="nav-icon">◇</span><span class="nav-text">Configuration</span></button>
     <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span><span class="nav-text">Settings</span></button>
     <button class="nav-item" data-view="about"><span class="nav-icon">ⓘ</span><span class="nav-text">About</span></button>
-    <div class="sidebar-bottom" aria-label="Signed-in profile"><picture><source id="sidebar-profile-picture-jxl" type="image/jxl"><img id="sidebar-profile-picture" class="sidebar-profile-picture" alt="" aria-hidden="true"></picture><span id="sidebar-profile-name" class="sidebar-profile-name">Loading profile…<span id="sidebar-ui-signature" class="sidebar-signature-status" data-status="unverified" role="status" aria-live="polite">UI signature unverified</span></span></div>
+    <div class="sidebar-bottom" aria-label="Signed-in profile"><picture><source id="sidebar-profile-picture-jxl" type="image/jxl"><img id="sidebar-profile-picture" class="sidebar-profile-picture" alt="" aria-hidden="true"></picture><span id="sidebar-profile-name" class="sidebar-profile-name">Loading profile…</span></div>
    </aside>
    <div class="workspace"><header><div class="brand" style="font-size:12px;padding:0;color:var(--muted)"></div><button id="sign-out" type="button">Sign out</button></header>
   <main>

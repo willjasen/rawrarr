@@ -320,7 +320,6 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/api/workspace/nodes", get(workspace_nodes))
         .route("/api/workspace/nodes/{node_id}", delete(delete_workspace_node))
         .route("/api/workspace/profile", get(workspace_profile))
-        .route("/api/workspace/ui-signature", get(workspace_ui_signature))
         .route("/api/workspace/profile-picture/{seed}/jxl", get(workspace_profile_picture_jxl))
         .route("/api/workspace/profile-picture/{seed}/png", get(workspace_profile_picture_png))
         .route("/api/workspace/device-picture/{seed}/jxl", get(workspace_device_picture_jxl))
@@ -1324,16 +1323,6 @@ async fn workspace_profile(
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(_) => StatusCode::SERVICE_UNAVAILABLE.into_response(),
     }
-}
-
-async fn workspace_ui_signature(
-    Extension(auth): Extension<AuthState>,
-    headers: HeaderMap,
-) -> Response {
-    if crate::auth::authenticated_user_id(&auth, &headers).await.is_none() {
-        return StatusCode::UNAUTHORIZED.into_response();
-    }
-    axum::Json(crate::ui_assets::signature_status().await).into_response()
 }
 
 async fn workspace_profile_picture_jxl(
