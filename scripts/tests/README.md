@@ -1,6 +1,6 @@
 - `test_rawrarr_library_text_cache.mjs` — checks node-scoped browser library text caching, immediate Movies/TV rendering, live refresh, and separately loaded artwork. Run with `node --test scripts/tests/test_rawrarr_library_text_cache.mjs`.
 - `test_rawrarr_library_browser.mjs` — checks that Movies and TV use one responsive, searchable, filterable poster-card renderer with service-specific availability. Run with `node --test scripts/tests/test_rawrarr_library_browser.mjs`.
-- `test_rawrarr_artwork_cache.rs` — checks disabled-cache file reads and disk fallback when Redis is unreachable; runs with the Rust suite or `cargo test artwork_cache` in the isolated test image.
+- `test_rawrarr_artwork_cache.rs` — checks disabled-cache file reads and disk fallback when Redis is unreachable. Its Valkey integration test additionally verifies PING and encrypted-byte storage with `RAWARR_TEST_VALKEY_URL=redis://valkey:6379/`; run it in the isolated Rust test image with a Valkey 8 service on the same disposable Docker network using `cargo test --locked --offline --manifest-path /workspace/rust-arr/Cargo.toml valkey_stores_and_returns_encrypted_artwork_when_configured -- --nocapture`.
 
 - `test_rawrarr_coordinator_arr_links.mjs` — checks the coordinator's encrypted Radarr slug flow, direct metadata route, browser-only reachability gate, and year-cell icon wiring for Movies and TV. Run with `node --test scripts/tests/test_rawrarr_coordinator_arr_links.mjs`.
 # Rawrarr tests
@@ -39,6 +39,7 @@
 - `test_rawrarr_device_routes.mjs` — checks the shared all-device route-status helper for Direct, Relay, and Offline states, Redis cache reachability in measured node latency, probe caching, and explicit refresh. Run with `node --test scripts/tests/test_rawrarr_device_routes.mjs`.
 
 - `test_rawrarr_node_network_isolation.mjs` — checks that metadata/storage have no published host ports and share a Tailscale namespace with loopback-only listeners and relay targets. Requires Node.js; run `node --test scripts/tests/test_rawrarr_node_network_isolation.mjs`.
+- `test_rawrarr_node_network_isolation.mjs` — also checks both metadata Compose variants use Valkey with bounded, non-persistent cache settings, health checks, local-only access, and the opt-in default disabled. Run `node --test scripts/tests/test_rawrarr_node_network_isolation.mjs`.
 
 - `test_rawrarr_mini_export.mjs` — headless Chromium mini-export test using real post-quantum ciphertext from the `age` CLI; verifies browser decryption, HMAC filename matching, local ZIP contents, wrong-key handling, and that the private ID is never sent. Run in the isolated Playwright test image.
 

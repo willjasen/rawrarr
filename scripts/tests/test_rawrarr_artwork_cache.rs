@@ -25,3 +25,30 @@ fn enabled_but_unreachable_cache_falls_back_to_disk() {
     assert_eq!(cache.read(&path).unwrap(), b"age-ciphertext");
     fs::remove_file(path).unwrap();
 }
+
+#[test]
+fn valkey_stores_and_returns_encrypted_artwork_when_configured() {
+    let Ok(url) = std::env::var("RAWARR_TEST_VALKEY_URL") else {
+        eprintln!("SKIP: set RAWARR_TEST_VALKEY_URL to run the live Valkey artwork-cache integration check");
+        return;
+    };
+    let cache = ArtworkCache::from_options(true, Some(&url), 86_400);
+    assert!(cache.is_configured(), "Valkey URL must be accepted by the Redis-compatible client");
+    assert!(cache.ping(), "Valkey must answer PING");
+
+    let client = redis::Client::open(url).unwrap();
+    let mut connection = client.get_connection().unwrap();
+    let before: Vec<String> = redis::cmd("KEYS").arg("rawrarr:artwork:v1:*").query(&mut connection).unwrap();
+    let ciphertext = b"age-encrypted-artwork-fixture";
+    let path = temporary_file("valkey", ciphertext);
+    assert_eq!(cache.read(&path).unwrap(), ciphertext);
+
+    let keys: Vec<String> = redis::cmd("KEYS").arg("rawrarr:artwork:v1:*").query(&mut connection).unwrap();
+    let added: Vec<&String> = keys.iter().filter(|key| !before.contains(key)).collect();
+    assert_eq!(added.len(), 1, "a cache miss should store one new versioned artwork entry");
+    let stored: Vec<u8> = redis::cmd("GET").arg(added[0]).query(&mut connection).unwrap();
+    assert_eq!(stored, ciphertext, "Valkey must contain the encrypted bytes unchanged");
+
+    assert_eq!(cache.read(&path).unwrap(), ciphertext, "repeat read should return the Valkey value");
+    fs::remove_file(path).unwrap();
+}

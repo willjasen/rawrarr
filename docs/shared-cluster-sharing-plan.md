@@ -15,6 +15,20 @@ Planning only. No multi-person sharing, MLS protocol, revocation cleanup, or age
 
 ## Candidate technical design
 
+### Peer metadata synchronization with RPC and Merkle reconciliation (planned)
+
+The long-term goal is for approved Rawrarr nodes in one cluster to exchange metadata directly, with a Garage S3-inspired model: RPC handles authenticated peer coordination and bounded data exchange, while Merkle trees summarize replicated records and identify which branches or objects differ. This is a design direction only; no peer metadata RPC or Merkle reconciliation is implemented by this proposal.
+
+- Keep encrypted metadata objects as the replicated payload. Peers validate cluster/instance identity, membership, object class, size limits, and signed revision metadata before accepting data; a Merkle match is an integrity/reconciliation aid, not an authorization proof.
+- Define a versioned, canonical leaf record that binds an opaque object key, ciphertext digest, object/schema version, and signed revision or tombstone. Build deterministic tree nodes from sorted leaves so different peers produce the same root for the same accepted state.
+- Expose authenticated RPC operations for peer hello/capability negotiation, accepted cluster epoch and tree-root exchange, bounded subtree comparison, and ciphertext object transfer. Prefer direct peer routes; retain coordinator/relay-assisted rendezvous only for discovery or transport fallback, never as a metadata plaintext authority.
+- Reconcile missing leaves and tombstones incrementally. Verify hashes while streaming, stage received objects, validate signatures and authorization, then atomically publish them into the local metadata store. Retries must be idempotent and safe after interruption.
+- Treat concurrent writes as explicit conflicts unless a record type has a documented deterministic merge rule. Do not silently select the newest wall-clock timestamp. Authority-changing state continues to follow the signed trust history and owner authorization rules above.
+- Persist each node's last accepted trust-history head and per-instance Merkle root locally. On rollback, stale snapshots, unknown roots, or incompatible schemas, quarantine the affected sync state and require a validated catch-up or recovery path before serving it as current.
+- Keep node-local Valkey caches disposable and outside the replication protocol. Merkle leaves refer to authoritative encrypted objects; cache residency, cache keys, and cache health must not affect convergence.
+
+Implementation should begin with a protocol document and two-node sanitized prototype: canonical encoding and hash domain separation, RPC framing/authentication, pagination and resource limits, deletion/tombstone retention, schema negotiation, offline catch-up, interrupted transfers, and malicious/stale peer tests. Only after those decisions are reviewed should a durable node RPC service be implemented.
+
 ### Separate responsibilities
 
 - **Passkeys** authenticate each person's account to Rawrarr.
@@ -86,6 +100,11 @@ The person controlling an invitee node can refuse cleanup, preserve backups, or 
 7. **Validate recovery and release readiness.** Exercise owner backup restore, age-identity loss and metadata rebuild, root-key loss/compromise, offline nodes, removed-member behavior, malicious non-owner proposals, old snapshots, backup retention, history gaps, and root rotation. Update security documentation and user guidance before enabling the feature.
 
 ## Open decisions
+
+- Which stable object-key namespace should Merkle leaves cover: current encrypted files, logical metadata records, or both through a versioned mapping?
+- What authenticated peer identity and transport will RPC use across local Tailscale and future non-Tailscale networks?
+- How are tombstones retained long enough for long-offline peers, and what is the safe full-resync behavior after a peer falls behind that retention window?
+- Which record classes can merge deterministically, and which require owner review when two nodes edit concurrently?
 
 - Is MLS preferable to a smaller owner-signed membership log for Rawrarr's infrequent changes?
 - Does an invitation expose the existing library by default? If yes, what is the supported no-payload-re-encryption migration for existing age files?

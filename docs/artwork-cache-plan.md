@@ -1,5 +1,7 @@
 # Optional in-memory artwork cache plan
 
+The Redis-compatible cache service is Valkey (`valkey/valkey:8-alpine`). The Rust client and URL scheme remain Redis-protocol compatible (`redis://`).
+
 ## Goal
 
 Let an operator opt a Rawrarr node into a bounded Redis cache for shared encrypted artwork. Cache hits should reduce repeated shared-folder reads while preserving the current age-encryption boundary. The cache is disposable: `/shared/metadata` remains authoritative and every miss or Redis failure falls back to the existing file read and decrypt path.
