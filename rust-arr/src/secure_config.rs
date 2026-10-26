@@ -1514,7 +1514,13 @@ fn encrypt_shared_file(recipient: &str, path: &Path, plaintext: &[u8]) -> Result
     let directory = path.parent().ok_or(VaultError::StorageFailed)?;
     fs::create_dir_all(directory).map_err(|_| VaultError::StorageFailed)?;
     if let Some(metadata_directory) = directory.parent() {
-        set_shared_directory_permissions(metadata_directory)?;
+        // Do not try to change permissions on the filesystem root for files
+        // stored directly under the shared root (for example, the group key
+        // envelope). Nested metadata folders still need Syncthing-readable
+        // parent permissions.
+        if metadata_directory.parent().is_some() {
+            set_shared_directory_permissions(metadata_directory)?;
+        }
     }
     set_shared_directory_permissions(directory)?;
     let temporary = temporary_path(path);
