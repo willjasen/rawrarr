@@ -1,6 +1,22 @@
 use super::*;
 use chrono::{TimeZone, Utc};
 
+#[tokio::test]
+async fn scan_controller_accepts_cancel_only_while_active_and_preserves_progress() {
+    let controller = ScanController::default();
+    assert_eq!(controller.cancel().await.unwrap_err(), "no storage scan is running");
+
+    controller.start_for_test();
+    let cancelled = controller.cancel().await.expect("active scan should accept cancellation");
+    assert!(cancelled.active);
+    assert!(cancelled.cancel_requested);
+    assert_eq!(cancelled.files_total, 3);
+
+    let status = controller.status().await;
+    assert!(status.cancel_requested);
+    assert!(status.active);
+}
+
 #[test]
 fn scan_schedule_defaults_to_daily_at_four_in_its_configured_timezone() {
     let schedule = ScanSchedule::default_for_timezone("America/New_York".to_owned());

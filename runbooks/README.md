@@ -43,6 +43,8 @@
 
 # Rawrarr runbooks
 
+- [Regression and browser coverage for implemented behavior gaps](2026-10-26-regression-browser-coverage.md) — Add storage scan cancellation coverage and coordinator reconnect browser coverage; document the existing Radarr mirror lifecycle integration test (issue [#120](https://github.com/willjasen/rawrarr/issues/120)).
+
 - [Polish the About page layout](2026-10-26-about-page-visual-polish.md) — Present the current web app flow in a responsive hero, workflow cards, and privacy callout.
 - [Complete OrbStack Arr connection testing](2026-10-26-complete-orbstack-arr-connections.md) — Exercise fossil's encrypted Radarr/Sonarr connection, status, and library paths through a private test CA (issue [#99](https://github.com/willjasen/rawrarr/issues/99)).
 
