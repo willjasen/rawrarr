@@ -32,6 +32,23 @@ test('standalone metadata Compose identifies the service and device as fossil', 
   assert.match(metadata, /RAWARR_DEVICE_NAME: \$\{RAWARR_DEVICE_NAME:-Fossil node\}/);
 });
 
+test('metadata artwork cache uses Valkey with bounded disposable storage and remains opt-in', () => {
+  for (const compose of [metadata, macbookTailscale]) {
+    assert.match(compose, /image: valkey\/valkey:8-alpine/);
+    assert.match(compose, /valkey-server/);
+    assert.match(compose, /--save", "", "--appendonly", "no"/);
+    assert.match(compose, /--maxmemory", "2gb", "--maxmemory-policy", "allkeys-lru"/);
+    assert.match(compose, /valkey-cli", "ping/);
+    assert.match(compose, /mem_limit: 2560m/);
+    assert.doesNotMatch(compose, /image: redis:/);
+  }
+  assert.match(metadata, /RAWARR_ARTWORK_CACHE_ENABLED: \$\{RAWARR_ARTWORK_CACHE_ENABLED:-false\}/);
+  assert.match(metadata, /RAWARR_ARTWORK_CACHE_URL: redis:\/\/artwork-cache:6379\//);
+  assert.match(macbookTailscale, /RAWARR_ARTWORK_CACHE_ENABLED: \$\{RAWARR_ARTWORK_CACHE_ENABLED:-false\}/);
+  assert.match(macbookTailscale, /RAWARR_ARTWORK_CACHE_URL: redis:\/\/127\.0\.0\.1:6379\//);
+  assert.match(macbookTailscale, /artwork-cache:[\s\S]*?network_mode: "service:tailscale"/);
+});
+
 test('Mini storage and Serve proxy use only loopback in the Tailscale namespace', () => {
   assert.match(storage, /network_mode: "container:\$\{RAWARR_TAILSCALE_CONTAINER:-rawrarr-mini-tailscale\}"/);
   assert.match(storage, /RUST_ARR_LISTEN_ADDR: 127\.0\.0\.1:8080/);

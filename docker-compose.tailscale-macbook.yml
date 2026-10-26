@@ -2,12 +2,12 @@
 # Attach this service to the existing rawrarr-local_default network.
 services:
   artwork-cache:
-    image: redis:7-alpine
+    image: valkey/valkey:8-alpine
     container_name: rawrarr-local-artwork-cache-1
-    command: ["redis-server", "--bind", "127.0.0.1", "--protected-mode", "yes", "--save", "", "--appendonly", "no", "--maxmemory", "2gb", "--maxmemory-policy", "allkeys-lru"]
+    command: ["valkey-server", "--bind", "127.0.0.1", "--protected-mode", "yes", "--save", "", "--appendonly", "no", "--maxmemory", "2gb", "--maxmemory-policy", "allkeys-lru"]
     mem_limit: 2560m
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5

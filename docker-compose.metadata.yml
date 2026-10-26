@@ -1,11 +1,11 @@
 # Standalone subscriber deployment against an existing coordinator.
 services:
   artwork-cache:
-    image: redis:7-alpine
-    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "2gb", "--maxmemory-policy", "allkeys-lru"]
+    image: valkey/valkey:8-alpine
+    command: ["valkey-server", "--save", "", "--appendonly", "no", "--maxmemory", "2gb", "--maxmemory-policy", "allkeys-lru"]
     mem_limit: 2560m
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
