@@ -405,6 +405,11 @@ test('default metadata selection measures online direct metadata nodes and selec
   assert.match(workspaceScript, /const relayRoute = \{ nodeId: node\.nodeId, base: `\/nodes\/\$\{encodeURIComponent\(node\.nodeId\)\}`, direct: false \}/);
 });
 
+test('device cards hide unavailable Syncthing health until configured', () => {
+  assert.doesNotMatch(workspaceScript, /Syncthing health unavailable/);
+  assert.match(workspaceScript, /else if \(!report\?\.configured\) \{\s*syncHealth\.hidden = true;/);
+});
+
 test('overview distinguishes an available metadata node from no online metadata node', () => {
   assert.match(workspaceScript, /const onlineMetadata = workspaceNodes\.some\(candidate => candidate\.role === 'metadata' && candidate\.online\)/);
   assert.match(workspaceScript, /Fossil node not selected/);

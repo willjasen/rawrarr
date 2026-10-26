@@ -1692,7 +1692,7 @@ async function loadNodes() {
       } else if (!node.online) {
         setSyncHealth(['Node offline']);
       } else if (!report?.configured) {
-        setSyncHealth(['Syncthing health unavailable']);
+        syncHealth.hidden = true;
       } else {
         setSyncHealth(['No shared folders configured']);
       }
