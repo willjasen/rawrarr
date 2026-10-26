@@ -214,11 +214,13 @@ async function loadProfileAvatar() {
 async function loadNodeAvatar(node, pictureSource, image) {
   let seedPromise = nodeAvatarSeeds.get(node.nodeId);
   if (!seedPromise) {
-    seedPromise = deriveNodeAvatarSeed(node.nodeId).catch(() => '');
+    seedPromise = deriveNodeAvatarSeed(node.nodeId).catch(async () => {
+      const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`rawrarr-node:${node.nodeId}`)));
+      return Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
+    });
     nodeAvatarSeeds.set(node.nodeId, seedPromise);
   }
   const seed = await seedPromise;
-  if (!seed) return;
   pictureSource.srcset = `/api/workspace/device-picture/${seed}/jxl`;
   image.src = `/api/workspace/device-picture/${seed}/png`;
 }
