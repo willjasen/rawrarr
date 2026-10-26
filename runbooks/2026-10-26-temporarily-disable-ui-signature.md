@@ -25,10 +25,17 @@ The signed updater required `ui-bundle.zip.sig` and an image-pinned public key b
 - `node --check` passed for the edited coordinator workspace module and topology browser test source.
 - The topology browser test could not execute because this worktree's host Node environment lacks `playwright-core`.
 - `cargo check --locked --offline` could not start: host `rustc` aborts because the configured LLVM dylib requires missing `libz3.5.1.dylib`.
-- Read-only internal checks returned HTTP 200 for `/`, `/health`, and `/api/auth/status`; `/api/auth/session` returned 401 without a browser session. The Mac mini's current bundle marker reports version `f7925d26652d683dc784c90ded2cadb3f6885a17`, `verified`, and `signed`. This confirms service reachability but does not reproduce the owner's authenticated browser symptom.
-- No internal container was changed; the work is not deployed.
+- Before deployment, read-only checks returned HTTP 200 for `/`, `/health`, and `/api/auth/status`; `/api/auth/session` returned 401 without a browser session. The previous bundle marker reported version `f7925d26652d683dc784c90ded2cadb3f6885a17`, `verified`, and `signed`. This confirmed service reachability but did not reproduce the owner's authenticated browser symptom.
 
-For an internal rollout, publish and merge the change first, then rebuild from the exact published `main` revision and update only the coordinator if runtime paths confirm the node code is unaffected. Verify `https://rawrarr.risk-mermaid.ts.net/health` and the existing Tailscale Serve route. Do not deploy from this feature branch.
+## Internal deployment verification
+
+- PR #108 was merged at `f21e1b9`. Published `main` revision `5fedbadcb829869d37db128680f0b229c65137c1` passed GitHub Actions run [40268258968](https://github.com/willjasen/rawrarr/actions/runs/40268258968), which published the unsigned bundle and its SHA-256 checksum.
+- Rebuilt and recreated only `roarlay` in Compose project `rawrarr-internal-mini` from that exact published revision. The active UI volume advanced to `5fedbadcb829869d37db128680f0b229c65137c1`; the installed checksum matched the release asset, and the signature marker and workspace badge are absent.
+- Roarlay is healthy with zero restarts. PostgreSQL and Tailscale container IDs were unchanged. Tailscale Serve still maps HTTPS 443 `/` to `http://127.0.0.1:8080`; `/`, `/health`, and `/api/auth/status` return HTTP 200, and health identifies Roarlay.
+- The per-container deployment lock was released and confirmed absent. The MacBook fossil was not changed because this is coordinator-only runtime behavior.
+- `/api/auth/session` returned 401 without a browser session. The deployment therefore verifies the signature warning removal and coordinator availability, but does not verify that the owner's passkey login/access issue is resolved.
+
+The internal rollout is complete. For future changes, continue to deploy only from an exact published `main` revision and preserve the existing coordinator Tailscale Serve route.
 
 ## Security tradeoff and restoration
 
@@ -36,4 +43,4 @@ While disabled, SHA-256 detects transfer corruption but does not authenticate th
 
 ## Status
 
-Implementation is on a feature branch. No internal container was changed by this runbook unless deployment evidence is added after merge.
+Implementation is merged and deployed to internal roarlay. The reported authenticated browser symptom still needs an owner-side login check.

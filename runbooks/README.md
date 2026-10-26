@@ -597,3 +597,4 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 
 - [Keep the coordinator workspace pending while it reconnects](2026-10-25-coordinator-reconnect-pending.md) — Show a blocking reconnect state after repeated coordinator health failures and restore the current workspace after recovery (issue [#98](https://github.com/willjasen/rawrarr/issues/98)).
 - [Remove the roarlay label from coordinator page headers](2026-10-25-remove-roarlay-header-label.md) — Remove the top-right coordinator header label while preserving sign-out (issue [#89](https://github.com/willjasen/rawrarr/issues/89)).
+- [Temporarily disable UI signature enforcement](2026-10-26-temporarily-disable-ui-signature.md) — Remove the UI signature badge and release-signature requirement while retaining checksum/archive validation; deploy and verify the coordinator update (issue [#107](https://github.com/willjasen/rawrarr/issues/107)).
