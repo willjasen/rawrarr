@@ -68,7 +68,9 @@ Rawrarr currently uses the owner age identity for the shared vault. Subscriber d
 
 ## Configure Radarr
 
-1. Open the Rawrarr dashboard and its **Settings** section.
+The Movies page prompts for a connection when Radarr is not configured. The TV page prompts for the Sonarr URL and API key when Sonarr is not configured. Until connected, each page hides its library details.
+
+1. Open the **Movies** page.
 2. Enter the HTTPS Radarr base URL and API key, then choose **Save and connect**. Rawrarr rejects HTTP URLs and checks the Radarr status endpoint using those credentials before saving.
 3. After a successful check, Rawrarr saves the settings into `/shared/config.aged` and applies the connection immediately; a Rawrarr restart is not required. In the local Compose environment, it also keeps a mode-`0600` plaintext copy at `/data/radarr-config.json` so local tools can inspect the setup without passkey or age handling. Changes saved through Rawrarr update both copies. When the age vault is unlocked, the shared encrypted file is authoritative and refreshes the local copy.
 4. Use the connection status or **Movies** view to read Radarr's current movie inventory. The artwork source column reports shared-cache availability or Radarr fallback; it is not proof that a cached file decrypted successfully. The load-time column measures browser-observed poster load time, not isolated Radarr response time. Failed image requests show as unavailable.

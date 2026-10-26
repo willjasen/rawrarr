@@ -133,7 +133,7 @@
       <button class="nav-item" id="movies-nav" type="button" style="width:100%;border:0;background:transparent;text-align:left;cursor:pointer"><span class="nav-icon">▧</span><span class="nav-text">Movies</span></button>
       <button class="nav-item" id="series-nav" type="button" style="width:100%;border:0;background:transparent;text-align:left;cursor:pointer"><span class="nav-icon">▧</span><span class="nav-text">TV</span></button>
       <button class="nav-item" id="configuration-nav" type="button" style="width:100%;border:0;background:transparent;text-align:left;cursor:pointer"><span class="nav-icon">◇</span><span class="nav-text">Configuration</span></button>
-      <a class="nav-item" href="#radarr-settings-panel" id="settings-nav" style="text-decoration:none"><span class="nav-icon">⚙</span><span class="nav-text">Settings</span></a>
+      <button class="nav-item" id="settings-nav" type="button" style="width:100%;border:0;background:transparent;text-align:left;cursor:pointer"><span class="nav-icon">⚙</span><span class="nav-text">Settings</span></button>
       <button class="nav-item" id="about-nav" type="button" style="width:100%;border:0;background:transparent;text-align:left;cursor:pointer"><span class="nav-icon">ⓘ</span><span class="nav-text">About</span></button>
       <div class="sidebar-bottom">Discovery, libraries, and fulfillment.<br>Early access · Radarr first</div>
     </aside>
@@ -185,41 +185,24 @@
             <div id="syncthing-message" class="settings-message" role="status" aria-live="polite"></div>
           </form>
         </article>
-        <article class="panel" id="radarr-settings-panel" style="grid-column: 1 / -1; scroll-margin-top: 24px">
+      </section>
+      <section id="movies-content" hidden>
+        <article class="panel arr-connection-panel" id="radarr-settings-panel" style="margin-bottom:14px;scroll-margin-top:24px" hidden>
           <div class="panel-head"><h2>Connect Radarr</h2><button id="refresh" class="refresh" type="button">Refresh status ↻</button></div>
           <form id="radarr-settings" class="settings-form">
-            <p class="setup-intro">Settings apply immediately and are saved encrypted. After a restart, unlock them with the age identity unless it is mounted as a Docker secret.</p>
-            <label for="radarr-url">Radarr URL</label>
-            <input id="radarr-url" name="url" type="url" placeholder="https://radarr.example.com" autocomplete="url" required>
-            <label for="radarr-key">Radarr API key</label>
-            <input id="radarr-key" name="apiKey" type="password" autocomplete="new-password" required>
+            <p class="setup-intro">Enter your Radarr URL and API key to load movie details. Settings are saved encrypted on the selected metadata node.</p>
+            <label for="radarr-url">Radarr URL</label><input id="radarr-url" name="url" type="url" placeholder="https://radarr.example.com" autocomplete="url" required>
+            <label for="radarr-key">Radarr API key</label><input id="radarr-key" name="apiKey" type="password" autocomplete="new-password" required>
             <div id="radarr-key-note" class="settings-key-note">Required for the first encrypted save.</div>
-            <label for="radarr-ui-username">Radarr UI username (optional)</label>
-            <input id="radarr-ui-username" name="uiUsername" type="text" autocomplete="username">
-            <label for="radarr-ui-password">Radarr UI password (optional)</label>
-            <input id="radarr-ui-password" name="uiPassword" type="password" autocomplete="current-password">
+            <label for="radarr-ui-username">Radarr UI username (optional)</label><input id="radarr-ui-username" name="uiUsername" type="text" autocomplete="username">
+            <label for="radarr-ui-password">Radarr UI password (optional)</label><input id="radarr-ui-password" name="uiPassword" type="password" autocomplete="current-password">
             <div id="radarr-ui-auth-note" class="settings-key-note">Enter both only if Radarr requires a UI login to download backups. Stored in the age-encrypted config.</div>
-            <div class="settings-actions"><button id="save-radarr" class="refresh" type="submit">Save and connect</button><button id="clear-radarr" class="refresh" type="button">Clear</button></div>
-            <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
-            <h3 style="margin:0 0 6px">Your metadata</h3><p class="setup-intro">Decrypt and download all available movie metadata records and matching artwork as a ZIP. Decryption and archive creation happen in this browser.</p><button id="mini-export" class="refresh" type="button">Export metadata</button>
+            <div class="settings-actions"><button id="save-radarr" class="refresh" type="submit">Save and connect</button><button id="clear-radarr" class="refresh" type="button">Clear connection</button></div>
+            <hr style="border:0;border-top:1px solid var(--line);margin:18px 0"><h3 style="margin:0 0 6px">Your metadata</h3><p class="setup-intro">Decrypt and download all available movie metadata records and matching artwork as a ZIP. Decryption and archive creation happen in this browser.</p><button id="mini-export" class="refresh" type="button">Export metadata</button>
             <div id="radarr-settings-message" class="settings-message" role="status" aria-live="polite"></div>
           </form>
         </article>
-        <article class="panel" id="sonarr-settings-panel" style="grid-column: 1 / -1; scroll-margin-top: 24px">
-          <div class="panel-head"><h2>Connect Sonarr</h2></div>
-          <form id="sonarr-settings" class="settings-form">
-            <p class="setup-intro">Settings apply immediately and are saved encrypted. After a restart, unlock them with the age identity unless it is mounted as a Docker secret.</p>
-            <label for="sonarr-url">Sonarr URL</label>
-            <input id="sonarr-url" name="url" type="url" placeholder="https://sonarr.example.com" autocomplete="url" required>
-            <label for="sonarr-key">Sonarr API key</label>
-            <input id="sonarr-key" name="apiKey" type="password" autocomplete="new-password" required>
-            <div id="sonarr-key-note" class="settings-key-note">Required for the first encrypted save.</div>
-            <div class="settings-actions"><button id="save-sonarr" class="refresh" type="submit">Save and connect</button><button id="clear-sonarr" class="refresh" type="button">Clear</button></div>
-            <div id="sonarr-settings-message" class="settings-message" role="status" aria-live="polite"></div>
-          </form>
-        </article>
-      </section>
-      <section id="movies-content" hidden>
+        <div id="radarr-library-content">
         <section class="grid movies-summary-grid" aria-label="Radarr movie statistics">
           <article class="card"><div class="card-head"><span>Movies in Radarr</span></div><div class="card-value" id="movie-count">—</div><div class="card-sub">Tracked library entries</div></article>
           <article class="card"><div class="card-head"><span>Files present</span></div><div class="card-value" id="movie-files">—</div><div class="card-sub">Movies with an imported movie file</div></article>
@@ -235,8 +218,21 @@
           </div>
           <div class="table-wrap"><table><thead><tr></tr></thead><tbody id="radarr-movie-rows"></tbody></table></div>
         </article>
+        </div>
       </section>
       <section id="series-content" hidden>
+        <article class="panel arr-connection-panel" id="sonarr-settings-panel" style="margin-bottom:14px;scroll-margin-top:24px" hidden>
+          <div class="panel-head"><h2>Connect Sonarr</h2></div>
+          <form id="sonarr-settings" class="settings-form">
+            <p class="setup-intro">Enter your Sonarr URL and API key to load TV details. Settings are saved encrypted on the selected metadata node.</p>
+            <label for="sonarr-url">Sonarr URL</label><input id="sonarr-url" name="url" type="url" placeholder="https://sonarr.example.com" autocomplete="url" required>
+            <label for="sonarr-key">Sonarr API key</label><input id="sonarr-key" name="apiKey" type="password" autocomplete="new-password" required>
+            <div id="sonarr-key-note" class="settings-key-note">Required for the first encrypted save.</div>
+            <div class="settings-actions"><button id="save-sonarr" class="refresh" type="submit">Save and connect</button><button id="clear-sonarr" class="refresh" type="button">Clear connection</button></div>
+            <div id="sonarr-settings-message" class="settings-message" role="status" aria-live="polite"></div>
+          </form>
+        </article>
+        <div id="sonarr-library-content">
         <section class="grid" aria-label="Sonarr series statistics">
           <article class="card"><div class="card-head"><span>Series in Sonarr</span></div><div class="card-value" id="series-count">—</div><div class="card-sub">Tracked library entries</div></article>
           <article class="card"><div class="card-head"><span>Files present</span></div><div class="card-value" id="series-files">—</div><div class="card-sub">Series with imported episodes</div></article>
@@ -247,6 +243,7 @@
           <div id="series-message" class="scan-summary" role="status">Select refresh to load your Sonarr library.</div>
           <div class="table-wrap"><table><thead><tr></tr></thead><tbody id="sonarr-series-rows"></tbody></table></div>
         </article>
+        </div>
       </section>
       <section id="configuration-content" hidden>
         <article class="panel" style="margin-bottom:14px">
@@ -270,14 +267,14 @@
             <div class="about-copy">
               <p>rawrarr brings your media libraries together across devices. Radarr and Sonarr provide the library views, while rawrarr organizes shared metadata and artwork so your devices can use the same information.</p>
               <p>Metadata shared between nodes is age-encrypted before it is synchronized. Roarlay helps your signed-in account manage its devices, and boneyards keep media on their own disks.</p>
-              <p>Use Movies and TV to browse connected libraries, and Settings to connect Radarr or Sonarr and manage other app options.</p>
+              <p>Use Movies and TV to connect Radarr and Sonarr and browse their libraries. Settings contains account and node configuration.</p>
             </div>
           </article>
           <article class="panel">
             <div class="panel-head"><h2>How the pieces fit</h2></div>
             <div class="about-copy">
               <p><strong>rawrarr</strong> coordinates your library and keeps shared metadata available across your devices.</p>
-              <p><strong>Radarr and Sonarr</strong> manage movie and TV libraries. Connect them in Settings to see their library data in rawrarr.</p>
+              <p><strong>Radarr and Sonarr</strong> manage movie and TV libraries. Connect each service on its Movies or TV page to see its library data in rawrarr.</p>
               <p><strong>Your devices</strong> synchronize encrypted shared metadata. Media files remain on the storage you choose; rawrarr does not upload them to the coordinator.</p>
               <p>rawrarr is evolving. General-purpose sharing of files and folders is a future direction; the current app focuses on media libraries and their metadata.</p>
             </div>
@@ -335,10 +332,15 @@
       const movies = view === 'movies';
       const series = view === 'series';
       document.getElementById('series-content').hidden = !series;
+      document.getElementById('sonarr-settings-panel').hidden = !series || sonarrConfigured;
+      document.getElementById('radarr-settings-panel').hidden = !movies || radarrConfigured;
+      document.getElementById('sonarr-library-content').hidden = !sonarrConfigured;
+      document.getElementById('radarr-library-content').hidden = !radarrConfigured;
       document.getElementById('series-nav').classList.toggle('active', series);
       document.getElementById('series-nav').setAttribute('aria-current', series ? 'page' : 'false');
       const configuration = view === 'configuration';
       const about = view === 'about';
+      document.getElementById('settings-nav').classList.toggle('active', configuration);
       document.getElementById('page-title').textContent = about ? 'About' : configuration ? 'Configuration' : movies ? 'Movies' : series ? 'TV' : 'Overview';
       document.getElementById('overview-content').hidden = movies || series || configuration || about;
       document.getElementById('movies-content').hidden = !movies;
@@ -353,8 +355,8 @@
       configurationNav.setAttribute('aria-current', configuration ? 'page' : 'false');
       document.getElementById('about-nav').classList.toggle('active', about);
       document.getElementById('about-nav').setAttribute('aria-current', about ? 'page' : 'false');
-      if (movies) loadRadarrMovies();
-      if (series) loadSonarrSeries();
+      if (movies) void loadRadarrSettings().then(() => { if (window.location.hash === '#movies') return loadRadarrMovies(); });
+      if (series) void loadSonarrSettings().then(() => { if (window.location.hash === '#series') return loadSonarrSeries(); });
       if (configuration) loadConfiguration();
     }
     function restoreView() {
@@ -369,13 +371,12 @@
     const settingsForm = document.getElementById('radarr-settings');
     function openRadarrSettings(event) {
       event.preventDefault();
-      showView('overview');
-      const panel = document.getElementById('radarr-settings-panel');
-      panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      showView('movies');
+      document.getElementById('radarr-settings-panel').scrollIntoView({ behavior: 'smooth', block: 'center' });
       document.getElementById('radarr-url').focus({ preventScroll: true });
     }
     document.getElementById('configure-radarr-link').addEventListener('click', openRadarrSettings);
-    document.getElementById('settings-nav').addEventListener('click', openRadarrSettings);
+    document.getElementById('settings-nav').addEventListener('click', () => showView('configuration'));
     document.getElementById('sign-out').addEventListener('click', async () => {
       localStorage.removeItem('rawrarr.browser.age-id');
       sessionStorage.removeItem('rawrarr.browser.age-id');
@@ -478,11 +479,17 @@
       document.getElementById('live-status').textContent = 'Reconnecting to live updates…';
     };
 
+    let radarrConfigured = false;
+    let sonarrConfigured = false;
     async function loadRadarrSettings() {
       try {
         const response = await fetch('/api/settings/radarr', { headers: { Accept: 'application/json' } });
         const settings = await response.json();
+        radarrConfigured = Boolean(settings.configured);
+        document.getElementById('radarr-settings-panel').hidden = radarrConfigured || window.location.hash !== '#movies';
+        document.getElementById('radarr-library-content').hidden = !radarrConfigured;
         if (settings.url) document.getElementById('radarr-url').value = settings.url;
+        document.getElementById('radarr-key').required = !settings.configured;
         const keyField = document.getElementById('radarr-key');
         const canKeepSavedKey = settings.configured && settings.persisted;
         keyField.required = !canKeepSavedKey;
@@ -523,6 +530,8 @@
         document.getElementById('radarr-ui-password').value = '';
         message.textContent = 'Applied immediately without restarting. Checking Radarr…';
         await Promise.all([loadRadarrSettings(), refreshStatus(), loadMetadataInfo()]);
+        showView('movies');
+        await loadRadarrMovies();
         message.textContent = `Saved encrypted and applied without restart · Radarr: ${state.textContent}.`;
       } catch (error) {
         message.textContent = error.message;
@@ -539,6 +548,7 @@
         document.getElementById('radarr-ui-password').value = '';
         document.getElementById('radarr-settings-message').textContent = 'Cleared Radarr settings. The shared filename secret is preserved. Environment settings may apply again after a restart.';
         await Promise.all([loadRadarrSettings(), refreshStatus(), loadMetadataInfo()]);
+        showView('movies');
       }
     });
 
@@ -711,6 +721,12 @@
     async function loadRadarrMovies() {
       const message = document.getElementById('movies-message');
       const button = document.getElementById('refresh-movies');
+      if (!radarrConfigured) {
+        document.getElementById('radarr-settings-panel').hidden = false;
+        document.getElementById('movies-message').textContent = 'Connect Radarr to view movie details.';
+        document.getElementById('radarr-movie-rows').replaceChildren();
+        return;
+      }
       if (button.disabled) return;
       const generation = ++movieLoadGeneration;
       const hasMovies = document.getElementById('radarr-movie-rows').childElementCount > 0;
@@ -761,6 +777,12 @@
     let seriesLoadGeneration = 0;
     async function loadSonarrSeries() {
       const button = document.getElementById('refresh-series');
+      if (!sonarrConfigured) {
+        document.getElementById('sonarr-settings-panel').hidden = false;
+        document.getElementById('series-message').textContent = 'Connect Sonarr to view TV details.';
+        document.getElementById('sonarr-series-rows').replaceChildren();
+        return;
+      }
       if (button.disabled) return;
       button.disabled = true;
       const generation = ++seriesLoadGeneration;
@@ -958,6 +980,9 @@
       const response = await fetch('/api/settings/sonarr');
       if (!response.ok) return;
       const settings = await response.json();
+      sonarrConfigured = Boolean(settings.configured);
+      document.getElementById('sonarr-settings-panel').hidden = sonarrConfigured || window.location.hash !== '#series';
+      document.getElementById('sonarr-library-content').hidden = !sonarrConfigured;
       document.getElementById('sonarr-url').value = settings.url || '';
       document.getElementById('sonarr-key').required = !settings.configured;
       document.getElementById('sonarr-key-note').textContent = settings.configured ? 'Leave blank to keep the saved API key.' : 'Required for the first encrypted save.';
@@ -973,8 +998,11 @@
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Could not save Sonarr settings');
         document.getElementById('sonarr-key').value = '';
+        sonarrConfigured = true;
         renderArrLibrary([], ++seriesLoadGeneration, null, libraryApps.sonarr);
         await loadSonarrSettings();
+        document.getElementById('sonarr-settings-panel').hidden = true;
+        await loadSonarrSeries();
         message.textContent = 'Connected to Sonarr. Settings saved encrypted.';
       } catch (error) { message.textContent = error.message; }
       finally { button.disabled = false; }
@@ -985,8 +1013,10 @@
         const response = await fetch('/api/settings/sonarr', { method: 'DELETE' });
         if (!response.ok) throw new Error((await response.json()).error || 'Could not clear Sonarr');
         document.getElementById('sonarr-key').value = '';
+        sonarrConfigured = false;
         renderArrLibrary([], ++seriesLoadGeneration, null, libraryApps.sonarr);
         await loadSonarrSettings();
+        document.getElementById('sonarr-settings-panel').hidden = false;
         message.textContent = 'Sonarr settings cleared.';
       } catch (error) { message.textContent = error.message; }
     });
@@ -1230,8 +1260,7 @@
     loadIdentityTheme();
     loadPendingNodes();
     setInterval(loadPendingNodes, 10000);
-    loadRadarrSettings();
-    loadSonarrSettings().catch(() => {});
+    Promise.all([loadRadarrSettings(), loadSonarrSettings()]);
   </script>
 </body>
 </html>
