@@ -30,10 +30,12 @@
 
 - 2026-10-18 `61fc927` (`docs: align project guides with current roles and features`): reviewed the repository and updated setup, roarlay/apex/metadata architecture, direct routes, movie export, storage scanning, and roadmap status. See [the task runbook](runbooks/2026-10-18-current-state-documentation-review.md). On the next whole-project documentation review, inspect this commit and commits after it before deciding what needs updating; record the new documentation commit here after committing the docs.
 
-## Mac mini noninteractive SSH PATH
+## Tailscale SSH for internal Macs
 
-- Noninteractive SSH sessions to `willjasen@brandons-mac-mini.risk-mermaid.ts.net` may start with a minimal `PATH` that omits Docker and GitHub CLI. In remote command strings, prepend `export PATH=/usr/local/bin:/opt/homebrew/bin:$PATH`; the verified Docker executable is `/usr/local/bin/docker` and `gh` is also available after adding `/usr/local/bin`.
-- Before running Docker commands remotely, confirm the context with `docker context show`; the Mac mini currently uses `orbstack`. Use `/usr/local/bin/docker` explicitly if setting `PATH` is not practical. This avoids mistaking a PATH issue for a missing Docker installation.
+- Prefer `tailscale ssh willjasen@brandons-mac-mini.risk-mermaid.ts.net` and `tailscale ssh willjasen@brandons-macbook-pro.risk-mermaid.ts.net` for interactive or remote-command access to the internal Macs. Tailscale SSH verifies the destination host identity through the tailnet, avoiding a separate OpenSSH `known_hosts` entry.
+- Keep host identity verification enabled. Do not bypass strict host-key checking or accept an unverified host key. If Tailscale SSH reports that no host key is known, verify that the destination is advertising Tailscale SSH and resolve its tailnet SSH configuration before deployment.
+- Noninteractive sessions may start with a minimal `PATH` that omits Docker and GitHub CLI. In remote command strings, prepend `export PATH=/usr/local/bin:/opt/homebrew/bin:$PATH`; the verified Docker executable on the Mac mini is `/usr/local/bin/docker` and `gh` is also available after adding `/usr/local/bin`.
+- Before running Docker commands remotely, confirm the context with `docker context show`; the Mac mini currently uses `orbstack`. Use `/usr/local/bin/docker` explicitly if setting `PATH` is not practical.
 
 ## Serialized container deployments
 
