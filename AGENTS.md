@@ -22,6 +22,10 @@
 - When Will asks for a Rawrarr web UI change without naming a node, treat the internal coordinator UI at `https://rawrarr.risk-mermaid.ts.net/` as the target. Deploy coordinator changes to the Mac mini `rawrarr-internal-mini` roarlay service. Update the MacBook fossil only when the requested change affects node code or Will explicitly asks to update that node.
 - After internal coordinator UI changes, update only `roarlay` in the existing `rawrarr-internal-mini` Compose project and verify roarlay health and the tailnet route as described below. Preserve its PostgreSQL database, Tailscale state, configuration, and the user’s browser windows.
 
+## Recurring environment issues
+
+- When a task encounters a small setup or environment issue that recurs (for example, a checkout missing Playwright), first fix the underlying cause when practical. If the cause cannot be fixed appropriately, record the verified workaround here so later tasks can use it. Include the affected environment, the exact workaround, and any relevant limits; keep it concise, secret-free, and generally applicable. Do not add one-off failures or speculative workarounds, and remove or revise guidance when it becomes obsolete.
+
 ## Documentation review baseline
 
 - 2026-10-18 `61fc927` (`docs: align project guides with current roles and features`): reviewed the repository and updated setup, roarlay/apex/metadata architecture, direct routes, movie export, storage scanning, and roadmap status. See [the task runbook](runbooks/2026-10-18-current-state-documentation-review.md). On the next whole-project documentation review, inspect this commit and commits after it before deciding what needs updating; record the new documentation commit here after committing the docs.

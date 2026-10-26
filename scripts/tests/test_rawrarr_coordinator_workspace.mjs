@@ -72,6 +72,7 @@ test('device shared-folder health is concise and formatted without exposing the 
 });
 
 test('Devices shows a network diagram with one link for each device pair', () => {
+  assert.match(workspace, /<section id="devices-view"[^>]*>[\s\S]*?<h1 class="page-title">Devices<\/h1>\s*<p><a class="button-link" href="\/setup\/node">Add a device with Docker Compose<\/a><\/p>/);
   assert.match(workspace, /<section id="device-topology" class="topology-section" aria-labelledby="device-topology-title" hidden>[\s\S]*?<h2 id="device-topology-title">Topology<\/h2>/);
   assert.match(workspace, /<div id="device-topology-content"><\/div>/);
   assert.match(workspaceScript, /function renderDeviceTopology\(nodes, observedPeers, deviceNames\)/);
@@ -376,7 +377,7 @@ test('coordinator node buttons display accessible direct, relay, and offline rou
   assert.match(deviceRoutes, /device\.relayAvailable \? 'relay' : 'offline'/);
   assert.match(deviceRoutes, /status, directRoute/);
   assert.match(workspaceScript, /nodeStateLabel = node\.online \? `Online · \$\{routeLabel\}` : routeLabel/);
-  assert.match(workspaceScript, /stateLabel\.textContent = latencyLabel \? `Online · \$\{latencyLabel\}` : nodeStateLabel/);
+  assert.match(workspaceScript, /stateLabel\.textContent = latencyLabel \|\| nodeStateLabel/);
   assert.match(workspaceScript, /if \(!node\.online \|\| !node\.relayAvailable\) return/);
   assert.match(workspaceScript, /if \(!node\.relayAvailable && !node\.directUrl\)/);
   assert.match(workspaceScript, /const canOpenNode = node => node\.relayAvailable \|\| Boolean\(node\.directUrl\)/);
@@ -394,7 +395,7 @@ test('default metadata selection measures online direct metadata nodes and selec
   assert.match(deviceRoutes, /signal: AbortSignal\.timeout\(2500\)/);
   assert.match(deviceRoutes, /probeCacheMilliseconds = 15_000/);
   assert.match(workspaceScript, /checkDeviceRoutes\(workspaceNodes, \{ refresh \}\)/);
-  assert.match(workspaceScript, /stateLabel\.textContent = latencyLabel \? `Online · \$\{latencyLabel\}` : nodeStateLabel/);
+  assert.match(workspaceScript, /stateLabel\.textContent = latencyLabel \|\| nodeStateLabel/);
   assert.match(workspaceScript, /Direct Tailscale route active \(\$\{latencyLabel\}\)/);
   assert.match(workspaceScript, /const relayRoute = \{ nodeId: node\.nodeId, base: `\/nodes\/\$\{encodeURIComponent\(node\.nodeId\)\}`, direct: false \}/);
 });
