@@ -386,11 +386,12 @@ test('coordinator node buttons display accessible direct, relay, and offline rou
   assert.match(deviceRoutes, /status, directRoute/);
   assert.match(workspaceScript, /nodeStateLabel = node\.online \? `Online · \$\{routeLabel\}` : routeLabel/);
   assert.match(workspaceScript, /stateLabel\.textContent = latencyLabel \|\| nodeStateLabel/);
-  assert.match(workspaceScript, /if \(!node\.online \|\| !node\.relayAvailable\) return/);
+  assert.doesNotMatch(workspaceScript, /async function loadNodeAvatar\(node, pictureSource, image\) \{\s*if \(!node\.online \|\| !node\.relayAvailable\)/);
   assert.match(workspaceScript, /if \(!node\.relayAvailable && !node\.directUrl\)/);
   assert.match(workspaceScript, /const canOpenNode = node => node\.relayAvailable \|\| Boolean\(node\.directUrl\)/);
   assert.match(workspace, /\.node-state\.online \.node-state-indicator \{ border-color:#a6e3a1; background:#3bc46b/);
   assert.match(workspace, /\.node-state\.offline \.node-state-indicator \{ border-color:#ff9999; background:#ef5c5c/);
+  assert.match(workspace, /\.node-state\.online\.offline \.node-state-indicator \{ border-color:#d5b66a; background:#b98c27/);
   assert.match(workspace, /\.node-state\.direct \.node-state-indicator \{ border-color:#a6e3a1; background:#3bc46b/);
   assert.match(workspace, /\.node-state\.relay \.node-state-indicator \{ border-color:#78b8ec; background:#528fc0/);
   assert.match(workspace, /\.node-state-indicator \{ flex:0 0 13px; width:13px; height:13px; border:1px solid/);

@@ -212,7 +212,6 @@ async function loadProfileAvatar() {
   renderProfileAvatar();
 }
 async function loadNodeAvatar(node, pictureSource, image) {
-  if (!node.online || !node.relayAvailable) return;
   let seedPromise = nodeAvatarSeeds.get(node.nodeId);
   if (!seedPromise) {
     seedPromise = deriveNodeAvatarSeed(node.nodeId).catch(() => '');
