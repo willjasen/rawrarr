@@ -6,6 +6,7 @@
 # Rawrarr tests
 
 - `test_coordinator_availability.mjs` — Checks repeated health failures before showing the coordinator pending modal, stable recovery before refreshing the current view, visibility/network retry hooks, and the served/bundled monitor asset. Run `node --test scripts/tests/test_coordinator_availability.mjs`.
+- `test_orbstack_arr_connectivity.py` — starts the isolated OrbStack Arr/fossil services when passed `--start`, then checks authenticated Radarr and Sonarr system-status calls from fossil's shared Tailscale network namespace without printing API keys. Requires OrbStack's `orbstack` Docker context and the test secrets/approved-node files described by the environment-test runbook. Run `python3 scripts/tests/test_orbstack_arr_connectivity.py --start`.
 
 - `test_rawrarr_topology_visibility_browser.mjs` — Chromium checks that topology stays hidden for no devices and offline-only devices, appears online, and opens after a device reports online on a later poll. Run in the isolated Playwright test image.
 

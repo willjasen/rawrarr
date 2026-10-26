@@ -47,6 +47,7 @@
 - [Use Valkey for fossil cache and plan peer metadata sync](2026-10-25-valkey-metadata-peer-sync.md) — Switch metadata Compose definitions to Valkey, add regression coverage, and record the planned RPC/Merkle peer synchronization direction (issue [#100](https://github.com/willjasen/rawrarr/issues/100)).
 
 - [Describe the current web app on About](2026-10-25-about-web-app-user-flow.md) — Explain the existing browser workflow and track identity-domain and external Arr provisioning work separately (issues [#95](https://github.com/willjasen/rawrarr/issues/95) and [#96](https://github.com/willjasen/rawrarr/issues/96)).
+- [OrbStack Radarr and Sonarr connectivity test](2026-10-26-orbstack-arr-connectivity-test.md) — Add disposable Arr services and repeatable authenticated API connectivity checks from fossil in the isolated environment (issue [#99](https://github.com/willjasen/rawrarr/issues/99)).
 
 - [Separate node check-in and browser route status](2026-10-25-separate-node-online-and-route-status.md) — Clarify coordinator heartbeat versus browser direct/relay reachability and allow device avatars through either route (issue [#86](https://github.com/willjasen/rawrarr/issues/86)).
 

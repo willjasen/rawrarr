@@ -2,6 +2,8 @@
 
 This project keeps a local Radarr inspection helper and repeatable checks under [`tests/`](tests/). See the [test index](tests/README.md) for coverage, dependencies, and invocation.
 
+- `tests/test_orbstack_arr_connectivity.py` — Start and verify the isolated OrbStack Radarr/Sonarr APIs from the fossil node network namespace. Requires the OrbStack Docker context and local test state; `--start` starts only the test project's required services. See the [environment test runbook](../runbooks/2026-10-26-orbstack-arr-connectivity-test.md).
+
 - `classify_internal_deploy_targets.py` — Compare two Git refs and emit JSON identifying whether internal coordinator, node, both, or neither targets need deployment. Known coordinator/node paths are mapped explicitly; unknown Rawrarr runtime paths conservatively target both. Requires Python 3. Run `python3 scripts/classify_internal_deploy_targets.py --base origin/main --head HEAD`.
 
 - `local_radarr.py` — read Radarr status and library totals using the node-local plaintext mirror in the local Docker container; never prints the API key or movie paths. Requires Python 3 and Docker access. Run `python3 scripts/local_radarr.py`.
