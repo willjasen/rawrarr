@@ -18,4 +18,4 @@ Clarify the coordinator Radarr and Sonarr settings when the selected metadata no
 
 ## Final state and remaining work
 
-Implementation and regression coverage are complete on `codex/clarify-media-connection-route`. No deployment was requested; UI copy has not been verified against the live internal page. Commit and PR status are recorded in the completion report.
+Implementation and regression coverage are complete on `codex/clarify-media-connection-route`. No deployment was requested; UI copy has not been verified against the live internal page. Task commit: `7691e57` (`Clarify unconfigured media service settings`). The branch was pushed and PR [#92](https://github.com/willjasen/rawrarr/pull/92) was opened; it includes merge commit `98fc5e9` to bring in the latest `origin/main` at the time. The PR is awaiting review/checks. No deployment was requested; UI copy has not been verified against the live internal page.
