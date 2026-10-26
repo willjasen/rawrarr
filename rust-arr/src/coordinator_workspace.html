@@ -35,6 +35,13 @@
     .sidebar-signature-status[data-status="signed"] { color:#a6e3a1 }
     .sidebar-signature-status[data-status="rejected"] { color:#ff8a8a }
     .workspace { min-width:0 }
+    #coordinator-pending-dialog { width:min(520px,calc(100vw - 32px)); border:1px solid var(--line); border-radius:14px; padding:26px; color:var(--text); background:var(--panel); box-shadow:0 20px 70px #0009 }
+    #coordinator-pending-dialog::backdrop { background:#101411f2 }
+    #coordinator-pending-dialog h1 { margin:0 0 8px; font-size:22px }
+    #coordinator-pending-dialog p { color:var(--muted); margin:0 }
+    .coordinator-pending-indicator { width:32px; height:32px; margin-bottom:14px; border:3px solid var(--line); border-top-color:var(--green); border-radius:50%; animation:coordinator-pending-spin 1s linear infinite }
+    @keyframes coordinator-pending-spin { to { transform:rotate(360deg) } }
+    @media (prefers-reduced-motion:reduce) { .coordinator-pending-indicator { animation:none; border-color:var(--green) } }
     header { display:flex; align-items:center; justify-content:flex-end; gap:16px; padding:13px 22px; border-bottom:1px solid var(--line); background:var(--panel) }
     button,select { border:1px solid #46574a; border-radius:8px; padding:9px 12px; color:var(--text); background:#202821; font:inherit }
     button { cursor:pointer } button:hover { border-color:var(--green) }
@@ -217,6 +224,11 @@
   </style>
 </head>
 <body>
+  <dialog id="coordinator-pending-dialog" aria-labelledby="coordinator-pending-title" aria-describedby="coordinator-pending-detail" aria-busy="true">
+    <div class="coordinator-pending-indicator" aria-hidden="true"></div>
+    <h1 id="coordinator-pending-title">Reconnecting to roarlay</h1>
+    <p id="coordinator-pending-detail" role="status" aria-live="polite">The coordinator connection was interrupted. Roarlay may be updating or restarting. This page will reconnect automatically.</p>
+  </dialog>
   <div class="app">
    <aside aria-label="Main navigation">
     <div class="brand"><picture><source srcset="/assets/rawrarr-logo.jxl" type="image/jxl"><img src="/assets/rawrarr-logo.png" alt="rawrarr" width="180" height="60"></picture></div><div class="section-label">rawrchive</div>

@@ -8,6 +8,7 @@ coordinator_passkey.html
 subscriber_onboarding.html
 passkey-client.mjs
 coordinator-workspace.mjs
+coordinator-availability.mjs
 coordinator-ai.mjs
 coordinator-device-routes.mjs
 coordinator-passkey.mjs

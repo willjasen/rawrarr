@@ -264,6 +264,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/assets/rawrarr-logo.png", get(coordinator_rawrarr_logo))
         .route("/assets/rawrarr-logo.jxl", get(coordinator_rawrarr_logo_jxl))
         .route("/assets/coordinator-workspace.mjs", get(coordinator_workspace_script))
+        .route("/assets/coordinator-availability.mjs", get(coordinator_availability_script))
         .route("/assets/coordinator-node-avatar.mjs", get(coordinator_node_avatar_script))
         .route("/assets/coordinator-ai.mjs", get(coordinator_ai_script))
         .route("/assets/coordinator-device-routes.mjs", get(coordinator_device_routes_script))
@@ -1504,6 +1505,13 @@ async fn direct_session(
 
 async fn coordinator_workspace_script() -> Response {
     let mut response = axum::response::Response::new(Body::from(crate::ui_assets::text("coordinator-workspace.mjs", include_str!("coordinator-workspace.mjs")).await));
+    response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/javascript; charset=utf-8"));
+    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+async fn coordinator_availability_script() -> Response {
+    let mut response = Response::new(Body::from(crate::ui_assets::text("coordinator-availability.mjs", include_str!("coordinator-availability.mjs")).await));
     response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/javascript; charset=utf-8"));
     response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response

@@ -1,4 +1,5 @@
 import { checkDeviceRoutes } from './coordinator-device-routes.mjs';
+import { createCoordinatorAvailabilityMonitor } from './coordinator-availability.mjs';
 import { deriveNodeAvatarSeed } from './coordinator-node-avatar.mjs';
 import { dinosaurMainColor, dinosaurWingWord } from './profile-color.mjs';
 import { initAiChat } from './coordinator-ai.mjs';
@@ -2058,8 +2059,32 @@ document.getElementById('sign-out').addEventListener('click', async () => {
   window.location.replace('/auth');
 });
 
+const coordinatorPendingDialog = document.getElementById('coordinator-pending-dialog');
+coordinatorPendingDialog.addEventListener('cancel', event => event.preventDefault());
+const originalDocumentTitle = document.title;
+let initialWorkspaceLoadFinished = false;
+function refreshWorkspaceAfterCoordinatorReconnect() {
+  if (coordinatorPendingDialog.open) coordinatorPendingDialog.close();
+  document.title = originalDocumentTitle;
+  if (!initialWorkspaceLoadFinished) return;
+  void loadNodes();
+  void loadPending();
+  const currentView = location.hash.slice(1) || 'overview';
+  showView(currentView, true);
+  if (currentView === 'configuration') void loadClusterConfiguration();
+}
+const coordinatorAvailability = createCoordinatorAvailabilityMonitor({
+  onUnavailable: () => {
+    document.title = 'Reconnecting · rawrarr';
+    if (!coordinatorPendingDialog.open) coordinatorPendingDialog.showModal();
+  },
+  onAvailable: refreshWorkspaceAfterCoordinatorReconnect,
+});
+coordinatorAvailability.start();
+
 await loadNodes();
 await loadPending();
+initialWorkspaceLoadFinished = true;
 if (location.hash === '#configuration') void loadClusterConfiguration();
 if (location.hash === '#movies') void loadArrSettings('radarr');
 if (location.hash === '#tv' || location.hash === '#series') void loadArrSettings('sonarr');
