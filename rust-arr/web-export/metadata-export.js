@@ -212,6 +212,7 @@ export async function loadDeviceNames(identity, base) {
 
 export async function loadSharedConfig(identity, base) {
   if (!identity.trim().startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('Paste a post-quantum age private ID.');
+  if (typeof base !== 'string' || !base.trim()) throw new Error('No usable route is available to read the shared configuration.');
   const prefix = base.endsWith('/') ? base : `${base}/`;
   identity = await resolveGroupIdentity(identity, base);
   const encrypted = await fetchBytes(`${prefix}api/metadata/export/config`);
