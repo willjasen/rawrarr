@@ -154,7 +154,7 @@ test('coordinator root selects passkey sign-in or an owner workspace while healt
   assert.match(workspace, /id="age-id"/);
   assert.match(workspace, /id="age-id-entry"/);
   assert.doesNotMatch(workspace, /id="remember-age-id"/);
-  assert.match(workspace, /Your ID is saved in this browser so you can use the main pages without entering it again/);
+  assert.match(workspace, /After validation, Rawrarr saves your ID in this browser when browser storage is available/);
   assert.match(workspace, /id="age-storage-title">Age private ID in this browser/);
   assert.match(workspace, /id="age-storage-status"/);
   assert.match(workspace, /id="save-age-id"/);
@@ -168,6 +168,9 @@ test('coordinator root selects passkey sign-in or an owner workspace while healt
   assert.match(workspaceScript, /addEventListener\('pagehide', \(\) =>/);
   assert.match(workspaceScript, /localStorage\.getItem\(ageSessionKey\)/);
   assert.match(workspaceScript, /localStorage\.setItem\(ageSessionKey, identity\)/);
+  assert.match(workspaceScript, /deriveProfileRecipient\(identity\)[\s\S]*?rememberAgeIdentity\(identity\)[\s\S]*?await unlockMetadataVaultForSettings\(\)/);
+  assert.match(workspaceScript, /try \{\s*localStorage\.setItem\(ageSessionKey, identity\);[\s\S]*?return false;/);
+  assert.match(workspaceScript, /this browser could not save it/);
   assert.match(workspaceScript, /localStorage\.removeItem\(ageSessionKey\)/);
   assert.match(workspaceScript, /arrDirectRequest\('\/settings\/age'/);
   assert.doesNotMatch(workspaceScript, /localStorage\.(?:getItem|setItem)\([^)]*(?:root|signing)/i);
@@ -239,7 +242,7 @@ test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from th
   assert.match(workspace, /\.profile-avatar \{ display:block;/);
   assert.match(workspaceScript, /profile-picture\/\$\{profileAvatarSeed\}\/jxl/);
   assert.match(workspaceScript, /profile-picture\/\$\{profileAvatarSeed\}\/png/);
-  assert.match(workspaceScript, /ageIdentityInMemory \|\| localStorage\.getItem\(ageSessionKey\)/);
+  assert.match(workspaceScript, /const identity = ageIdentityInMemory;/);
   assert.match(workspaceScript, /deriveProfileRecipient\(identity\)/);
   assert.doesNotMatch(workspaceScript, /fetch\(`\/nodes\/\$\{encodeURIComponent\(node\.nodeId\)\}\/api\/metadata\/export\/recipient/);
   assert.match(metadataExport, /identityToRecipient\(identity\.trim\(\)\)/);
