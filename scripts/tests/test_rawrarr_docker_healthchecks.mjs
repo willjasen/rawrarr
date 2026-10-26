@@ -15,6 +15,15 @@ test('Rawrarr and PostgreSQL containers define readiness health checks', () => {
   assert.match(compose, /postgres:[\s\S]*?healthcheck:[\s\S]*?pg_isready -U rawrarr -d rawrarr/);
 });
 
+test('Rawrarr image builds its Rust binary for the requested container architecture', () => {
+  assert.match(dockerfile, /ARG TARGETARCH/);
+  assert.match(dockerfile, /amd64\) rust_target=x86_64-unknown-linux-gnu/);
+  assert.match(dockerfile, /arm64\) rust_target=aarch64-unknown-linux-gnu/);
+  assert.match(dockerfile, /Unsupported target architecture/);
+  assert.match(dockerfile, /cargo build --release --locked --target "\$rust_target"/);
+  assert.match(dockerfile, /test "\$\(cat \/usr\/share\/rawrarr\/target-arch\)" = "\$TARGETARCH"/);
+});
+
 test('Docker test containers have unique names in the rawrarr-test-regression group', () => {
   assert.match(testRunner, /BASE36 = "0123456789abcdefghijklmnopqrstuvwxyz"/);
   assert.match(testRunner, /def timestamp_code\(\)/);
