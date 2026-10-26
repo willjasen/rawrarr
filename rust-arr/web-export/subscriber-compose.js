@@ -20,7 +20,7 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
     ? `rawrarr-${baseHostname}`.slice(0, 63)
     : baseHostname;
   const lines = [
-    '# Rawrarr subscriber node. Requires the rawrarr:local image until a public release is published.',
+    '# Rawrarr subscriber node. Sign in to ghcr.io with a GitHub token that has read:packages access before the first pull.',
     '# This file runs no coordinator, roarlay, or PostgreSQL service.',
     'services:',
     '  tailscale:',
@@ -56,7 +56,8 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
   }
   lines.push(
     `  ${role === 'storage' ? 'boneyard' : 'fossil'}:`,
-    '    image: rawrarr:local',
+    '    image: ghcr.io/willjasen/rawrarr:main',
+    '    pull_policy: always',
     '    environment:',
     `      RAWARR_ROLE: ${role}`,
     '      RUST_ARR_LISTEN_ADDR: 0.0.0.0:8080',
