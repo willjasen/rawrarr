@@ -249,6 +249,8 @@ test('age ID is remembered after validation, restored on reload, and cleared on 
   const page = await browser.newPage();
   const identity = 'AGE-SECRET-KEY-PQ-1remembered-test-fixture';
   let vaultUnlocked = false;
+  let releaseAgeCheck;
+  let delayAgeCheck = true;
   await page.route('http://rawrarr.test/**', async route => {
     const request = route.request();
     const url = new URL(request.url());
@@ -266,7 +268,13 @@ test('age ID is remembered after validation, restored on reload, and cleared on 
     if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
     if (url.pathname === '/api/workspace/direct-session') return route.fulfill({ status: 204, headers: { 'set-cookie': `rawrarr_direct_session=${'b'.repeat(64)}; Path=/direct-api/; SameSite=Strict` } });
     if (url.pathname === '/direct-api/health') return route.fulfill({ status: 204 });
-    if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'GET') return route.fulfill({ json: { unlocked: vaultUnlocked, encryptedConfigExists: true } });
+    if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'GET') {
+      if (delayAgeCheck) {
+        delayAgeCheck = false;
+        await new Promise(resolve => { releaseAgeCheck = resolve; });
+      }
+      return route.fulfill({ json: { unlocked: vaultUnlocked, encryptedConfigExists: true } });
+    }
     if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'POST') {
       const body = request.postDataJSON();
       assert.equal(body.identityEnvelope, `age-ciphertext:${identity}`);
@@ -284,6 +292,9 @@ test('age ID is remembered after validation, restored on reload, and cleared on 
   await page.waitForFunction(() => document.querySelector('[data-node-id="metadata-one"]')?.dataset.selected === 'true');
   await page.locator('#age-id').fill(identity);
   await page.click('#unlock');
+  await page.waitForFunction(key => localStorage.getItem('rawrarr.browser.age-id') === key, identity);
+  assert.equal(await page.evaluate(key => localStorage.getItem('rawrarr.browser.age-id') === key, identity), true, 'persist the locally validated ID before waiting on the node');
+  releaseAgeCheck();
   await page.waitForFunction(() => document.getElementById('age-id').value === '');
   await page.waitForFunction(key => localStorage.getItem('rawrarr.browser.age-id') === key, identity);
   assert.equal(await page.evaluate(key => localStorage.getItem('rawrarr.browser.age-id') === key, identity), true);
