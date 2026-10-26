@@ -427,21 +427,21 @@
           <p id="metadata-export-dialog-status" class="connection-message" role="status" aria-live="polite"></p>
         </form>
       </dialog>
-      <dialog id="approve-node-dialog" style="width:min(640px,calc(100% - 28px));border:1px solid #39463d;border-radius:14px;background:#151b18;color:#e7eee8;padding:22px">
-        <form id="approve-node-form">
-          <h2 style="margin:0 0 8px">Approve with the instance root key</h2>
-          <p class="sub">This tab decrypts the root backup with your age ID and signs the displayed request locally. Only the public root key and signature are sent to roarlay. Compare the fingerprint with the copy you saved separately.</p>
-          <p id="approve-node-status" class="connection-message" role="status" aria-live="polite"></p>
-          <label for="approve-node-age-id">Age private ID</label>
-          <input id="approve-node-age-id" type="password" autocomplete="off" spellcheck="false" required style="width:100%;min-height:42px;margin-top:6px;border:1px solid #46574a;border-radius:8px;background:#101411;color:var(--text);padding:10px;font:12px ui-monospace,monospace">
-          <label for="approve-node-root-backup">Encrypted root-key backup</label>
-          <textarea id="approve-node-root-backup" required autocomplete="off" spellcheck="false" style="width:100%;min-height:135px;margin-top:6px;border:1px solid #46574a;border-radius:8px;background:#101411;color:var(--text);padding:10px;font:12px ui-monospace,monospace"></textarea>
-          <label for="approve-node-root-fingerprint">Independently saved root fingerprint</label>
-          <input id="approve-node-root-fingerprint" type="text" inputmode="text" pattern="[0-9a-fA-F]{64}" autocomplete="off" required style="width:100%;min-height:42px;margin-top:6px;border:1px solid #46574a;border-radius:8px;background:#101411;color:var(--text);padding:10px;font:12px ui-monospace,monospace">
-          <div class="connection-actions"><button type="submit">Sign and approve</button><button id="approve-node-cancel" type="button">Cancel</button></div>
-        </form>
-      </dialog>
     </section>
+    <dialog id="approve-node-dialog" style="width:min(640px,calc(100% - 28px));border:1px solid #39463d;border-radius:14px;background:#151b18;color:#e7eee8;padding:22px">
+      <form id="approve-node-form">
+        <h2 style="margin:0 0 8px">Approve with the instance root key</h2>
+        <p class="sub">This tab decrypts the root backup with your age ID and signs the displayed request locally. Only the public root key and signature are sent to roarlay. Compare the fingerprint with the copy you saved separately.</p>
+        <p id="approve-node-status" class="connection-message" role="status" aria-live="polite"></p>
+        <label for="approve-node-age-id">Age private ID</label>
+        <input id="approve-node-age-id" type="password" autocomplete="off" spellcheck="false" required style="width:100%;min-height:42px;margin-top:6px;border:1px solid #46574a;border-radius:8px;background:#101411;color:var(--text);padding:10px;font:12px ui-monospace,monospace">
+        <label for="approve-node-root-backup">Encrypted root-key backup</label>
+        <textarea id="approve-node-root-backup" required autocomplete="off" spellcheck="false" style="width:100%;min-height:135px;margin-top:6px;border:1px solid #46574a;border-radius:8px;background:#101411;color:var(--text);padding:10px;font:12px ui-monospace,monospace"></textarea>
+        <label for="approve-node-root-fingerprint">Independently saved root fingerprint</label>
+        <input id="approve-node-root-fingerprint" type="text" inputmode="text" pattern="[0-9a-fA-F]{64}" autocomplete="off" required style="width:100%;min-height:42px;margin-top:6px;border:1px solid #46574a;border-radius:8px;background:#101411;color:var(--text);padding:10px;font:12px ui-monospace,monospace">
+        <div class="connection-actions"><button type="submit">Sign and approve</button><button id="approve-node-cancel" type="button">Cancel</button></div>
+      </form>
+    </dialog>
   </main>
    </div>
   </div>
