@@ -21,6 +21,12 @@ test('updater no longer requires a publisher key, signature asset, or OpenSSL CL
   assert.doesNotMatch(updater, /PINNED_PUBLIC_KEY_FILE|pkeyutl|bundle\.zip\.sig/);
 });
 
+test('release workflow no longer requires a UI signing secret or creates signature assets', () => {
+  const workflow = read('../../.github/workflows/tests.yml');
+  assert.doesNotMatch(workflow, /RAWRARR_UI_SIGNING_KEY|ui-bundle\.zip\.sig|name: Sign UI bundle/);
+  assert.match(workflow, /ui publisher-signature generation and verification are temporarily disabled/i);
+});
+
 test('device signing endpoints and checks remain in place', () => {
   const coordinator = read('../../rust-arr/src/coordinator.rs');
   assert.match(coordinator, /api\/nodes\/signing-certificate/);
