@@ -267,6 +267,7 @@ enum RadarrConfigError {
     InvalidUrl,
     InvalidApiKey,
     InvalidUiCredentials,
+    InvalidCaCertificate,
 }
 
 impl std::fmt::Display for RadarrConfigError {
@@ -275,6 +276,7 @@ impl std::fmt::Display for RadarrConfigError {
             Self::InvalidUrl => "Invalid Radarr URL",
             Self::InvalidApiKey => "Invalid Radarr API key",
             Self::InvalidUiCredentials => "Invalid Radarr UI credentials",
+            Self::InvalidCaCertificate => "Invalid Arr CA certificate",
         })
     }
 }
@@ -322,13 +324,20 @@ impl ArrClient {
         {
             return Err(RadarrConfigError::InvalidUiCredentials);
         }
-        let http = reqwest::Client::builder()
+        let mut http_builder = reqwest::Client::builder()
             // Arr library endpoints can take several seconds while the service
             // is scraping metadata; five seconds caused intermittent 502s.
             .timeout(Duration::from_secs(30))
-            .redirect(reqwest::redirect::Policy::none())
+            .redirect(reqwest::redirect::Policy::none());
+        if let Some(ca_path) = env::var_os("RAWARR_ARR_CA_CERT_FILE") {
+            let ca_pem = std::fs::read(ca_path).map_err(|_| RadarrConfigError::InvalidCaCertificate)?;
+            let ca_certificate = reqwest::Certificate::from_pem(&ca_pem)
+                .map_err(|_| RadarrConfigError::InvalidCaCertificate)?;
+            http_builder = http_builder.add_root_certificate(ca_certificate);
+        }
+        let http = http_builder
             .build()
-            .map_err(|_| RadarrConfigError::InvalidUrl)?;
+            .map_err(|_| RadarrConfigError::InvalidCaCertificate)?;
 
         Ok(Self {
             movie_snapshot: Default::default(),
@@ -2381,6 +2390,7 @@ async fn put_radarr_settings(
                 RadarrConfigError::InvalidUrl => "Enter a valid Radarr HTTPS URL",
                 RadarrConfigError::InvalidApiKey => "Enter a valid Radarr API key",
                 RadarrConfigError::InvalidUiCredentials => "Enter valid Radarr UI credentials",
+                RadarrConfigError::InvalidCaCertificate => "The configured Arr CA certificate could not be loaded",
             };
             (StatusCode::BAD_REQUEST, Json(ApiError { error: message }))
         })?;

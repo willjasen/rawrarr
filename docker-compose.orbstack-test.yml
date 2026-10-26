@@ -45,6 +45,23 @@ services:
       timeout: 5s
       retries: 30
 
+  arr-proxy:
+    image: caddy:2-alpine
+    volumes:
+      - ./arr-orbstack-test.Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${HOME}/Library/Application Support/rawrarr/orbstack-test/arr-tls/arr-test.crt:/certs/arr-test.crt:ro
+      - ${HOME}/Library/Application Support/rawrarr/orbstack-test/arr-tls/arr-test.key:/certs/arr-test.key:ro
+    networks:
+      default:
+        aliases:
+          - radarr.test
+          - sonarr.test
+    depends_on:
+      radarr:
+        condition: service_healthy
+      sonarr:
+        condition: service_healthy
+
   headscale:
     image: headscale/headscale:0.29.5
     command: serve
@@ -142,12 +159,15 @@ services:
       RAWARR_METADATA_DIR: /metadata
       RAWARR_COORDINATOR_URL: http://coordinator:8080
       RAWARR_COORDINATOR_LOCAL_HTTP: "true"
+      RAWARR_ARR_CA_CERT_FILE: /run/secrets/arr_test_ca
       RAWARR_NODE_TOKEN_FILE: /run/secrets/node_token
       RAWARR_WEBAUTHN_RP_ID: localhost
       RAWARR_WEBAUTHN_ORIGIN: http://localhost:17397
     secrets:
       - source: node_a_token
         target: node_token
+      - source: arr_test_ca
+        target: arr_test_ca
     volumes:
       - orbstack-test-node-a:/data
       - orbstack-test-shared:/shared
@@ -159,6 +179,8 @@ services:
         condition: service_healthy
       sonarr:
         condition: service_healthy
+      arr-proxy:
+        condition: service_started
 
   tailscale-b:
     image: tailscale/tailscale:stable
@@ -237,3 +259,5 @@ secrets:
     file: ${HOME}/Library/Application Support/rawrarr/orbstack-test/tailscale-a-key
   tailscale_b_key:
     file: ${HOME}/Library/Application Support/rawrarr/orbstack-test/tailscale-b-key
+  arr_test_ca:
+    file: ${HOME}/Library/Application Support/rawrarr/orbstack-test/arr-tls/arr-test-ca.crt
