@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 const root = new URL('../../', import.meta.url);
 const read = path => readFile(new URL(path, root), 'utf8');
-const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, metadataUi, compose, metadataExport, mainRs, tailscaleCompose, boneyardCompose, coordinatorAvatar] = await Promise.all([
+const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, metadataUi, compose, metadataExport, mainRs, tailscaleCompose, boneyardCompose, coordinatorAvatar, internalMiniCompose] = await Promise.all([
   read('rust-arr/src/coordinator.rs'),
   read('rust-arr/src/auth.rs'),
   read('rust-arr/src/node_auth.rs'),
@@ -18,6 +18,7 @@ const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, me
   read('docker-compose.tailscale-macbook.yml'),
   read('docker-compose.storage.yml'),
   read('rust-arr/src/coordinator_avatar.rs'),
+  read('docker-compose.internal-mini.yml'),
 ]);
 
 test('coordinator labels the Sonarr section TV in navigation and its page heading', () => {
@@ -298,6 +299,12 @@ test('node list and relay are restricted to the signed-in owner and trusted conf
   assert.match(nodeAuth, /tokio::spawn\(async move/);
   assert.match(nodeAuth, /Duration::from_secs\(30\)/);
   assert.match(compose, /RAWARR_NODE_RELAY_TARGETS/);
+});
+
+test('internal coordinator maps the newly approved fossil ID to its relay and direct Tailscale routes', () => {
+  assert.match(internalMiniCompose, /"device-d3ee53b1d561fb349955b199":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/"/);
+  assert.match(internalMiniCompose, /"device-d3ee53b1d561fb349955b199":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/direct-api\/"/);
+  assert.match(internalMiniCompose, /"device-9288eb3b039608d16a9102a5"/);
 });
 
 test('coordinator relay can reach tailnet nodes through its Tailscale SOCKS5 sidecar', () => {
