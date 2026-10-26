@@ -48,7 +48,11 @@ def main():
             return full
         def endpoint(name):
             info=json.loads(docker('inspect',name))[0]
-            return 'http://127.0.0.1:' + info['NetworkSettings']['Ports']['8080/tcp'][0]['HostPort']
+            published=info['NetworkSettings']['Ports'].get('8080/tcp')
+            if not published:
+                state=info['State']
+                raise AssertionError(f"service did not publish port 8080 or exited (status={state['Status']} exit={state['ExitCode']})")
+            return 'http://127.0.0.1:' + published[0]['HostPort']
         def request(base, path, method='GET', payload=None, cookie=None, bearer=None):
             headers = {'Content-Type':'application/json'}
             if cookie: headers['Cookie']='rawrarr_session='+cookie
@@ -82,7 +86,9 @@ def main():
             for path in ['/api/radarr/status','/api/settings/age','/api/settings/radarr','/api/library','/api/devices']:
                 assert request(central_url,path,bearer=token)[0]==404, path
             status,body=request(central_url,'/')
-            assert status==200 and b'id="sign-in"' in body, 'anonymous coordinator root must show passkey sign-in'
+            assert status==200 and b'rawrarr' in body and b'Sign in' in body, 'anonymous coordinator root must show the public landing page and sign-in link'
+            status,body=request(central_url,'/auth')
+            assert status==200 and b'id="sign-in"' in body, 'anonymous coordinator auth route must show passkey sign-in'
             assert request(central_url,'/health')[0]==200, 'coordinator health endpoint must remain public'
             assert request(central_url,'/api/auth/status')[0]==200
             assert request(central_url,'/api/workspace/nodes')[0]==401

@@ -28,6 +28,9 @@ test('Docker test containers have unique names in the rawrarr-test-regression gr
   assert.doesNotMatch(testRunner, /copytree\([^\n]*web-export/);
   assert.match(testRunner, /ROOT \/ "docs"/);
   assert.match(testRunner, /ROOT \/ "\.github"/);
+  assert.match(testEntrypoint, /grep -Eq.*playwright-core/);
+  assert.match(testEntrypoint, /chromium.*launch/);
+  assert.match(testEntrypoint, /puppeteer/);
   assert.match(testRunner, /f"\{rust_source\}\/\."/);
   assert.match(testRunner, /f"\{tests_source\}\/\."/);
   assert.match(testRunner, /--rebuild-base/);
@@ -37,13 +40,12 @@ test('Docker test containers have unique names in the rawrarr-test-regression gr
   assert.match(testEntrypoint, /cargo clean --manifest-path \/workspace\/rust-arr\/Cargo\.toml -p rust-arr/);
   assert.match(testEntrypoint, /={16,}[\s\S]*CONTAINER TEST SUMMARY[\s\S]*={16,}/);
   assert.match(testEntrypoint, /section_start "NODE\.JS TESTS"/);
-  assert.match(testEntrypoint, /section_start "PLAYWRIGHT BROWSER TEST"/);
+  assert.match(testEntrypoint, /section_start "PLAYWRIGHT BROWSER TESTS"/);
   assert.match(testEntrypoint, /section_start "RUST UNIT TESTS"/);
   assert.match(testEntrypoint, /section_start "PYTHON INTEGRATION TESTS"/);
   assert.match(testEntrypoint, /END %s \(status=%s\)/);
   assert.match(testEntrypoint, /print_result "Node\.js"/);
-  assert.match(testEntrypoint, /browser_test=\/workspace\/scripts\/tests\/test_rawrarr_age_setup_browser\.mjs/);
-  assert.match(testEntrypoint, /node --experimental-global-webcrypto --test "\$browser_test"/);
+  assert.match(testEntrypoint, /node --experimental-global-webcrypto --test "\$browser_test" >>"\$playwright_log" 2>&1/);
   assert.match(testEntrypoint, /print_result "Playwright browser"/);
   assert.match(testEntrypoint, /TEST RESULTS playwright=%s node=%s rust=%s/);
   assert.match(testEntrypoint, /test_started_at=/);
