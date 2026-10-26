@@ -143,7 +143,7 @@ test('coordinator root selects passkey sign-in or an owner workspace while healt
   assert.match(workspace, /id="age-storage-status"/);
   assert.match(workspace, /id="save-age-id"/);
   assert.match(workspace, /id="remove-age-id"/);
-  assert.match(workspace, /Root signing keys are never saved in browser storage/);
+  assert.match(workspace, /User signing keys are never saved in browser storage/);
   assert.match(workspace, /id="clear-key" type="button" hidden/);
   assert.match(workspace, /<title>rawrarr<\/title>/);
   assert.match(workspace, /stays in this tab's memory/);
