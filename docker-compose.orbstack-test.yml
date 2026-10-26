@@ -17,6 +17,34 @@ services:
       timeout: 3s
       retries: 20
 
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: UTC
+    volumes:
+      - orbstack-test-radarr:/config
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:7878/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: UTC
+    volumes:
+      - orbstack-test-sonarr:/config
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8989/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
   headscale:
     image: headscale/headscale:0.29.5
     command: serve
@@ -91,6 +119,7 @@ services:
       TS_STATE_DIR: /var/lib/tailscale
       TS_USERSPACE: "true"
       TS_AUTH_ONCE: "false"
+      TS_EXTRA_ARGS: --accept-dns=false --login-server=https://headscale
     secrets:
       - tailscale_a_key
       - headscale_ca
@@ -105,7 +134,8 @@ services:
     environment:
       RAWARR_ROLE: metadata
       RAWARR_NODE_ID: test-metadata-a
-      RAWARR_DEVICE_NAME: Test metadata node A
+      RAWARR_DEVICE_NAME: fossil
+      RAWARR_INSTANCE_ROOT_FINGERPRINT: ${RAWARR_INSTANCE_ROOT_FINGERPRINT:-}
       RUST_ARR_LISTEN_ADDR: 127.0.0.1:8080
       RAWARR_DATA_DIR: /data
       RAWARR_SHARED_DATA_DIR: /shared
@@ -125,6 +155,10 @@ services:
     depends_on:
       roarlay:
         condition: service_healthy
+      radarr:
+        condition: service_healthy
+      sonarr:
+        condition: service_healthy
 
   tailscale-b:
     image: tailscale/tailscale:stable
@@ -136,6 +170,7 @@ services:
       TS_STATE_DIR: /var/lib/tailscale
       TS_USERSPACE: "true"
       TS_AUTH_ONCE: "false"
+      TS_EXTRA_ARGS: --accept-dns=false --login-server=https://headscale
     secrets:
       - tailscale_b_key
       - headscale_ca
@@ -173,6 +208,8 @@ services:
 
 volumes:
   orbstack-test-postgres:
+  orbstack-test-radarr:
+  orbstack-test-sonarr:
   orbstack-test-headscale:
   orbstack-test-node-a:
   orbstack-test-node-b:
