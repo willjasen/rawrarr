@@ -51,8 +51,8 @@ services:
       RAWARR_APPROVED_NODES_FILE: /run/secrets/rawrarr_approved_nodes
       RAWARR_COORDINATOR_WEB_RP_ID: ${RAWARR_COORDINATOR_WEB_RP_ID:-risk-mermaid.ts.net}
       RAWARR_COORDINATOR_WEB_ORIGIN: ${RAWARR_COORDINATOR_WEB_ORIGIN:-https://rawrarr.risk-mermaid.ts.net}
-      RAWARR_NODE_RELAY_TARGETS: '{"device-9288eb3b039608d16a9102a5":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/"}'
-      RAWARR_NODE_DIRECT_TARGETS: '{"device-9288eb3b039608d16a9102a5":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/direct-api/"}'
+      RAWARR_NODE_RELAY_TARGETS: '{"device-9288eb3b039608d16a9102a5":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/","device-d3ee53b1d561fb349955b199":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/"}'
+      RAWARR_NODE_DIRECT_TARGETS: '{"device-9288eb3b039608d16a9102a5":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/direct-api/","device-d3ee53b1d561fb349955b199":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/direct-api/"}'
     secrets:
       - rawrarr_postgres_password
       - rawrarr_approved_nodes
