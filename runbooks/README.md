@@ -1,3 +1,4 @@
+- [Deploy tested GitHub main to the internal Macs](2026-10-25-deploy-tested-main-internal-macs.md) — Build the tested published revision and update the internal roarlay coordinator and fossil subscriber with health and route verification.
 - [Verify local main regression suite](2026-10-25-verify-main-regression-suite.md) — Fix regression fixtures and browser export, then confirm Node, Playwright, and Rust checks pass on a branch based on local main.
 - [Defer subscriber Compose deployment work](2026-10-25-defer-subscriber-compose.md) — Track the remaining optional installer gaps in the roadmap and clean up the completed onboarding branch.
 - [Simplify first-account onboarding](2026-10-22-simplify-first-account-onboarding.md) — Finish passkey, age ID, and signing-key setup on Devices, with subscriber Docker Compose setup available when the owner chooses to add a node.
