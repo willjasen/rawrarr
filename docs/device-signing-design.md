@@ -1,5 +1,7 @@
 # Per-instance device signing
 
+> Identity ownership and the boundary between age confidentiality, passkey authentication, and ML-DSA signatures are summarized in [identity domains](identity-domains.md).
+
 ## Trust model
 
 Rawrarr uses ML-DSA-65 for an owner-held per-instance root and node-local device keys. The root authorizes a subscriber's exact enrollment request, key, display name, and role. The coordinator stores only the root public key and signed approvals; the root private key is decrypted and used in the browser for an approval, then cleared from the form and active tab. It is never sent to Roarlay.
