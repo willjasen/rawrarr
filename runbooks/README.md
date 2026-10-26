@@ -42,6 +42,8 @@
 
 # Rawrarr runbooks
 
+- [Peer metadata synchronization design decisions](2026-10-26-peer-metadata-sync-design-decisions.md) — Record user-only device membership, signed per-device revisions, versioned object/logical Merkle mapping, deterministic newest-revision convergence, and acknowledgement-based tombstone retention (issue [#100](https://github.com/willjasen/rawrarr/issues/100)).
+
 - [Use Valkey for fossil cache and plan peer metadata sync](2026-10-25-valkey-metadata-peer-sync.md) — Switch metadata Compose definitions to Valkey, add regression coverage, and record the planned RPC/Merkle peer synchronization direction (issue [#100](https://github.com/willjasen/rawrarr/issues/100)).
 
 - [Describe the current web app on About](2026-10-25-about-web-app-user-flow.md) — Explain the existing browser workflow and track identity-domain and external Arr provisioning work separately (issues [#95](https://github.com/willjasen/rawrarr/issues/95) and [#96](https://github.com/willjasen/rawrarr/issues/96)).
