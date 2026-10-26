@@ -20,7 +20,7 @@ import uuid
 def docker(*args, input=None, check=True):
     result = subprocess.run(['docker', *args], input=input, capture_output=True, text=True, check=False)
     if check and result.returncode:
-        reason = result.stderr.strip().replace('\n', ' ')[:300]
+        reason = result.stderr.strip().replace('\n', ' ')[:1200]
         raise RuntimeError('Docker operation failed: ' + ' '.join(args[:3]) + (': ' + reason if reason else ''))
     return result
 
@@ -66,6 +66,8 @@ def main():
             path = root / directory
             path.mkdir(mode=0o777)
             path.chmod(0o777)
+            docker('run', '--rm', '-v', f'{path}:/fixture', 'alpine:3.21',
+                'chown', '-R', '10001:10001', '/fixture')
         (root / 'media' / 'Example Film (2024)').mkdir()
         (root / 'media' / 'Example Film (2024)' / 'Example Film (2024).mkv').write_bytes(b'disposable film fixture')
         (root / 'media' / 'Example Show' / 'Season 01').mkdir(parents=True)

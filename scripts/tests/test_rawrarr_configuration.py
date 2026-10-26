@@ -65,6 +65,29 @@ def expect_bytes(path, status=200):
     return body
 
 
+def encrypt_identity_for_node(identity):
+    recipient = expect_bytes('/api/metadata/export/node-recipient').decode().strip()
+    encrypted = subprocess.run(['age', '--recipient', recipient], input=identity.encode(),
+        check=True, capture_output=True).stdout
+    decoded = subprocess.run(['age', '--decrypt', '--identity', '/data/node-age-identity'],
+        input=encrypted, check=True, capture_output=True).stdout
+    assert decoded == identity.encode(), 'node identity envelope did not round trip locally'
+    return base64.b64encode(encrypted).decode('ascii')
+
+
+def unlock_identity(identity):
+    status, body = request(BASE_URL, '/api/settings/age', 'POST', {
+        'identityEnvelope': encrypt_identity_for_node(identity),
+    })
+    if status != 200:
+        try:
+            reason = json.loads(body).get('error', '')
+        except (json.JSONDecodeError, AttributeError):
+            reason = ''
+        raise AssertionError(f'/api/settings/age returned HTTP {status}: {reason}')
+    return json.loads(body)
+
+
 def verify_configuration(session, mode):
     global SESSION_COOKIE, RADARR_REQUESTS
     SESSION_COOKIE = 'rawrarr_session=' + session
@@ -83,13 +106,21 @@ def verify_configuration(session, mode):
     if mode == 'storage':
         media_dir = Path(os.environ['RAWARR_LIBRARY_PATH'])
         identity = payload_identity
-        expect_json('/api/settings/age', 'POST', {'identity': identity})
+        unlock_identity(identity)
         scan = expect_json('/api/library/scan', 'POST', {})
         assert len(scan['items']) == 2 and scan['sidecarsCreated'] == 2 and scan['sidecarErrors'] == 0, 'storage scan did not create exactly two sidecars'
         sidecars = list((shared_dir / 'metadata' / 'library' / 'text').glob('*.json.aged'))
         assert len(sidecars) == 2 and all(path.read_bytes().startswith(b'age-encryption.org/v1\n') for path in sidecars), 'shared storage sidecars are missing or unencrypted'
-        decrypted = subprocess.run(['age', '--decrypt', '--identity', '-', str(sidecars[0])],
+        group_identity = (data_dir / 'group-age-identity').read_text()
+        wrapped_group_identity = subprocess.run(
+            ['age', '--decrypt', '--identity', '-', str(shared_dir / 'group-age-user-envelope.aged')],
             input=identity.encode(), check=True, capture_output=True).stdout
+        assert wrapped_group_identity == group_identity.encode(), 'storage node did not recover the user-wrapped group identity'
+        decrypted = subprocess.run(['age', '--decrypt', '--identity', '-', str(sidecars[0])],
+            input=group_identity.encode(), check=True, capture_output=True).stdout
+        user_decryption = subprocess.run(['age', '--decrypt', '--identity', '-', str(sidecars[0])],
+            input=identity.encode(), capture_output=True)
+        assert user_decryption.returncode != 0, 'user identity decrypted group metadata directly'
         record = json.loads(decrypted)
         assert record['deviceId'] == os.environ['RAWARR_DEVICE_ID'], 'sidecar device ID did not match storage node'
         assert record['libraryName'] == 'Fixture library', 'sidecar library name was not retained'
@@ -103,11 +134,21 @@ def verify_configuration(session, mode):
     generated = expect_json('/api/settings/age/generate', 'POST', {})
     identity = generated['identity']
     assert identity.startswith('#') and 'AGE-SECRET-KEY-PQ-1' in identity
-    unlock = expect_json('/api/settings/age', 'POST', {'identity': identity})
+    derived = subprocess.run(['age-keygen', '-y'], input=identity.encode(), check=True, capture_output=True).stdout.decode().strip()
+    assert derived == generated['recipient'], 'generated user identity does not match its public recipient'
+    unlock = unlock_identity(identity)
     assert unlock['unlocked'] is True, 'metadata age identity did not unlock'
-    recipient = generated['recipient']
+    recipient = (shared_dir / 'group-age-recipient').read_text().strip()
+    assert recipient.startswith('age1pq1') and recipient != generated['recipient']
     assert (shared_dir / 'age-recipient').read_text().strip() == recipient
     assert identity.encode() not in (shared_dir / 'age-recipient').read_bytes()
+    group_identity_path = data_dir / 'group-age-identity'
+    group_identity = group_identity_path.read_text()
+    assert data_dir.stat().st_mode & 0o777 == 0o700 and group_identity_path.stat().st_mode & 0o777 == 0o600
+    wrapped_group_identity = subprocess.run(
+        ['age', '--decrypt', '--identity', '-', str(shared_dir / 'group-age-user-envelope.aged')],
+        input=identity.encode(), check=True, capture_output=True).stdout
+    assert wrapped_group_identity == group_identity.encode(), 'user-wrapped group identity did not decrypt for the owner'
 
     expect_json('/api/settings/radarr', 'PUT', {'url': 'http://127.0.0.1:1', 'apiKey': TEST_API_KEY}, 400)
     expect_json('/api/settings/radarr', 'PUT', {'url': 'https://127.0.0.1:1', 'apiKey': TEST_API_KEY}, 502)
@@ -144,7 +185,9 @@ def verify_configuration(session, mode):
     print('PASS Radarr settings are HTTPS-validated, encrypted in shared config, redacted on readback, and mirrored with private file permissions')
 
     wrong_identity = subprocess.run(['age-keygen', '-pq'], check=True, capture_output=True, text=True).stdout
-    expect_json('/api/settings/age', 'POST', {'identity': wrong_identity}, 400)
+    expect_json('/api/settings/age', 'POST', {
+        'identityEnvelope': encrypt_identity_for_node(wrong_identity),
+    }, 400)
     assert expect_json('/api/settings/age')['unlocked'] is True
 
     poster = b'disposable encrypted poster fixture'

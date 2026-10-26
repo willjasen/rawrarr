@@ -1,4 +1,5 @@
 use hmac::{Hmac, Mac};
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use ml_dsa::{MlDsa65, SigningKey, signature::{Keypair, Signer}};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -18,6 +19,8 @@ mod movie_metadata_cache;
 pub struct AgeVault {
     movie_metadata_cache: std::sync::Arc<movie_metadata_cache::MetadataCache>,
     identity: String,
+    user_recipient: String,
+    group_identity: String,
     recipient: String,
     shared_dir: PathBuf,
     metadata_dir: PathBuf,
@@ -30,6 +33,8 @@ pub struct AgeVault {
 impl Drop for AgeVault {
     fn drop(&mut self) {
         self.identity.zeroize();
+        self.user_recipient.zeroize();
+        self.group_identity.zeroize();
         self.recipient.zeroize();
     }
 }
@@ -275,6 +280,14 @@ impl AgeVault {
         Self::shared_dir().join("age-recipient")
     }
 
+    pub fn group_recipient_path() -> PathBuf {
+        Self::shared_dir().join("group-age-recipient")
+    }
+
+    pub fn group_user_envelope_path() -> PathBuf {
+        Self::shared_dir().join("group-age-user-envelope.aged")
+    }
+
     fn artwork_path(&self, tmdb_id: u64) -> Result<PathBuf, VaultError> {
         let opaque = self.opaque_metadata_filename("artwork", "tmdb", tmdb_id, ".aged")?;
         let opaque_path = self.metadata_dir
@@ -464,19 +477,29 @@ impl AgeVault {
             return Err(VaultError::InvalidConfig);
         }
         self.movie_metadata_cache.load(&path, || {
-            let output = run_with_input(
-                "age",
-                &["--decrypt", "--identity", "-", path_arg(&path)?],
-                self.identity.as_bytes(),
-            )?;
-            if !output.status.success() {
-                return Err(VaultError::DecryptionFailed);
-            }
-            let plaintext = Zeroizing::new(output.stdout);
+            let output = self.decrypt_shared_file(&path)?;
+            let plaintext = Zeroizing::new(output);
             serde_json::from_slice(plaintext.as_slice())
                 .map(Some)
                 .map_err(|_| VaultError::InvalidConfig)
         })
+    }
+
+    fn decrypt_shared_file(&self, path: &Path) -> Result<Vec<u8>, VaultError> {
+        let ciphertext = fs::read(path).map_err(|_| VaultError::StorageFailed)?;
+        self.decrypt_shared_bytes(&ciphertext)
+    }
+
+    fn decrypt_shared_bytes(&self, ciphertext: &[u8]) -> Result<Vec<u8>, VaultError> {
+        let group = run_with_input_data("age", &["--decrypt", "--identity"], self.group_identity.as_bytes(), ciphertext)?;
+        if group.status.success() {
+            return Ok(group.stdout);
+        }
+        let legacy = run_with_input_data("age", &["--decrypt", "--identity"], self.identity.as_bytes(), ciphertext)?;
+        if legacy.status.success() {
+            return Ok(legacy.stdout);
+        }
+        Err(VaultError::DecryptionFailed)
     }
 
     pub fn store_tv_artwork(&self, tvdb_id: u64, content_type: &str, bytes: &[u8]) -> Result<(), VaultError> {
@@ -618,13 +641,26 @@ impl AgeVault {
             if existing.trim() == self.recipient {
                 return Ok(());
             }
+            if identity_to_recipient(&self.identity)? == existing.trim() {
+                encrypt_text_file(&path, format!("{}\n", self.recipient).as_bytes())?;
+                return Ok(());
+            }
             return Err(VaultError::InvalidIdentity);
         }
-        encrypt_text_file(&path, format!("{}\n", self.recipient).as_bytes())
+        encrypt_text_file(&path, format!("{}\n", self.recipient).as_bytes())?;
+        let group_path = self.shared_dir.join("group-age-recipient");
+        if !group_path.is_file() {
+            encrypt_text_file(&group_path, format!("{}\n", self.recipient).as_bytes())?;
+        }
+        Ok(())
     }
 
     pub fn recipient(&self) -> &str {
         &self.recipient
+    }
+
+    pub fn user_recipient(&self) -> &str {
+        &self.user_recipient
     }
 
     fn public_recipient_path_for(shared_dir: &Path) -> PathBuf {
@@ -662,16 +698,7 @@ impl AgeVault {
         } else {
             fs::read(&path).map_err(|_| VaultError::StorageFailed)?
         };
-        let output = run_with_input_data(
-            "age",
-            &["--decrypt", "--identity"],
-            self.identity.as_bytes(),
-            &ciphertext,
-        )?;
-        if !output.status.success() {
-            return Err(VaultError::DecryptionFailed);
-        }
-        let plaintext = Zeroizing::new(output.stdout);
+        let plaintext = Zeroizing::new(self.decrypt_shared_bytes(&ciphertext)?);
         let Some(separator) = plaintext.iter().position(|byte| *byte == b'\n') else {
             return Err(VaultError::InvalidConfig);
         };
@@ -703,15 +730,7 @@ impl AgeVault {
             return Err(VaultError::InvalidConfig);
         }
         self.movie_metadata_cache.load(&path, || {
-            let output = run_with_input(
-                "age",
-                &["--decrypt", "--identity", "-", path_arg(&path)?],
-                self.identity.as_bytes(),
-            )?;
-            if !output.status.success() {
-                return Err(VaultError::DecryptionFailed);
-            }
-            let plaintext = Zeroizing::new(output.stdout);
+            let plaintext = Zeroizing::new(self.decrypt_shared_file(&path)?);
             serde_json::from_slice(plaintext.as_slice())
                 .map(Some)
                 .map_err(|_| VaultError::InvalidConfig)
@@ -777,15 +796,92 @@ impl AgeVault {
         if !output.status.success() {
             return Err(VaultError::InvalidIdentity);
         }
-        let recipient = String::from_utf8(output.stdout)
+        let user_recipient = String::from_utf8(output.stdout)
             .map_err(|_| VaultError::InvalidIdentity)?
             .lines()
             .find(|line| line.starts_with("age1pq1"))
             .ok_or(VaultError::InvalidIdentity)?
             .to_owned();
+        let data_dir = env::var_os("RAWARR_DATA_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| shared_dir.join(".node-state"));
+        fs::create_dir_all(&data_dir).map_err(|_| VaultError::StorageFailed)?;
+        set_private_directory_permissions(&data_dir)?;
+        let group_path = data_dir.join("group-age-identity");
+        if !shared_dir.join("group-age-recipient").exists() {
+            let legacy_path = shared_dir.join("age-recipient");
+            if legacy_path.is_file()
+                && fs::read_to_string(legacy_path)
+                    .map_err(|_| VaultError::StorageFailed)?
+                    .trim() != user_recipient
+            {
+                return Err(VaultError::InvalidIdentity);
+            }
+        }
+        let (group_identity, recipient) = if group_path.is_file() {
+            let group_identity = fs::read_to_string(&group_path).map_err(|_| VaultError::StorageFailed)?;
+            let group_recipient = identity_to_recipient(&group_identity)?;
+            if let Ok(published) = fs::read_to_string(shared_dir.join("group-age-recipient")) {
+                if published.trim() != group_recipient {
+                    return Err(VaultError::InvalidIdentity);
+                }
+            }
+            (group_identity, group_recipient)
+        } else {
+            let published_path = shared_dir.join("group-age-recipient");
+            if published_path.exists() {
+                // The synchronized user envelope lets an approved node recover
+                // the same group identity after restart or initial enrollment.
+                let envelope = fs::read(shared_dir.join("group-age-user-envelope.aged"))
+                    .map_err(|_| VaultError::StorageFailed)?;
+                let output = decrypt_age_input(identity.as_bytes(), &envelope)?;
+                if !output.status.success() {
+                    return Err(VaultError::InvalidIdentity);
+                }
+                let group_identity = String::from_utf8(output.stdout).map_err(|_| VaultError::InvalidIdentity)?;
+                let group_recipient = identity_to_recipient(&group_identity)?;
+                let published = fs::read_to_string(published_path).map_err(|_| VaultError::StorageFailed)?;
+                if published.trim() != group_recipient {
+                    return Err(VaultError::InvalidIdentity);
+                }
+                persist_private_identity(&group_path, &group_identity)?;
+                (group_identity, group_recipient)
+            } else {
+                let output = Command::new("age-keygen")
+                    .arg("-pq")
+                    .output()
+                    .map_err(|_| VaultError::AgeUnavailable)?;
+                if !output.status.success() {
+                    return Err(VaultError::InvalidIdentity);
+                }
+                let group_identity = String::from_utf8(output.stdout).map_err(|_| VaultError::InvalidIdentity)?;
+                let group_recipient = identity_to_recipient(&group_identity)?;
+                persist_private_identity(&group_path, &group_identity)?;
+                encrypt_text_file(&published_path, format!("{group_recipient}\n").as_bytes())?;
+                (group_identity, group_recipient)
+            }
+        };
+        let user_envelope_path = shared_dir.join("group-age-user-envelope.aged");
+        if user_envelope_path.exists() {
+            let ciphertext = fs::read(&user_envelope_path).map_err(|_| VaultError::StorageFailed)?;
+            let opened = decrypt_age_input(identity.as_bytes(), &ciphertext)?;
+            let opened_successfully = opened.status.success();
+            let plaintext = Zeroizing::new(opened.stdout);
+            if !opened_successfully
+                || identity_to_recipient(
+                    std::str::from_utf8(&plaintext).map_err(|_| VaultError::InvalidIdentity)?,
+                )? != recipient
+            {
+                return Err(VaultError::InvalidIdentity);
+            }
+        } else {
+            encrypt_shared_file(&user_recipient, &user_envelope_path, group_identity.as_bytes())?;
+        }
         Ok(Self {
             movie_metadata_cache: Default::default(),
             identity,
+            user_recipient,
+            group_identity,
             recipient,
             metadata_dir: metadata_dir_for(
                 &shared_dir,
@@ -808,8 +904,8 @@ impl AgeVault {
             return Err(VaultError::InvalidIdentity);
         }
         let identity = String::from_utf8(output.stdout).map_err(|_| VaultError::InvalidIdentity)?;
-        let vault = Self::from_identity(identity.clone())?;
-        Ok((identity, vault.recipient.clone()))
+        let recipient = identity_to_recipient(&identity)?;
+        Ok((identity, recipient))
     }
 
     /// Ensure this subscriber node has a persistent age identity separate from the user's vault.
@@ -853,6 +949,77 @@ impl AgeVault {
         node_identity_recipient(&data_dir.join("node-age-identity"))
     }
 
+    /// Decrypt an age-wrapped user identity addressed to this node's device ID.
+    pub fn decrypt_user_identity_envelope(encoded_ciphertext: &str) -> Result<String, VaultError> {
+        Self::decrypt_user_identity_envelope_at(encoded_ciphertext, &local_data_dir())
+    }
+
+    fn decrypt_user_identity_envelope_at(
+        encoded_ciphertext: &str,
+        data_dir: &Path,
+    ) -> Result<String, VaultError> {
+        if encoded_ciphertext.len() > 24 * 1024 {
+            return Err(VaultError::InvalidIdentity);
+        }
+        let ciphertext = BASE64.decode(encoded_ciphertext).map_err(|_| VaultError::InvalidIdentity)?;
+        if ciphertext.len() > 16 * 1024 || !ciphertext.starts_with(b"age-encryption.org/v1\n") {
+            return Err(VaultError::InvalidIdentity);
+        }
+        let device_identity = Zeroizing::new(
+            fs::read_to_string(data_dir.join("node-age-identity"))
+                .map_err(|_| VaultError::StorageFailed)?,
+        );
+        let output = decrypt_age_input(device_identity.as_bytes(), &ciphertext)?;
+        if !output.status.success() {
+            return Err(VaultError::InvalidIdentity);
+        }
+        let identity = String::from_utf8(output.stdout).map_err(|_| VaultError::InvalidIdentity)?;
+        identity_to_recipient(&identity)?;
+        Ok(identity)
+    }
+
+    /// Install a group identity encrypted specifically for this device.
+    pub fn install_group_identity_envelope(ciphertext: &[u8]) -> Result<(), VaultError> {
+        Self::install_group_identity_envelope_at(
+            ciphertext,
+            &local_data_dir(),
+            &Self::group_recipient_path(),
+        )
+    }
+
+    fn install_group_identity_envelope_at(
+        ciphertext: &[u8],
+        data_dir: &Path,
+        group_recipient_path: &Path,
+    ) -> Result<(), VaultError> {
+        if ciphertext.len() > 16 * 1024 || !ciphertext.starts_with(b"age-encryption.org/v1\n") {
+            return Err(VaultError::InvalidIdentity);
+        }
+        let device_identity = Zeroizing::new(
+            fs::read_to_string(data_dir.join("node-age-identity"))
+                .map_err(|_| VaultError::StorageFailed)?,
+        );
+        let output = decrypt_age_input(device_identity.as_bytes(), ciphertext)?;
+        if !output.status.success() {
+            return Err(VaultError::InvalidIdentity);
+        }
+        let group_identity = Zeroizing::new(String::from_utf8(output.stdout).map_err(|_| VaultError::InvalidIdentity)?);
+        let recipient = identity_to_recipient(&group_identity)?;
+        let published = fs::read_to_string(group_recipient_path).map_err(|_| VaultError::StorageFailed)?;
+        if published.trim() != recipient {
+            return Err(VaultError::InvalidIdentity);
+        }
+        let path = data_dir.join("group-age-identity");
+        if path.exists() {
+            let current = Zeroizing::new(fs::read_to_string(&path).map_err(|_| VaultError::StorageFailed)?);
+            if identity_to_recipient(&current)? != recipient {
+                return Err(VaultError::InvalidIdentity);
+            }
+            return Ok(());
+        }
+        persist_private_identity(&path, &group_identity)
+    }
+
     pub fn config_exists(&self) -> bool {
         self.config_path.is_file()
     }
@@ -891,14 +1058,26 @@ impl AgeVault {
         let output = run_with_input(
             "age",
             &["--decrypt", "--identity", "-", path_arg(&self.config_path)?],
-            self.identity.as_bytes(),
+            self.group_identity.as_bytes(),
         )?;
-        if !output.status.success() {
-            return Err(VaultError::DecryptionFailed);
-        }
-        let plaintext = Zeroizing::new(output.stdout);
+        let (plaintext, legacy) = if output.status.success() {
+            (Zeroizing::new(output.stdout), false)
+        } else {
+            let legacy = run_with_input(
+                "age",
+                &["--decrypt", "--identity", "-", path_arg(&self.config_path)?],
+                self.identity.as_bytes(),
+            )?;
+            if !legacy.status.success() {
+                return Err(VaultError::DecryptionFailed);
+            }
+            (Zeroizing::new(legacy.stdout), true)
+        };
         let config: PersistedConfig =
             serde_json::from_slice(plaintext.as_slice()).map_err(|_| VaultError::InvalidConfig)?;
+        if legacy {
+            self.write_config(&config)?;
+        }
         Ok(Some(config))
     }
 
@@ -1055,6 +1234,53 @@ fn local_data_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("data"))
 }
 
+fn identity_to_recipient(identity: &str) -> Result<String, VaultError> {
+    let output = run_with_input("age-keygen", &["-y"], identity.as_bytes())?;
+    if !output.status.success() {
+        return Err(VaultError::InvalidIdentity);
+    }
+    String::from_utf8(output.stdout)
+        .map_err(|_| VaultError::InvalidIdentity)?
+        .lines()
+        .find(|line| is_post_quantum_recipient(line))
+        .map(str::to_owned)
+        .ok_or(VaultError::InvalidIdentity)
+}
+
+fn persist_private_identity(path: &Path, identity: &str) -> Result<(), VaultError> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let parent = path.parent().ok_or(VaultError::StorageFailed)?;
+    fs::create_dir_all(parent).map_err(|_| VaultError::StorageFailed)?;
+    set_private_directory_permissions(parent)?;
+    let temporary = temporary_path(path);
+    let result = (|| {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&temporary)
+            .map_err(|_| VaultError::StorageFailed)?;
+        file.write_all(identity.as_bytes()).map_err(|_| VaultError::StorageFailed)?;
+        file.sync_all().map_err(|_| VaultError::StorageFailed)?;
+        match fs::hard_link(&temporary, path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                let existing = Zeroizing::new(fs::read_to_string(path).map_err(|_| VaultError::StorageFailed)?);
+                if identity_to_recipient(&existing)? == identity_to_recipient(identity)? {
+                    Ok(())
+                } else {
+                    Err(VaultError::InvalidIdentity)
+                }
+            }
+            Err(_) => Err(VaultError::StorageFailed),
+        }
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(temporary);
+    }
+    result
+}
+
 fn persist_local_config(path: &Path, config: &PersistedConfig) -> Result<(), VaultError> {
     let directory = path.parent().ok_or(VaultError::StorageFailed)?;
     fs::create_dir_all(directory).map_err(|_| VaultError::StorageFailed)?;
@@ -1178,9 +1404,8 @@ fn ensure_node_identity_at(path: &Path) -> Result<String, VaultError> {
 }
 
 fn node_identity_recipient(path: &Path) -> Result<String, VaultError> {
-    let identity = fs::read_to_string(path).map_err(|_| VaultError::StorageFailed)?;
-    let vault = AgeVault::from_identity(identity)?;
-    Ok(vault.recipient().to_owned())
+    let identity = Zeroizing::new(fs::read_to_string(path).map_err(|_| VaultError::StorageFailed)?);
+    identity_to_recipient(&identity)
 }
 
 const NODE_SIGNING_KEY_MAGIC: &[u8] = b"RAWARR-NODE-SIGNING-KEY\0";
@@ -1289,7 +1514,13 @@ fn encrypt_shared_file(recipient: &str, path: &Path, plaintext: &[u8]) -> Result
     let directory = path.parent().ok_or(VaultError::StorageFailed)?;
     fs::create_dir_all(directory).map_err(|_| VaultError::StorageFailed)?;
     if let Some(metadata_directory) = directory.parent() {
-        set_shared_directory_permissions(metadata_directory)?;
+        // Do not try to change permissions on the filesystem root for files
+        // stored directly under the shared root (for example, the group key
+        // envelope). Nested metadata folders still need Syncthing-readable
+        // parent permissions.
+        if metadata_directory.parent().is_some() {
+            set_shared_directory_permissions(metadata_directory)?;
+        }
     }
     set_shared_directory_permissions(directory)?;
     let temporary = temporary_path(path);
@@ -1533,6 +1764,79 @@ mod tests {
     }
 
     #[test]
+    fn group_identity_envelope_is_installed_only_for_its_device_recipient() {
+        let keygen = Command::new("age-keygen")
+            .arg("-pq")
+            .output()
+            .expect("age-keygen must be installed for this test");
+        assert!(keygen.status.success());
+        let group_identity = String::from_utf8(keygen.stdout).expect("group identity is UTF-8");
+        let group_recipient = identity_to_recipient(&group_identity).expect("derive group recipient");
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock after epoch")
+            .as_nanos();
+        let root = env::temp_dir().join(format!("rawrarr-group-envelope-test-{}-{unique}", std::process::id()));
+        let data_dir = root.join("data");
+        let shared_dir = root.join("shared");
+        fs::create_dir_all(&data_dir).expect("create isolated device data directory");
+        fs::create_dir_all(&shared_dir).expect("create isolated shared directory");
+        let device_path = data_dir.join("node-age-identity");
+        ensure_node_identity_at(&device_path).expect("create device identity");
+        let device_identity = Zeroizing::new(fs::read_to_string(&device_path).expect("read device identity"));
+        let device_recipient = identity_to_recipient(&device_identity).expect("derive device recipient");
+        encrypt_text_file(&shared_dir.join("group-age-recipient"), format!("{group_recipient}\n").as_bytes())
+            .expect("publish group recipient");
+        let envelope_path = shared_dir.join("group-envelope.aged");
+        encrypt_shared_file(&device_recipient, &envelope_path, group_identity.as_bytes())
+            .expect("wrap group key for device");
+        let envelope = fs::read(envelope_path).expect("read device envelope");
+
+        AgeVault::install_group_identity_envelope_at(
+            &envelope,
+            &data_dir,
+            &shared_dir.join("group-age-recipient"),
+        )
+        .expect("install group key on intended device");
+        let installed = Zeroizing::new(fs::read_to_string(data_dir.join("group-age-identity")).expect("read installed group key"));
+        assert_eq!(identity_to_recipient(&installed).unwrap(), group_recipient);
+        assert_ne!(device_recipient, group_recipient);
+
+        fs::remove_dir_all(root).expect("remove isolated test tree");
+    }
+
+    #[test]
+    fn browser_unlock_identity_is_age_wrapped_to_the_device_identity() {
+        let keygen = Command::new("age-keygen")
+            .arg("-pq")
+            .output()
+            .expect("age-keygen must be installed for this test");
+        assert!(keygen.status.success());
+        let user_identity = String::from_utf8(keygen.stdout).expect("user identity is UTF-8");
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock after epoch")
+            .as_nanos();
+        let data_dir = env::temp_dir().join(format!("rawrarr-user-envelope-test-{}-{unique}", std::process::id()));
+        fs::create_dir_all(&data_dir).expect("create isolated device directory");
+        let device_path = data_dir.join("node-age-identity");
+        ensure_node_identity_at(&device_path).expect("create device age identity");
+        let device_identity = Zeroizing::new(fs::read_to_string(&device_path).expect("read device identity"));
+        let device_recipient = identity_to_recipient(&device_identity).expect("derive device recipient");
+        let envelope_path = data_dir.join("user-identity.aged");
+        encrypt_shared_file(&device_recipient, &envelope_path, user_identity.as_bytes())
+            .expect("encrypt user age identity to the device");
+        let ciphertext = fs::read(envelope_path).expect("read device-encrypted user identity");
+        let encoded = BASE64.encode(ciphertext);
+
+        let opened = AgeVault::decrypt_user_identity_envelope_at(&encoded, &data_dir)
+            .expect("device opens its encrypted request");
+        assert_eq!(opened, user_identity);
+
+        fs::remove_dir_all(data_dir).expect("remove isolated device directory");
+    }
+
+    #[test]
     fn invalid_existing_node_identity_is_not_replaced() {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -1647,7 +1951,7 @@ mod tests {
             std::process::id()
         ));
         let vault = AgeVault::from_identity_in_dirs(
-            identity,
+            identity.clone(),
             shared_dir.clone(),
             shared_dir.join("local.json"),
             false,
@@ -1670,7 +1974,7 @@ mod tests {
         let decrypted = run_with_input(
             "age",
             &["--decrypt", "--identity", "-", path_arg(&path).unwrap()],
-            vault.identity.as_bytes(),
+            vault.group_identity.as_bytes(),
         )
         .expect("decrypt backup fixture");
         assert!(decrypted.status.success());
@@ -1705,7 +2009,7 @@ mod tests {
         ));
         let local_config_path = data_dir.join("radarr-config.json");
         let vault = AgeVault::from_identity_in_dirs(
-            identity,
+            identity.clone(),
             shared_dir.clone(),
             local_config_path.clone(),
             true,
@@ -1720,6 +2024,18 @@ mod tests {
                 .trim(),
             vault.recipient()
         );
+        assert_ne!(identity_to_recipient(&identity).unwrap(), vault.recipient());
+        let user_envelope = fs::read(shared_dir.join("group-age-user-envelope.aged"))
+            .expect("read user-wrapped group identity");
+        let recovered_group = run_with_input_data(
+            "age",
+            &["--decrypt", "--identity"],
+            identity.as_bytes(),
+            &user_envelope,
+        )
+        .expect("decrypt group identity envelope as the user");
+        assert!(recovered_group.status.success());
+        assert_eq!(recovered_group.stdout, vault.group_identity.as_bytes());
         let config = PersistedConfig {
             device_names: std::collections::HashMap::new(),
             sonarr: None,
@@ -1778,15 +2094,9 @@ mod tests {
         assert!(wrong_identity_output.status.success());
         let wrong_identity =
             String::from_utf8(wrong_identity_output.stdout).expect("wrong identity is UTF-8");
-        let wrong_vault = AgeVault::from_identity_in_shared_dir(wrong_identity, shared_dir.clone())
-            .expect("second valid PQ age identity");
         assert!(matches!(
-            wrong_vault.persist_public_recipient(),
+            AgeVault::from_identity_in_shared_dir(wrong_identity, shared_dir.clone()),
             Err(VaultError::InvalidIdentity)
-        ));
-        assert!(matches!(
-            wrong_vault.load(),
-            Err(VaultError::DecryptionFailed)
         ));
 
         // Exceed normal pipe capacity so the writer and age stdout reader must run
@@ -1900,11 +2210,19 @@ mod tests {
                 "-",
                 path_arg(&sidecar_path).unwrap(),
             ],
-            vault.identity.as_bytes(),
+            vault.group_identity.as_bytes(),
         )
         .expect("decrypt media JSON sidecar");
         assert!(decrypted_sidecar.status.success());
         assert_eq!(decrypted_sidecar.stdout, sidecar_json);
+        let user_cannot_decrypt = run_with_input_data(
+            "age",
+            &["--decrypt", "--identity"],
+            identity.as_bytes(),
+            &encrypted_sidecar,
+        )
+        .expect("run age with the separate user identity");
+        assert!(!user_cannot_decrypt.status.success(), "shared records must target the group recipient");
 
         vault.clear().expect("clear encrypted and local config");
         assert!(config_path.exists());

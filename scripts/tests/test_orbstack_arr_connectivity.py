@@ -275,7 +275,7 @@ def remove_session(user_id: str, session_digest: str) -> None:
 
 
 APP_FLOW = r'''
-import json, os, sys, urllib.error, urllib.request
+import base64, json, os, subprocess, sys, urllib.error, urllib.request
 payload=json.load(sys.stdin)
 cookie='rawrarr_session='+payload['session']
 def call(path, method='GET', body=None):
@@ -289,6 +289,9 @@ def call(path, method='GET', body=None):
         raise RuntimeError(path+' returned HTTP '+str(error.code))
 def require(condition, message):
     if not condition: raise RuntimeError(message)
+def text(path):
+    request=urllib.request.Request('http://127.0.0.1:8080'+path,headers={'Accept':'text/plain','Cookie':cookie})
+    with urllib.request.urlopen(request,timeout=35) as response: return response.read().decode().strip()
 identity_path='/data/age-identity'
 if os.path.isfile(identity_path):
     identity=open(identity_path,encoding='utf-8').read().strip()
@@ -298,7 +301,10 @@ else:
     require(code==200 and 'AGE-SECRET-KEY-PQ-1' in generated.get('identity',''),'age identity generation failed (HTTP '+str(code)+')')
     identity=generated['identity']
     remember=True
-code,unlocked=call('/api/settings/age','POST',{'identity':identity,'rememberOnDevice':remember})
+node_recipient=text('/api/metadata/export/node-recipient')
+wrapped=subprocess.run(['age','--recipient',node_recipient],input=identity.encode(),capture_output=True,check=True).stdout
+identity_envelope=base64.b64encode(wrapped).decode('ascii')
+code,unlocked=call('/api/settings/age','POST',{'identityEnvelope':identity_envelope,'rememberOnDevice':remember})
 require(code==200 and unlocked.get('unlocked') is True,'fossil age vault unlock failed')
 for service,url,key in [('radarr','https://radarr.test',payload['radarrKey']),('sonarr','https://sonarr.test',payload['sonarrKey'])]:
     code,saved=call('/api/settings/'+service,'PUT',{'url':url,'apiKey':key})

@@ -28,7 +28,7 @@ export async function checkDeviceRoutes(devices, {
         const directBase = device.directUrl.endsWith('/') ? device.directUrl : `${device.directUrl}/`;
         const startedAt = performance.now();
         try {
-          const response = await fetchImpl(`${directBase}api/direct/health`, {
+          const response = await fetchImpl(`${directBase}health`, {
             cache: 'no-store',
             credentials: 'omit',
             mode: 'cors',

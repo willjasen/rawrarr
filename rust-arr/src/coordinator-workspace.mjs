@@ -609,9 +609,13 @@ async function unlockMetadataVaultForSettings() {
   if (!identity) throw new Error('Enter your age private ID and unlock Movies before saving connection settings.');
   const ageSettings = await arrDirectRequest('/settings/age');
   if (!ageSettings.unlocked) {
+    await import('/assets/metadata-export.js');
+    const apiBase = await arrDirectUrl();
+    await window.rawrarrMiniExport.prepareGroupIdentityForDevice(identity, apiBase);
+    const identityEnvelope = await window.rawrarrMiniExport.encryptIdentityForDevice(identity, apiBase);
     await arrDirectRequest('/settings/age', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identity, rememberOnDevice: false }),
+      body: JSON.stringify({ identityEnvelope, rememberOnDevice: false }),
     });
   }
 }
@@ -1087,7 +1091,7 @@ async function chooseDirectRoute(node, route) {
       body: JSON.stringify({ nodeId: node.nodeId })
     });
     if (new URL(route.base, window.location.href).origin !== window.location.origin) {
-      const response = await fetch(`${route.base}/api/direct/session`, {
+      const response = await fetch(`${route.base}/session`, {
         method: 'POST', cache: 'no-store', credentials: 'include', redirect: 'error',
         headers: { Authorization: `Bearer ${session.token}` }
       });

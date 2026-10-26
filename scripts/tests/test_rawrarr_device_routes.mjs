@@ -4,6 +4,7 @@ import { checkDeviceRoutes } from '../../rust-arr/src/coordinator-device-routes.
 
 test('checks all devices and returns direct, relay, or offline route status', async () => {
   let calls = 0;
+  const requestedUrls = [];
   const devices = [
     { nodeId: 'direct-device', online: true, relayAvailable: true, directUrl: 'https://direct.test/' },
     { nodeId: 'relay-device', online: true, relayAvailable: true, directUrl: 'https://relay.test/' },
@@ -12,6 +13,7 @@ test('checks all devices and returns direct, relay, or offline route status', as
   const routes = await checkDeviceRoutes(devices, {
     fetchImpl: async url => {
       calls++;
+      requestedUrls.push(url);
       return { ok: url.startsWith('https://direct.test/') };
     },
   });
@@ -21,6 +23,10 @@ test('checks all devices and returns direct, relay, or offline route status', as
   assert.equal(routes.get('relay-device').status, 'relay');
   assert.equal(routes.get('offline-device').status, 'offline');
   assert.equal(calls, 2, 'offline devices do not need a network probe');
+  assert.deepEqual(requestedUrls.sort(), [
+    'https://direct.test/health',
+    'https://relay.test/health',
+  ].sort());
 });
 
 test('includes metadata-node Redis reachability in measured direct-route latency', async () => {

@@ -1,3 +1,4 @@
+- [Fix unavailable Syncthing health on online device cards](2026-10-26-fix-syncthing-health-unavailable.md) — Diagnose and restore shared-folder Syncthing health for online configured subscriber nodes (issue [#135](https://github.com/willjasen/rawrarr/issues/135)).
 - [Remove stale internal metadata after clean bootstrap](2026-10-26-remove-stale-internal-metadata.md) — Remove the pre-bootstrap encrypted metadata retained on the internal MacBook after verifying its age (issue [#115](https://github.com/willjasen/rawrarr/issues/115)).
 - [Clarify media connection state](2026-10-25-clarify-media-connection-state.md) — Explain unconfigured Radarr and Sonarr state on the selected metadata node and distinguish it from a missing browser direct route (issue [#87](https://github.com/willjasen/rawrarr/issues/87)).
 - [Keep profile avatar traits stable across refreshes](2026-10-25-stable-profile-avatar-refresh.md) — Seed fallback profile artwork from the stable account ID when the saved age ID cannot be derived (issue [#83](https://github.com/willjasen/rawrarr/issues/83)).
@@ -44,8 +45,10 @@
 # Rawrarr runbooks
 
 - [Fix database integration tests](2026-10-26-fix-db-integrations.md) — Update the disposable coordinator, node, and configuration integrations for explicit roles, coordinator trust, and current owner bootstrap (issue [#130](https://github.com/willjasen/rawrarr/issues/130)).
+- [Route the Mac mini fossil through Tailscale Serve](2026-10-26-route-mac-mini-fossil.md) — Configure the enrolled Mac mini subscriber's tailnet routes and coordinator mappings so its avatar and browser endpoints are reachable (issue [#136](https://github.com/willjasen/rawrarr/issues/136)).
 
 - [Test fossil host port isolation](2026-10-26-fossil-port-forward-tests.md) — Add generated-Compose regression and live two-fossil OrbStack checks for host-published ports (issue [#126](https://github.com/willjasen/rawrarr/issues/126)).
+- [Encrypt shared metadata to the group identity](2026-10-26-group-age-metadata.md) — Create/distribute group age identities and use the group recipient for shared metadata and config (issue [#109](https://github.com/willjasen/rawrarr/issues/109)).
 
 - [Define user, device, group, and app identity domains](2026-10-26-identity-domains.md) — Consolidate key ownership and purpose, distinguish implemented behavior from planned group/app lifecycles, and link current design references (issue [#95](https://github.com/willjasen/rawrarr/issues/95)).
 
