@@ -28,11 +28,15 @@ Deploy the tested, published `main` revision to the internal Mac mini coordinato
 - Roarlay is running the new arm64 image, healthy with zero restarts. PostgreSQL applied migration 0008. The protected PostgreSQL backup is valid. PostgreSQL and Tailscale retained their original start time and zero restarts.
 - `docker exec rawrarr-internal-mini-tailscale-1 tailscale serve status --json` confirms `rawrarr.risk-mermaid.ts.net:443` `/` still proxies to `http://127.0.0.1:8080`. Coordinator HTTPS `/health` and fossil HTTPS `/health` returned HTTP 200. The session-protected fossil `/direct-api/api/direct/health` returned 401 without a browser session; an authenticated direct-session probe was not run.
 - The coordinator's persistent UI volume contains bundle versions `6ffed1623ad46fad739bf87944032293118b5b8e` and `02c3461c4535555d249533c94ea88130bd04954a`; the latest version is the tested GitHub `main` commit.
-- Fossil is currently running the exported pre-update application snapshot with zero restarts and HTTPS `/health` HTTP 200. It has not been updated to `02c3461c`. The independently saved fingerprint and owner-signed in-browser approval are required before its safe signing migration. The user was asked for the independently verified 64-character fingerprint or the saved source location.
+- Fossil is currently running the exported pre-update application snapshot with zero restarts and HTTPS `/health` HTTP 200. It has not been updated to `02c3461c`. Its existing Compose lacks the required instance-root pin; instead of recovering the old root backup, the owner authorized a clean account/trust bootstrap.
+
+## Owner-authorized clean bootstrap
+
+The owner prefers to avoid recovering the old root backup and authorized clearing internal account/trust state if that is the faster route. The published onboarding flow can create a new encrypted instance-root backup and matching fingerprint, then generate a fossil Compose file containing the pin. Reset only the coordinator database and approved-node registry; preserve the Mac mini Tailscale identity, MacBook Tailscale sidecar, `/data` (including node age identity, signing key, and token), `/shared` metadata, `/ui` bundles, and all Docker volumes. Backups of PostgreSQL, the approved-node registry, and fossil `/data` are verified and stored with owner-only permissions.
 
 ## Remaining work
 
-After receiving the independently verified fingerprint, update the MacBook Compose configuration with that exact pin and the current GitHub settings, deploy fossil from `02c3461c`, then complete owner approval in the coordinator browser using the encrypted root backup. Confirm node identity continuity, registration, health, and coordinator-to-fossil routes. Do not source the pin only from Roarlay.
+Reset the coordinator database and approved-node registry from the verified backups, restart roarlay and confirm migrations/empty owner state. Keep fossil stopped until the owner completes first-passkey and new root setup in the browser, saves the new encrypted root backup and fingerprint, and provides the generated Compose configuration. Then deploy the matching fossil configuration and verify owner approval, node health, and coordinator-to-fossil routes.
 
 ## Recovery
 
