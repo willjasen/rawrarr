@@ -578,3 +578,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Fix the invisible pending-node approval dialog](2026-10-25-fix-invisible-node-approval-dialog.md) — Move the root-signing dialog outside the hidden Settings section and verify the Devices Approve flow.
 - [Fix the OrbStack test runner copy step](2026-10-22-fix-test-runner-copy.md) — Remove duplicate `web-export` staging and verify the current checkout can start an isolated OrbStack test run.
 - [Triage local Node failures and rerun OrbStack suites](2026-10-23-node-test-failure-triage.md) — Record local-source regression results, verified two-node connectivity, and remaining Node test failures.
+
+- [Import the age ID while nodes are offline](2026-10-25-import-age-id-offline.md) — Validate an age private ID locally and save it in the browser without requiring an online fossil.
