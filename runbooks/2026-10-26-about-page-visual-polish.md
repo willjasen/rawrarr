@@ -24,4 +24,4 @@ Improve the coordinator About page's visual hierarchy while keeping its descript
 
 ## Final state
 
-Pending commit, pull request, and merge.
+The About layout change is committed on the task branch. The pull request records review and merge state; no deployment has been performed.
