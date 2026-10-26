@@ -50,8 +50,9 @@ test('metadata and storage direct listeners expose health and session-protected 
 
 test('workspace automatically selects direct Tailscale access, visibly reports it, and falls back to coordinator relay', () => {
   assert.doesNotMatch(workspace, /id="tv-route-status" class="route-status"/);
-  assert.match(script, /state\.className = `node-state \$\{routeState\}`/);
-  assert.match(script, /direct: 'Direct',[\s\S]*relay: 'Relay',[\s\S]*offline: 'Offline'/);
+  assert.match(script, /state\.className = `node-state \$\{node\.online \? 'online' : 'offline'\} \$\{routeState\}`/);
+  assert.match(script, /direct: 'Direct',[\s\S]*relay: 'Relay',[\s\S]*offline: node\.online \? 'Route unavailable' : 'Not checking in'/);
+  assert.match(script, /nodeStateLabel = node\.online \? `Online · \$\{routeLabel\}` : routeLabel/);
   assert.match(script, /aria-label', route\?\.status === 'direct' && latencyLabel/);
   assert.match(routes, /export async function checkDeviceRoutes\(devices/);
   assert.match(routes, /status, directRoute/);
