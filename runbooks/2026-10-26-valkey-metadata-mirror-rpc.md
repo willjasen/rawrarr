@@ -6,7 +6,7 @@ Replicate only encrypted `/shared/config.aged` through authenticated RPC/Merkle 
 
 ## Initial state
 
-- Started from fetched `origin/main` at `421dca34` on the isolated branch `codex/valkey-metadata-rpc`.
+- Created the isolated branch `codex/valkey-metadata-rpc` from `origin/main` at `421dca34`, then fetched and rebased onto newly published `origin/main` at `e530450` before implementation. The newer base includes the group-encrypted config bootstrap fix.
 - The MacBook `rawrarr-node-internal` fossil and its Valkey service are healthy. The existing Valkey service is the optional encrypted-artwork cache. `/shared/config.aged` exists there and is 2,060 bytes; its contents were not read.
 - The Mac mini `rawrarr-internal` fossil is healthy, has no Valkey container, and has no `/shared/config.aged`. Its separate `rawrarr-internal-mini` roarlay, PostgreSQL, and Tailscale services must remain outside subscriber changes.
 - Neither live fossil has `/data/radarr-config.json`. The MacBook `config.aged` begins with the age ciphertext marker; no file contents were read. Preserve this property: local files and Valkey contain ciphertext only, while decrypted settings remain in memory when needed.
@@ -20,6 +20,7 @@ Replicate only encrypted `/shared/config.aged` through authenticated RPC/Merkle 
 - Updated issue #100 with the narrowed config-only scope, local Valkey rebuild, authenticated bounded RPC, Merkle anti-entropy, two-node reconnect tests, and per-node Syncthing exclusion requirement.
 - The user selected RPC/Merkle-only transfer for `config.aged`; do not configure an RPC/Syncthing dual-writer path.
 - The user explicitly requires no plaintext config copy on node-local disk. Revision journals must contain only ciphertext, signed digests, counters, and opaque IDs.
+- Fetched the newer `origin/main` at `e530450` and rebased this task branch; no other worktree or branch was changed.
 - Keep all operational deployment work on published GitHub `main`; no live service or Syncthing ignore rule was changed during inspection.
 
 ## Verification
@@ -33,4 +34,4 @@ Replicate only encrypted `/shared/config.aged` through authenticated RPC/Merkle 
 
 ## Status and remaining work
 
-The MacBook's current config is not yet on the Mac mini. Both nodes still use the existing Syncthing behavior, and only the MacBook has Valkey. Complete the config-only protocol and isolated two-fossil integration, then publish to `main` before adding Valkey to the mini fossil or excluding `config.aged` from Syncthing. Preserve `/shared/metadata`, artwork, the mini coordinator, and both fossils' node-local state.
+The protocol draft is in [metadata-peer-repair-protocol.md](../docs/metadata-peer-repair-protocol.md). The project plan requires protocol review before durable RPC implementation or live Syncthing exclusions; those changes have not started. After review, implement and validate the isolated two-fossil path, then publish to `main` before adding Valkey to the mini fossil or excluding `config.aged` from Syncthing. Preserve `/shared/metadata`, artwork, the mini coordinator, and both fossils' node-local state.
