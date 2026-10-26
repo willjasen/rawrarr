@@ -1302,6 +1302,7 @@ struct WorkspaceNode {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct WorkspaceProfile {
+    account_id: Uuid,
     display_name: String,
 }
 
@@ -1316,6 +1317,7 @@ async fn workspace_profile(
     match sqlx::query_scalar::<_, Uuid>("SELECT id FROM rawrarr_users WHERE id=$1")
         .bind(owner).fetch_optional(&state.pool).await {
         Ok(Some(user_id)) => axum::Json(WorkspaceProfile {
+            account_id: user_id,
             display_name: crate::auth::generated_account_name(user_id),
         }).into_response(),
         Ok(None) => StatusCode::NOT_FOUND.into_response(),

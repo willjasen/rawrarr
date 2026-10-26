@@ -205,6 +205,7 @@ test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from th
   assert.match(coordinator, /\.route\("\/api\/workspace\/profile", get\(workspace_profile\)\)/);
   assert.match(coordinator, /SELECT id FROM rawrarr_users WHERE id=\$1/);
   assert.match(coordinator, /display_name: crate::auth::generated_account_name\(user_id\)/);
+  assert.match(coordinator, /account_id: user_id/);
   assert.match(workspace, /id="profile-picture"/);
   assert.doesNotMatch(workspace, /Loading the public age ID from a fossil node/);
   assert.doesNotMatch(workspace, /Your name from passkey setup/);
@@ -222,8 +223,9 @@ test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from th
   assert.match(workspaceScript, /words\.slice\(2\)\.join\(' '\)/);
   assert.match(workspaceScript, /sidebar-profile-picture-jxl'\)\.srcset = jxlUrl/);
   assert.match(workspace, /\.profile-avatar \{ display:block; overflow:hidden;/);
-  assert.match(workspaceScript, /rawrarr-profile:\$\{profileBaseName\}/);
   assert.match(workspaceScript, /profileAvatarSeed = Array\.from\(digest, byte => byte\.toString\(16\)\.padStart\(2, '0'\)\)\.join\(''\)/);
+  assert.match(workspaceScript, /profileAccountId = profile\.accountId \|\| ''/);
+  assert.match(workspaceScript, /rawrarr-profile:\$\{profileAccountId \|\| profileBaseName\}/);
   assert.match(coordinator, /\.route\("\/api\/workspace\/profile-picture\/\{seed\}\/jxl", get\(workspace_profile_picture_jxl\)\)/);
   assert.match(coordinator, /\.route\("\/api\/workspace\/profile-picture\/\{seed\}\/png", get\(workspace_profile_picture_png\)\)/);
   assert.match(coordinator, /async fn workspace_profile_picture_jxl\([\s\S]*?authenticated_user_id\(&auth, &headers\)/);
