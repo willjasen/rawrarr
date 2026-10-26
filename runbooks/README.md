@@ -1,3 +1,4 @@
+- [Generate the profile avatar from the saved age ID](2026-10-25-profile-avatar-local-age-id.md) — Derive profile art locally from the owner’s saved age ID, with a node-independent fallback.
 - [Deploy tested GitHub main to the internal Macs](2026-10-25-deploy-tested-main-internal-macs.md) — Build the tested published revision and update the internal roarlay coordinator and fossil subscriber with health and route verification.
 - [Verify local main regression suite](2026-10-25-verify-main-regression-suite.md) — Fix regression fixtures and browser export, then confirm Node, Playwright, and Rust checks pass on a branch based on local main.
 - [Defer subscriber Compose deployment work](2026-10-25-defer-subscriber-compose.md) — Track the remaining optional installer gaps in the roadmap and clean up the completed onboarding branch.

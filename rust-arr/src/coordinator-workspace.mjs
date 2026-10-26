@@ -163,7 +163,6 @@ document.getElementById('configure-sonarr')?.addEventListener('click', () => sho
 showView(location.hash.slice(1) || 'overview', false);
 if (location.hash === '#series') history.replaceState(null, '', `${location.pathname}${location.search}#tv`);
 let profileAvatarSeed = '';
-let profileAvatarLoadNode = '';
 let profileBaseName = '';
 function renderProfileAvatar() {
   if (!profileAvatarSeed) return;
@@ -213,25 +212,19 @@ function renderProfileAvatar() {
 }
 async function loadProfileAvatar() {
   if (profileAvatarSeed) { renderProfileAvatar(); return; }
-  const node = workspaceNodes.find(candidate => candidate.role === 'metadata' && candidate.online && candidate.relayAvailable)
-    || (selectedNodeDetails?.role === 'metadata' ? selectedNodeDetails : null);
-  if (!node || profileAvatarLoadNode === node.nodeId) return;
-  profileAvatarLoadNode = node.nodeId;
   try {
-    const response = await fetch(`/nodes/${encodeURIComponent(node.nodeId)}/api/metadata/export/recipient`, { cache: 'no-store', headers: { Accept: 'text/plain' } });
-    if (!response.ok) throw new Error('Public age ID is not available from this fossil node.');
-    const recipient = (await response.text()).trim();
-    if (!/^age1pq1[a-z0-9]+$/.test(recipient)) throw new Error('Fossil node returned an invalid public age ID.');
+    const identity = ageIdentityInMemory || localStorage.getItem(ageSessionKey) || '';
+    if (!identity) throw new Error('No saved age ID is available.');
+    await import('/assets/metadata-export.js');
+    const recipient = (await window.rawrarrMiniExport.deriveProfileRecipient(identity)).trim();
+    if (!/^age1pq1[a-z0-9]+$/.test(recipient)) throw new Error('The saved age ID did not produce a valid public recipient.');
     const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(recipient)));
     profileAvatarSeed = Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
-    renderProfileAvatar();
   } catch (error) {
-    document.getElementById('profile-avatar-status').textContent = error.message || 'Could not load the public age ID.';
-    profileAvatarLoadNode = '';
     const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`rawrarr-profile:${profileBaseName}`)));
     profileAvatarSeed = Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
-    renderProfileAvatar();
   }
+  renderProfileAvatar();
 }
 async function loadNodeAvatar(node, pictureSource, image) {
   if (!node.online || !node.relayAvailable) return;
