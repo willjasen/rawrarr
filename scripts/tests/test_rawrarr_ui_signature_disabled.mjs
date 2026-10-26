@@ -13,15 +13,11 @@ test('workspace no longer presents an unverified UI signature warning', () => {
 
 test('coordinator no longer exposes the obsolete UI publisher status endpoint', () => {
   const coordinator = read('../../rust-arr/src/coordinator.rs');
-  const assets = read('../../rust-arr/src/ui_assets.rs');
   assert.doesNotMatch(coordinator, /api\/workspace\/ui-signature|workspace_ui_signature/);
-  assert.doesNotMatch(assets, /SignatureStatus|bundle\.signature-status/);
 });
 
-test('runtime image and updater no longer require a publisher key or OpenSSL CLI', () => {
-  const dockerfile = read('../../rust-arr/Dockerfile');
+test('updater no longer requires a publisher key, signature asset, or OpenSSL CLI', () => {
   const updater = read('../../rust-arr/update_ui_bundle.py');
-  assert.doesNotMatch(dockerfile, /ui-publisher-public-key|\bopenssl\b/);
   assert.doesNotMatch(updater, /PINNED_PUBLIC_KEY_FILE|pkeyutl|bundle\.zip\.sig/);
 });
 

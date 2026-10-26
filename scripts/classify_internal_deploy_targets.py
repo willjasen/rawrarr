@@ -19,6 +19,9 @@ COORDINATOR_FILES = {
     "rust-arr/src/coordinator-device-routes.mjs",
     "rust-arr/src/coordinator-passkey.mjs",
     "rust-arr/src/profile-color.mjs",
+    # UI release updates run only in the coordinator container, gated by
+    # RAWARR_ROLE=coordinator in rust-arr/container-entrypoint.sh.
+    "rust-arr/update_ui_bundle.py",
     "docker-compose.internal-mini.yml",
     "docker-compose.coordinator.yml",
 }
