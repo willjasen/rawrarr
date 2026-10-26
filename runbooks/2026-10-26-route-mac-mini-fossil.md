@@ -19,9 +19,9 @@ Fix the newly enrolled Mac mini fossil's missing Devices avatar and browser rout
 - Serve status reads back both HTTPS paths on `rawrarr-mac-mini.risk-mermaid.ts.net`. From the Mac mini, both `/health` and `/direct-api/api/direct/health` returned HTTP 200 when the request was pinned to the subscriber's Tailscale IP; direct health returned `status: ok`.
 - Added this node ID to the internal coordinator's relay and direct-target maps and added assertions for both mappings.
 - `node --test scripts/tests/test_rawrarr_coordinator_workspace.mjs` passed 27/27; `docker compose -f docker-compose.internal-mini.yml config -q` and `git diff --check` passed.
-- The code mapping is not deployed yet. Until it is published and roarlay is updated, the coordinator will still show no route and will not fetch the avatar or shared-health response through its relay.
+- PR [#137](https://github.com/willjasen/rawrarr/pull/137) contains the coordinator map change; its required Basic script tests passed. The code mapping is not deployed yet. Until it is published and roarlay is updated, the coordinator will still show no route and will not fetch the avatar or shared-health response through its relay.
 - The local workstation could not reach the tailnet hostname directly; testing from the Mac mini host succeeded. The authenticated browser card has not yet been rechecked after coordinator map deployment.
 
 ## Final state and remaining work
 
-Subscriber-side Serve is configured and both endpoint paths are healthy over Tailscale. A focused PR is still needed for the coordinator target map; merge and published-main deployment must follow the project workflow before end-to-end Devices verification and closing related issue #135.
+Subscriber-side Serve is configured and both endpoint paths are healthy over Tailscale. PR #137 is open; merge and published-main deployment must follow the project workflow before end-to-end Devices verification and closing related issue #135.
