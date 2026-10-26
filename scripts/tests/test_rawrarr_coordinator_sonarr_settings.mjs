@@ -43,7 +43,7 @@ test('coordinator saves Radarr and Sonarr settings over the direct metadata rout
       workspaceRequests.push({ path: url.pathname, body: request.postData() || '' });
       return route.fulfill({ status: 204, headers: { 'set-cookie': `rawrarr_direct_session=${'a'.repeat(64)}; Path=/direct-api/; SameSite=Strict` } });
     }
-    if (url.pathname === '/direct-api/api/direct/health') return route.fulfill({ status: 204 });
+    if (url.pathname === '/direct-api/health') return route.fulfill({ status: 204 });
     if (url.pathname.startsWith('/direct-api/api/')) {
       directRequests.push({ path: url.pathname, method: request.method(), body: request.postData() || '' });
       if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'GET') {
@@ -224,7 +224,7 @@ test('Movies and TV do not display cached library data without an age ID', async
     if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
     if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }] });
     if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
-    if (url.pathname === '/direct-api/api/direct/health') return route.fulfill({ status: 204 });
+    if (url.pathname === '/direct-api/health') return route.fulfill({ status: 204 });
     return route.fulfill({ status: 404, body: 'not found' });
   });
 
@@ -263,7 +263,7 @@ test('age ID is remembered after validation, restored on reload, and cleared on 
     if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }] });
     if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
     if (url.pathname === '/api/workspace/direct-session') return route.fulfill({ status: 204, headers: { 'set-cookie': `rawrarr_direct_session=${'b'.repeat(64)}; Path=/direct-api/; SameSite=Strict` } });
-    if (url.pathname === '/direct-api/api/direct/health') return route.fulfill({ status: 204 });
+    if (url.pathname === '/direct-api/health') return route.fulfill({ status: 204 });
     if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'GET') return route.fulfill({ json: { unlocked: vaultUnlocked, encryptedConfigExists: true } });
     if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'POST') {
       const body = request.postDataJSON();
@@ -316,7 +316,7 @@ test('Settings imports an age ID locally without an online node and clears it ma
     if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [] });
     if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
     if (url.pathname === '/api/workspace/direct-session') return route.fulfill({ status: 204, headers: { 'set-cookie': `rawrarr_direct_session=${'c'.repeat(64)}; Path=/direct-api/; SameSite=Strict` } });
-    if (url.pathname === '/direct-api/api/direct/health') return route.fulfill({ status: 204 });
+    if (url.pathname === '/direct-api/health') return route.fulfill({ status: 204 });
     if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'POST') {
       directAgeValidationRequests += 1;
       const body = request.postDataJSON();
