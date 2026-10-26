@@ -5,6 +5,7 @@ import test from 'node:test';
 import { chromium } from '/usr/local/lib/node_modules/playwright-core/index.mjs';
 
 const pageHtml = await readFile(new URL('../../rust-arr/src/age_setup.html', import.meta.url), 'utf8');
+const metadataExport = "window.rawrarrMiniExport = { prepareGroupIdentityForDevice: async () => false, encryptIdentityForDevice: async value => `age-ciphertext:${value}` };";
 const privateKey = 'AGE-SECRET-KEY-PQ-1ABCDXYZ0123456789';
 const recipient = 'age1pq1browser-test-recipient';
 const themeSeed = '0123456789abcdef'.repeat(4);
@@ -15,6 +16,11 @@ const server = createServer((request, response) => {
   if (request.method === 'GET' && (request.url === '/age-setup' || request.url === '/')) {
     response.setHeader('content-type', 'text/html; charset=utf-8');
     response.end(pageHtml);
+    return;
+  }
+  if (request.method === 'GET' && request.url === '/assets/metadata-export.js') {
+    response.setHeader('content-type', 'text/javascript; charset=utf-8');
+    response.end(metadataExport);
     return;
   }
   response.setHeader('content-type', 'application/json; charset=utf-8');

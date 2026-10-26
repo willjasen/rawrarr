@@ -206,14 +206,14 @@ struct SharingStatus {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AgeIdentityRequest {
-    identity: String,
+    identity_envelope: String,
     #[serde(default)]
     remember_on_device: bool,
 }
 
 impl Drop for AgeIdentityRequest {
     fn drop(&mut self) {
-        self.identity.zeroize();
+        self.identity_envelope.zeroize();
     }
 }
 
@@ -1957,6 +1957,28 @@ async fn export_age_recipient() -> Result<Response<Body>, StatusCode> {
         .body(Body::from(recipient.trim().to_owned())).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
+async fn export_group_user_envelope() -> Result<Response<Body>, StatusCode> {
+    let path = secure_config::AgeVault::group_user_envelope_path();
+    let bytes = tokio::task::spawn_blocking(move || std::fs::read(path))
+        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|error| if error.kind() == std::io::ErrorKind::NotFound { StatusCode::NOT_FOUND } else { StatusCode::INTERNAL_SERVER_ERROR })?;
+    if bytes.len() > 64 * 1024 || !bytes.starts_with(b"age-encryption.org/v1\n") {
+        return Err(StatusCode::SERVICE_UNAVAILABLE);
+    }
+    Response::builder()
+        .header(header::CONTENT_TYPE, "application/octet-stream")
+        .header(header::CACHE_CONTROL, "private, no-store")
+        .body(Body::from(bytes))
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+async fn install_group_identity_envelope(body: Bytes) -> Result<StatusCode, StatusCode> {
+    tokio::task::spawn_blocking(move || secure_config::AgeVault::install_group_identity_envelope(&body))
+        .await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn export_node_age_recipient() -> Result<Response<Body>, StatusCode> {
     let recipient = tokio::task::spawn_blocking(secure_config::AgeVault::node_identity_recipient)
         .await
@@ -2025,7 +2047,7 @@ async fn get_age_settings(State(state): State<Arc<AppState>>) -> Json<AgeSetting
         encrypted_config_exists: secure_config::AgeVault::config_path().is_file(),
         theme_seed: vault
             .as_ref()
-            .map(|vault| age_theme_seed(vault.recipient())),
+            .map(|vault| age_theme_seed(vault.user_recipient())),
     })
 }
 
@@ -2244,9 +2266,14 @@ async fn generate_age_identity() -> Result<Json<GeneratedAgeIdentity>, (StatusCo
 
 async fn unlock_age_settings(
     State(state): State<Arc<AppState>>,
-    Json(mut request): Json<AgeIdentityRequest>,
+    Json(request): Json<AgeIdentityRequest>,
 ) -> Result<Json<AgeSettingsInfo>, (StatusCode, Json<ApiError>)> {
-    let vault = secure_config::AgeVault::from_identity(std::mem::take(&mut request.identity))
+    let identity = secure_config::AgeVault::decrypt_user_identity_envelope(&request.identity_envelope)
+        .map_err(|_| (
+            StatusCode::BAD_REQUEST,
+            Json(ApiError { error: "The age-wrapped user identity could not be opened by this device" }),
+        ))?;
+    let vault = secure_config::AgeVault::from_identity(identity)
         .map_err(|_| {
             (
                 StatusCode::BAD_REQUEST,
@@ -2306,7 +2333,7 @@ async fn unlock_age_settings(
         *state.radarr.write().await = Some(client);
     }
     let exists = vault.config_exists();
-    let theme_seed = age_theme_seed(vault.recipient());
+    let theme_seed = age_theme_seed(vault.user_recipient());
     *state.vault.write().await = Some(vault);
     state.radarr_backup_notify.notify_one();
     Ok(Json(AgeSettingsInfo {
@@ -2667,6 +2694,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/metadata/session/library", axum::routing::post(encrypted_radarr_library))
         .route("/api/metadata/export/config", get(export_config_ciphertext).put(replace_config_ciphertext))
         .route("/api/metadata/export/recipient", get(export_age_recipient))
+        .route("/api/metadata/export/group-user-envelope", get(export_group_user_envelope))
         .route("/api/metadata/export/node-recipient", get(export_node_age_recipient))
         .route("/api/metadata/export/ciphertext/{kind}/{filename}", get(export_ciphertext))
         .route("/api/metadata/storage", get(metadata_storage_status))
@@ -2684,6 +2712,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/settings/age",
             get(get_age_settings).post(unlock_age_settings),
         )
+        .route("/api/settings/age/group-identity", axum::routing::put(install_group_identity_envelope))
         .route(
             "/api/settings/age/generate",
             axum::routing::post(generate_age_identity),
@@ -2725,9 +2754,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/metadata/session/library", post(encrypted_radarr_library))
         .route("/api/metadata/export/config", get(export_config_ciphertext).put(replace_config_ciphertext))
         .route("/api/metadata/export/recipient", get(export_age_recipient))
+        .route("/api/metadata/export/group-user-envelope", get(export_group_user_envelope))
         .route("/api/metadata/export/node-recipient", get(export_node_age_recipient))
         .route("/api/metadata/export/ciphertext/{kind}/{filename}", get(export_ciphertext))
         .route("/api/settings/age", get(get_age_settings).post(unlock_age_settings))
+        .route("/api/settings/age/group-identity", axum::routing::put(install_group_identity_envelope))
         .route(
             "/api/settings/radarr",
             get(get_radarr_settings)
@@ -3054,7 +3085,7 @@ mod age_identity_request_tests {
     #[test]
     fn browser_camel_case_remember_flag_is_deserialized() {
         let request: AgeIdentityRequest = serde_json::from_str(
-            r#"{"identity":"AGE-SECRET-KEY-PQ-1fixture","rememberOnDevice":true}"#,
+            r#"{"identityEnvelope":"age-encryption.org/v1\nfixture","rememberOnDevice":true}"#,
         )
         .expect("decode age unlock request");
         assert!(request.remember_on_device);

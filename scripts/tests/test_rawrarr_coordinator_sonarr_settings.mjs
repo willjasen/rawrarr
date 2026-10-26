@@ -36,6 +36,7 @@ test('coordinator saves Radarr and Sonarr settings over the direct metadata rout
     if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
     if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-ai.mjs') return route.fulfill({ body: aiModule, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: "window.rawrarrMiniExport = { prepareGroupIdentityForDevice: async () => false, encryptIdentityForDevice: async identity => `age-ciphertext:${identity}` };" });
     if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
     if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }] });
     if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
@@ -51,7 +52,8 @@ test('coordinator saves Radarr and Sonarr settings over the direct metadata rout
       }
       if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'POST') {
         const body = request.postDataJSON();
-        assert.equal(body.identity, identity);
+        assert.equal(body.identityEnvelope, `age-ciphertext:${identity}`);
+        assert.equal(Object.hasOwn(body, 'identity'), false);
         assert.equal(body.rememberOnDevice, false);
         vaultUnlocked = true;
         return route.fulfill({ json: { unlocked: true, encryptedConfigExists: true } });
@@ -258,7 +260,7 @@ test('age ID is remembered after validation, restored on reload, and cleared on 
     if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
     if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-ai.mjs') return route.fulfill({ body: aiModule, contentType: 'text/javascript' });
-    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: "window.rawrarrMiniExport = { loadRadarrLibrary: async () => [], deriveProfileRecipient: async identity => { if (!identity.startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('invalid identity'); return 'age1pq1validrecipient'; } };" });
+    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: "window.rawrarrMiniExport = { loadRadarrLibrary: async () => [], prepareGroupIdentityForDevice: async () => false, encryptIdentityForDevice: async identity => `age-ciphertext:${identity}`, deriveProfileRecipient: async identity => { if (!identity.startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('invalid identity'); return 'age1pq1validrecipient'; } };" });
     if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
     if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }] });
     if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
@@ -267,7 +269,8 @@ test('age ID is remembered after validation, restored on reload, and cleared on 
     if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'GET') return route.fulfill({ json: { unlocked: vaultUnlocked, encryptedConfigExists: true } });
     if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'POST') {
       const body = request.postDataJSON();
-      assert.equal(body.identity, identity);
+      assert.equal(body.identityEnvelope, `age-ciphertext:${identity}`);
+      assert.equal(Object.hasOwn(body, 'identity'), false);
       vaultUnlocked = true;
       return route.fulfill({ json: { unlocked: true, encryptedConfigExists: true } });
     }
@@ -311,7 +314,7 @@ test('Settings imports an age ID locally without an online node and clears it ma
     if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
     if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-ai.mjs') return route.fulfill({ body: aiModule, contentType: 'text/javascript' });
-    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: "window.rawrarrMiniExport = { loadRadarrLibrary: async () => [], deriveProfileRecipient: async identity => { if (!identity.startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('invalid identity'); return 'age1pq1validrecipient'; } };" });
+    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: "window.rawrarrMiniExport = { loadRadarrLibrary: async () => [], prepareGroupIdentityForDevice: async () => false, encryptIdentityForDevice: async identity => `age-ciphertext:${identity}`, deriveProfileRecipient: async identity => { if (!identity.startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('invalid identity'); return 'age1pq1validrecipient'; } };" });
     if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
     if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [] });
     if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
@@ -320,7 +323,8 @@ test('Settings imports an age ID locally without an online node and clears it ma
     if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'POST') {
       directAgeValidationRequests += 1;
       const body = request.postDataJSON();
-      assert.equal(body.identity, identity);
+      assert.equal(body.identityEnvelope, `age-ciphertext:${identity}`);
+      assert.equal(Object.hasOwn(body, 'identity'), false);
       assert.equal(body.rememberOnDevice, false);
       unlocked = true;
       return route.fulfill({ json: { unlocked: true, encryptedConfigExists: true } });

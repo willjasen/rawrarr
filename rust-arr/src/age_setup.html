@@ -103,6 +103,7 @@
       </div>
     </dialog>
   </main>
+  <script src="/assets/metadata-export.js"></script>
   <script>
     const identity = document.getElementById('identity');
     const message = document.getElementById('message');
@@ -282,9 +283,11 @@
       button.disabled = true;
       document.getElementById('import-message').textContent = 'Unlocking encrypted configuration…';
       try {
+        await window.rawrarrMiniExport.prepareGroupIdentityForDevice(value, '/api');
+        const identityEnvelope = await window.rawrarrMiniExport.encryptIdentityForDevice(value, '/api');
         const response = await fetch('/api/settings/age', {
           method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identity: value, rememberOnDevice: document.getElementById('remember-on-device').checked })
+          body: JSON.stringify({ identityEnvelope, rememberOnDevice: document.getElementById('remember-on-device').checked })
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Could not unlock the age vault');
@@ -341,9 +344,11 @@
       button.disabled = true;
       identityCopyStatus.textContent = 'Unlocking encrypted configuration…';
       try {
+        await window.rawrarrMiniExport.prepareGroupIdentityForDevice(privateIdentity, '/api');
+        const identityEnvelope = await window.rawrarrMiniExport.encryptIdentityForDevice(privateIdentity, '/api');
         const response = await fetch('/api/settings/age', {
           method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identity: privateIdentity, rememberOnDevice: document.getElementById('remember-on-device').checked })
+          body: JSON.stringify({ identityEnvelope, rememberOnDevice: document.getElementById('remember-on-device').checked })
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Could not unlock the age vault');

@@ -1723,7 +1723,7 @@ fn storage_scan_relay_allowed(
 }
 
 fn ciphertext_export_path(path: &str) -> bool {
-    matches!(path, "api/metadata/export/mini" | "api/metadata/export/config" | "api/metadata/export/recipient" | "api/metadata/export/node-recipient")
+    matches!(path, "api/metadata/export/mini" | "api/metadata/export/config" | "api/metadata/export/recipient" | "api/metadata/export/node-recipient" | "api/metadata/export/group-user-envelope")
         || path.strip_prefix("api/metadata/export/ciphertext/").is_some_and(|tail| {
             let mut parts = tail.split('/');
             let kind = parts.next().unwrap_or_default();
