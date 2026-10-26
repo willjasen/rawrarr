@@ -428,16 +428,6 @@ impl AgeVault {
         )
     }
 
-    fn read_shared_recipient() -> Result<String, VaultError> {
-        let value = fs::read_to_string(Self::public_recipient_path())
-            .map_err(|_| VaultError::StorageFailed)?;
-        let recipient = value.trim();
-        if !is_post_quantum_recipient(recipient) {
-            return Err(VaultError::InvalidIdentity);
-        }
-        Ok(recipient.to_owned())
-    }
-
     pub fn movie_metadata_exists(&self, tmdb_id: u64) -> bool {
         self.movie_metadata_path(tmdb_id).is_ok_and(|path| path.is_file())
     }
