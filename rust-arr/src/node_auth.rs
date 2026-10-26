@@ -27,6 +27,19 @@ pub struct NodeAuth {
 }
 
 impl NodeAuth {
+    #[cfg(test)]
+    pub(crate) fn test_fixture() -> Self {
+        Self {
+            client: reqwest::Client::new(),
+            base: reqwest::Url::parse("http://127.0.0.1:1").expect("fixture URL"),
+            token: Arc::new(Zeroizing::new(String::new())),
+            display_name: "fixture".to_owned(),
+            node_id: Arc::new(std::sync::RwLock::new("fixture".to_owned())),
+            root_fingerprint: None,
+            signing_certificate: Arc::new(std::sync::RwLock::new(None)),
+        }
+    }
+
     pub async fn from_env(
         role: crate::node_role::NodeRole,
         node_id: &str,

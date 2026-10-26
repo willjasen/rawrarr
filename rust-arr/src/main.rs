@@ -934,6 +934,57 @@ async fn dashboard_events(
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
+#[cfg(test)]
+mod dashboard_event_tests {
+    use super::*;
+    use futures_util::StreamExt;
+    use serde_json::Value;
+
+    #[tokio::test]
+    async fn dashboard_stream_emits_named_json_snapshot_events_and_keepalive() {
+        let state = Arc::new(AppState {
+            auth: node_auth::NodeAuth::test_fixture(),
+            role: node_role::NodeRole::Metadata,
+            radarr: Arc::new(RwLock::new(None)),
+            vault: Arc::new(RwLock::new(None)),
+            library: None,
+            device_id: "fixture-device".to_owned(),
+            shared_logs: None,
+            storage_scan: storage_node::ScanController::default(),
+            storage_schedule: None,
+            syncthing: None,
+            artwork_backfill: Arc::new(RwLock::new(ArtworkBackfillProgress::default())),
+            sonarr_backfill: Arc::new(RwLock::new(ArtworkBackfillProgress::default())),
+            artwork_scrape_lock: Arc::new(tokio::sync::Mutex::new(())),
+            artwork_scrape_notify: Arc::new(tokio::sync::Notify::new()),
+            radarr_backup_notify: Arc::new(tokio::sync::Notify::new()),
+            artwork_force_rescan: Arc::new(AtomicBool::new(false)),
+            sonarr_scrape_notify: Arc::new(tokio::sync::Notify::new()),
+            artwork_cache: Arc::new(artwork_cache::ArtworkCache::disabled()),
+        });
+        let response = dashboard_events(State(state)).await.into_response();
+        assert_eq!(response.headers()[header::CONTENT_TYPE], "text/event-stream");
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-cache");
+        let mut body = response.into_body().into_data_stream();
+        let frame = tokio::time::timeout(Duration::from_secs(1), body.next())
+            .await
+            .expect("initial dashboard event should arrive immediately")
+            .expect("stream should yield an event")
+            .expect("event body should be readable");
+        let frame = String::from_utf8(frame.to_vec()).unwrap();
+        assert!(frame.starts_with("event: dashboard\ndata: "), "{frame}");
+        assert!(frame.ends_with("\n\n"), "{frame}");
+        let json = frame
+            .lines()
+            .find_map(|line| line.strip_prefix("data: "))
+            .expect("dashboard event should include JSON data");
+        let snapshot: Value = serde_json::from_str(json).unwrap();
+        assert_eq!(snapshot["metadata"]["configured"], false);
+        assert_eq!(snapshot["radarr"]["configured"], false);
+        assert_eq!(snapshot["devices"][0]["id"], "fixture-device");
+    }
+}
+
 async fn library_info(State(state): State<Arc<AppState>>) -> Json<library::LibraryInfo> {
     match &state.library {
         Some(root) => Json(library::LibraryInfo {
