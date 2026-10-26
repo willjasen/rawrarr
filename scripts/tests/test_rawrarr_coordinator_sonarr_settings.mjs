@@ -247,7 +247,7 @@ test('age ID is remembered after validation, restored on reload, and cleared on 
     if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
     if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-ai.mjs') return route.fulfill({ body: aiModule, contentType: 'text/javascript' });
-    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: 'window.rawrarrMiniExport = { loadRadarrLibrary: async () => [] };' });
+    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: "window.rawrarrMiniExport = { loadRadarrLibrary: async () => [], deriveProfileRecipient: async identity => { if (!identity.startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('invalid identity'); return 'age1pq1validrecipient'; } };" });
     if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
     if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }] });
     if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
@@ -282,12 +282,13 @@ test('age ID is remembered after validation, restored on reload, and cleared on 
   assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
 });
 
-test('Settings validates and stores an age ID in the browser until manual clear', async t => {
+test('Settings imports an age ID locally without an online node and clears it manually', async t => {
   const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
   t.after(() => browser.close());
   const page = await browser.newPage();
   const identity = 'AGE-SECRET-KEY-PQ-1settings-test-fixture';
   let unlocked = false;
+  let directAgeValidationRequests = 0;
   await page.route('http://rawrarr.test/**', async route => {
     const request = route.request();
     const url = new URL(request.url());
@@ -297,13 +298,14 @@ test('Settings validates and stores an age ID in the browser until manual clear'
     if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
     if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-ai.mjs') return route.fulfill({ body: aiModule, contentType: 'text/javascript' });
-    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: 'window.rawrarrMiniExport = { loadRadarrLibrary: async () => [] };' });
+    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: "window.rawrarrMiniExport = { loadRadarrLibrary: async () => [], deriveProfileRecipient: async identity => { if (!identity.startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('invalid identity'); return 'age1pq1validrecipient'; } };" });
     if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
-    if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }] });
+    if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [] });
     if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
     if (url.pathname === '/api/workspace/direct-session') return route.fulfill({ status: 204, headers: { 'set-cookie': `rawrarr_direct_session=${'c'.repeat(64)}; Path=/direct-api/; SameSite=Strict` } });
     if (url.pathname === '/direct-api/api/direct/health') return route.fulfill({ status: 204 });
     if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'POST') {
+      directAgeValidationRequests += 1;
       const body = request.postDataJSON();
       assert.equal(body.identity, identity);
       assert.equal(body.rememberOnDevice, false);
@@ -318,22 +320,44 @@ test('Settings validates and stores an age ID in the browser until manual clear'
   });
 
   await page.goto('http://rawrarr.test/#settings');
-  await page.waitForFunction(() => document.querySelector('[data-node-id="metadata-one"]')?.dataset.selected === 'true');
   await page.getByText('Age private ID is not stored in this browser.').waitFor();
   await page.locator('#settings-age-id').fill(identity);
   await page.click('#save-age-id');
-  await page.locator('#age-storage-message').getByText('Age private ID validated and saved in this browser.').waitFor();
+  await page.locator('#age-storage-message').getByText('Age private ID checked and saved in this browser.').waitFor();
   assert.equal(await page.evaluate(key => localStorage.getItem('rawrarr.browser.age-id') === key, identity), true);
+  assert.equal(directAgeValidationRequests, 0);
   assert.equal(await page.locator('#settings-age-id').inputValue(), '');
   assert.equal(await page.locator('#remember-age-id').count(), 0);
 
-  await page.click('[data-view="movies"]');
-  await page.getByText('0 Radarr library entries loaded directly from the node.').waitFor();
-  assert.equal(await page.locator('#age-id-entry').isVisible(), false);
-  await page.click('[data-view="settings"]');
   await page.click('#remove-age-id');
   await page.getByText('Age private ID removed from this browser.').waitFor();
   assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
   assert.equal(await page.locator('#remember-age-id').count(), 0);
-  assert.match(await page.locator('#content-status').textContent(), /metadata is locked/);
+});
+
+test('Settings rejects an invalid age ID without persisting it', async t => {
+  const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.route('http://rawrarr.test/**', async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
+    if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-ai.mjs') return route.fulfill({ body: aiModule, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: "window.rawrarrMiniExport = { deriveProfileRecipient: async () => { throw new Error('invalid identity'); } };" });
+    if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
+    if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [] });
+    if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
+    if (url.pathname.startsWith('/api/workspace/')) return route.fulfill({ json: {} });
+    return route.fulfill({ status: 404, body: 'not found' });
+  });
+  await page.goto('http://rawrarr.test/#settings');
+  await page.locator('#settings-age-id').fill('not-an-age-identity');
+  await page.click('#save-age-id');
+  await page.getByText('invalid identity').waitFor();
+  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
+  assert.equal(await page.locator('#settings-age-id').inputValue(), '');
 });

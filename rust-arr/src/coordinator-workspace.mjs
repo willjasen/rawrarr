@@ -470,16 +470,15 @@ document.getElementById('age-storage-form').addEventListener('submit', async eve
     return;
   }
   saveAgeIdButton.disabled = true;
-  ageStorageMessage.textContent = 'Validating the age ID with the selected fossil node…';
+  ageStorageMessage.textContent = 'Checking the age ID in this browser…';
   try {
-    await arrDirectRequest('/settings/age', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identity, rememberOnDevice: false }),
-    });
+    await import('/assets/metadata-export.js');
+    const recipient = (await window.rawrarrMiniExport.deriveProfileRecipient(identity)).trim();
+    if (!/^age1pq1[a-z0-9]+$/.test(recipient)) throw new Error('The age private ID is invalid. Check it and try again.');
     rememberAgeIdentity(identity);
     settingsAgeIdInput.value = '';
-    contentStatus.textContent = 'Age private ID validated and saved in this browser.';
-    ageStorageMessage.textContent = 'Age private ID validated and saved in this browser.';
+    contentStatus.textContent = 'Age private ID checked and saved in this browser.';
+    ageStorageMessage.textContent = 'Age private ID checked and saved in this browser.';
     updateAgeIdControls();
   } catch (error) {
     ageStorageMessage.dataset.state = 'error';
