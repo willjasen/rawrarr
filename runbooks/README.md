@@ -42,6 +42,8 @@
 
 # Rawrarr runbooks
 
+- [Describe the current web app on About](2026-10-25-about-web-app-user-flow.md) — Explain the existing browser workflow and track identity-domain and external Arr provisioning work separately (issues [#95](https://github.com/willjasen/rawrarr/issues/95) and [#96](https://github.com/willjasen/rawrarr/issues/96)).
+
 - [Separate node check-in and browser route status](2026-10-25-separate-node-online-and-route-status.md) — Clarify coordinator heartbeat versus browser direct/relay reachability and allow device avatars through either route (issue [#86](https://github.com/willjasen/rawrarr/issues/86)).
 
 - [Hide topology until a device is online](2026-10-25-hide-topology-until-online.md) — Keep the topology section hidden until the first enrolled device reports online; cover empty, offline, and online states in regression and browser tests (issue [#75](https://github.com/willjasen/rawrarr/issues/75)).
