@@ -45,7 +45,7 @@ test('Overview and device management stay separate, with age-encrypted name edit
 test('coordinator UI decrypts names in the browser and only relays age ciphertext for writes', () => {
   assert.match(workspace, /loadDeviceNames\(ageIdentity/);
   assert.match(workspace, /saveDeviceName\(ageIdentity/);
-  assert.match(browser, /decrypter\.addIdentity\(identity\.trim\(\)\)/);
+  assert.match(browser, /decrypter\.addIdentity\(candidate\)/);
   assert.match(browser, /method: 'PUT'[\s\S]*body: ciphertext/);
   assert.match(coordinator, /request_body\.starts_with\(b"age-encryption\.org\/v1\\n"\)/);
   assert.match(coordinator, /api\/metadata\/export\/recipient/);

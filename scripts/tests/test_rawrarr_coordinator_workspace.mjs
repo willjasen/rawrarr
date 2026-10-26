@@ -124,7 +124,7 @@ test('Radarr and Sonarr settings use the configured user-node URL directly from 
   assert.match(workspaceScript, /return `\$\{route\.base\}\/api`/);
   assert.match(workspaceScript, /const canOpenNode = node => node\.relayAvailable \|\| Boolean\(node\.directUrl\)/);
   assert.match(workspaceScript, /fetch\(`\$\{base\}\$\{path\}`/);
-  assert.match(workspaceScript, /body: JSON\.stringify\(\{ identity, rememberOnDevice: false \}\)/);
+  assert.match(workspaceScript, /body: JSON\.stringify\(\{ identityEnvelope, rememberOnDevice: false \}\)/);
   assert.match(workspaceScript, /apiKey: document\.getElementById\(copy\.key\)\.value/);
   assert.match(workspaceScript, /uiUsername: document\.getElementById\(copy\.uiUsername\)\.value/);
   assert.match(mainRs, /\.route\("\/api\/settings\/age", get\(get_age_settings\)\.post\(unlock_age_settings\)\)/);

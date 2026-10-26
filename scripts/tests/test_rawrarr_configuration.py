@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import hashlib
 import json
@@ -70,6 +71,13 @@ def request_json(base_url: str, path: str, method: str = "GET", body: dict | Non
 def request_bytes(base_url: str, path: str) -> tuple[bytes, str]:
     with urllib.request.urlopen(base_url + path, timeout=3) as response:
         return response.read(), response.headers.get_content_type()
+
+
+def age_encrypt_to_recipient(recipient: str, plaintext: bytes) -> str:
+    result = subprocess.run(
+        ["age", "--recipient", recipient], input=plaintext, capture_output=True, check=True
+    )
+    return base64.b64encode(result.stdout).decode("ascii")
 
 
 def start_server(
@@ -188,7 +196,9 @@ def main() -> int:
             assert identity.startswith("#") and "AGE-SECRET-KEY-PQ-1" in identity
             expected_theme_seed = hashlib.sha256(generated["recipient"].encode()).hexdigest()
             assert generated["themeSeed"] == expected_theme_seed
-            unlock = request_json(base_url, "/api/settings/age", "POST", {"identity": identity})
+            node_recipient, _ = request_bytes(base_url, "/api/metadata/export/node-recipient")
+            identity_envelope = age_encrypt_to_recipient(node_recipient.decode().strip(), identity.encode())
+            unlock = request_json(base_url, "/api/settings/age", "POST", {"identityEnvelope": identity_envelope})
             assert unlock["unlocked"] is True
             assert unlock["themeSeed"] == expected_theme_seed
             age_status = request_json(base_url, "/api/settings/age")
@@ -196,8 +206,18 @@ def main() -> int:
             assert age_status["themeSeed"] == expected_theme_seed
             assert generated["recipient"] not in json.dumps(age_status)
             recipient_path = shared_dir / "age-recipient"
-            assert recipient_path.read_text().strip() == generated["recipient"]
+            group_recipient = recipient_path.read_text().strip()
+            assert group_recipient.startswith("age1pq1")
+            assert group_recipient != generated["recipient"]
+            assert (shared_dir / "group-age-recipient").read_text().strip() == group_recipient
+            assert (shared_dir / "group-age-user-envelope.aged").read_bytes().startswith(b"age-encryption.org/v1\n")
             assert identity.encode() not in recipient_path.read_bytes()
+            group_identity = (data_dir / "group-age-identity").read_bytes()
+            user_envelope = subprocess.run(
+                ["age", "--decrypt", "--identity", "-", str(shared_dir / "group-age-user-envelope.aged")],
+                input=identity.encode(), check=True, capture_output=True,
+            ).stdout
+            assert user_envelope == group_identity
             scan = request_json(base_url, "/api/library/scan", "POST")
             assert len(scan["items"]) == 2
             assert scan["sidecarsCreated"] == 2 and scan["sidecarErrors"] == 0
@@ -207,10 +227,15 @@ def main() -> int:
             assert all(b"Example Film" not in path.read_bytes() for path in sidecar_paths)
             decrypted = subprocess.run(
                 ["age", "--decrypt", "--identity", "-", str(sidecar_paths[0])],
-                input=identity.encode(),
+                input=group_identity,
                 check=True,
                 capture_output=True,
             )
+            user_decryption = subprocess.run(
+                ["age", "--decrypt", "--identity", "-", str(sidecar_paths[0])],
+                input=identity.encode(), capture_output=True,
+            )
+            assert user_decryption.returncode != 0, "user identity must not decrypt group metadata directly"
             sidecar = json.loads(decrypted.stdout)
             assert sidecar["schemaVersion"] == 1
             assert sidecar["deviceId"] == "storage-fixture"
@@ -336,7 +361,7 @@ def main() -> int:
             artwork_dir.mkdir(parents=True)
             artwork_path = artwork_dir / "12345.aged"
             subprocess.run(
-                ["age", "--recipient", generated["recipient"], "--output", str(artwork_path), "-"],
+                ["age", "--recipient", group_recipient, "--output", str(artwork_path), "-"],
                 input=b"image/jpeg\n" + poster,
                 check=True,
                 stdout=subprocess.DEVNULL,

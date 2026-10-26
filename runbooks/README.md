@@ -47,6 +47,7 @@
 - [Route the Mac mini fossil through Tailscale Serve](2026-10-26-route-mac-mini-fossil.md) — Configure the enrolled Mac mini subscriber's tailnet routes and coordinator mappings so its avatar and browser endpoints are reachable (issue [#136](https://github.com/willjasen/rawrarr/issues/136)).
 
 - [Test fossil host port isolation](2026-10-26-fossil-port-forward-tests.md) — Add generated-Compose regression and live two-fossil OrbStack checks for host-published ports (issue [#126](https://github.com/willjasen/rawrarr/issues/126)).
+- [Encrypt shared metadata to the group identity](2026-10-26-group-age-metadata.md) — Create/distribute group age identities and use the group recipient for shared metadata and config (issue [#109](https://github.com/willjasen/rawrarr/issues/109)).
 
 - [Define user, device, group, and app identity domains](2026-10-26-identity-domains.md) — Consolidate key ownership and purpose, distinguish implemented behavior from planned group/app lifecycles, and link current design references (issue [#95](https://github.com/willjasen/rawrarr/issues/95)).
 
