@@ -182,24 +182,7 @@ function renderProfileAvatar() {
     part.textContent = word;
     return part;
   }));
-  const badge = document.getElementById('sidebar-ui-signature');
-  if (badge) sidebarName.appendChild(badge);
   sidebarName.setAttribute('aria-label', words.join(' '));
-  const signatureBadge = document.getElementById('sidebar-ui-signature');
-  if (signatureBadge) {
-    signatureBadge.dataset.status = 'unverified';
-    signatureBadge.textContent = 'UI signature unverified';
-    fetch('/api/workspace/ui-signature', { credentials: 'same-origin' }).then(response => response.ok ? response.json() : { status: 'unverified' }).then(result => {
-      const signed = result.status === 'signed';
-      const rejected = result.status === 'rejected';
-      signatureBadge.dataset.status = signed ? 'signed' : rejected ? 'rejected' : 'unverified';
-      signatureBadge.textContent = signed ? 'Signed' : rejected ? 'UI update rejected' : 'UI signature unverified';
-      signatureBadge.title = signed ? `Publisher signature verified${result.version ? ` for ${result.version}` : ''}` : rejected ? 'The latest UI update failed publisher verification; the previous UI remains active.' : 'No publisher-verified UI bundle is active.';
-    }).catch(() => {
-      signatureBadge.dataset.status = 'unverified';
-      signatureBadge.textContent = 'UI signature status unavailable';
-    });
-  }
   const picture = document.getElementById('profile-picture');
   const jxlUrl = `/api/workspace/profile-picture/${profileAvatarSeed}/jxl`;
   const pngUrl = `/api/workspace/profile-picture/${profileAvatarSeed}/png`;

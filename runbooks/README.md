@@ -42,6 +42,8 @@
 
 # Rawrarr runbooks
 
+- [Temporarily disable UI signature enforcement](2026-10-26-temporarily-disable-ui-signature.md) — Remove UI publisher-signature enforcement and the unverified badge while retaining checksum and archive validation (issue [#107](https://github.com/willjasen/rawrarr/issues/107)).
+
 - [Peer metadata synchronization design decisions](2026-10-26-peer-metadata-sync-design-decisions.md) — Record user-only device membership, device-key RPC authentication, versioned object/logical Merkle mapping, deterministic newest-revision convergence, tombstone acknowledgements, and revision history retention (issue [#100](https://github.com/willjasen/rawrarr/issues/100)).
 
 - [Use Valkey for fossil cache and plan peer metadata sync](2026-10-25-valkey-metadata-peer-sync.md) — Switch metadata Compose definitions to Valkey, add regression coverage, and record the planned RPC/Merkle peer synchronization direction (issue [#100](https://github.com/willjasen/rawrarr/issues/100)).
@@ -578,7 +580,7 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Move the device delete button to the card corner](2026-10-22-device-delete-button-position.md) — Place Delete device at the bottom-right of coordinator Devices cards.
 - [Separate UI updates from node images through GitHub](2026-10-22-github-ui-distribution.md) — Publish private UI bundles through GitHub Actions and refresh node-local UI files without routine application image rebuilds.
 - [Deploy GitHub UI updates to internal nodes](2026-10-22-deploy-github-ui-to-internal-coordinator.md) — Main-only source convergence and verified coordinator/subscriber deployment.
-- [Authenticate Rawrarr UI bundle updates](2026-10-22-signed-ui-updates.md) — Verify publisher signatures before activating downloaded UI and display trusted verification state.
+- [Authenticate Rawrarr UI bundle updates](2026-10-22-signed-ui-updates.md) — Original publisher-signature implementation; temporarily superseded by [the signature-disabled mode](2026-10-26-temporarily-disable-ui-signature.md).
 
 - [Use ECDH for encrypted browser library sessions](2026-10-22-ecdh-browser-library-session.md) — Replace only the Radarr browser-response session-key exchange with ephemeral P-256 ECDH and HKDF; retain age identities and encrypted metadata for other features.
 - [Complete per-instance device signing](2026-10-22-complete-device-signing.md) — Resolve GitHub issue #37 with owner-rooted ML-DSA enrollment, signed shared records, and a safe path for existing nodes.

@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
 
 FROM debian:bookworm-slim
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg libssl3 librsvg2-bin libjxl-tools openssl python3 \
+    && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg libssl3 librsvg2-bin libjxl-tools python3 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin rustarr \
     && mkdir -p /data /shared /ui \
@@ -25,7 +25,6 @@ RUN apt-get update \
 COPY --from=builder /rust-arr /usr/local/bin/rust-arr
 COPY --from=age-builder /go/bin/age /go/bin/age-keygen /usr/local/bin/
 COPY update_ui_bundle.py /usr/local/bin/rawrarr-update-ui
-COPY ui-publisher-public-key.pem /etc/rawrarr/ui-publisher-public-key.pem
 COPY container-entrypoint.sh /usr/local/bin/rawrarr-entrypoint
 RUN chmod 755 /usr/local/bin/rawrarr-entrypoint /usr/local/bin/rawrarr-update-ui
 USER 10001:10001

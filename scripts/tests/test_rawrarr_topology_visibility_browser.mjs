@@ -48,8 +48,6 @@ async function serveWorkspace(devices) {
       response.end(JSON.stringify(devices));
     } else if (request.url === '/api/workspace/pending') {
       response.end('[]');
-    } else if (request.url === '/api/workspace/ui-signature') {
-      response.end(JSON.stringify({ status: 'unverified' }));
     } else {
       response.statusCode = 404;
       response.end(JSON.stringify({ error: 'not found' }));

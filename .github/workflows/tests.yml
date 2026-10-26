@@ -117,7 +117,7 @@ jobs:
           tag_name: ui-${{ github.sha }}
           target_commitish: ${{ github.sha }}
           name: Rawrarr UI ${{ github.sha }}
-          body: Automatically published same-origin UI assets. The coordinator verifies the publisher signature and bundle checksum before installing it.
+          body: Automatically published same-origin UI assets with a SHA-256 checksum and optional detached publisher signature. Current coordinators verify the checksum but temporarily do not enforce the UI publisher signature.
           files: |
             ${{ runner.temp }}/ui-bundle.zip
             ${{ runner.temp }}/ui-bundle.zip.sha256
