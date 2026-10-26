@@ -182,6 +182,9 @@ impl Client {
             let connection = &connections["connections"][id];
             let query = url::form_urlencoded::Serializer::new(String::new())
                 .append_pair("folder", folder_id).append_pair("device", id).finish();
+            // Peer completion is supplementary. Syncthing may omit it while
+            // the device is disconnected or still indexing; keep reporting
+            // folder state and connectivity in that case.
             let peer_completion = self.get(&format!("rest/db/completion?{query}")).await.ok()
                 .and_then(|value| value["completion"].as_f64());
             peers.push(PeerHealth {
@@ -340,6 +343,45 @@ fn validate_share(request: &ShareRequest) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::{Json, Router, http::StatusCode, routing::get};
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn peer_completion_failure_does_not_hide_folder_health() {
+        let app = Router::new()
+            .route("/rest/system/status", get(|| async { Json(json!({"myID":"LOCAL"})) }))
+            .route("/rest/system/version", get(|| async { Json(json!({"version":"test"})) }))
+            .route("/rest/config/folders", get(|| async { Json(json!([{
+                "id":"shared", "devices":[{"deviceID":"LOCAL"},{"deviceID":"PEER"}]
+            }])) }))
+            .route("/rest/db/status", get(|| async { Json(json!({"state":"idle"})) }))
+            .route("/rest/db/completion", get(|uri: axum::http::Uri| async move {
+                if uri.query().unwrap_or_default().contains("device=PEER") {
+                    (StatusCode::NOT_FOUND, Json(json!({"error":"peer completion unavailable"})))
+                } else {
+                    (StatusCode::OK, Json(json!({"completion":100.0})))
+                }
+            }))
+            .route("/rest/system/connections", get(|| async { Json(json!({
+                "connections":{"PEER":{"connected":true,"paused":false}}
+            })) }))
+            .route("/rest/config/devices", get(|| async { Json(json!([
+                {"deviceID":"LOCAL","name":"Local"}, {"deviceID":"PEER","name":"Peer"}
+            ])) }));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap(); });
+        let client = Client::new(&format!("http://{address}"), "fixture").unwrap();
+
+        let reports = client.shared_health_all().await.unwrap();
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].state, "idle");
+        assert_eq!(reports[0].completion_percent, Some(100.0));
+        assert_eq!(reports[0].peers.len(), 1);
+        assert!(reports[0].peers[0].connected);
+        assert_eq!(reports[0].peers[0].completion_percent, None);
+        server.abort();
+    }
 
     #[test]
     fn rejects_url_credentials_and_non_http_schemes() {
