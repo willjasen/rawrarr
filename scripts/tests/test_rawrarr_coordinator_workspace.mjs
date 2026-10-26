@@ -312,7 +312,8 @@ test('coordinator workspace selects nodes, reads Radarr directly, and keeps conf
   assert.match(workspaceScript, /Choose a connected fossil or boneyard node/);
   assert.match(workspaceScript, /roleLabel\(role\)/);
   assert.match(workspaceScript, /'coordinator' \? 'roarlay' : role === 'storage' \? 'boneyard' : 'fossil'/);
-  assert.match(workspace, />roarlay<\/div>/);
+  assert.doesNotMatch(workspace, /<header[^>]*>\s*<div class="brand"[^>]*>roarlay<\/div>/);
+  assert.match(workspace, /<button id="sign-out" type="button">Sign out<\/button>/);
   assert.match(compose, /  roarlay:\n/);
   assert.doesNotMatch(compose, /  coordinator:\n/);
   assert.match(boneyardCompose, /  boneyard:\n/);
