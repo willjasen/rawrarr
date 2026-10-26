@@ -63,7 +63,7 @@ test('device shared-folder health is concise and formatted without exposing the 
 });
 
 test('Devices shows a network diagram with one link for each device pair', () => {
-  assert.match(workspace, /<section id="device-topology" class="topology-section" aria-labelledby="device-topology-title">[\s\S]*?<h2 id="device-topology-title">Topology<\/h2>/);
+  assert.match(workspace, /<section id="device-topology" class="topology-section" aria-labelledby="device-topology-title" hidden>[\s\S]*?<h2 id="device-topology-title">Topology<\/h2>/);
   assert.match(workspace, /<div id="device-topology-content"><\/div>/);
   assert.match(workspaceScript, /function renderDeviceTopology\(nodes, observedPeers, deviceNames\)/);
   assert.match(workspaceScript, /deviceNames\[node\.nodeId\] \|\| node\.displayName \|\| node\.nodeId/);
@@ -76,6 +76,12 @@ test('Devices shows a network diagram with one link for each device pair', () =>
   assert.match(workspaceScript, /Add another device to see its links in the network diagram\./);
   assert.match(workspace, /\.topology-edge\.connected \{ stroke:var\(--green\); stroke-width:3 \}/);
   assert.match(workspace, /\.topology-edge\.disconnected \{ stroke:#ef7777 \}/);
+});
+
+test('Devices keeps topology hidden until an enrolled device is online', () => {
+  assert.match(workspaceScript, /const topologySection = document\.getElementById\('device-topology'\);\s*emptyDevices\.hidden = nodes\.length !== 0;\s*topologySection\.hidden = !nodes\.some\(node => node\.online === true\);/);
+  assert.match(workspaceScript, /if \(nodes\.some\(node => node\.online === true\)\) \{\s*renderDeviceTopology\(nodes, observedSyncthingPeers, deviceNames\);\s*\}/);
+  assert.match(workspace, /<section id="device-topology"[^>]*hidden/);
 });
 
 test('device names have an adjacent Edit button that unlocks the name field', () => {
