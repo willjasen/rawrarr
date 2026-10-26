@@ -386,4 +386,9 @@ export async function loadRadarrLibrary(identity, base = '', onProgress = () => 
   } finally { filenameKey.fill(0); }
 }
 
-window.rawrarrMiniExport = { runMiniExport, loadMiniMetadata, loadRadarrLibrary, saveDeviceName, loadDeviceNames, loadSharedConfig };
+async function deriveProfileRecipient(identity) {
+  if (typeof identity !== 'string' || !identity.trim()) throw new Error('No saved age ID is available.');
+  return age.identityToRecipient(identity.trim());
+}
+
+window.rawrarrMiniExport = { runMiniExport, loadMiniMetadata, loadRadarrLibrary, saveDeviceName, loadDeviceNames, loadSharedConfig, deriveProfileRecipient };

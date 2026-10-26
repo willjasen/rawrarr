@@ -200,9 +200,9 @@ test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from th
   assert.match(coordinator, /SELECT id FROM rawrarr_users WHERE id=\$1/);
   assert.match(coordinator, /display_name: crate::auth::generated_account_name\(user_id\)/);
   assert.match(workspace, /id="profile-picture"/);
-  assert.match(workspace, /Generated dinosaur profile picture/);
+  assert.doesNotMatch(workspace, /Loading the public age ID from a fossil node/);
   assert.doesNotMatch(workspace, /Your name from passkey setup/);
-  assert.match(workspace, /Loading the public age ID from a fossil node/);
+  assert.match(workspace, /Generated dinosaur profile picture/);
   assert.match(workspace, /id="profile-name"/);
   assert.match(workspace, /id="sidebar-profile-name"/);
   assert.match(workspace, /id="sidebar-profile-picture"/);
@@ -228,8 +228,11 @@ test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from th
   assert.match(workspace, /\.profile-avatar \{ display:block;/);
   assert.match(workspaceScript, /profile-picture\/\$\{profileAvatarSeed\}\/jxl/);
   assert.match(workspaceScript, /profile-picture\/\$\{profileAvatarSeed\}\/png/);
+  assert.match(workspaceScript, /ageIdentityInMemory \|\| localStorage\.getItem\(ageSessionKey\)/);
+  assert.match(workspaceScript, /deriveProfileRecipient\(identity\)/);
+  assert.doesNotMatch(workspaceScript, /fetch\(`\/nodes\/\$\{encodeURIComponent\(node\.nodeId\)\}\/api\/metadata\/export\/recipient/);
+  assert.match(metadataExport, /identityToRecipient\(identity\.trim\(\)\)/);
   assert.doesNotMatch(workspaceScript, /function profilePictureData\(digest\)/);
-  assert.match(workspaceScript, /api\/metadata\/export\/recipient/);
   assert.match(workspaceScript, /deriveNodeAvatarSeed\(node\.nodeId\)/);
   assert.match(workspaceScript, /device-avatar/);
   assert.match(workspaceScript, /device-picture\/\$\{seed\}\/jxl/);
