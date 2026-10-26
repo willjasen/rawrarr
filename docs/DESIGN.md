@@ -127,7 +127,9 @@ Rawrarr is intended to grow beyond Radarr into discovery, library management, an
 
 ## Devices and sharing
 
-### Isolated and shared cluster modes
+### Isolated and shared cluster modes (exploratory)
+
+> This section contains multi-person cluster design proposals, not implemented behavior. Its per-file recipient-encryption discussion is exploratory and is not the agreed group/app key lifecycle. Use [identity domains](identity-domains.md) for the current agreed identity model and the implementation status of each key domain.
 
 Create each new cluster in **isolated** mode, with one owner. The owner may make a one-way transition to **shared** mode when inviting another person. Once shared, that cluster identity must never return to isolated mode: removing every invitee or revoking every grant does not erase the fact that multiple principals may have seen data or keys. Show the transition and its permanent consequence before the owner confirms it, and record the mode in authenticated, rollback-resistant cluster state. A user who later wants an isolated cluster creates a new cluster with a new age identity and signing root; this is a new security domain, not a rollback or proof that the former member cannot access data they already received.
 
