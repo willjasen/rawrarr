@@ -43,6 +43,23 @@ Replicate only encrypted `/shared/config.aged` through authenticated RPC/Merkle 
 - Focused `cargo test --locked --offline config_repair` in the isolated Rust image passed the ciphertext, allowlist, atomic-write, Merkle, signed revision, replay, and peer-manifest exchange tests.
 - `python3 scripts/tests/run_rawrarr_tests_in_docker.py` passed after RPC wiring: 110 Node tests, the browser suite, and 94 Rust tests. The runner skipped Python environment integrations.
 
+## Published deployment
+
+- PR [#159](https://github.com/willjasen/rawrarr/pull/159) was merged to GitHub `main` as `99e2e82d2e1953950a7820800018a37500618919`. The deploy classifier selected both coordinator and nodes relative to deployed revision `83d70be134a1a56e81a109ce62a75ad13632d17c`.
+- Built the Mac mini image from the published `main` archive on the mini's native ARM64 OrbStack host. The resulting image is `linux/arm64`; the mini fossil and `roarlay` both run it without runtime emulation. MacBook fossil runs the `linux/amd64` published image on its `x86_64` host.
+- Added a dedicated Valkey service to the Mac mini subscriber Compose project. It is isolated in the fossil Tailscale network namespace, listens on loopback, has a volatile 256 MiB cache, and is healthy. The MacBook's existing Valkey service remains in use.
+- Configured both fossils with the same stable node-ID allowlist and HTTPS `.ts.net` direct API URLs. Both local plaintext-config flags are false. The RPC endpoints use the node `/direct-api` Tailscale Serve routes.
+- Recreated mini fossil, MacBook fossil, and mini coordinator `roarlay` from the published image; preserved PostgreSQL and Tailscale services and state. Both fossils, both Valkey services, and `roarlay` are healthy. Valkey returns `PONG` on both fossils.
+- The mini initially had no `/shared/config.aged`; after the RPC release it received the 2,060-byte age ciphertext. Both active files now have the same SHA-256 (`3a99ac9d4e7437e849c1a2969eb542e61fda6eb3589a68bf4f4453389d4360aa`) and mode `0600`. Each Valkey current-digest pointer matches its active file, and a SHA-1 computed inside Valkey confirms the cached bytes match the active ciphertext. The mini's durable journal contains the MacBook's signed `put` revision, confirming peer revision transfer.
+- `/data/radarr-config.json` is absent on both nodes. No age identity was read or printed. Direct `/direct-api/health` routes on both `.ts.net` hosts return HTTP 200. The mini tailnet Serve read-back still maps `/` on port 443 to `http://127.0.0.1:8080`; the public health route responds as Roarlay.
+- A local ARM64 cross-build was stopped before deployment because it was slow; the final mini image was built natively on the Mac mini from the same published source revision.
+
+## Remaining verification
+
+- Owner decryption was not verified because neither fossil has a node-local age identity file and no browser unlock flow was performed. Keep the Syncthing ignore unchanged until owner access is confirmed.
+- The default native Syncthing `config.xml` on both Macs did not list a Rawrarr shared folder. No `.stignore` was created or modified because the applicable Rawrarr folder path was not present in the configured folders. Identify the active Rawrarr Syncthing folder/instance, verify owner decryption, then apply only the root-level `/config.aged` ignore on both nodes. App metadata/artwork Syncthing behavior was not changed by this deployment.
+- GitHub issue #100 remains open for owner-decryption, Syncthing exclusion, and isolated convergence acceptance follow-up.
+
 ## Status and remaining work
 
-The approved protocol is in [metadata-peer-repair-protocol.md](../docs/metadata-peer-repair-protocol.md). RPC, signed journal, and periodic Merkle reconciliation are implemented locally; the complete isolated convergence gate and live rollout remain. Live Syncthing exclusions and production services have not been changed. Preserve `/shared/metadata`, artwork, the mini coordinator, and both fossils' node-local state.
+The approved protocol is in [metadata-peer-repair-protocol.md](../docs/metadata-peer-repair-protocol.md). RPC, signed journals, and periodic Merkle reconciliation are merged and deployed to both fossils; the Mac mini has its own Valkey service. Live config ciphertext converged from the MacBook through peer RPC and both caches match it. The mini coordinator and Tailscale route remain healthy. Owner decryption and the exact Syncthing folder mapping still need verification before excluding `/config.aged`; keep app metadata/artwork behavior unchanged.
