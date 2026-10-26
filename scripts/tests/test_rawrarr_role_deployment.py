@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Disposable Docker integration test for the three roles; pass --apply to run."""
+"""Disposable Docker integration for coordinator-approved metadata and storage nodes."""
+
 import argparse
+import base64
 import hashlib
 import json
 import os
 from pathlib import Path
 import secrets
+import socket
 import subprocess
 import tempfile
 import time
@@ -14,146 +17,277 @@ import urllib.request
 import uuid
 
 
-def docker(*args, input=None):
-    return subprocess.run(['docker', *args], input=input, capture_output=True, text=True, check=True).stdout.strip()
+def docker(*args, input=None, check=True):
+    result = subprocess.run(['docker', *args], input=input, capture_output=True, text=True, check=False)
+    if check and result.returncode:
+        reason = result.stderr.strip().replace('\n', ' ')[:300]
+        raise RuntimeError('Docker operation failed: ' + ' '.join(args[:3]) + (': ' + reason if reason else ''))
+    return result
+
+
+def free_port():
+    with socket.socket() as listener:
+        listener.bind(('127.0.0.1', 0))
+        return listener.getsockname()[1]
+
+
+def request(base, path, method='GET', payload=None, cookie=None):
+    headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
+    if cookie:
+        headers['Cookie'] = 'rawrarr_session=' + cookie
+    body = None if payload is None else json.dumps(payload).encode()
+    req = urllib.request.Request(base + path, data=body, method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=5) as response:
+            return response.status, response.read()
+    except urllib.error.HTTPError as error:
+        return error.code, error.read()
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--image', default='rawrarr:roles-test')
+    parser.add_argument('--browser-image', default='rawrarr-testing-base:local')
     args = parser.parse_args()
     if not args.apply:
-        print('Dry run: create isolated PostgreSQL/coordinator/metadata/storage containers, test role boundaries, then remove only test resources. Pass --apply.')
-        return
+        print('Dry run: create a disposable coordinator and PostgreSQL DB, bootstrap the owner in Chromium, enroll metadata and storage nodes with signed approval, test role/session/outage boundaries, and remove only uniquely named fixtures. Pass --apply.')
+        return 0
+
     prefix = 'rawrarr-test-regression-roles-' + uuid.uuid4().hex[:10]
-    containers = []
     network = prefix
-    with tempfile.TemporaryDirectory(prefix=prefix) as tmp:
-        root = Path(tmp)
-        token = secrets.token_hex(32)
-        storage_token = secrets.token_hex(32)
-        nodes = [dict(id=name, role=role, token_sha256=hashlib.sha256(value.encode()).hexdigest(), origin='http://localhost:8080', rp_id='localhost') for name, role, value in [('metadata-test','metadata',token), ('storage-test','storage',storage_token)]]
-        for name, text in [('registry',json.dumps(nodes)), ('token',token), ('storage-token',storage_token)]:
-            (root/name).write_text(text)
-            (root/name).chmod(0o444)
-        for name in ['shared', 'data-metadata', 'data-storage', 'media']:
-            (root/name).mkdir(mode=0o777)
-            (root/name).chmod(0o777)
-        (root/'media'/'fixture.mkv').write_bytes(b'fixture')
+    containers = []
+    helper = None
+    with tempfile.TemporaryDirectory(prefix=prefix) as temporary:
+        root = Path(temporary)
+        (root / 'registry.json').write_text('[]')
+        (root / 'registry.json').chmod(0o444)
+        for directory in ('coordinator-data', 'metadata-data', 'storage-data', 'shared', 'media'):
+            path = root / directory
+            path.mkdir(mode=0o777)
+            path.chmod(0o777)
+        (root / 'media' / 'Example Film (2024)').mkdir()
+        (root / 'media' / 'Example Film (2024)' / 'Example Film (2024).mkv').write_bytes(b'disposable film fixture')
+        (root / 'media' / 'Example Show' / 'Season 01').mkdir(parents=True)
+        (root / 'media' / 'Example Show' / 'Season 01' / 'Example.Show.S01E01.mkv').write_bytes(b'disposable episode fixture')
+        cert_dir = root / 'test-ca'
+        cert_dir.mkdir(mode=0o755)
+        (cert_dir / 'server.ext').write_text(
+            'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\n'
+            'extendedKeyUsage=serverAuth\nsubjectAltName=DNS:localhost,IP:127.0.0.1\n')
+        cert_commands = [
+            ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-sha256', '-days', '2',
+             '-keyout', str(cert_dir / 'ca.key'), '-out', str(cert_dir / 'ca.crt'), '-subj', '/CN=Rawrarr Disposable Test CA',
+             '-addext', 'basicConstraints=critical,CA:TRUE', '-addext', 'keyUsage=critical,keyCertSign,cRLSign'],
+            ['req', '-newkey', 'rsa:2048', '-nodes', '-sha256', '-keyout', str(cert_dir / 'radarr.key'),
+             '-out', str(cert_dir / 'radarr.csr'), '-subj', '/CN=localhost'],
+            ['x509', '-req', '-in', str(cert_dir / 'radarr.csr'), '-CA', str(cert_dir / 'ca.crt'),
+             '-CAkey', str(cert_dir / 'ca.key'), '-CAcreateserial', '-out', str(cert_dir / 'radarr.crt'),
+             '-days', '2', '-sha256', '-extfile', str(cert_dir / 'server.ext')],
+        ]
+        if any(subprocess.run(['openssl', *command], capture_output=True, check=False).returncode for command in cert_commands):
+            raise RuntimeError('could not create the temporary Radarr test CA and server certificate')
+        (cert_dir / 'ca.key').chmod(0o600)
+        (cert_dir / 'radarr.key').chmod(0o644)
+
         def run(name, image, *options):
             full = prefix + '-' + name
             containers.append(full)
-            docker('run','-d','--name',full,'--label','com.docker.compose.project=rawrarr-test-regression','--network',network,*options,image)
+            docker('run', '-d', '--name', full, '--label', 'com.docker.compose.project=rawrarr-test-regression', *options, image)
             return full
-        def endpoint(name):
-            info=json.loads(docker('inspect',name))[0]
-            published=info['NetworkSettings']['Ports'].get('8080/tcp')
-            if not published:
-                state=info['State']
-                raise AssertionError(f"service did not publish port 8080 or exited (status={state['Status']} exit={state['ExitCode']})")
-            return 'http://127.0.0.1:' + published[0]['HostPort']
-        def request(base, path, method='GET', payload=None, cookie=None, bearer=None):
-            headers = {'Content-Type':'application/json'}
-            if cookie: headers['Cookie']='rawrarr_session='+cookie
-            if bearer: headers['Authorization']='Bearer '+bearer
-            req=urllib.request.Request(base+path, data=json.dumps(payload).encode() if payload is not None else None, headers=headers, method=method)
-            try:
-                with urllib.request.urlopen(req, timeout=3) as response: return response.status, response.read()
-            except urllib.error.HTTPError as error: return error.code, error.read()
-        def ready(name):
-            base=endpoint(name)
-            for _ in range(80):
-                try:
-                    if request(base,'/health')[0]==200: return base
-                except (OSError, TimeoutError): pass
-                if docker('inspect','--format','{{.State.Running}}',name) != 'true':
-                    raise AssertionError('Test service exited before readiness: '+name)
-                time.sleep(.25)
-            raise AssertionError('Readiness timeout: '+name)
-        try:
-            docker('network','create',network)
-            pg=run('postgres','postgres:17-alpine','--network-alias','postgres','-e','POSTGRES_PASSWORD=disposable-fixture-password','-e','POSTGRES_USER=rawrarr','-e','POSTGRES_DB=rawrarr')
-            for _ in range(80):
-                result=subprocess.run(['docker','exec',pg,'pg_isready','-U','rawrarr'],capture_output=True)
-                if result.returncode==0: break
-                time.sleep(.25)
-            relay_targets=json.dumps({'metadata-test':f'http://{prefix}-metadata:8080','storage-test':f'http://{prefix}-storage:8080'})
-            central=run('coordinator',args.image,'--network-alias','coordinator','-p','127.0.0.1::8080','-e','RAWARR_ROLE=coordinator','-e','RAWARR_PG_HOST=postgres','-e','RAWARR_PG_PASSWORD=disposable-fixture-password','-e','RAWARR_APPROVED_NODES_FILE=/registry','-e','RAWARR_COORDINATOR_WEB_RP_ID=localhost','-e','RAWARR_COORDINATOR_WEB_ORIGIN=http://localhost:8081','-e','RAWARR_NODE_RELAY_TARGETS='+relay_targets,'-v',f'{root}/registry:/registry:ro')
-            central_url=ready(central)
-            assert request(central_url,'/passkeys/add')[0]==200
-            assert request(central_url,'/api/passkeys/coordinator/register/start','POST',{'token':'invalid'})[0]==400
-            for path in ['/api/radarr/status','/api/settings/age','/api/settings/radarr','/api/library','/api/devices']:
-                assert request(central_url,path,bearer=token)[0]==404, path
-            status,body=request(central_url,'/')
-            assert status==200 and b'rawrarr' in body and b'Sign in' in body, 'anonymous coordinator root must show the public landing page and sign-in link'
-            status,body=request(central_url,'/auth')
-            assert status==200 and b'id="sign-in"' in body, 'anonymous coordinator auth route must show passkey sign-in'
-            assert request(central_url,'/health')[0]==200, 'coordinator health endpoint must remain public'
-            assert request(central_url,'/api/auth/status')[0]==200
-            assert request(central_url,'/api/workspace/nodes')[0]==401
-            assert not json.loads(docker('inspect',central))[0]['Mounts'][1:]
-            def subscriber(name, role, token_file, extra=()):
-                node_id = 'metadata-test' if role == 'metadata' and name == 'metadata' else 'storage-test' if role == 'storage' and name == 'storage' else name
-                return run(name,args.image,'-p','127.0.0.1::8080','-e','RAWARR_ROLE='+role,'-e','RAWARR_NODE_ID='+node_id,'-e','RAWARR_DEVICE_ID='+node_id,'-e','RAWARR_COORDINATOR_URL=http://coordinator:8080','-e','RAWARR_COORDINATOR_LOCAL_HTTP=true','-e','RAWARR_NODE_TOKEN_FILE=/token','-v',f'{root}/{token_file}:/token:ro','-v',f'{root}/shared:/shared','-v',f'{root}/data-{role}:/data',*extra)
-            metadata=subscriber('metadata','metadata','token')
-            metadata_url=ready(metadata)
-            web_proxy=prefix+'-coordinator-web-proxy'
-            containers.append(web_proxy)
-            docker('run','-d','--name',web_proxy,'--network','container:'+metadata,'caddy:2-alpine','caddy','reverse-proxy','--from',':8081','--to','coordinator:8080')
-            for _ in range(40):
-                probe=subprocess.run(['docker','exec',metadata,'curl','-fsS','http://127.0.0.1:8081/health'],capture_output=True)
-                if probe.returncode==0: break
-                time.sleep(.1)
-            else: raise AssertionError('Coordinator passkey origin proxy did not become ready')
-            storage=subscriber('storage','storage','storage-token',('-e','RAWARR_LIBRARY_PATH=/media','-v',f'{root}/media:/media:ro'))
-            storage_url=ready(storage)
-            assert request(metadata_url,'/api/auth/status')[0]==200
-            status, body=request(metadata_url,'/api/auth/register/start','POST',{'displayName':'Fixture Owner'})
-            assert status==200 and json.loads(body)['options']['publicKey']['rp']['id']=='localhost'
-            for base in [metadata_url,storage_url]: assert request(base,'/api/radarr/status')[0]==401
-            browser_test=(Path(__file__).parent / 'helpers/role_passkey_browser.mjs').resolve()
-            browser_run=subprocess.run(['docker','run','--rm','--network','container:'+metadata,'--entrypoint','node','-v',f'{browser_test}:/test.mjs:ro','rawrarr-testing-base:local','/test.mjs'],capture_output=True,text=True)
-            if browser_run.returncode:
-                raise AssertionError('Passkey browser integration failed: '+browser_run.stdout[-1500:]+' '+browser_run.stderr[-3000:])
-            print(browser_run.stdout.strip())
-            passkey_rows=docker('exec',pg,'psql','-U','rawrarr','-d','rawrarr','-Atc','SELECT count(*) || \'|\' || count(DISTINCT user_id) FROM rawrarr_passkeys')
-            assert passkey_rows=='2|1', 'coordinator passkey was not added to the existing account'
-            session=secrets.token_hex(16)
-            digest=hashlib.sha256(session.encode()).hexdigest()
-            sql=f"INSERT INTO rawrarr_sessions(token_hash,user_id,expires_at,node_id) SELECT decode('{digest}','hex'),id,now()+interval '1 hour','metadata-test' FROM rawrarr_users LIMIT 1;"
-            docker('exec','-i',pg,'psql','-U','rawrarr','-d','rawrarr','-v','ON_ERROR_STOP=1',input=sql)
-            assert request(metadata_url,'/api/devices',cookie=session)[0]==200
-            assert request(storage_url,'/api/devices',cookie=session)[0]==401, 'cross-node session accepted'
-            pending_token=secrets.token_hex(32)
-            status,body=request(central_url,'/api/nodes/enroll','POST',{
-                'nodeId':'mac-mini-storage','role':'storage','displayName':'Mac mini',
-                'origin':'http://localhost:7297','rpId':'localhost'
-            },bearer=pending_token)
-            assert status==201, body
-            request_id=json.loads(body)['requestId']
-            status,body=request(metadata_url,'/api/nodes/pending',cookie=session)
-            assert status==200 and any(n['nodeId']=='mac-mini-storage' for n in json.loads(body))
-            status,body=request(metadata_url,'/api/nodes/approve','POST',{'requestId':request_id},cookie=session)
-            assert status==204, body
-            assert request(central_url,'/api/auth/status',bearer=pending_token)[0]==200, 'approved node credential not activated'
-            assert request(central_url,'/api/nodes/register','POST',{'role':'storage'},bearer=pending_token)[0]==204
-            assert request(metadata_url,'/api/auth/logout','POST',{},session)[0]==200
-            assert request(metadata_url,'/api/devices',cookie=session)[0]==401, 'logout failed'
-            result=docker('exec',pg,'psql','-U','rawrarr','-d','rawrarr','-Atc','SELECT role FROM rawrarr_nodes ORDER BY role')
-            assert result.splitlines()==['metadata','storage','storage']
-            bad=subscriber('wrong-role','storage','token',('-e','RAWARR_LIBRARY_PATH=/media','-v',f'{root}/media:/media:ro'))
-            for _ in range(40):
-                if docker('inspect','--format','{{.State.Running}}',bad)=='false': break
-                time.sleep(.1)
-            assert docker('inspect','--format','{{.State.ExitCode}}',bad)!='0'
-            docker('stop',central)
-            assert request(metadata_url,'/api/devices',cookie=session)[0]==401
-            assert request(metadata_url,'/api/auth/status')[0]==503
-            print('PASS: isolated roles, owner-approved pending-node enrollment, node-scoped sessions, logout, role mismatch, and coordinator outage fail-closed behavior')
-        finally:
-            for name in reversed(containers):
-                subprocess.run(['docker','rm','-f',name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-            subprocess.run(['docker','network','rm',network],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 
-if __name__=='__main__': main()
+        def sidecar(node_id):
+            full = prefix + '-' + node_id + '-network'
+            containers.append(full)
+            docker('run', '-d', '--name', full, '--label', 'com.docker.compose.project=rawrarr-test-regression',
+                '--network', network, '--network-alias', node_id, 'alpine:3.21', 'sh', '-c',
+                'while true; do sleep 3600; done')
+            return full
+
+        def wait_node(namespace):
+            for _ in range(160):
+                state = docker('inspect', '--format', '{{.State.Running}}', namespace, check=False)
+                if state.returncode or state.stdout.strip() != 'true':
+                    raise AssertionError('subscriber exited before becoming ready: ' + namespace)
+                probe = docker('exec', namespace, 'curl', '-fsS', 'http://127.0.0.1:8080/health', check=False)
+                if probe.returncode == 0:
+                    return
+                time.sleep(0.25)
+            raise AssertionError('subscriber readiness timed out: ' + namespace)
+
+        def start_node(role, node_id, namespace=None, plaintext_config=False):
+            namespace = namespace or sidecar(node_id)
+            data_dir = root / ('metadata-data' if role == 'metadata' else 'storage-data')
+            shared = root / 'shared'
+            media_mount = ('-e', 'RAWARR_LIBRARY_PATH=/media', '-e', 'RAWARR_LIBRARY_NAME=Fixture library',
+                '-v', f'{root}/media:/media:ro') if role == 'storage' else ()
+            metadata_mount = ('-e', 'RAWARR_LOCAL_PLAINTEXT_CONFIG=' + ('true' if plaintext_config else 'false'),
+                '-e', 'RAWARR_ARR_CA_CERT_FILE=/test-ca/ca.crt',
+                '-v', f'{root}/test-ca:/test-ca:ro') if role == 'metadata' else ()
+            config_test_mount = ('-v', f'{Path(__file__).parent}/test_rawrarr_configuration.py:/tests/test_rawrarr_configuration.py:ro',)
+            node = run(node_id, args.image, '--network', 'container:' + namespace,
+                '-e', 'RAWARR_ROLE=' + role, '-e', 'RAWARR_NODE_ID=' + node_id,
+                '-e', 'RAWARR_DEVICE_ID=' + node_id, '-e', 'RAWARR_DEVICE_NAME=' + node_id,
+                '-e', 'RAWARR_PG_HOST=postgres', '-e', 'RAWARR_PG_DATABASE=rawrarr_test', '-e', 'RAWARR_PG_PASSWORD=disposable-fixture-password',
+                '-e', 'RAWARR_COORDINATOR_URL=http://coordinator:8080', '-e', 'RAWARR_COORDINATOR_LOCAL_HTTP=true',
+                '-e', 'RAWARR_NODE_TOKEN_FILE=/data/node-token', '-e', 'RAWARR_NODE_ENROLLMENT_ENABLED=true',
+                '-e', 'RAWARR_INSTANCE_ROOT_FINGERPRINT=' + root_fingerprint,
+                '-e', 'RAWARR_WEBAUTHN_RP_ID=localhost', '-e', 'RAWARR_WEBAUTHN_ORIGIN=http://localhost:8081',
+                '-e', 'RUST_ARR_LISTEN_ADDR=0.0.0.0:8080',
+                '-v', f'{data_dir}:/data', '-v', f'{shared}:/shared', *media_mount, *metadata_mount, *config_test_mount)
+            return namespace, node
+
+        try:
+            docker('network', 'create', network)
+            postgres = run('postgres', 'postgres:17-alpine', '--network', network, '--network-alias', 'postgres',
+                '-e', 'POSTGRES_PASSWORD=disposable-fixture-password', '-e', 'POSTGRES_USER=rawrarr', '-e', 'POSTGRES_DB=rawrarr_test')
+            for _ in range(100):
+                if docker('exec', postgres, 'pg_isready', '-U', 'rawrarr', check=False).returncode == 0:
+                    break
+                time.sleep(0.25)
+            else:
+                raise RuntimeError('disposable PostgreSQL did not become ready')
+
+            coordinator = run('coordinator', args.image, '--network', network, '--network-alias', 'coordinator',
+                '-p', f'127.0.0.1:{free_port()}:8080', '--entrypoint', '/usr/local/bin/rust-arr',
+                '-e', 'RAWARR_ROLE=coordinator', '-e', 'RAWARR_PG_HOST=postgres', '-e', 'RAWARR_PG_DATABASE=rawrarr_test',
+                '-e', 'RAWARR_PG_PASSWORD=disposable-fixture-password',
+                '-e', 'RAWARR_APPROVED_NODES_FILE=/registry.json', '-e', 'RAWARR_COORDINATOR_WEB_RP_ID=localhost',
+                '-e', 'RAWARR_COORDINATOR_WEB_ORIGIN=http://localhost:8081',
+                '-e', 'RAWARR_NODE_RELAY_TARGETS=' + json.dumps({'metadata-test': f'http://{prefix}-metadata-test-network:8080', 'storage-test': f'http://{prefix}-storage-test-network:8080'}),
+                '-e', 'RAWARR_NODE_DIRECT_TARGETS={}', '-e', 'RUST_ARR_LISTEN_ADDR=0.0.0.0:8080',
+                '-v', f'{root}/registry.json:/registry.json:ro')
+            for _ in range(100):
+                if docker('exec', coordinator, 'curl', '-fsS', 'http://127.0.0.1:8080/health', check=False).returncode == 0:
+                    break
+                time.sleep(0.25)
+            else:
+                raise RuntimeError('disposable coordinator did not become ready')
+
+            metadata_namespace = sidecar('metadata-test')
+            caddy = prefix + '-coordinator-web-proxy'
+            containers.append(caddy)
+            docker('run', '-d', '--name', caddy, '--label', 'com.docker.compose.project=rawrarr-test-regression',
+                '--network', 'container:' + metadata_namespace, 'caddy:2-alpine', 'caddy', 'reverse-proxy',
+                '--from', ':8081', '--to', 'coordinator:8080')
+            browser_helper = (Path(__file__).parent / 'helpers/role_passkey_browser.mjs').resolve()
+            helper = subprocess.Popen(
+                ['docker', 'run', '-i', '--rm', '--network', 'container:' + metadata_namespace,
+                 '--entrypoint', 'node', '-v', f'{browser_helper}:/test.mjs:ro', args.browser_image, '/test.mjs'],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1,
+            )
+            line = helper.stdout.readline().strip()
+            if not line.startswith('READY ') or len(line.split()) != 2:
+                detail = helper.stderr.read()[-2000:] if helper.poll() is not None else 'browser bootstrap emitted no readiness marker'
+                raise RuntimeError('owner browser bootstrap failed: ' + detail)
+            root_fingerprint = line.split()[1]
+            if len(root_fingerprint) != 64:
+                raise RuntimeError('owner browser returned an invalid public root fingerprint')
+
+            metadata_namespace, metadata = start_node('metadata', 'metadata-test', metadata_namespace, plaintext_config=True)
+            helper.stdin.write('approve metadata-test\n')
+            helper.stdin.flush()
+            if not helper.stdout.readline().startswith('APPROVED metadata-test'):
+                raise RuntimeError('owner did not approve metadata enrollment')
+            wait_node(metadata)
+
+            storage_namespace, storage = start_node('storage', 'storage-test')
+            helper.stdin.write('approve storage-test\n')
+            helper.stdin.flush()
+            if not helper.stdout.readline().startswith('APPROVED storage-test'):
+                raise RuntimeError('owner did not approve storage enrollment')
+            wait_node(storage)
+            print('PASS real Chromium passkey owner setup, encrypted root creation, and signed metadata/storage approval')
+
+            rows = docker('exec', postgres, 'psql', '-U', 'rawrarr', '-d', 'rawrarr_test', '-Atc', "SELECT role FROM rawrarr_nodes ORDER BY role").stdout.splitlines()
+            assert rows == ['metadata', 'storage'], 'approved role rows were not persisted in PostgreSQL'
+            passkeys = docker('exec', postgres, 'psql', '-U', 'rawrarr', '-d', 'rawrarr_test', '-Atc', 'SELECT count(*) FROM rawrarr_passkeys').stdout.strip()
+            assert passkeys == '1', 'initial coordinator passkey was not persisted'
+
+            user_id = docker('exec', postgres, 'psql', '-U', 'rawrarr', '-d', 'rawrarr_test', '-Atc', 'SELECT id FROM rawrarr_users LIMIT 1').stdout.strip()
+            session = secrets.token_hex(32)
+            digest = hashlib.sha256(session.encode()).hexdigest()
+            sql = f"INSERT INTO rawrarr_sessions(token_hash,user_id,expires_at,node_id) VALUES(decode('{digest}','hex'),'{user_id}'::uuid,now()+interval '5 minutes','metadata-test')"
+            docker('exec', '-i', postgres, 'psql', '-U', 'rawrarr', '-d', 'rawrarr_test', '-v', 'ON_ERROR_STOP=1', input=sql)
+            metadata_status = docker('exec', metadata, 'python3', '-c',
+                "import urllib.request; r=urllib.request.Request('http://127.0.0.1:8080/api/devices',headers={'Cookie':'rawrarr_session=" + session + "'}); print(urllib.request.urlopen(r).status)").stdout.strip()
+            storage_status = docker('exec', storage, 'python3', '-c',
+                "import urllib.request,urllib.error; r=urllib.request.Request('http://127.0.0.1:8080/api/devices',headers={'Cookie':'rawrarr_session=" + session + "'});\ntry: print(urllib.request.urlopen(r).status)\nexcept urllib.error.HTTPError as e: print(e.code)").stdout.strip()
+            assert metadata_status == '200' and storage_status == '401', 'session was not scoped to its metadata node'
+            print('PASS PostgreSQL-backed sessions are scoped to the approved node')
+
+            config_full = docker('exec', '-i', metadata, 'python3', '/tests/test_rawrarr_configuration.py', 'metadata',
+                input=json.dumps({'session': session}))
+            if config_full.returncode:
+                raise RuntimeError('configuration API integration failed: ' + config_full.stderr.strip())
+            output_lines = config_full.stdout.splitlines()
+            identity_line = next((line for line in output_lines if line.startswith('TEST_IDENTITY_B64:')), None)
+            if identity_line is None:
+                raise RuntimeError('configuration integration did not return its temporary age identity')
+            test_identity = base64.b64decode(identity_line.removeprefix('TEST_IDENTITY_B64:')).decode()
+            print('\n'.join(line for line in output_lines if not line.startswith('TEST_IDENTITY_B64:')))
+
+            storage_session = secrets.token_hex(32)
+            storage_digest = hashlib.sha256(storage_session.encode()).hexdigest()
+            storage_sql = f"INSERT INTO rawrarr_sessions(token_hash,user_id,expires_at,node_id) VALUES(decode('{storage_digest}','hex'),'{user_id}'::uuid,now()+interval '5 minutes','storage-test')"
+            docker('exec', '-i', postgres, 'psql', '-U', 'rawrarr', '-d', 'rawrarr_test', '-v', 'ON_ERROR_STOP=1', input=storage_sql)
+            config_storage = docker('exec', '-i', storage, 'python3', '/tests/test_rawrarr_configuration.py', 'storage',
+                input=json.dumps({'session': storage_session, 'identity': test_identity}))
+            if config_storage.returncode:
+                raise RuntimeError('storage configuration integration failed: ' + config_storage.stderr.strip())
+            print(config_storage.stdout.strip())
+
+            docker('stop', metadata)
+            docker('rm', metadata)
+            metadata_namespace, metadata = start_node('metadata', 'metadata-test', metadata_namespace, plaintext_config=False)
+            wait_node(metadata)
+            config_locked = docker('exec', '-i', metadata, 'python3', '/tests/test_rawrarr_configuration.py', 'locked',
+                input=json.dumps({'session': session}))
+            if config_locked.returncode:
+                raise RuntimeError('configuration restart integration failed: ' + config_locked.stderr.strip())
+            print(config_locked.stdout.strip())
+
+            wrong_namespace = sidecar('wrong-role')
+            bad = run('wrong-role', args.image, '--network', 'container:' + wrong_namespace,
+                '-e', 'RAWARR_ROLE=storage', '-e', 'RAWARR_NODE_ID=metadata-test', '-e', 'RAWARR_DEVICE_ID=wrong-role',
+                '-e', 'RAWARR_PG_HOST=postgres', '-e', 'RAWARR_PG_PASSWORD=disposable-fixture-password',
+                '-e', 'RAWARR_COORDINATOR_URL=http://coordinator:8080', '-e', 'RAWARR_COORDINATOR_LOCAL_HTTP=true',
+                '-e', 'RAWARR_NODE_TOKEN_FILE=/token', '-e', 'RAWARR_NODE_ENROLLMENT_ENABLED=true',
+                '-e', 'RAWARR_INSTANCE_ROOT_FINGERPRINT=' + root_fingerprint,
+                '-e', 'RAWARR_WEBAUTHN_RP_ID=localhost', '-e', 'RAWARR_WEBAUTHN_ORIGIN=http://localhost:8081',
+                '-v', f'{root}/metadata-data/node-token:/token:ro', '-v', f'{root}/coordinator-data:/data')
+            for _ in range(100):
+                state = json.loads(docker('inspect', bad).stdout)[0]['State']
+                if state['Status'] == 'exited':
+                    break
+                time.sleep(0.2)
+            assert state['Status'] == 'exited' and state['ExitCode'] != 0, 'a metadata credential was accepted for storage role'
+            print('PASS role mismatch fails closed')
+
+            docker('stop', coordinator)
+            outage = docker('exec', metadata, 'python3', '-c',
+                "import urllib.request,urllib.error;\ntry: print(urllib.request.urlopen('http://127.0.0.1:8080/api/nodes/pending').status)\nexcept urllib.error.HTTPError as e: print(e.code)\nexcept Exception: print('unavailable')").stdout.strip()
+            assert outage in ('401', '503', 'unavailable'), 'metadata node did not fail closed during coordinator outage'
+            print('PASS coordinator outage fails closed')
+        finally:
+            if helper and helper.poll() is None:
+                try:
+                    helper.stdin.write('quit\n')
+                    helper.stdin.flush()
+                    helper.wait(timeout=10)
+                except Exception:
+                    helper.terminate()
+                    helper.wait(timeout=5)
+            for name in reversed(containers):
+                subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(['docker', 'network', 'rm', network], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    print('PASS disposable containers, network, PostgreSQL, DB rows, and temporary files cleaned up')
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        raise SystemExit(main())
+    except (AssertionError, OSError, RuntimeError, subprocess.SubprocessError) as error:
+        print('FAIL Rawrarr role integration: ' + str(error), file=__import__('sys').stderr)
+        raise SystemExit(1)

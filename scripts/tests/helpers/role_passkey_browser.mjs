@@ -1,40 +1,61 @@
-// Invoked only by test_rawrarr_role_deployment.py against its disposable metadata node.
+// Interactive owner-side bootstrap for the disposable role deployment test.
+// Private age/root material remains in this browser process and is never printed.
 import assert from 'node:assert/strict';
+import readline from 'node:readline';
 import { chromium } from '/usr/local/lib/node_modules/playwright-core/index.mjs';
-const browser = await chromium.launch({headless:true, executablePath:'/usr/bin/chromium', args:['--no-sandbox']});
+
+const origin = 'http://localhost:8081';
+const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
 try {
   const context = await browser.newContext();
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const page = await context.newPage();
-  page.on('response', response => {
-    if (response.url().includes('/api/auth/register/finish')) {
-      console.log(`registration finish HTTP ${response.status()}`);
-    }
-  });
   const cdp = await context.newCDPSession(page);
   await cdp.send('WebAuthn.enable');
-  await cdp.send('WebAuthn.addVirtualAuthenticator', {options:{protocol:'ctap2', transport:'internal', hasResidentKey:true, hasUserVerification:true, isUserVerified:true, automaticPresenceSimulation:true}});
-  await page.goto('http://localhost:8080/auth');
-  await page.locator('#display-name').fill('Fixture Owner');
+  await cdp.send('WebAuthn.addVirtualAuthenticator', { options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } });
+
+  await page.goto(`${origin}/auth`);
   await page.locator('#create-passkey').click();
-  try { await page.waitForURL('**/setup/age', {timeout:15000}); }
-  catch { throw new Error(`Initial passkey setup did not continue: ${page.url()} — ${await page.locator('#message').innerText()}`); }
-  assert.equal((await page.request.get('http://localhost:8080/api/devices')).status(),200);
-  assert.equal((await page.request.post('http://localhost:8080/api/auth/logout')).status(),200);
-  await page.goto('http://localhost:8080/auth');
-  await page.locator('#sign-in').click();
-  await page.waitForURL('**/setup/age', {timeout:15000});
-  assert.equal((await page.request.get('http://localhost:8080/api/devices')).status(),200);
-  await page.goto('http://localhost:8080/setup/age');
-  await page.locator('#add-coordinator-passkey').click();
-  await page.locator('#create-passkey').click();
-  await page.getByText(/Passkey added to your existing Rawrarr account/).waitFor({timeout:15000});
-  assert.match(page.url(), /^http:\/\/localhost:8081\/passkeys\/add$/);
-  await page.goto('http://localhost:8081/');
-  await page.locator('#sign-in').click();
-  await page.waitForURL('http://localhost:8081/', {timeout:15000});
-  await page.locator('#node-page').waitFor({state:'visible', timeout:15000});
-  await page.frameLocator('#node-page').getByText(/unlock your rawrchive/i).waitFor({timeout:15000});
-  assert.match(page.url(), /^http:\/\/localhost:8081\/$/);
-  assert.equal(await page.locator('#node-page').getAttribute('src'), '/nodes/metadata-test/');
-  console.log('PASS: real browser virtual-passkey registration, coordinator sign-in, and metadata page relay');
-} finally { await browser.close(); }
+  await page.waitForURL('**/setup/node', { timeout: 20000 });
+  await page.locator('#create-age').click();
+  await page.locator('#copy-age').click();
+  const ageIdentity = await page.evaluate(() => navigator.clipboard.readText());
+  assert.match(ageIdentity, /^AGE-SECRET-KEY-PQ-1/);
+  await page.locator('#age-backed-up').check();
+  await page.locator('#create-root').click();
+  await page.locator('#root-fingerprint').getByText(/Instance root fingerprint:/).waitFor({ timeout: 30000 });
+  const rootFingerprint = (await page.locator('#root-fingerprint').innerText()).match(/[0-9a-f]{64}/i)?.[0];
+  assert.ok(rootFingerprint);
+  await page.locator('#copy-root').click();
+  const rootBackup = await page.evaluate(() => navigator.clipboard.readText());
+  assert.match(rootBackup, /^-----BEGIN AGE ENCRYPTED FILE-----/);
+  console.log(`READY ${rootFingerprint}`);
+
+  const lines = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+  for await (const command of lines) {
+    if (command === 'quit') break;
+    const match = /^approve ([a-z0-9-]+)$/.exec(command);
+    if (!match) throw new Error('unknown test-helper command');
+    const nodeId = match[1];
+    await page.goto(origin);
+    const signIn = page.locator('#sign-in');
+    if (await signIn.isVisible().catch(() => false)) {
+      await signIn.click();
+      await page.waitForURL(origin, { timeout: 15000 });
+    }
+    await page.locator('[data-view="devices"]').click();
+    const request = page.locator('#pending .pending-item').filter({ hasText: nodeId });
+    await request.waitFor({ timeout: 60000 });
+    await request.getByRole('button', { name: 'Approve' }).click();
+    await page.locator('#approve-node-age-id').fill(ageIdentity);
+    await page.locator('#approve-node-root-backup').fill(rootBackup);
+    await page.locator('#approve-node-root-fingerprint').fill(rootFingerprint);
+    await page.locator('#approve-node-form [type="submit"]').click();
+    await page.locator('#approve-node-dialog').waitFor({ state: 'hidden', timeout: 60000 });
+    await request.waitFor({ state: 'detached', timeout: 30000 });
+    console.log(`APPROVED ${nodeId}`);
+  }
+  await page.close();
+} finally {
+  await browser.close();
+}
