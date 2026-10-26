@@ -788,6 +788,9 @@ async function loadClusterConfiguration() {
   try {
     await import('/assets/metadata-export.js');
     const route = await chooseNodeRoute(node);
+    if (!route || typeof route.base !== 'string' || !route.base.trim()) {
+      throw new Error('No usable route is available to read the shared configuration.');
+    }
     const config = await window.rawrarrMiniExport.loadSharedConfig(identity, route.base);
     configurationJson.textContent = JSON.stringify(redactConfigSecrets(config), null, 2);
     clearConfigStrings(config);

@@ -337,10 +337,12 @@ test('coordinator workspace selects nodes, reads Radarr directly, and keeps conf
   assert.match(workspaceScript, /if \(view === 'configuration' && updateHash\) void loadClusterConfiguration\(\)/);
   assert.match(workspaceScript, /if \(location\.hash === '#configuration'\) void loadClusterConfiguration\(\)/);
   assert.match(workspaceScript, /window\.rawrarrMiniExport\.loadSharedConfig\(identity, route\.base\)/);
+  assert.match(workspaceScript, /if \(!route \|\| typeof route\.base !== 'string' \|\| !route\.base\.trim\(\)\)/);
   assert.match(workspaceScript, /function redactConfigSecrets/);
   assert.match(workspaceScript, /secretConfigKey = .*username/);
   assert.match(workspaceScript, /'<REDACTED>'/);
   assert.match(metadataExport, /loadSharedConfig/);
+  assert.match(metadataExport, /typeof base !== 'string' \|\| !base\.trim\(\)/);
   assert.match(workspaceScript, /base: `\/nodes\/\$\{encodeURIComponent\(node\.nodeId\)\}`/);
   assert.match(workspaceScript, /movie-count/);
   assert.match(workspaceScript, /poster\.loading = 'lazy'/);
