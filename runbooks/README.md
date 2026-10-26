@@ -45,6 +45,8 @@
 # Rawrarr runbooks
 
 - [Fix database integration tests](2026-10-26-fix-db-integrations.md) — Update the disposable coordinator, node, and configuration integrations for explicit roles, coordinator trust, and current owner bootstrap (issue [#130](https://github.com/willjasen/rawrarr/issues/130)).
+- [Restore the MacBook direct route](2026-10-26-restore-macbook-direct-route.md) — Update the MacBook subscriber to match the coordinator's direct health and session endpoints (issue [#141](https://github.com/willjasen/rawrarr/issues/141)).
+
 - [Route the Mac mini fossil through Tailscale Serve](2026-10-26-route-mac-mini-fossil.md) — Configure the enrolled Mac mini subscriber's tailnet routes and coordinator mappings so its avatar and browser endpoints are reachable (issue [#136](https://github.com/willjasen/rawrarr/issues/136)).
 
 - [Test fossil host port isolation](2026-10-26-fossil-port-forward-tests.md) — Add generated-Compose regression and live two-fossil OrbStack checks for host-published ports (issue [#126](https://github.com/willjasen/rawrarr/issues/126)).
