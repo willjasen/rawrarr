@@ -43,6 +43,8 @@
 
 # Rawrarr runbooks
 
+- [Show identity domains in the coordinator About page](2026-10-26-identity-domains-about.md) — Explain user, device, group, and app identity purposes and current/planned behavior in the app (issue [#95](https://github.com/willjasen/rawrarr/issues/95)).
+
 - [Define user, device, group, and app identity domains](2026-10-26-identity-domains.md) — Consolidate key ownership and purpose, distinguish implemented behavior from planned group/app lifecycles, and link current design references (issue [#95](https://github.com/willjasen/rawrarr/issues/95)).
 
 - [Regression and browser coverage for implemented behavior gaps](2026-10-26-regression-browser-coverage.md) — Add storage scan cancellation coverage and coordinator reconnect browser coverage; document the existing Radarr mirror lifecycle integration test (issue [#120](https://github.com/willjasen/rawrarr/issues/120)).

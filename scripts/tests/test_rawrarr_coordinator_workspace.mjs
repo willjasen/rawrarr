@@ -21,6 +21,21 @@ const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, me
   read('docker-compose.internal-mini.yml'),
 ]);
 
+test('About explains all four identity domains and marks planned capabilities clearly', () => {
+  const about = workspace.match(/<section id="about-view"[\s\S]*?<\/section>/)?.[0];
+  assert.ok(about, 'About section exists');
+  assert.match(about, /Four identity domains/);
+  assert.match(about, /<h3>User<\/h3><span class="about-identity-status">Current<\/span>/);
+  assert.match(about, /<h3>Device<\/h3><span class="about-identity-status">Current<\/span>/);
+  assert.match(about, /<h3>Group<\/h3><span class="about-identity-status planned">Planned<\/span>/);
+  assert.match(about, /<h3>App<\/h3><span class="about-identity-status planned">Planned<\/span>/);
+  assert.match(about, /config\.aged<\/code> will be encrypted to it/);
+  assert.match(about, /Every approved group node can access app IDs for now/);
+  assert.match(about, /moving an app between fossil nodes preserves its metadata identity/);
+  assert.match(about, /Tailscale Serve can route node messages, but it carries ciphertext only/);
+  assert.doesNotMatch(about, /AGE-SECRET-KEY|PRIVATE KEY|AGE-SECRET-KEY-PQ/);
+});
+
 test('coordinator labels the Sonarr section TV in navigation and its page heading', () => {
   assert.doesNotMatch(workspace, /id="tv-route-status" class="route-status"/);
   assert.match(workspace, /data-view=\"series\"[^>]*>[\s\S]*?<span class=\"nav-text\">TV<\/span>/);
