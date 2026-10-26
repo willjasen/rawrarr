@@ -95,9 +95,11 @@ test('coordinator saves Radarr and Sonarr settings over the direct metadata rout
   await page.locator('#unlock').click();
   await page.waitForFunction(() => document.getElementById('age-id').value === '');
   assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
+  await page.locator('#radarr-node-note').getByText('Radarr is not configured on metadata-one.').waitFor();
   await page.click('[data-view="series"]');
   assert.equal(new URL(page.url()).hash, '#tv');
   await page.locator('#sonarr-settings-message').getByText('Enter your Sonarr HTTPS URL and API key.').waitFor();
+  await page.locator('#sonarr-node-note').getByText('Sonarr is not configured on metadata-one.').waitFor();
   await page.locator('#sonarr-url').fill('https://sonarr.example.test');
   await page.locator('#sonarr-key').fill('sonarr-secret-api-key');
   await page.click('#save-sonarr');
