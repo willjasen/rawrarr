@@ -110,3 +110,11 @@ test('saving a weekly schedule sends PUT and clears its draft only after success
   assert.match(summary.textContent, /Schedule saved.*Next scan/);
   assert.equal(harness.controls.save.disabled, false);
 });
+
+test('Stop scan is visible only while a scan is active and sends owner-routed cancellation', () => {
+  assert.match(workspace, /stopButton\.textContent = 'Stop scan'/);
+  assert.match(workspace, /stopButton\.hidden = !storageScansActive\.has\(node\.nodeId\)/);
+  assert.match(workspace, /storageScanRequest\(node, '\/api\/library\/scan\/cancel', \{\}, 'POST'\)/);
+  assert.match(workspace, /renderStorageScanStatus\(node\.nodeId, 'Stopping after the current file…'\)/);
+  assert.match(workspace, /storageScanStatusByNode/);
+});
