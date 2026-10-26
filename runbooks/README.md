@@ -42,7 +42,7 @@
 
 # Rawrarr runbooks
 
-- [Garage-inspired Valkey mirror and repair design](2026-10-26-garage-inspired-valkey-repair.md) — Record `/shared` authority, rebuildable Valkey metadata mirroring, Garage-style Merkle/RPC repair, and safe-majority failover constraints (issue [#100](https://github.com/willjasen/rawrarr/issues/100)).
+- [Garage-inspired Valkey mirror and repair design](2026-10-26-garage-inspired-valkey-repair.md) — Record `/shared` authority, rebuildable Valkey metadata mirroring, Garage-style Merkle/RPC repair, and deferred third-node/failover constraints (issue [#100](https://github.com/willjasen/rawrarr/issues/100)).
 
 - [Peer metadata synchronization design decisions](2026-10-26-peer-metadata-sync-design-decisions.md) — Record user-only device membership, device-key RPC authentication, versioned object/logical Merkle mapping, deterministic newest-revision convergence, tombstone acknowledgements, and revision history retention (issue [#100](https://github.com/willjasen/rawrarr/issues/100)).
 
