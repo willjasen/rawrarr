@@ -36,8 +36,7 @@
 - `test_rawrarr_device_routes.mjs` — checks the shared all-device route-status helper for Direct, Relay, and Offline states, Redis cache reachability in measured node latency, cached probes, and explicit refresh. Run with `node --test scripts/tests/test_rawrarr_device_routes.mjs`.
 - `test_rawrarr_device_routes.mjs` — checks the shared all-device route-status helper for Direct, Relay, and Offline states, Redis cache reachability in measured node latency, probe caching, and explicit refresh. Run with `node --test scripts/tests/test_rawrarr_device_routes.mjs`.
 
-- `test_rawrarr_node_network_isolation.mjs` — checks that metadata/storage have no published host ports and share a Tailscale namespace with loopback-only listeners and relay targets. Requires Node.js; run `node --test scripts/tests/test_rawrarr_node_network_isolation.mjs`.
-- `test_rawrarr_node_network_isolation.mjs` — also checks both metadata Compose variants use Valkey with bounded, non-persistent cache settings, health checks, local-only access, and the opt-in default disabled. Run `node --test scripts/tests/test_rawrarr_node_network_isolation.mjs`.
+- `test_rawrarr_node_network_isolation.mjs` — checks that metadata/storage have no host-published application ports; metadata shares its Tailscale namespace with loopback-only listeners; and both metadata Compose variants use Valkey with bounded, non-persistent cache settings, health checks, and the opt-in default disabled. Requires Node.js; run `node --test scripts/tests/test_rawrarr_node_network_isolation.mjs`.
 
 - `test_rawrarr_mini_export.mjs` — headless Chromium mini-export test using real post-quantum ciphertext from the `age` CLI; verifies browser decryption, HMAC filename matching, local ZIP contents, wrong-key handling, and that the private ID is never sent. Run in the isolated Playwright test image.
 
