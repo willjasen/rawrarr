@@ -31,8 +31,22 @@ class UiBundleTests(unittest.TestCase):
             "assets": assets or [
                 {"name": "ui-bundle.zip", "id": 1},
                 {"name": "ui-bundle.zip.sha256", "id": 2},
+                {"name": "ui-bundle.zip.sig", "id": 3},
             ],
         }
+
+    @staticmethod
+    def verify_signature(folder):
+        key = pathlib.Path(folder) / "publisher.pem"
+        key.write_text("test public key")
+        return (
+            patch.object(updater, "PINNED_PUBLIC_KEY_FILE", key),
+            patch.object(
+                updater.subprocess,
+                "run",
+                return_value=updater.subprocess.CompletedProcess(["openssl"], 0),
+            ),
+        )
 
     def test_package_allowlist_and_checksum(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -54,10 +68,12 @@ class UiBundleTests(unittest.TestCase):
             token = pathlib.Path(folder) / "token"
             token.write_text("test-token")
             root = pathlib.Path(folder) / "ui"
-            responses = [json.dumps(release).encode(), bundle, digest]
-            with patch.object(updater, "fetch", side_effect=responses):
+            responses = [json.dumps(release).encode(), bundle, digest, b"test-signature"]
+            key_patch, openssl_patch = self.verify_signature(folder)
+            with key_patch, openssl_patch, patch.object(updater, "fetch", side_effect=responses):
                 self.assertEqual(updater.update("owner/repo", token, root, False), "dry-run")
-            with patch.object(updater, "fetch", side_effect=responses):
+            key_patch, openssl_patch = self.verify_signature(folder)
+            with key_patch, openssl_patch, patch.object(updater, "fetch", side_effect=responses):
                 self.assertEqual(updater.update("owner/repo", token, root, True), "installed")
             current = root / "current"
             self.assertEqual((current / "ui.html").read_text(), "<h1>new</h1>")
@@ -76,6 +92,7 @@ class UiBundleTests(unittest.TestCase):
             "assets": [
                 {"name": "ui-bundle.zip", "id": 41},
                 {"name": "ui-bundle.zip.sha256", "id": 42},
+                {"name": "ui-bundle.zip.sig", "id": 43},
             ],
         }
         with tempfile.TemporaryDirectory() as folder:
@@ -92,9 +109,12 @@ class UiBundleTests(unittest.TestCase):
                     return bundle
                 if url.endswith("/assets/42"):
                     return f"{digest}  ui-bundle.zip\n".encode()
+                if url.endswith("/assets/43"):
+                    return b"test-signature"
                 self.fail(f"unexpected GitHub API request: {url}")
 
-            with patch.object(updater, "fetch", side_effect=github_fetch):
+            key_patch, openssl_patch = self.verify_signature(folder)
+            with key_patch, openssl_patch, patch.object(updater, "fetch", side_effect=github_fetch):
                 self.assertEqual(updater.update("owner/repo", token_file, root, True), "installed")
             self.assertEqual(
                 [request[0] for request in requests],
@@ -102,6 +122,7 @@ class UiBundleTests(unittest.TestCase):
                     "https://api.github.com/repos/owner/repo/releases/latest",
                     "https://api.github.com/repos/owner/repo/releases/assets/41",
                     "https://api.github.com/repos/owner/repo/releases/assets/42",
+                    "https://api.github.com/repos/owner/repo/releases/assets/43",
                 ],
             )
             self.assertTrue(all(request[1] == "protected-test-token" for request in requests))
@@ -112,9 +133,10 @@ class UiBundleTests(unittest.TestCase):
             self.assertEqual((root / "current" / "bundle.sha256").read_text().strip(), digest)
 
             requests.clear()
-            with patch.object(updater, "fetch", side_effect=github_fetch):
+            key_patch, openssl_patch = self.verify_signature(folder)
+            with key_patch, openssl_patch, patch.object(updater, "fetch", side_effect=github_fetch):
                 self.assertEqual(updater.update("owner/repo", token_file, root, True), "current")
-            self.assertEqual(len(requests), 3)
+            self.assertEqual(len(requests), 4)
 
     def test_rejects_bad_checksum_and_traversal(self):
         buffer = io.BytesIO()
@@ -125,11 +147,29 @@ class UiBundleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             token = pathlib.Path(folder) / "token"
             token.write_text("test-token")
-            with patch.object(updater, "fetch", side_effect=[json.dumps(release).encode(), bundle, b"0" * 64]):
+            key_patch, openssl_patch = self.verify_signature(folder)
+            with (
+                key_patch,
+                openssl_patch,
+                patch.object(
+                    updater,
+                    "fetch",
+                    side_effect=[json.dumps(release).encode(), bundle, b"0" * 64, b"test-signature"],
+                ),
+            ):
                 with self.assertRaisesRegex(ValueError, "checksum mismatch"):
                     updater.update("owner/repo", token, pathlib.Path(folder) / "ui", True)
             digest = hashlib.sha256(bundle).hexdigest().encode()
-            with patch.object(updater, "fetch", side_effect=[json.dumps(release).encode(), bundle, digest]):
+            key_patch, openssl_patch = self.verify_signature(folder)
+            with (
+                key_patch,
+                openssl_patch,
+                patch.object(
+                    updater,
+                    "fetch",
+                    side_effect=[json.dumps(release).encode(), bundle, digest, b"test-signature"],
+                ),
+            ):
                 with self.assertRaisesRegex(ValueError, "unsafe path"):
                     updater.update("owner/repo", token, pathlib.Path(folder) / "ui", True)
             self.assertFalse((pathlib.Path(folder) / "escape").exists())
@@ -144,7 +184,7 @@ class UiBundleTests(unittest.TestCase):
             current.mkdir(parents=True)
             (current / "ui.html").write_text("trusted")
             with patch.object(updater, "fetch", return_value=json.dumps(release).encode()):
-                with self.assertRaisesRegex(ValueError, "missing its bundle or checksum"):
+                with self.assertRaisesRegex(ValueError, "missing its bundle, checksum, or signature"):
                     updater.update("owner/repo", token, root, True)
             self.assertEqual((current / "ui.html").read_text(), "trusted")
 

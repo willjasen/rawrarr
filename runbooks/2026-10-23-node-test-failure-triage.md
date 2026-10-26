@@ -53,3 +53,9 @@ The verified age-setup test adjustment is saved on this branch. The coordinator 
 - Rebuilt the regression dependency image for the clean candidate, then ran `python3 scripts/tests/run_rawrarr_tests_in_docker.py --context orbstack`.
 - Verification on the clean candidate: Node 122 passed / 0 failed; Playwright 1 passed; Rust 82 passed / 0 failed. Python integration checks were skipped because the unit-test container does not provide PostgreSQL, age, or Syncthing fixtures. Overall container regression result: passed.
 - Final test logs are retained in `rawrarr-test-regression-tests-mvok2jhx`.
+
+## GitHub check follow-up
+
+- PR #67's required `Basic script tests` check exposed stale UI-bundle updater fixtures: current `main` requires a `.sig` release asset and configured publisher key before checksum and archive validation.
+- Updated the fixtures to include the signature asset and mock the OpenSSL verification boundary; retained coverage for install, repeated checks, checksum mismatch, unsafe archive paths, and rejection of incomplete releases.
+- Local verification: `python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v` passed all 34 tests; `git diff --check` passed. The PR check must be rerun against the pushed fix.
