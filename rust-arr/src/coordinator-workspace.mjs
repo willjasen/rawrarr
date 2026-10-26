@@ -622,6 +622,7 @@ async function unlockMetadataVaultForSettings() {
 
 const arrSettings = {
   radarr: {
+    overviewCards: ['overview-radarr-card', 'overview-radarr-genres-card'],
     copies: [
       { url: 'radarr-url', key: 'radarr-key', uiUsername: 'radarr-ui-username', uiPassword: 'radarr-ui-password', uiNote: 'radarr-ui-auth-note', form: 'radarr-settings', note: 'radarr-key-note', message: 'radarr-settings-message', button: 'save-radarr', clear: 'clear-radarr', nodeNote: 'radarr-node-note' },
       { url: 'settings-radarr-url', key: 'settings-radarr-key', uiUsername: 'settings-radarr-ui-username', uiPassword: 'settings-radarr-ui-password', uiNote: 'settings-radarr-ui-auth-note', form: 'settings-radarr-settings', note: 'settings-radarr-key-note', message: 'settings-radarr-settings-message', button: 'settings-save-radarr', clear: 'settings-clear-radarr', nodeNote: 'settings-radarr-node-note' },
@@ -629,6 +630,7 @@ const arrSettings = {
     mediaCard: 'radarr-connection-card', saved: 'settings-radarr-saved', savedUrl: 'settings-radarr-saved-url', endpoint: '/settings/radarr', label: 'Radarr',
   },
   sonarr: {
+    overviewCards: ['overview-sonarr-card', 'overview-sonarr-genres-card'],
     copies: [
       { url: 'sonarr-url', key: 'sonarr-key', form: 'sonarr-settings', note: 'sonarr-key-note', message: 'sonarr-settings-message', button: 'save-sonarr', clear: 'clear-sonarr', nodeNote: 'sonarr-node-note' },
       { url: 'settings-sonarr-url', key: 'settings-sonarr-key', form: 'settings-sonarr-settings', note: 'settings-sonarr-key-note', message: 'settings-sonarr-settings-message', button: 'settings-save-sonarr', clear: 'settings-clear-sonarr', nodeNote: 'settings-sonarr-node-note' },
@@ -639,6 +641,7 @@ const arrSettings = {
 
 async function loadArrSettings(service) {
   const fields = arrSettings[service];
+  for (const id of fields.overviewCards) document.getElementById(id).hidden = true;
   for (const copy of fields.copies) {
     document.getElementById(copy.button).disabled = true;
     const message = document.getElementById(copy.message);
@@ -648,6 +651,7 @@ async function loadArrSettings(service) {
   try {
     await unlockMetadataVaultForSettings();
     const settings = await arrDirectRequest(fields.endpoint);
+    for (const id of fields.overviewCards) document.getElementById(id).hidden = !settings.configured;
     void probeArrBase(service, settings.url || '');
     document.getElementById(fields.mediaCard).hidden = Boolean(settings.configured);
     for (const copy of fields.copies) {
