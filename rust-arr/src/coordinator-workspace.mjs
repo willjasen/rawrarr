@@ -164,6 +164,7 @@ showView(location.hash.slice(1) || 'overview', false);
 if (location.hash === '#series') history.replaceState(null, '', `${location.pathname}${location.search}#tv`);
 let profileAvatarSeed = '';
 let profileBaseName = '';
+let profileAccountId = '';
 function renderProfileAvatar() {
   if (!profileAvatarSeed) return;
   const [baseFirst = '', baseSecond = ''] = profileBaseName.split('-');
@@ -221,7 +222,7 @@ async function loadProfileAvatar() {
     const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(recipient)));
     profileAvatarSeed = Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
   } catch (error) {
-    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`rawrarr-profile:${profileBaseName}`)));
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`rawrarr-profile:${profileAccountId || profileBaseName}`)));
     profileAvatarSeed = Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
   }
   renderProfileAvatar();
@@ -241,6 +242,7 @@ async function loadNodeAvatar(node, pictureSource, image) {
 async function loadProfile() {
   try {
     const profile = await jsonRequest('/api/workspace/profile');
+    profileAccountId = profile.accountId || '';
     profileBaseName = profile.displayName || 'Rawrarr user';
     document.getElementById('profile-name').textContent = profileBaseName;
     document.getElementById('sidebar-profile-name').textContent = profileBaseName;
