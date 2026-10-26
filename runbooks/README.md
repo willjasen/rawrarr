@@ -586,4 +586,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Import the age ID while nodes are offline](2026-10-25-import-age-id-offline.md) — Validate an age private ID locally and save it in the browser without requiring an online fossil.
 # Rawrarr runbooks
 
+- [Keep the coordinator workspace pending while it reconnects](2026-10-25-coordinator-reconnect-pending.md) — Show a blocking reconnect state after repeated coordinator health failures and restore the current workspace after recovery (issue [#98](https://github.com/willjasen/rawrarr/issues/98)).
 - [Remove the roarlay label from coordinator page headers](2026-10-25-remove-roarlay-header-label.md) — Remove the top-right coordinator header label while preserving sign-out (issue [#89](https://github.com/willjasen/rawrarr/issues/89)).

@@ -4,13 +4,14 @@ import test from 'node:test';
 import { chromium } from '/usr/local/lib/node_modules/playwright-core/index.mjs';
 
 const root = new URL('../../', import.meta.url);
-const [html, script, deviceRoutes, nodeAvatar, profileColor, aiModule] = await Promise.all([
+const [html, script, deviceRoutes, nodeAvatar, profileColor, aiModule, availabilityModule] = await Promise.all([
   readFile(new URL('rust-arr/src/coordinator_workspace.html', root), 'utf8'),
   readFile(new URL('rust-arr/src/coordinator-workspace.mjs', root), 'utf8'),
   readFile(new URL('rust-arr/src/coordinator-device-routes.mjs', root), 'utf8'),
   readFile(new URL('rust-arr/src/coordinator-node-avatar.mjs', root), 'utf8'),
   readFile(new URL('rust-arr/src/profile-color.mjs', root), 'utf8'),
   readFile(new URL('rust-arr/src/coordinator-ai.mjs', root), 'utf8'),
+  readFile(new URL('rust-arr/src/coordinator-availability.mjs', root), 'utf8'),
 ]);
 
 test('coordinator saves Radarr and Sonarr settings over the direct metadata route only', async t => {
@@ -27,8 +28,10 @@ test('coordinator saves Radarr and Sonarr settings over the direct metadata rout
   await page.route('http://rawrarr.test/**', async route => {
     const request = route.request();
     const url = new URL(request.url());
+    if (url.pathname === '/health') return route.fulfill({ status: 200, body: 'ok' });
     if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
     if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-availability.mjs') return route.fulfill({ body: availabilityModule, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
     if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
@@ -177,8 +180,10 @@ test('coordinator opens TV from #tv and upgrades the old #series link', async t 
   const page = await browser.newPage();
   await page.route('http://rawrarr.test/**', async route => {
     const path = new URL(route.request().url()).pathname;
+    if (path === '/health') return route.fulfill({ status: 200, body: 'ok' });
     if (path === '/') return route.fulfill({ body: html, contentType: 'text/html' });
     if (path === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
+    if (path === '/assets/coordinator-availability.mjs') return route.fulfill({ body: availabilityModule, contentType: 'text/javascript' });
     if (path === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
     if (path === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
     if (path === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
@@ -208,8 +213,10 @@ test('Movies and TV do not display cached library data without an age ID', async
   }, { moviesCache, tvCache });
   await page.route('http://rawrarr.test/**', async route => {
     const url = new URL(route.request().url());
+    if (url.pathname === '/health') return route.fulfill({ status: 200, body: 'ok' });
     if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
     if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-availability.mjs') return route.fulfill({ body: availabilityModule, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
     if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
@@ -243,8 +250,10 @@ test('age ID is remembered after validation, restored on reload, and cleared on 
   await page.route('http://rawrarr.test/**', async route => {
     const request = route.request();
     const url = new URL(request.url());
+    if (url.pathname === '/health') return route.fulfill({ status: 200, body: 'ok' });
     if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
     if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-availability.mjs') return route.fulfill({ body: availabilityModule, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
     if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
@@ -294,8 +303,10 @@ test('Settings imports an age ID locally without an online node and clears it ma
   await page.route('http://rawrarr.test/**', async route => {
     const request = route.request();
     const url = new URL(request.url());
+    if (url.pathname === '/health') return route.fulfill({ status: 200, body: 'ok' });
     if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
     if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-availability.mjs') return route.fulfill({ body: availabilityModule, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
     if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
@@ -343,8 +354,10 @@ test('Settings rejects an invalid age ID without persisting it', async t => {
   const page = await browser.newPage();
   await page.route('http://rawrarr.test/**', async route => {
     const url = new URL(route.request().url());
+    if (url.pathname === '/health') return route.fulfill({ status: 200, body: 'ok' });
     if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
     if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-availability.mjs') return route.fulfill({ body: availabilityModule, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
     if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
