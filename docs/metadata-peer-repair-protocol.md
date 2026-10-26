@@ -2,7 +2,7 @@
 
 ## Status
 
-Approved design for the initial two-fossil implementation. The code now has a ciphertext-only local Valkey mirror/rehydration foundation and Merkle/conflict-order primitives; authenticated peer RPC, signed durable revision exchange, and reconnect repair are not implemented yet. At the initial inspection, the MacBook Valkey service cached encrypted artwork only, the Mac mini fossil had no Valkey service, the MacBook had `/shared/config.aged`, and the Mac mini did not. See [issue #100](https://github.com/willjasen/rawrarr/issues/100) and the [task runbook](../runbooks/2026-10-26-valkey-metadata-mirror-rpc.md).
+Approved design for the initial two-fossil implementation. The code now has a ciphertext-only local Valkey mirror, signed durable revision records, challenge-authenticated fixed-object peer RPC, and periodic manifest/Merkle reconciliation. The isolated end-to-end reconnect gate is still pending. At the initial inspection, the MacBook Valkey service cached encrypted artwork only, the Mac mini fossil had no Valkey service, the MacBook had `/shared/config.aged`, and the Mac mini did not. See [issue #100](https://github.com/willjasen/rawrarr/issues/100) and the [task runbook](../runbooks/2026-10-26-valkey-metadata-mirror-rpc.md).
 
 ## Scope and data boundary
 
@@ -35,6 +35,8 @@ This detects many partial rollbacks when a peer retains a newer signed revision.
 ## Peer authorization and RPC
 
 Use an explicit, owner-managed allowlist of the two peer device IDs and direct Tailscale HTTPS URLs for the first deployment. A peer presents its existing instance-root-signed device certificate. The receiver verifies the pinned root fingerprint, certified device ID/role, expected allowlist entry, and certificate signature. No shared peer secret is introduced. A later coordinator-backed peer discovery endpoint is a separate change.
+
+Configure the same two-entry `RAWARR_CONFIG_PEERS` JSON object on each fossil. Keys must be the stable node IDs; values must be HTTPS URLs on the tailnet ending at each node's direct API base, such as `https://node-name.example.ts.net/direct-api`. The service rejects non-Tailscale hostnames, credentials, query strings, and fragments. Do not put API keys or age identities in this setting.
 
 Before transfer, peers use a protocol-versioned challenge exchange with a fresh 256-bit receiver nonce. The sender signs a canonical proof binding the nonce, sender ID, receiver ID, protocol version, and requested capability. Challenges expire after 30 seconds and are one-use. Each request signs the method, exact path, body digest, sender ID, receiver ID, and a fresh nonce. Reject unknown peers, invalid signatures, expired/reused challenges, unsupported versions, and mismatched targets.
 
