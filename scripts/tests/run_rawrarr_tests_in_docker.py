@@ -54,7 +54,7 @@ def copy_project_into_container(context: str, name: str, destination: Path) -> N
     # Copy only the root-level fixtures needed by source-structure tests.
     for compose_file in sorted(ROOT.glob("docker-compose*.yml")):
         subprocess.run(["docker", "--context", context, "cp", str(compose_file), f"{name}:/workspace/{compose_file.name}"], check=True)
-    for fixture in (ROOT / "admin", ROOT / "docs", ROOT / "storage-proxy.Caddyfile"):
+    for fixture in (ROOT / ".github", ROOT / "admin", ROOT / "docs", ROOT / "storage-proxy.Caddyfile"):
         if not fixture.exists():
             continue
         subprocess.run(["docker", "--context", context, "cp", str(fixture), f"{name}:/workspace/"], check=True)
