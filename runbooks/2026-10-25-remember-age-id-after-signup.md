@@ -29,4 +29,4 @@ Save a newly created age ID in browser-local storage after vault unlock, restore
 
 - Signup vault unlock and successful first age-ID validation now save the ID in browser-local storage. The coordinator workspace restores it on reload; manual clear and sign-out remove it.
 - The subscriber UI sign-out handler also removes the browser-local and legacy tab-session values.
-- Changes are on `codex/remember-age-id-signup`; commit and push status will be recorded after the task-owned commit.
+- Changes are committed on `codex/remember-age-id-signup` as `748890536be8d624bde76ac0b5c4c6aa0f416e2b` (`feat: remember age ID in browser`). The branch has no configured upstream, so the commit remains local and was not pushed.
