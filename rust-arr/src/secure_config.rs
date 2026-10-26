@@ -808,14 +808,36 @@ impl AgeVault {
         fs::create_dir_all(&data_dir).map_err(|_| VaultError::StorageFailed)?;
         set_private_directory_permissions(&data_dir)?;
         let group_path = data_dir.join("group-age-identity");
-        if !shared_dir.join("group-age-recipient").exists() {
+        if !shared_dir.join("group-age-recipient").exists() && !group_path.is_file() {
             let legacy_path = shared_dir.join("age-recipient");
             if legacy_path.is_file()
                 && fs::read_to_string(legacy_path)
                     .map_err(|_| VaultError::StorageFailed)?
                     .trim() != user_recipient
             {
-                return Err(VaultError::InvalidIdentity);
+                // `age-recipient` predates the distinct group identity and may
+                // name the key that encrypted the legacy config. Do not treat
+                // that public marker as proof that this user identity is wrong:
+                // accept the migration only when this identity can actually
+                // open a valid config. This check happens before creating any
+                // new group-key files, so a failed attempt leaves shared state
+                // untouched.
+                let config_path = shared_dir.join("config.aged");
+                if !config_path.is_file() {
+                    return Err(VaultError::InvalidIdentity);
+                }
+                let output = run_with_input(
+                    "age",
+                    &["--decrypt", "--identity", "-", path_arg(&config_path)?],
+                    identity.as_bytes(),
+                )?;
+                if !output.status.success() {
+                    return Err(VaultError::InvalidIdentity);
+                }
+                let plaintext = Zeroizing::new(output.stdout);
+                if serde_json::from_slice::<PersistedConfig>(plaintext.as_slice()).is_err() {
+                    return Err(VaultError::InvalidIdentity);
+                }
             }
         }
         let (group_identity, recipient) = if group_path.is_file() {
@@ -2010,6 +2032,94 @@ mod tests {
             Err(VaultError::InvalidConfig)
         ));
         fs::remove_dir_all(shared_dir).expect("remove isolated test data");
+    }
+
+    #[test]
+    fn legacy_recipient_mismatch_migrates_only_when_user_identity_opens_config() {
+        let user_keygen = Command::new("age-keygen")
+            .arg("-pq")
+            .output()
+            .expect("age-keygen must be installed for this test");
+        assert!(user_keygen.status.success());
+        let user_identity = String::from_utf8(user_keygen.stdout).expect("user identity is UTF-8");
+        let user_recipient = identity_to_recipient(&user_identity).expect("derive user recipient");
+
+        let marker_keygen = Command::new("age-keygen")
+            .arg("-pq")
+            .output()
+            .expect("age-keygen must be installed for this test");
+        assert!(marker_keygen.status.success());
+        let marker_identity = String::from_utf8(marker_keygen.stdout).expect("marker identity is UTF-8");
+        let stale_recipient = identity_to_recipient(&marker_identity).expect("derive legacy marker");
+        assert_ne!(stale_recipient, user_recipient);
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock after epoch")
+            .as_nanos();
+        let root = env::temp_dir().join(format!(
+            "rawrarr-legacy-recipient-migration-test-{}-{unique}",
+            std::process::id()
+        ));
+        let shared_dir = root.join("shared");
+        let data_dir = root.join("data");
+        fs::create_dir_all(&shared_dir).expect("create isolated shared directory");
+        fs::create_dir_all(&data_dir).expect("create isolated data directory");
+        fs::write(shared_dir.join("age-recipient"), format!("{stale_recipient}\n"))
+            .expect("write legacy public recipient marker");
+        let config_path = shared_dir.join("config.aged");
+        encrypt_shared_file(
+            &user_recipient,
+            &config_path,
+            br#"{"schema_version":1,"services":[]}"#,
+        )
+        .expect("encrypt legacy config to user identity");
+
+        let vault = AgeVault::from_identity_in_dirs(
+            user_identity.clone(),
+            shared_dir.clone(),
+            data_dir.join("radarr-config.json"),
+            false,
+        )
+        .expect("accept identity proven by encrypted config");
+        assert!(vault.load().expect("migrate readable config").is_some());
+        assert!(shared_dir.join("group-age-recipient").is_file());
+        assert!(shared_dir.join("group-age-user-envelope.aged").is_file());
+
+        let rejected_root = root.join("rejected");
+        let rejected_shared = rejected_root.join("shared");
+        let rejected_data = rejected_root.join("data");
+        fs::create_dir_all(&rejected_shared).expect("create rejected shared directory");
+        fs::create_dir_all(&rejected_data).expect("create rejected data directory");
+        fs::write(rejected_shared.join("age-recipient"), format!("{stale_recipient}\n"))
+            .expect("write second legacy marker");
+        let rejected_config = rejected_shared.join("config.aged");
+        encrypt_shared_file(
+            &user_recipient,
+            &rejected_config,
+            br#"{"schema_version":1,"services":[]}"#,
+        )
+        .expect("encrypt second legacy config");
+        let wrong_keygen = Command::new("age-keygen")
+            .arg("-pq")
+            .output()
+            .expect("age-keygen must be installed for this test");
+        assert!(wrong_keygen.status.success());
+        let wrong_identity = String::from_utf8(wrong_keygen.stdout).expect("wrong identity is UTF-8");
+        assert!(matches!(
+            AgeVault::from_identity_in_dirs(
+                wrong_identity,
+                rejected_shared.clone(),
+                rejected_data.join("radarr-config.json"),
+                false,
+            ),
+            Err(VaultError::InvalidIdentity)
+        ));
+        assert!(!rejected_shared.join("group-age-recipient").exists());
+        assert!(!rejected_shared.join("group-age-user-envelope.aged").exists());
+        assert!(!rejected_data.join("group-age-identity").exists());
+
+        fs::remove_dir_all(root).expect("remove isolated test directories");
     }
 
     #[test]

@@ -17,6 +17,7 @@ GitHub issue search found no existing issue for this behavior. Issue #110 descri
 - The node previously mapped every `AgeVault::from_identity` error to HTTP 400 with “Import a valid post-quantum age identity.” This concealed age CLI, storage, group-key mismatch, and encrypted-config failures.
 - Added stage-specific safe error messages and HTTP statuses for invalid/mismatched IDs, unavailable age tools, inaccessible key storage, encryption/decryption failures, and malformed config. No identity, ciphertext, or credential data is included in errors.
 - Added Rust mapping tests and an integration assertion for a genuinely wrong group identity. Updated the test index.
+- Follow-up: when `group-age-recipient` is missing, a mismatching legacy `age-recipient` is no longer treated as conclusive proof of a wrong user ID. The submitted identity must decrypt a valid existing `config.aged` before Rawrarr creates any new group-key files. A nonmatching identity or missing/unreadable config leaves the shared and node-local key state unchanged.
 - The live internal host could not be reached from this session: its MagicDNS hostname did not resolve. No service was changed or deployed.
 
 ## Verification
@@ -25,3 +26,4 @@ GitHub issue search found no existing issue for this behavior. Issue #110 descri
 - `python3` AST parse of `scripts/tests/test_rawrarr_configuration.py` — passed.
 - `git diff --check` — passed.
 - Host `cargo` and `rustfmt` are unavailable, so formatting and the direct host Rust command were not run. The isolated Rust build and test suite compiled and passed.
+- Follow-up focused Rust regression coverage was added for both the successful legacy-config migration and rejection without key-file creation. It has not yet been run.
