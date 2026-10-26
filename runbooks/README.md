@@ -48,7 +48,7 @@
 
 - [Hide generated device IDs from device labels](2026-10-26-hide-device-id-label.md) — Keep opaque stable IDs out of visible topology labels while preserving their internal use (issue [#155](https://github.com/willjasen/rawrarr/issues/155)).
 
-- [Replicate config.aged through Valkey and peer RPC/Merkle](2026-10-26-valkey-metadata-mirror-rpc.md) — Implement config-only encrypted Valkey mirroring and authenticated two-fossil repair while leaving app metadata/artwork in Syncthing (issue [#100](https://github.com/willjasen/rawrarr/issues/100)).
+- [Replicate config.aged through Valkey and peer RPC/Merkle](2026-10-26-valkey-metadata-mirror-rpc.md) — Implement and deploy encrypted two-fossil repair, including native ARM64 Mac mini Valkey/RPC, with owner-decryption and Syncthing exclusion follow-up (issue [#100](https://github.com/willjasen/rawrarr/issues/100)).
 
 - [Fix database integration tests](2026-10-26-fix-db-integrations.md) — Update the disposable coordinator, node, and configuration integrations for explicit roles, coordinator trust, and current owner bootstrap (issue [#130](https://github.com/willjasen/rawrarr/issues/130)).
 - [Restore the MacBook direct route](2026-10-26-restore-macbook-direct-route.md) — Update the MacBook subscriber to match the coordinator's direct health and session endpoints (issue [#141](https://github.com/willjasen/rawrarr/issues/141)).
