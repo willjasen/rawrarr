@@ -26,4 +26,4 @@ GitHub issue search found no existing issue for this behavior. Issue #110 descri
 - `python3` AST parse of `scripts/tests/test_rawrarr_configuration.py` — passed.
 - `git diff --check` — passed.
 - Host `cargo` and `rustfmt` are unavailable, so formatting and the direct host Rust command were not run. The isolated Rust build and test suite compiled and passed.
-- Follow-up focused Rust regression coverage was added for both the successful legacy-config migration and rejection without key-file creation. It has not yet been run.
+- Follow-up `python3 scripts/tests/run_rawrarr_tests_in_docker.py --remove-after` passed: Node.js 112/112, Playwright browser suite passed, and Rust 97/97 including the legacy-recipient migration regression. Python integration tests were skipped by the isolated runner.
