@@ -312,11 +312,11 @@
         <label for="age-id">Age private ID</label><br>
         <input id="age-id" type="password" autocomplete="off" spellcheck="false" placeholder="AGE-SECRET-KEY-PQ-1…">
         <button id="unlock" type="button">Unlock metadata</button>
-        <p class="age-security-warning">Your ID stays only in this tab's memory. Enter it again after reloading or closing this page.</p>
+        <p class="age-security-warning">Your ID is saved in this browser so you can use the main pages without entering it again. Sign out or clear it in Settings to remove it.</p>
       </div>
       <button id="clear-key" type="button" hidden>Clear private ID</button>
       </div></div>
-      <p id="content-status" role="status">Enter your age private ID to unlock. It stays in this tab's memory and is cleared when the page closes.</p>
+      <p id="content-status" role="status">Enter your age private ID to unlock. It will be saved in this browser after validation.</p>
       <section id="radarr-summary" class="summary" aria-label="Radarr movie statistics"></section>
       <article class="panel library-panel"><div class="panel-head"><h2>Movies</h2><button id="refresh-movies" type="button">Rescan</button></div>
         <p id="radarr-scrape-status" class="scrape-status" role="status" aria-live="polite" hidden></p>
@@ -369,12 +369,12 @@
       <div class="settings-identity">
       <article class="profile-card"><picture class="profile-avatar"><source id="profile-picture-jxl" type="image/jxl"><img id="profile-picture" alt="Generated dinosaur profile picture"></picture><div class="profile-avatar-copy"><h2 class="profile-name" id="profile-name">Loading profile…</h2><p class="profile-avatar-status" id="profile-avatar-status" role="status" aria-live="polite">Loading the public age ID from a fossil node…</p></div></article>
       <article class="age-storage-card" aria-labelledby="age-storage-title">
-        <h2 id="age-storage-title">Age private ID for this session</h2>
+        <h2 id="age-storage-title">Age private ID in this browser</h2>
         <p id="age-storage-status" class="age-storage-status" role="status" aria-live="polite">Checking browser storage…</p>
         <form id="age-storage-form" class="age-storage-form">
           <label id="settings-age-id-label" for="settings-age-id">Age private ID</label>
           <input id="settings-age-id" type="password" autocomplete="off" spellcheck="false" placeholder="AGE-SECRET-KEY-PQ-1…">
-          <div class="connection-actions"><button id="save-age-id" type="submit">Use age ID for this session</button><button id="remove-age-id" type="button" hidden>Clear age ID from this tab</button></div>
+          <div class="connection-actions"><button id="save-age-id" type="submit">Save age ID in this browser</button><button id="remove-age-id" type="button" hidden>Clear saved age ID</button></div>
           <p id="age-storage-message" class="connection-message" role="status" aria-live="polite"></p>
         </form>
       </article>
@@ -420,7 +420,7 @@
       <dialog id="metadata-export-dialog" style="width:min(520px,calc(100% - 28px));border:1px solid #39463d;border-radius:14px;background:#151b18;color:#e7eee8;padding:22px">
         <form id="metadata-export-form">
           <h2 style="margin:0 0 8px">Unlock metadata export</h2>
-          <p class="sub">Enter your post-quantum age private ID. It is used in this tab to decrypt the files and is never sent to Rawrarr.</p>
+          <p class="sub">Enter your post-quantum age private ID. After a successful export it is saved in this browser. It is never sent to roarlay.</p>
           <label for="metadata-export-identity">Age private ID</label>
           <input id="metadata-export-identity" type="password" autocomplete="off" spellcheck="false" required style="width:100%;min-height:42px;margin-top:6px;border:1px solid #46574a;border-radius:8px;background:#101411;color:var(--text);padding:10px;font:12px ui-monospace,monospace">
           <div class="connection-actions"><button id="metadata-export-start" type="submit">Decrypt and download ZIP</button><button id="metadata-export-cancel" type="button">Cancel</button></div>

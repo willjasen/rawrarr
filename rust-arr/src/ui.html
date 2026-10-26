@@ -377,6 +377,8 @@
     document.getElementById('configure-radarr-link').addEventListener('click', openRadarrSettings);
     document.getElementById('settings-nav').addEventListener('click', openRadarrSettings);
     document.getElementById('sign-out').addEventListener('click', async () => {
+      localStorage.removeItem('rawrarr.browser.age-id');
+      sessionStorage.removeItem('rawrarr.browser.age-id');
       await fetch('/api/auth/logout', { method: 'POST', headers: { Accept: 'application/json' } });
       window.location.replace('/auth');
     });

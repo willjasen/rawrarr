@@ -71,6 +71,7 @@ test('generated private age identity has a short preview and full value is expos
   const rootStyles = new Map();
   const fetchCalls = [];
   const clipboard = [];
+  const stored = new Map();
   let randomValue = 0;
   const document = {
     documentElement: { style: { setProperty(name, value) { rootStyles.set(name, value); } } },
@@ -89,6 +90,7 @@ test('generated private age identity has a short preview and full value is expos
       } }
     },
     TextEncoder,
+    localStorage: { setItem(key, value) { stored.set(key, value); }, getItem(key) { return stored.get(key) || null; } },
     fetch: async (url, options = {}) => {
       fetchCalls.push({ url, options });
       if (url.endsWith('/generate')) return { ok: true, async json() { return { identity: privateIdentity, recipient: publicRecipient, themeSeed }; } };
@@ -140,6 +142,7 @@ test('generated private age identity has a short preview and full value is expos
   await elements['backup-confirmed'].change();
   await elements.unlock.click();
   assert.equal(unlockCount(), 1);
+  assert.equal(stored.get('rawrarr.browser.age-id'), privateIdentity, 'successful signup vault setup remembers the age ID in this browser');
   assert.equal(elements['identity-copy-dialog'].open, false);
   assert.deepEqual(context.window.location.replaced, ['/']);
   assert.doesNotMatch(page, /identity-challenge-input|identity-backup-check/);

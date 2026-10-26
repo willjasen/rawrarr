@@ -67,7 +67,7 @@
       <input id="remember-on-device" type="checkbox">
       <span>Keep this ID on this device after unlocking</span>
     </label>
-    <p class="privacy-note">Pasted IDs unlock directly. New IDs use the copy and backup confirmation flow. A remembered ID stays in this node's private local data folder and is not synced.</p>
+    <p class="privacy-note">After a successful unlock, this browser keeps the ID until you sign out. The checkbox also keeps a separate copy in this node's private local data folder. Neither copy is synced.</p>
     <div id="message" role="status" aria-live="polite"></div>
     <section class="coordinator-passkey" id="coordinator-passkey-section" aria-label="Roarlay passkey" hidden>
       <p>Add a passkey for roarlay using your existing signed-in rawrarr account. The passkey ceremony opens on the roarlay website.</p>
@@ -289,6 +289,7 @@
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Could not unlock the age vault');
         applyIdentityTheme(result.themeSeed);
+        localStorage.setItem('rawrarr.browser.age-id', privateIdentityKey(value));
         identity.value = '';
         importDialog.close();
         message.textContent = 'Vault unlocked. Opening your workspace…';
@@ -347,6 +348,7 @@
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Could not unlock the age vault');
         applyIdentityTheme(result.themeSeed);
+        localStorage.setItem('rawrarr.browser.age-id', privateIdentity);
         generatedIdentity = '';
         identity.value = '';
         identityCopied = false;
