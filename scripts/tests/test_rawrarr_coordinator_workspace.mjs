@@ -72,6 +72,7 @@ test('device shared-folder health is concise and formatted without exposing the 
 });
 
 test('Devices shows a network diagram with one link for each device pair', () => {
+  assert.match(workspace, /<section id="devices-view"[^>]*>[\s\S]*?<h1 class="page-title">Devices<\/h1>\s*<p><a class="button-link" href="\/setup\/node">Add a device with Docker Compose<\/a><\/p>/);
   assert.match(workspace, /<section id="device-topology" class="topology-section" aria-labelledby="device-topology-title" hidden>[\s\S]*?<h2 id="device-topology-title">Topology<\/h2>/);
   assert.match(workspace, /<div id="device-topology-content"><\/div>/);
   assert.match(workspaceScript, /function renderDeviceTopology\(nodes, observedPeers, deviceNames\)/);
