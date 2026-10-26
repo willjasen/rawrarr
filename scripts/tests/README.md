@@ -90,6 +90,7 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 - `test_rawrarr_ai_chat.mjs` — local library answers for year, genre, and disk-size shares, plus split-frame OpenAI SSE parsing. Run `node --test scripts/tests/test_rawrarr_ai_chat.mjs`.
 
 - `test_rawrarr_filename_secret.rs` — Rust tests for random key generation, validation, encrypted persistence, legacy migration, peer consistency, Radarr update/removal preservation, and plaintext-mirror exclusion. Included in the isolated Rust suite.
+- `test_rawrarr_config_repair.rs` — validates ciphertext bounds and private atomic writes, direct Tailscale HTTPS peer allowlists, pinned-root revision signatures, one-use challenge/request signatures, Merkle roots, and deterministic conflict ordering. Included in the isolated Rust suite as `config_repair`.
 - `test_rawrarr_config_schema.rs` — Rust tests for legacy flat config migration to schema v1, service-array persistence including optional encrypted Radarr UI credentials, and unsupported-version rejection. Included in the isolated Rust suite.
 - `test_rawrarr_hmac_metadata_filenames.rs` — checks domain-separated opaque movie filenames, byte-identical ciphertext migration, and decryption after migration. Included in the isolated Rust suite.
 

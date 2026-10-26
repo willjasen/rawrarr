@@ -56,9 +56,12 @@ services:
     environment:
       RUST_ARR_LISTEN_ADDR: 127.0.0.1:8081
       RUST_ARR_DIRECT_LISTEN_ADDR: 127.0.0.1:8082
+      RAWARR_LOCAL_PLAINTEXT_CONFIG: "false"
       RAWARR_ARTWORK_CACHE_ENABLED: ${RAWARR_ARTWORK_CACHE_ENABLED:-false}
       RAWARR_ARTWORK_CACHE_URL: redis://127.0.0.1:6379/
       RAWARR_ARTWORK_CACHE_TTL_SECONDS: ${RAWARR_ARTWORK_CACHE_TTL_SECONDS:-86400}
+      RAWARR_CONFIG_CACHE_URL: redis://127.0.0.1:6379/
+      RAWARR_CONFIG_PEERS: ${RAWARR_CONFIG_PEERS:-}
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--output", "/dev/null", "http://127.0.0.1:8081/health"]
       interval: 10s

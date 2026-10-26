@@ -896,7 +896,16 @@ impl AgeVault {
         // The first approved node creates the shared config as soon as it
         // installs the user's identity. `write_config` always encrypts with
         // the group recipient, never the user's or device's recipient.
-        if !vault.config_path.is_file() {
+        let peer_repair_configured = env::var("RAWARR_CONFIG_PEERS").ok()
+            .and_then(|value| serde_json::from_str::<std::collections::HashMap<String, String>>(&value).ok())
+            .is_some_and(|peers| peers.iter().any(|(id, value)| {
+                !id.is_empty() && id.len() <= 128 && id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+                    && url::Url::parse(value).is_ok_and(|parsed| parsed.scheme() == "https"
+                        && parsed.host_str().is_some_and(|host| host.ends_with(".ts.net"))
+                        && parsed.username().is_empty() && parsed.password().is_none()
+                        && parsed.query().is_none() && parsed.fragment().is_none())
+            }));
+        if !vault.config_path.is_file() && !peer_repair_configured {
             vault.save(&PersistedConfig {
                 device_names: std::collections::HashMap::new(),
                 sonarr: None,

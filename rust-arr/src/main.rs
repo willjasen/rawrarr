@@ -7,6 +7,7 @@ pub mod auth;
 mod coordinator;
 mod device_signing;
 mod artwork_cache;
+mod config_repair;
 mod coordinator_avatar;
 pub mod devices;
 pub mod download_clients;
@@ -71,6 +72,8 @@ struct AppState {
     artwork_force_rescan: Arc<AtomicBool>,
     sonarr_scrape_notify: Arc<tokio::sync::Notify>,
     artwork_cache: Arc<artwork_cache::ArtworkCache>,
+    config_mirror: Arc<config_repair::CiphertextMirror>,
+    config_peer: config_repair::PeerRpc,
 }
 
 #[derive(Clone, Default, Serialize)]
@@ -961,6 +964,8 @@ mod dashboard_event_tests {
             artwork_force_rescan: Arc::new(AtomicBool::new(false)),
             sonarr_scrape_notify: Arc::new(tokio::sync::Notify::new()),
             artwork_cache: Arc::new(artwork_cache::ArtworkCache::disabled()),
+            config_mirror: Arc::new(config_repair::CiphertextMirror::from_env()),
+            config_peer: config_repair::PeerRpc::from_env("fixture"),
         });
         let response = dashboard_events(State(state)).await.into_response();
         assert_eq!(response.headers()[header::CONTENT_TYPE], "text/event-stream");
@@ -2629,6 +2634,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut radarr = None;
     let mut vault = None;
     secure_config::AgeVault::enforce_local_config_policy()?;
+    let config_mirror = Arc::new(config_repair::CiphertextMirror::from_env());
+    let config_peer = config_repair::PeerRpc::from_env(&node_id);
+    if role == node_role::NodeRole::Metadata {
+        let path = secure_config::AgeVault::config_path();
+        config_mirror.restore_revisions();
+        if let Err(error) = config_mirror.restore_from_valkey(&path) {
+            eprintln!("rawrarr config ciphertext restore from Valkey failed: {error}");
+        }
+        let certificate = auth.signing_certificate();
+        let _ = config_peer.reconcile_once(&config_mirror, &path, certificate.as_ref()).await;
+    }
     let local_settings = secure_config::AgeVault::load_local_config()?;
     let identity_path = env::var_os("RAWARR_AGE_IDENTITY_FILE")
         .filter(|path| !path.is_empty())
@@ -2705,7 +2721,54 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         artwork_force_rescan: Arc::new(AtomicBool::new(false)),
         sonarr_scrape_notify: Arc::new(tokio::sync::Notify::new()),
         artwork_cache: Arc::new(artwork_cache::ArtworkCache::from_env()),
+        config_mirror: config_mirror.clone(),
+        config_peer: config_peer.clone(),
     });
+    if role == node_role::NodeRole::Metadata {
+        let mirror = state.config_mirror.clone();
+        let application_state = state.clone();
+        let path = secure_config::AgeVault::config_path();
+        let revision_device_id = node_id.clone();
+        let revision_certificate = auth.signing_certificate();
+        tokio::spawn(async move {
+            loop {
+                let mirror_task = mirror.clone();
+                let file_path = path.clone();
+                let device_id = revision_device_id.clone();
+                let certificate = revision_certificate.clone();
+                if let Err(error) = tokio::task::spawn_blocking(move || {
+                    let digest = mirror_task.rebuild_from_file(&file_path)?;
+                    if let (Some(_), Some(certificate), Ok(bytes)) = (digest.as_ref(), certificate, std::fs::read(&file_path)) {
+                        let revision = config_repair::record_local_config(&bytes, &device_id, &certificate)?;
+                        mirror_task.mirror_revision(&revision);
+                    }
+                    Ok::<(), std::io::Error>(())
+                }).await.unwrap_or_else(|_| Err(std::io::Error::other("config repair task failed"))) {
+                    eprintln!("rawrarr config ciphertext mirror refresh failed: {error}");
+                }
+                let peer_state = config_peer.clone();
+                let peer_mirror = mirror.clone();
+                let peer_path = path.clone();
+                let peer_certificate = revision_certificate.clone();
+                let repaired = peer_state.reconcile_once(&peer_mirror, &peer_path, peer_certificate.as_ref()).await;
+                if repaired {
+                    let vault = application_state.vault.read().await.clone();
+                    if let Some(vault) = vault {
+                        if let Ok(Ok(Some(settings))) = tokio::task::spawn_blocking(move || vault.load()).await {
+                            let client = RadarrClient::new_with_ui_auth(
+                                settings.radarr_url.clone(),
+                                Zeroizing::new(settings.radarr_api_key.clone()),
+                                Some(Zeroizing::new(settings.radarr_ui_username.clone())).filter(|value| !value.is_empty()),
+                                Some(Zeroizing::new(settings.radarr_ui_password.clone())).filter(|value| !value.is_empty()),
+                            ).ok();
+                            *application_state.radarr.write().await = client;
+                        }
+                    }
+                }
+                tokio::time::sleep(Duration::from_secs(30)).await;
+            }
+        });
+    }
     if role == node_role::NodeRole::Metadata {
         tokio::spawn(run_metadata_artwork_backfill(state.clone()));
         tokio::spawn(run_metadata_sonarr_backfill(state.clone()));
@@ -2835,6 +2898,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let direct_app = Router::new()
         .route("/health", get(direct_health))
         .route("/session", post(direct_session_cookie))
+        .route("/config-peer/challenge", get(config_repair::challenge))
+        .route("/config-peer/manifest", get(config_repair::manifest))
+        .route("/config-peer/config/{digest}", get(config_repair::config_object))
         .merge(direct_protected)
         .layer(middleware::from_fn(log_request))
         .layer(middleware::from_fn(direct_api_cors))
