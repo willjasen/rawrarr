@@ -6,6 +6,8 @@
 - `test_rawrarr_subscriber_compose.mjs` — checks subscriber role Compose generation and private GHCR image/auth guidance; run `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
 # Rawrarr tests
 
+- `test_publish_container_workflow.py` — checks that AMD64/ARM64 build as separate jobs, each writes a unique architecture tag, and the manifest job publishes `main` and commit tags only after both succeed; run `python3 scripts/tests/test_publish_container_workflow.py`.
+
 - `test_rawrarr_devices_add_button.mjs` — checks the coordinator Devices heading has a right-aligned “Add a device” link to `/setup/node`, wraps responsively, and preserves the first-node setup link; run with `node --test scripts/tests/test_rawrarr_devices_add_button.mjs`.
 
 - `test_rawrarr_dashboard_sse.mjs` — Chromium regression coverage for the dashboard EventSource connection, named snapshot handling, and open/error status states; run with `node --test scripts/tests/test_rawrarr_dashboard_sse.mjs` in the isolated Playwright test image. The Rust `dashboard_event_tests` verifies `text/event-stream`, cache headers, the initial named JSON snapshot, and fixture dashboard state.
