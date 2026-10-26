@@ -529,7 +529,7 @@ async function arrDirectUrl() {
   }
   const route = await chooseNodeRoute(node, true);
   if (!route.direct) {
-    throw new Error('Connection settings require the direct metadata route so the API key does not pass through roarlay.');
+    throw new Error('This browser cannot reach the selected metadata node directly. Connect from a browser with a direct node route to manage media service settings; credentials never pass through roarlay.');
   }
   return `${route.base}/api`;
 }
@@ -677,7 +677,9 @@ async function loadArrSettings(service) {
           ? 'Leave both blank to keep the encrypted login. Enter both to replace it; clear connection removes it.'
           : 'Optional. Enter both only if Radarr requires a UI login to download backups; saved in the age-encrypted config.';
       }
-      document.getElementById(copy.nodeNote).textContent = `Settings are sent directly to ${selectedNodeDetails.nodeId}; roarlay does not receive the ${service === 'radarr' ? 'API key or UI login' : 'API key'}.`;
+      document.getElementById(copy.nodeNote).textContent = settings.configured
+        ? `Connected to ${fields.label} on ${selectedNodeDetails.nodeId}. Settings are sent directly from this browser to the node; roarlay does not receive the ${service === 'radarr' ? 'API key or UI login' : 'API key'}.`
+        : `${fields.label} is not configured on ${selectedNodeDetails.nodeId}. Add it here when ready. Credentials go directly from this browser to the node; roarlay never receives them.`;
       const message = document.getElementById(copy.message);
       message.textContent = settings.configured ? `Saved ${fields.label} settings loaded from the age-encrypted config.` : `Enter your ${fields.label} HTTPS URL and API key.`;
       message.dataset.state = '';
