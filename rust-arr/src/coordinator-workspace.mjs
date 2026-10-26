@@ -364,9 +364,7 @@ if (initialUrl.searchParams.has('node')) {
   window.history.replaceState(null, '', initialUrl);
 }
 const ageSessionKey = 'rawrarr.browser.age-id';
-// Remove credentials saved by older UI versions; age identities now live only
-// in this document's memory and must be entered again after a reload.
-localStorage.removeItem(ageSessionKey);
+const rememberedAgeIdentity = localStorage.getItem(ageSessionKey) || '';
 sessionStorage.removeItem(ageSessionKey);
 const metadataExportButton = document.getElementById('export-metadata');
 const metadataExportStatus = document.getElementById('metadata-export-status');
@@ -386,6 +384,7 @@ async function runMetadataExport(identity) {
     await import('/assets/metadata-export.js');
     const route = selectedRoute?.nodeId === node.nodeId ? selectedRoute : await chooseNodeRoute(node, true);
     const count = await window.rawrarrMiniExport.runMiniExport(identity, message => { metadataExportStatus.textContent = message; }, route.base);
+    rememberAgeIdentity(identity);
     metadataExportStatus.textContent = `Downloaded ${count} movie metadata record(s) and matching available artwork.`;
   } catch (error) {
     metadataExportStatus.textContent = error instanceof Error ? error.message : 'Metadata export failed.';
@@ -420,8 +419,8 @@ metadataExportForm?.addEventListener('submit', async event => {
   await runMetadataExport(identity);
 });
 
-// Age identities are never persisted by this UI.
-let ageIdentityInMemory = '';
+// Keep the user's age identity on this browser until sign-out or manual clear.
+let ageIdentityInMemory = rememberedAgeIdentity;
 ageInput.value = '';
 
 function updateAgeIdControls() {
@@ -430,28 +429,33 @@ function updateAgeIdControls() {
   clearKeyButton.hidden = !hasIdentity;
   updateAgeStorageSettings();
 }
+function rememberAgeIdentity(identity) {
+  ageIdentityInMemory = identity;
+  localStorage.setItem(ageSessionKey, identity);
+}
 function updateAgeStorageSettings() {
   ageStorageStatus.dataset.state = '';
   ageStorageStatus.textContent = ageIdentityInMemory
-    ? 'Age private ID is available only in this tab’s memory. It will be cleared when this page closes.'
+    ? 'Age private ID is saved in this browser until you clear it or sign out.'
     : 'Age private ID is not stored in this browser.';
   settingsAgeIdInput.hidden = Boolean(ageIdentityInMemory);
   document.getElementById('settings-age-id-label').hidden = settingsAgeIdInput.hidden;
-  saveAgeIdButton.textContent = 'Use age ID for this session';
+  saveAgeIdButton.textContent = 'Save age ID in this browser';
   saveAgeIdButton.hidden = Boolean(ageIdentityInMemory);
   removeAgeIdButton.hidden = !ageIdentityInMemory;
-  removeAgeIdButton.textContent = 'Clear age ID from this tab';
+  removeAgeIdButton.textContent = 'Clear saved age ID';
 }
 function clearAgeIdentity() {
   aiMovies = null;
   aiSeries = null;
   ageIdentityInMemory = '';
+  localStorage.removeItem(ageSessionKey);
   ageInput.value = '';
   updateAgeIdControls();
 }
 updateAgeIdControls();
 window.addEventListener('pagehide', () => {
-  clearAgeIdentity();
+  ageIdentityInMemory = '';
   ageInput.value = '';
   settingsAgeIdInput.value = '';
   metadataExportInput.value = '';
@@ -477,10 +481,10 @@ document.getElementById('age-storage-form').addEventListener('submit', async eve
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ identity, rememberOnDevice: false }),
     });
-    ageIdentityInMemory = identity;
+    rememberAgeIdentity(identity);
     settingsAgeIdInput.value = '';
-    contentStatus.textContent = 'Age private ID validated for this tab. It will be cleared when this page closes.';
-    ageStorageMessage.textContent = 'Age private ID validated and kept in memory for this tab.';
+    contentStatus.textContent = 'Age private ID validated and saved in this browser.';
+    ageStorageMessage.textContent = 'Age private ID validated and saved in this browser.';
     updateAgeIdControls();
   } catch (error) {
     ageStorageMessage.dataset.state = 'error';
@@ -1448,6 +1452,7 @@ async function unlockMetadata() {
   contentStatus.textContent = hasCachedMovies ? 'Showing cached movie library while updating…' : 'Connecting to Radarr through the node direct route…';
   try {
     await unlockMetadataVaultForSettings();
+    rememberAgeIdentity(identity);
     const liveMovies = await arrDirectRequest('/radarr/live-library');
     if (selectedNode !== nodeId) return;
     const movies = liveMovies.map(movie => ({

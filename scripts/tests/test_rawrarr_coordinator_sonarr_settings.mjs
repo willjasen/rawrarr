@@ -232,7 +232,7 @@ test('Movies and TV do not display cached library data without an age ID', async
   assert.doesNotMatch(await page.locator('#series-view').textContent(), /Private TV Cache Fixture/);
 });
 
-test('age ID stays in page memory only and is cleared on reload', async t => {
+test('age ID is remembered after validation, restored on reload, and cleared on sign-out', async t => {
   const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
   t.after(() => browser.close());
   const page = await browser.newPage();
@@ -271,15 +271,18 @@ test('age ID stays in page memory only and is cleared on reload', async t => {
   await page.locator('#age-id').fill(identity);
   await page.click('#unlock');
   await page.waitForFunction(() => document.getElementById('age-id').value === '');
-  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
+  await page.waitForFunction(key => localStorage.getItem('rawrarr.browser.age-id') === key, identity);
+  assert.equal(await page.evaluate(key => localStorage.getItem('rawrarr.browser.age-id') === key, identity), true);
   await page.reload();
   await page.waitForFunction(() => document.querySelector('[data-node-id="metadata-one"]')?.dataset.selected === 'true');
-  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
-  assert.equal(await page.locator('#age-id-entry').isVisible(), true);
+  assert.equal(await page.evaluate(key => localStorage.getItem('rawrarr.browser.age-id') === key, identity), true);
+  assert.equal(await page.locator('#age-id-entry').isVisible(), false);
+  await page.click('#sign-out');
+  await page.waitForURL('**/auth');
   assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
 });
 
-test('Settings validates age ID for this tab without storing it', async t => {
+test('Settings validates and stores an age ID in the browser until manual clear', async t => {
   const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
   t.after(() => browser.close());
   const page = await browser.newPage();
@@ -319,8 +322,8 @@ test('Settings validates age ID for this tab without storing it', async t => {
   await page.getByText('Age private ID is not stored in this browser.').waitFor();
   await page.locator('#settings-age-id').fill(identity);
   await page.click('#save-age-id');
-  await page.getByText('Age private ID validated and kept in memory for this tab.').waitFor();
-  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
+  await page.locator('#age-storage-message').getByText('Age private ID validated and saved in this browser.').waitFor();
+  assert.equal(await page.evaluate(key => localStorage.getItem('rawrarr.browser.age-id') === key, identity), true);
   assert.equal(await page.locator('#settings-age-id').inputValue(), '');
   assert.equal(await page.locator('#remember-age-id').count(), 0);
 

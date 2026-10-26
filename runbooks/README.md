@@ -41,6 +41,8 @@
 
 - [Fetch GitHub before creating branches or worktrees](2026-10-25-fetch-github-before-new-worktree.md) — Start new task branches and worktrees from the latest fetched intended GitHub ref while preserving existing local work.
 
+- [Remember the age ID after signup and first use](2026-10-25-remember-age-id-after-signup.md) — Save the age ID locally after setup or first validation, restore it on main pages, and clear it on sign-out.
+
 - [Remove Swarmsail OrbStack projects](2026-10-22-remove-swarmsail-orbstack-projects.md) — Remove the unused local Swarmsail and isolated E2E Compose projects while preserving the local Swarmsail host data and verifying the Rawrarr node.
 
 - [Skip GitHub Actions for Markdown-only changes](2026-10-22-skip-actions-markdown-only.md) — Skip push and pull-request runs when changes contain only Markdown files.
