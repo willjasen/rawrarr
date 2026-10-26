@@ -44,6 +44,8 @@
 
 # Rawrarr runbooks
 
+- [Check coordinator UI releases every five minutes](2026-10-26-coordinator-ui-update-five-minute-poll.md) — Restore five-minute polling for the coordinator-only UI bundle updater (issue [#169](https://github.com/willjasen/rawrarr/issues/169)).
+
 - [Move Arr connection setup to Movies and TV](2026-10-26-move-arr-connection-setup.md) — Put Radarr and Sonarr connection forms on their respective library pages and hide library details until configured; issue creation was unavailable.
 
 - [Hide unconfigured Arr services from Overview](2026-10-26-hide-unconfigured-arr-overview.md) — Hide Radarr and Sonarr summary and genre cards until each service is configured on the selected metadata node (issue [#157](https://github.com/willjasen/rawrarr/issues/157)).

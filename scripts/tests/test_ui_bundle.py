@@ -23,6 +23,13 @@ updater = load("update_ui_bundle", "rust-arr/update_ui_bundle.py")
 
 
 class UiBundleTests(unittest.TestCase):
+    def test_coordinator_updater_poll_interval_defaults_to_five_minutes(self):
+        self.assertEqual(updater.DEFAULT_POLL_INTERVAL_SECONDS, 300)
+        self.assertEqual(updater.MIN_POLL_INTERVAL_SECONDS, 300)
+        self.assertEqual(updater.poll_interval_seconds(1), 300)
+        self.assertEqual(updater.poll_interval_seconds(300), 300)
+        self.assertEqual(updater.poll_interval_seconds(900), 900)
+
     @staticmethod
     def release(assets=None):
         return {
