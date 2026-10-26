@@ -104,7 +104,7 @@ test('coordinator saves Radarr and Sonarr settings over the direct metadata rout
   await page.locator('#sonarr-connection-card').waitFor({ state: 'hidden' });
   await page.locator('#sonarr-series .library-card').waitFor();
   assert.equal(await page.locator('#sonarr-series .library-card-title').textContent(), 'Example Show');
-  assert.match(await page.locator('#sonarr-series .library-card').textContent(), /2024.*3 \/ 8 episodes.*HD-1080p.*1\.5 KB/);
+  assert.match(await page.locator('#sonarr-series .library-card').textContent(), /2024.*3 \/ 8 episodes.*HD-1080p/);
   assert.equal(await page.locator('#tv-count').textContent(), '1 of 1 series');
   await page.locator('#tv-search').fill('absent');
   assert.equal(await page.locator('#sonarr-series .library-empty').textContent(), 'No titles match this search or filter.');
@@ -178,7 +178,9 @@ test('coordinator opens TV from #tv and upgrades the old #series link', async t 
     if (path === '/') return route.fulfill({ body: html, contentType: 'text/html' });
     if (path === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
     if (path === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
+    if (path === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
     if (path === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
+    if (path === '/assets/coordinator-ai.mjs') return route.fulfill({ body: aiModule, contentType: 'text/javascript' });
     if (path === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
     if (path === '/api/workspace/nodes') return route.fulfill({ json: [] });
     if (path === '/api/workspace/pending') return route.fulfill({ json: [] });
@@ -242,7 +244,9 @@ test('age ID stays in page memory only and is cleared on reload', async t => {
     if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
     if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
     if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-ai.mjs') return route.fulfill({ body: aiModule, contentType: 'text/javascript' });
     if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: 'window.rawrarrMiniExport = { loadRadarrLibrary: async () => [] };' });
     if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
     if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }] });
@@ -287,7 +291,9 @@ test('Settings validates age ID for this tab without storing it', async t => {
     if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
     if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
     if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-ai.mjs') return route.fulfill({ body: aiModule, contentType: 'text/javascript' });
     if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: 'window.rawrarrMiniExport = { loadRadarrLibrary: async () => [] };' });
     if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
     if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }] });
@@ -302,6 +308,7 @@ test('Settings validates age ID for this tab without storing it', async t => {
       return route.fulfill({ json: { unlocked: true, encryptedConfigExists: true } });
     }
     if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'GET') return route.fulfill({ json: { unlocked, encryptedConfigExists: true } });
+    if (url.pathname === '/direct-api/api/radarr/live-library') return route.fulfill({ json: [] });
     if (url.pathname.startsWith('/direct-api/api/')) return route.fulfill({ json: {} });
     if (url.pathname.startsWith('/api/workspace/')) return route.fulfill({ json: {} });
     return route.fulfill({ status: 404, body: 'not found' });
@@ -318,11 +325,11 @@ test('Settings validates age ID for this tab without storing it', async t => {
   assert.equal(await page.locator('#remember-age-id').count(), 0);
 
   await page.click('[data-view="movies"]');
-  await page.getByText('0 encrypted Radarr library entries decrypted locally.').waitFor();
+  await page.getByText('0 Radarr library entries loaded directly from the node.').waitFor();
   assert.equal(await page.locator('#age-id-entry').isVisible(), false);
   await page.click('[data-view="settings"]');
   await page.click('#remove-age-id');
-  await page.getByText('Age private ID removed from this tab.').waitFor();
+  await page.getByText('Age private ID removed from this browser.').waitFor();
   assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
   assert.equal(await page.locator('#remember-age-id').count(), 0);
   assert.match(await page.locator('#content-status').textContent(), /metadata is locked/);

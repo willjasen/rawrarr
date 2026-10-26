@@ -26,7 +26,7 @@ def main():
     if not args.apply:
         print('Dry run: create isolated PostgreSQL/coordinator/metadata/storage containers, test role boundaries, then remove only test resources. Pass --apply.')
         return
-    prefix = 'rawrarr-testing-roles-' + uuid.uuid4().hex[:10]
+    prefix = 'rawrarr-test-regression-roles-' + uuid.uuid4().hex[:10]
     containers = []
     network = prefix
     with tempfile.TemporaryDirectory(prefix=prefix) as tmp:
@@ -44,7 +44,7 @@ def main():
         def run(name, image, *options):
             full = prefix + '-' + name
             containers.append(full)
-            docker('run','-d','--name',full,'--label','com.docker.compose.project=rawrarr-testing','--network',network,*options,image)
+            docker('run','-d','--name',full,'--label','com.docker.compose.project=rawrarr-test-regression','--network',network,*options,image)
             return full
         def endpoint(name):
             info=json.loads(docker('inspect',name))[0]

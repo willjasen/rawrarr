@@ -47,7 +47,7 @@ test('subscriber recipient endpoint and coordinator device cards use the node id
   assert.match(coordinator, /coordinator-node-avatar\.mjs/);
   assert.match(workspace, /deriveNodeAvatarSeed\(node\.nodeId\)/);
   assert.match(workspace, /device-avatar/);
-  assert.match(workspace, /profile-picture\/\$\{seed\}\/jxl/);
-  assert.match(workspace, /profile-picture\/\$\{seed\}\/png/);
+  assert.match(workspace, /device-picture\/\$\{seed\}\/jxl/);
+  assert.match(workspace, /device-picture\/\$\{seed\}\/png/);
   assert.match(html, /\.device-avatar/);
 });

@@ -1,3 +1,4 @@
+- [Verify local main regression suite](2026-10-25-verify-main-regression-suite.md) — Fix regression fixtures and browser export, then confirm Node, Playwright, and Rust checks pass on a branch based on local main.
 - [Defer subscriber Compose deployment work](2026-10-25-defer-subscriber-compose.md) — Track the remaining optional installer gaps in the roadmap and clean up the completed onboarding branch.
 - [Simplify first-account onboarding](2026-10-22-simplify-first-account-onboarding.md) — Finish passkey, age ID, and signing-key setup on Devices, with subscriber Docker Compose setup available when the owner chooses to add a node.
 - [Integrate shared Radarr recovery](2026-10-22-integrate-radarr-shared-recovery.md) — Port owner-authenticated backup download, progress reporting, and scoped restore behavior onto current `main` through a focused pull request.

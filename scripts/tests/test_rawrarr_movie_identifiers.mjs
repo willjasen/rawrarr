@@ -24,7 +24,7 @@ test('movie titles and TMDb identifiers occupy separate aligned columns', async 
   const headers = await page.locator('table:has(#radarr-movie-rows) th').allTextContents();
   const idIndex = headers.indexOf('TMDb ID');
   assert.ok(idIndex > 0);
-  for (const [index, title, id, year] of [[0, 'A <Movie>', '42', '2020'], [1, 'No identifier', '—', '2021']]) {
+  for (const [index, title, id, year] of [[0, 'A <Movie> (2020)', '42', '2020'], [1, 'No identifier (2021)', '—', '2021']]) {
     const cells = rows.nth(index).locator('td');
     assert.equal(await cells.count(), headers.length);
     assert.equal(await cells.nth(0).textContent(), title);

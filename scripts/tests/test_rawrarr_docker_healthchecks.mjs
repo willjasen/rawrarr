@@ -15,7 +15,7 @@ test('Rawrarr and PostgreSQL containers define readiness health checks', () => {
   assert.match(compose, /postgres:[\s\S]*?healthcheck:[\s\S]*?pg_isready -U rawrarr -d rawrarr/);
 });
 
-test('Docker test containers have unique names in the rawrarr-testing group', () => {
+test('Docker test containers have unique names in the rawrarr-test-regression group', () => {
   assert.match(testRunner, /BASE36 = "0123456789abcdefghijklmnopqrstuvwxyz"/);
   assert.match(testRunner, /def timestamp_code\(\)/);
   assert.match(testRunner, /value = time\.time_ns\(\) \/\/ 1_000_000/);
@@ -24,6 +24,9 @@ test('Docker test containers have unique names in the rawrarr-testing group', ()
   assert.match(testRunner, /com\.docker\.compose\.project=\{PROJECT\}/);
   assert.match(testRunner, /if args\.rebuild_base or not image_exists:/);
   assert.match(testRunner, /copy_project_into_container\(args\.context, name/);
+  assert.match(testRunner, /shutil\.copytree/);
+  assert.doesNotMatch(testRunner, /copytree\([^\n]*web-export/);
+  assert.match(testRunner, /ROOT \/ "docs"/);
   assert.match(testRunner, /f"\{rust_source\}\/\."/);
   assert.match(testRunner, /f"\{tests_source\}\/\."/);
   assert.match(testRunner, /--rebuild-base/);
@@ -39,7 +42,7 @@ test('Docker test containers have unique names in the rawrarr-testing group', ()
   assert.match(testEntrypoint, /END %s \(status=%s\)/);
   assert.match(testEntrypoint, /print_result "Node\.js"/);
   assert.match(testEntrypoint, /browser_test=\/workspace\/scripts\/tests\/test_rawrarr_age_setup_browser\.mjs/);
-  assert.match(testEntrypoint, /node --test "\$browser_test"/);
+  assert.match(testEntrypoint, /node --experimental-global-webcrypto --test "\$browser_test"/);
   assert.match(testEntrypoint, /print_result "Playwright browser"/);
   assert.match(testEntrypoint, /TEST RESULTS playwright=%s node=%s rust=%s/);
   assert.match(testEntrypoint, /test_started_at=/);

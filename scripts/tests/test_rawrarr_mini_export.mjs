@@ -78,10 +78,15 @@ test('browser metadata export includes every indexed movie record and matching a
   assert.equal((await page.locator('#status').textContent()).includes(privateIdentity), false);
   assert.equal(requests.some(({ url }) => url.includes('AGE-SECRET-KEY')), false);
 
-  const downloadPromise = page.waitForEvent('download');
+  const downloadPromise = page.waitForEvent('download', { timeout: 10_000 });
   await page.locator('#identity').fill(privateIdentity);
   await page.locator('#start').click();
-  const download = await downloadPromise;
+  let download;
+  try {
+    download = await downloadPromise;
+  } catch (error) {
+    throw new Error(`Metadata export did not download a ZIP: ${await page.locator('#status').textContent()}`, { cause: error });
+  }
   assert.equal(download.suggestedFilename(), 'rawrarr-metadata-export.zip');
   const archivePath = join(tmp, 'result.zip');
   await download.saveAs(archivePath);

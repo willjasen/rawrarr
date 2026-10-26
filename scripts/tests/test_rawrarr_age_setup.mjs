@@ -37,7 +37,7 @@ test('generated private age identity has a short preview and full value is expos
   assert.match(page, /<img class="brand-logo" src="\/assets\/rawrarr-logo\.png" alt="rawrarr"/);
   assert.match(mainPage, /<source srcset="\/assets\/rawrarr-logo\.jxl" type="image\/jxl">/);
   assert.match(mainPage, /<img class="brand-logo" src="\/assets\/rawrarr-logo\.png" alt="rawrarr"/);
-  assert.match(server, /static_asset\("image\/jxl", include_bytes!\("assets\/rawrarr-logo\.jxl"\)\)/);
+  assert.match(server, /static_asset\("image\/jxl", ui_assets::bytes\("assets\/rawrarr-logo\.jxl", include_bytes!\("assets\/rawrarr-logo\.jxl"\)\)\.await\)/);
   assert.match(server, /\.route\("\/assets\/rawrarr-logo\.jxl", get\(rawrarr_logo_jxl\)\)/);
   assert.deepEqual([...jxlLogo.subarray(0, 2)], [0xff, 0x0a], 'logo asset is a JPEG XL codestream');
   assert.doesNotMatch(page, /<textarea\b/i);

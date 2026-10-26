@@ -144,16 +144,16 @@ export async function loadSharedConfig(identity, base) {
 }
 
 export async function runMiniExport(identity, onProgress = () => {}, base = '') {
-  const url = path => `${base}${path}`;
+  const endpointUrl = path => `${base}${path}`;
   if (!identity.trim().startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('Paste a post-quantum age private ID.');
   onProgress('Reading encrypted metadata index…');
-  const indexResponse = await fetch(url('/api/metadata/export/mini'), { cache: 'no-store' });
+  const indexResponse = await fetch(endpointUrl('/api/metadata/export/mini'), { cache: 'no-store' });
   if (!indexResponse.ok) throw new Error(indexResponse.status === 404 ? 'No encrypted movie metadata is available yet.' : 'Could not read the metadata export index.');
   const index = await indexResponse.json();
   if (!index.textFiles?.length) throw new Error('No encrypted movie metadata records are available to export.');
 
   onProgress('Decrypting shared config in this browser…');
-  const encryptedConfig = await fetchBytes(url('/api/metadata/export/config'));
+  const encryptedConfig = await fetchBytes(endpointUrl('/api/metadata/export/config'));
   const configBytes = await decrypt(identity, encryptedConfig);
   encryptedConfig.fill(0);
   let config;
@@ -178,7 +178,7 @@ export async function runMiniExport(identity, onProgress = () => {}, base = '') 
   const candidates = [];
   for (const [position, ciphertextName] of index.textFiles.entries()) {
     onProgress(`Decrypting movie record ${position + 1} of ${index.textFiles.length}…`);
-    const encryptedText = await fetchBytes(url(`/api/metadata/export/ciphertext/text/${encodeURIComponent(ciphertextName)}`));
+    const encryptedText = await fetchBytes(endpointUrl(`/api/metadata/export/ciphertext/text/${encodeURIComponent(ciphertextName)}`));
     const textBytes = await decrypt(identity, encryptedText);
     encryptedText.fill(0);
     const record = JSON.parse(decoder.decode(textBytes));
@@ -195,7 +195,7 @@ export async function runMiniExport(identity, onProgress = () => {}, base = '') 
     onProgress(`Matching artwork ${position + 1} of ${candidates.length}…`);
     const artworkName = await movieFilename(filenameKey, 'artwork', movie.tmdbId, '.aged');
     if (!index.artworkFiles.includes(artworkName)) continue;
-    const encrypted = await fetchBytes(url(`/api/metadata/export/ciphertext/artwork/${encodeURIComponent(artworkName)}`));
+    const encrypted = await fetchBytes(endpointUrl(`/api/metadata/export/ciphertext/artwork/${encodeURIComponent(artworkName)}`));
     const wrappedArtwork = await decrypt(identity, encrypted);
     encrypted.fill(0);
     const separator = wrappedArtwork.indexOf(10);
@@ -223,12 +223,12 @@ export async function runMiniExport(identity, onProgress = () => {}, base = '') 
   onProgress('Building the ZIP in this browser…');
   const archive = zipSync(files, { level: 0 });
   const blob = new Blob([archive], { type: 'application/zip' });
-  const url = URL.createObjectURL(blob);
+  const downloadUrl = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.href = url;
+  link.href = downloadUrl;
   link.download = 'rawrarr-metadata-export.zip';
   link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  setTimeout(() => URL.revokeObjectURL(downloadUrl), 60_000);
   return manifest.movies.length;
   } finally {
     for (const value of Object.values(files)) if (value instanceof Uint8Array) value.fill(0);

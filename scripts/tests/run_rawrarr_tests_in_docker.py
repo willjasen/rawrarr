@@ -16,7 +16,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[2]
 TESTS = ROOT / "scripts" / "tests"
-PROJECT = "rawrarr-testing"
+PROJECT = "rawrarr-test-regression"
 IMAGE = "rawrarr-testing-base:local"
 BASE36 = "0123456789abcdefghijklmnopqrstuvwxyz"
 CLEANUP_INTERVAL_SECONDS = 60 * 60
@@ -49,7 +49,17 @@ def copy_project_into_container(context: str, name: str, destination: Path) -> N
     shutil.copytree(TESTS, tests_source, ignore=shutil.ignore_patterns(".DS_Store", "__pycache__"))
     subprocess.run(["docker", "--context", context, "cp", f"{rust_source}/.", f"{name}:/workspace/rust-arr/"], check=True)
     subprocess.run(["docker", "--context", context, "cp", f"{tests_source}/.", f"{name}:/workspace/scripts/tests/"], check=True)
-    subprocess.run(["docker", "--context", context, "cp", str(ROOT / "docker-compose.yml"), f"{name}:/workspace/docker-compose.yml"], check=True)
+
+    # The Rust source tree was copied above, including the current UI assets.
+    # Copy only the root-level fixtures needed by source-structure tests.
+    for compose_file in sorted(ROOT.glob("docker-compose*.yml")):
+        subprocess.run(["docker", "--context", context, "cp", str(compose_file), f"{name}:/workspace/{compose_file.name}"], check=True)
+    for fixture in (ROOT / "admin", ROOT / "docs", ROOT / "storage-proxy.Caddyfile"):
+        if not fixture.exists():
+            continue
+        subprocess.run(["docker", "--context", context, "cp", str(fixture), f"{name}:/workspace/"], check=True)
+
+
 
 
 def cleanup_candidates(context: str) -> list[tuple[str, str, str]]:
