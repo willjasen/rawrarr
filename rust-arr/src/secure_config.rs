@@ -877,7 +877,7 @@ impl AgeVault {
         } else {
             encrypt_shared_file(&user_recipient, &user_envelope_path, group_identity.as_bytes())?;
         }
-        Ok(Self {
+        let vault = Self {
             movie_metadata_cache: Default::default(),
             identity,
             user_recipient,
@@ -892,7 +892,24 @@ impl AgeVault {
             local_plaintext_config,
             metadata_filename_key: std::sync::Arc::new(std::sync::OnceLock::new()),
             shared_dir,
-        })
+        };
+        // The first approved node creates the shared config as soon as it
+        // installs the user's identity. `write_config` always encrypts with
+        // the group recipient, never the user's or device's recipient.
+        if !vault.config_path.is_file() {
+            vault.save(&PersistedConfig {
+                device_names: std::collections::HashMap::new(),
+                sonarr: None,
+                radarr_url: String::new(),
+                radarr_api_key: String::new(),
+                radarr_ui_username: String::new(),
+                radarr_ui_password: String::new(),
+                additional_services: Vec::new(),
+                needs_migration: false,
+                metadata_filename_key: None,
+            })?;
+        }
+        Ok(vault)
     }
 
     pub fn generate_identity() -> Result<(String, String), VaultError> {
@@ -2036,6 +2053,22 @@ mod tests {
         .expect("decrypt group identity envelope as the user");
         assert!(recovered_group.status.success());
         assert_eq!(recovered_group.stdout, vault.group_identity.as_bytes());
+        let initial_config_path = shared_dir.join("config.aged");
+        let initial_ciphertext = fs::read(&initial_config_path).expect("first unlock creates shared config");
+        assert!(initial_ciphertext.starts_with(b"age-encryption.org/v1\n"));
+        let initial_plaintext = run_with_input(
+            "age",
+            &["--decrypt", "--identity", "-", path_arg(&initial_config_path).unwrap()],
+            vault.group_identity.as_bytes(),
+        ).expect("group identity decrypts initial config");
+        assert!(initial_plaintext.status.success());
+        assert!(serde_json::from_slice::<serde_json::Value>(&initial_plaintext.stdout).is_ok());
+        let user_decryption = run_with_input(
+            "age",
+            &["--decrypt", "--identity", "-", path_arg(&initial_config_path).unwrap()],
+            identity.as_bytes(),
+        ).expect("attempt user identity decryption");
+        assert!(!user_decryption.status.success(), "config must target the group recipient");
         let config = PersistedConfig {
             device_names: std::collections::HashMap::new(),
             sonarr: None,
