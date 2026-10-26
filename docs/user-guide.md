@@ -73,6 +73,8 @@ The public recipient is safe to share for encryption, but it cannot unlock the c
 
 Movie text records are stored at `/shared/metadata/movies/text/` and encrypted artwork at `/shared/metadata/movies/artwork/`. Posters use shared encrypted artwork when available and the vault is unlocked, with live Radarr fallback. Missing movie details and posters are cached on demand rather than scraping the entire library at once.
 
+For Arr services using a private certificate authority, set `RAWARR_ARR_CA_CERT_FILE` on each subscriber to the PEM-encoded CA certificate. Rawrarr adds that CA to its existing trusted roots for Radarr and Sonarr HTTPS requests; it does not allow HTTP or disable certificate verification. Mount only the CA certificate into the subscriber. The CA private key stays with the service that issues certificates and is never needed by Rawrarr.
+
 ## Recover Radarr on a chosen node
 
 When a Radarr connection is configured and the age vault is unlocked, Rawrarr asks Radarr to create a native backup on startup and every six hours. It age-encrypts the latest backup to `/shared/metadata/radarr/recovery.zip.aged`; Syncthing replicates that ciphertext to the other approved nodes. The archive contains Radarr's database and settings, including any credentials stored by Radarr. Rawrarr's scraped movie metadata and artwork are already stored separately in the shared, age-encrypted `movies/text/` and `movies/artwork/` folders, and remain available independently of the Radarr restore. If capture fails, the previous snapshot is retained and the failure is written to the node log.
