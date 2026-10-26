@@ -315,7 +315,7 @@ function renderDeviceTopology(nodes, observedPeers, deviceNames) {
     item.style.left = `${points[index].x / 10}%`;
     item.style.top = `${points[index].y / 5}%`;
     const name = document.createElement('strong');
-    name.textContent = deviceNames[node.nodeId] || node.displayName || node.nodeId;
+    name.textContent = deviceNames[node.nodeId] || (node.displayName && node.displayName !== node.nodeId ? node.displayName : roleLabel(node.role));
     const role = document.createElement('small');
     role.textContent = `${roleLabel(node.role)} · ${node.online ? 'online' : 'offline'}`;
     item.append(name, role);
@@ -1590,7 +1590,7 @@ async function loadNodes() {
       const nameInput = document.createElement('input');
       nameInput.className = 'device-name-input';
       nameInput.type = 'text';
-      nameInput.value = deviceNames[node.nodeId] || node.displayName || node.nodeId;
+      nameInput.value = deviceNames[node.nodeId] || (node.displayName && node.displayName !== node.nodeId ? node.displayName : roleLabel(node.role));
       nameInput.maxLength = 80;
       nameInput.setAttribute('aria-label', `Name for ${node.nodeId}`);
       nameInput.title = 'Device name';
