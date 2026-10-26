@@ -20,7 +20,7 @@ import xml.etree.ElementTree as ET
 
 CONTEXT = "orbstack"
 IMAGE = "syncthing/syncthing:2.1.5"
-PROJECT = "rawrarr-testing"
+PROJECT = "rawrarr-test-regression"
 BASE36 = "0123456789abcdefghijklmnopqrstuvwxyz"
 
 

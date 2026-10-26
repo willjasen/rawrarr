@@ -10,7 +10,7 @@ test('metadata nodes backfill one uncached Radarr poster at a time', () => {
   assert.match(source, /movie\.poster_url\.is_some\(\) && movie\.artwork_source\.as_deref\(\) == Some\("radarr"\)/);
   assert.match(source, /let total = movies\.iter\(\)\.filter\(\|movie\| movie\.poster_url\.is_some\(\)\)\.count\(\)/);
   assert.match(source, /let cached = vault\.as_ref\(\)\.is_some_and\(\|vault\| vault\.artwork_exists\(tmdb_id\)\)/);
-  assert.match(source, /for tmdb_id in missing\s*\{[\s\S]*?scrape_and_store_movie_artwork\(&radarr, vault\.clone\(\), tmdb_id, state\.artwork_scrape_lock\.clone\(\)\)\.await/);
+  assert.match(source, /for tmdb_id in missing\s*\{[\s\S]*?scrape_and_store_movie_artwork\(&radarr, vault\.clone\(\), tmdb_id, state\.artwork_cache\.clone\(\)/);
   assert.match(source, /\.route\("\/api\/metadata\/artwork\/backfill", get\(metadata_artwork_backfill_status\)\)/);
   assert.match(ui, /id="artwork-backfill-progress"/);
   assert.match(ui, /bar\.value = progress\.scraped/);

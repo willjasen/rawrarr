@@ -56,7 +56,7 @@ test('reload shows server snapshot before slow live results and never lets a lat
   let liveGate = new Promise(resolve => { finishLive = resolve; });
   let finishSnapshot;
   let snapshotGate = Promise.resolve();
-  const snapshot = { movies: [{ title: 'Saved Movie' }], updatedAt: 1700000000 };
+  const snapshot = { movies: [{ title: 'Saved Movie', year: 2023 }], updatedAt: 1700000000 };
   await page.route('http://rawrarr.test/**', async route => {
     const path = new URL(route.request().url()).pathname;
     if (path === '/') return route.fulfill({ body: html, contentType: 'text/html' });
@@ -71,17 +71,17 @@ test('reload shows server snapshot before slow live results and never lets a lat
     return route.fulfill({ status: 503, json: {} });
   });
   await page.goto('http://rawrarr.test/#movies');
-  await page.getByText('Saved Movie', { exact: true }).waitFor();
+  await page.getByText('Saved Movie (2023)', { exact: true }).waitFor();
   assert.match(await page.locator('#movies-message').textContent(), /last updated.*Updating/);
   assert.equal(await page.locator('#refresh-movies').isEnabled(), false);
   finishLive();
-  await page.getByText('Fresh Movie', { exact: true }).waitFor();
+  await page.getByText('Fresh Movie (—)', { exact: true }).waitFor();
   snapshotGate = new Promise(resolve => { finishSnapshot = resolve; });
   await page.reload();
-  await page.getByText('Fresh Movie', { exact: true }).waitFor();
+  await page.getByText('Fresh Movie (—)', { exact: true }).waitFor();
   const response = page.waitForResponse('**/api/radarr/movies/snapshot');
   finishSnapshot();
   await response;
   await page.waitForFunction(() => document.getElementById('movies-message').textContent.includes('live data'));
-  assert.equal(await page.getByText('Saved Movie', { exact: true }).count(), 0);
+  assert.equal(await page.getByText('Saved Movie (2023)', { exact: true }).count(), 0);
 });

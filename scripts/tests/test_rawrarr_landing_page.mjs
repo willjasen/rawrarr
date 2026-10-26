@@ -9,7 +9,7 @@ const coordinator = await readFile(new URL('../../rust-arr/src/coordinator.rs', 
 
 test('signed-out coordinator visitors see the public landing page and can continue to sign-in', async t => {
   assert.match(coordinator, /\.route\("\/", get\(coordinator_home\)\)/);
-  assert.match(coordinator, /async fn coordinator_home\([\s\S]*?if crate::auth::is_authenticated\(&state\.coordinator_auth, &headers\)\.await \{[\s\S]*?include_str!\("coordinator_workspace\.html"\)[\s\S]*?\} else \{\s*axum::response::Html\(include_str!\("landing\.html"\)\)/);
+  assert.match(coordinator, /async fn coordinator_home\([\s\S]*?if crate::auth::is_authenticated\(&state\.coordinator_auth, &headers\)\.await \{[\s\S]*?ui_assets::text\("coordinator_workspace\.html", include_str!\("coordinator_workspace\.html"\)\)[\s\S]*?\} else \{\s*axum::response::Html\(crate::ui_assets::text\("landing\.html", include_str!\("landing\.html"\)\)/);
   assert.match(coordinator, /\.route\("\/auth", get\(coordinator_auth_page\)\)/);
 
   const server = createServer((request, response) => {

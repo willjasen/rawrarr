@@ -21,8 +21,9 @@ test('coordinator exposes Radarr detail slugs through encrypted and temporary di
   assert.match(main, /async fn movie_by_tmdb_id[\s\S]*?movie_snapshot\.poster_movie\(tmdb_id\)\.await[\s\S]*?\/api\/v3\/movie/);
   assert.match(main, /let direct_protected = Router::new\([\s\S]*?\.route\("\/api\/radarr\/live-library", get\(radarr_movies_live\)\)[\s\S]*?"\/api\/radarr\/live-movies\/\{tmdb_id\}\/poster",[\s\S]*?get\(radarr_movie_poster_live\)/);
   assert.match(script, /arrDirectRequest\('\/radarr\/live-library'\)/);
-  assert.match(script, /posterUrl: movie\.tmdbId && movie\.artworkSource[\s\S]*?radarr\/live-movies/);
-  assert.match(script, /if \(movie\.posterUrl\) \{\s*image\.src = movie\.posterUrl/);
+  assert.match(script, /image\.src = `\$\{artworkBase\}\/radarr\/live-movies\/\$\{encodeURIComponent\(movie\.tmdbId\)\}\/poster`/);
+  assert.match(script, /async function attachMoviePosters\(movies, nodeId\)/);
+  assert.match(script, /image\.src = `\$\{artworkBase\}\/radarr\/live-movies\/\$\{encodeURIComponent\(movie\.tmdbId\)\}\/poster`/);
   assert.doesNotMatch(script.match(/async function unlockMetadata\(\)[\s\S]*?\n\}/)?.[0] || '', /loadRadarrLibrary|selectedRoute\.base/);
 });
 

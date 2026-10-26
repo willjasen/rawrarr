@@ -21,7 +21,7 @@ const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, me
 ]);
 
 test('coordinator labels the Sonarr section TV in navigation and its page heading', () => {
-  assert.match(workspace, /id="tv-route-status" class="route-status"[^>]*role="status"/);
+  assert.doesNotMatch(workspace, /id="tv-route-status" class="route-status"/);
   assert.match(workspace, /data-view=\"series\"[^>]*>[\s\S]*?<span class=\"nav-text\">TV<\/span>/);
   assert.match(workspace, /id=\"series-view\" hidden><h1 class=\"page-title\">TV<\/h1>[\s\S]*?id=\"sonarr-settings\"/);
   assert.match(workspace, /id=\"movies-view\" hidden><h1 class=\"page-title\">Movies<\/h1>[\s\S]*?id=\"radarr-settings\"/);
@@ -66,6 +66,8 @@ test('Devices shows a network diagram with one link for each device pair', () =>
   assert.match(workspace, /<section id="device-topology" class="topology-section" aria-labelledby="device-topology-title">[\s\S]*?<h2 id="device-topology-title">Topology<\/h2>/);
   assert.match(workspace, /<div id="device-topology-content"><\/div>/);
   assert.match(workspaceScript, /function renderDeviceTopology\(nodes, observedPeers, deviceNames\)/);
+  assert.match(workspaceScript, /deviceNames\[node\.nodeId\] \|\| node\.displayName \|\| node\.nodeId/);
+  assert.match(workspaceScript, /deviceNameTokens\(node\.displayName\)/);
   assert.match(workspaceScript, /getElementById\('device-topology-content'\)/);
   assert.match(workspaceScript, /nodes\.length \* \(nodes\.length - 1\) \/ 2/);
   assert.match(workspaceScript, /for \(let leftIndex = 0; leftIndex < count; leftIndex \+= 1\)/);
@@ -74,6 +76,15 @@ test('Devices shows a network diagram with one link for each device pair', () =>
   assert.match(workspaceScript, /Add another device to see its links in the network diagram\./);
   assert.match(workspace, /\.topology-edge\.connected \{ stroke:var\(--green\); stroke-width:3 \}/);
   assert.match(workspace, /\.topology-edge\.disconnected \{ stroke:#ef7777 \}/);
+});
+
+test('device names have an adjacent Edit button that unlocks the name field', () => {
+  assert.match(workspaceScript, /nameInput\.readOnly = true/);
+  assert.match(workspaceScript, /editNameButton\.textContent = 'Edit'/);
+  assert.match(workspaceScript, /nameGroup\.append\(nameInput, editNameButton\)/);
+  assert.match(workspaceScript, /nameInput\.readOnly = false;\s*nameInput\.focus\(\);/);
+  assert.match(workspaceScript, /saveDeviceName\(ageIdentity/);
+  assert.match(workspace, /\.device-name-group \{ display:flex/);
 });
 
 test('metadata export in Settings prompts for an age ID when tab memory is empty', () => {
@@ -87,14 +98,15 @@ test('metadata export in Settings prompts for an age ID when tab memory is empty
   assert.doesNotMatch(workspaceScript, /Unlock your age private ID in Movies before exporting metadata/);
 });
 
-test('Sonarr settings use only the browser-to-metadata direct route', () => {
+test('Radarr and Sonarr settings use the configured user-node URL directly from the browser', () => {
   assert.match(workspace, /id=\"sonarr-settings\"/);
   assert.match(workspace, /id=\"sonarr-url\"/);
   assert.match(workspace, /id=\"sonarr-key\"[^>]*type=\"password\"/);
   assert.match(workspace, /roarlay never receives the API key/);
   assert.match(workspaceScript, /async function arrDirectUrl\(\)/);
-  assert.match(workspaceScript, /if \(!route\.direct\)/);
+  assert.match(workspaceScript, /async function arrDirectUrl\(\)[\s\S]*?const route = await chooseNodeRoute\(node, true\)/);
   assert.match(workspaceScript, /return `\$\{route\.base\}\/api`/);
+  assert.match(workspaceScript, /const canOpenNode = node => node\.relayAvailable \|\| Boolean\(node\.directUrl\)/);
   assert.match(workspaceScript, /fetch\(`\$\{base\}\$\{path\}`/);
   assert.match(workspaceScript, /body: JSON\.stringify\(\{ identity, rememberOnDevice: false \}\)/);
   assert.match(workspaceScript, /apiKey: document\.getElementById\(copy\.key\)\.value/);
@@ -181,7 +193,7 @@ test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from th
   assert.match(workspace, /id="profile-picture"/);
   assert.match(workspace, /Generated dinosaur profile picture/);
   assert.doesNotMatch(workspace, /Your name from passkey setup/);
-  assert.match(workspace, /Loading the public age ID from a metadata node/);
+  assert.match(workspace, /Loading the public age ID from a fossil node/);
   assert.match(workspace, /id="profile-name"/);
   assert.match(workspace, /id="sidebar-profile-name"/);
   assert.match(workspace, /id="sidebar-profile-picture"/);
@@ -190,7 +202,7 @@ test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from th
   assert.match(workspaceScript, /sidebarName\.replaceChildren\(\.\.\.words\.map/);
   assert.match(workspaceScript, /sidebarName\.setAttribute\('aria-label', words\.join\(' '\)\)/);
   assert.match(workspaceScript, /const words = \[dinosaurMainColor\(profileAvatarSeed\), dinosaurWingWord\(profileAvatarSeed\), baseFirst, baseSecond\]/);
-  assert.match(workspaceScript, /words\.join\(''\)/);
+  assert.match(workspaceScript, /words\.slice\(0, 2\)\.join\(' '\)/);
   assert.match(workspaceScript, /words\.slice\(0, 2\)\.join\(' '\)/);
   assert.match(workspaceScript, /words\.slice\(2\)\.join\(' '\)/);
   assert.match(workspaceScript, /sidebar-profile-picture-jxl'\)\.srcset = jxlUrl/);
@@ -256,7 +268,7 @@ test('sidebar profile name displays four words in two columns with an accessible
 });
 
 test('node list and relay are restricted to the signed-in owner and trusted configured targets', () => {
-  assert.match(coordinator, /WHERE user_id=\$1 ORDER BY CASE role/);
+  assert.match(coordinator, /WHERE n\.user_id=\$1 ORDER BY CASE n\.role/);
   assert.match(coordinator, /WHERE id=\$1 AND user_id=\$2/);
   assert.match(coordinator, /RAWARR_NODE_RELAY_TARGETS/);
   assert.match(coordinator, /state\.relay_targets\.get\(&node_id\)/);
@@ -297,11 +309,11 @@ test('coordinator workspace selects nodes, reads Radarr directly, and keeps conf
   assert.match(workspaceScript, /secretConfigKey = .*username/);
   assert.match(workspaceScript, /'<REDACTED>'/);
   assert.match(metadataExport, /loadSharedConfig/);
-  assert.match(workspaceScript, /base: `\/nodes\/\$\{encodeURIComponent\(nodeId\)\}`/);
+  assert.match(workspaceScript, /base: `\/nodes\/\$\{encodeURIComponent\(node\.nodeId\)\}`/);
   assert.match(workspaceScript, /movie-count/);
-  assert.match(workspaceScript, /IntersectionObserver/);
+  assert.match(workspaceScript, /poster\.loading = 'lazy'/);
   assert.match(workspace, /id="movies"/);
-  assert.match(workspaceScript, /textContent = `\$\{movie\.title\}/);
+  assert.match(workspaceScript, /title\.textContent = item\.title \|\| 'Untitled'/);
   assert.match(workspaceScript, /\/api\/workspace\/pending/);
   assert.match(workspaceScript, /\/api\/workspace\/approve/);
   assert.match(coordinator, /fn ciphertext_export_path\(path: &str\)/);
@@ -335,9 +347,9 @@ test('coordinator node buttons display accessible direct, relay, and offline rou
   assert.match(deviceRoutes, /status: 'offline'/);
   assert.match(deviceRoutes, /device\.relayAvailable \? 'relay' : 'offline'/);
   assert.match(deviceRoutes, /status, directRoute/);
-  assert.match(workspaceScript, /stateLabel\.textContent = routeLabel/);
+  assert.match(workspaceScript, /stateLabel\.textContent = latencyLabel \|\| routeLabel/);
   assert.match(workspaceScript, /if \(!node\.relayAvailable && !node\.directUrl\)/);
-  assert.match(workspaceScript, /const canOpenNode = node => node\.online && \(node\.relayAvailable \|\| Boolean\(node\.directUrl\)\)/);
+  assert.match(workspaceScript, /const canOpenNode = node => node\.relayAvailable \|\| Boolean\(node\.directUrl\)/);
   assert.match(workspace, /\.node-state\.online \.node-state-indicator \{ border-color:#a6e3a1; background:#3bc46b/);
   assert.match(workspace, /\.node-state\.offline \.node-state-indicator \{ border-color:#ff9999; background:#ef5c5c/);
   assert.match(workspace, /\.node-state\.direct \.node-state-indicator \{ border-color:#a6e3a1; background:#3bc46b/);
@@ -354,12 +366,13 @@ test('default metadata selection measures online direct metadata nodes and selec
   assert.match(workspaceScript, /checkDeviceRoutes\(workspaceNodes, \{ refresh \}\)/);
   assert.match(workspaceScript, /stateLabel\.textContent = latencyLabel \|\| routeLabel/);
   assert.match(workspaceScript, /Direct Tailscale route active \(\$\{latencyLabel\}\)/);
+  assert.match(workspaceScript, /const relayRoute = \{ nodeId: node\.nodeId, base: `\/nodes\/\$\{encodeURIComponent\(node\.nodeId\)\}`, direct: false \}/);
 });
 
 test('overview distinguishes an available metadata node from no online metadata node', () => {
   assert.match(workspaceScript, /const onlineMetadata = workspaceNodes\.some\(candidate => candidate\.role === 'metadata' && candidate\.online\)/);
-  assert.match(workspaceScript, /Metadata node not selected/);
-  assert.match(workspaceScript, /No online metadata node/);
+  assert.match(workspaceScript, /Fossil node not selected/);
+  assert.match(workspaceScript, /No online fossil node/);
 });
 
 test('Overview genre charts show the top ten genres and combine the remainder as Other', () => {

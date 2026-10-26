@@ -19,7 +19,8 @@ test('coordinator advertises configured coordinator or tailnet direct routes to 
   assert.match(coordinator, /RAWARR_NODE_DIRECT_TARGETS/);
   assert.match(coordinator, /fn validate_direct_target\(origin: &str, target: &str\)/);
   assert.match(coordinator, /host\.ends_with\("\.risk-mermaid\.ts\.net"\)/);
-  assert.match(coordinator, /direct_url: state\.direct_targets\.get\(&node_id\)/);
+  assert.match(coordinator, /host == "rawrarr\.risk-mermaid\.ts\.net"[\s\S]*host\.starts_with\("rawrarr-"\)/);
+  assert.match(coordinator, /state\.direct_targets\.get\(&node_id\)\.map\(url::Url::to_string\)/);
   assert.match(coordinator, /api\/workspace\/direct-session/);
   assert.match(coordinator, /headers\.get\(header::ORIGIN\).*state\.web_origin/);
   assert.match(coordinator, /SELECT role FROM rawrarr_nodes WHERE id=\$1 AND user_id=\$2/);
@@ -42,17 +43,16 @@ test('metadata and storage direct listeners expose health and session-protected 
   assert.match(protectedRoutes, /\/api\/settings\/age/);
   assert.match(protectedRoutes, /\/api\/settings\/radarr/);
   assert.match(protectedRoutes, /\/api\/settings\/sonarr/);
-  assert.doesNotMatch(protectedRoutes, /\/api\/radarr|\/api\/auth/);
+  assert.match(protectedRoutes, /\/api\/radarr\/live-library/);
+  assert.doesNotMatch(protectedRoutes, /\/api\/auth\/(?:login|logout|register)/);
   assert.match(nodeAuth, /direct_session_token\(headers\)\.or_else\(\|\| crate::auth::cookie_token\(headers\)\)/);
 });
 
 test('workspace automatically selects direct Tailscale access, visibly reports it, and falls back to coordinator relay', () => {
-  assert.match(workspace, /id="route-status"/);
-  assert.match(workspace, /id="tv-route-status" class="route-status"/);
-  assert.match(workspace, /\.route-status\[data-state="direct"\]/);
-  assert.match(workspace, /\.route-status\[data-state="relay"\]/);
-  assert.match(workspace, /\.route-status\[data-state="fallback"\]/);
-  assert.match(workspace, /prefers-reduced-motion:reduce/);
+  assert.doesNotMatch(workspace, /id="tv-route-status" class="route-status"/);
+  assert.match(script, /state\.className = `node-state \$\{routeState\}`/);
+  assert.match(script, /direct: 'Direct',[\s\S]*relay: 'Relay',[\s\S]*offline: 'Offline'/);
+  assert.match(script, /aria-label', route\?\.status === 'direct' && latencyLabel/);
   assert.match(routes, /export async function checkDeviceRoutes\(devices/);
   assert.match(routes, /status, directRoute/);
   assert.match(routes, /api\/direct\/health/);
@@ -62,14 +62,10 @@ test('workspace automatically selects direct Tailscale access, visibly reports i
   assert.match(script, /api\/workspace\/direct-session/);
   assert.match(script, /api\/direct\/session/);
   assert.match(script, /credentials: 'include'/);
-  assert.match(script, /function setRouteStatus\(message, state\)/);
-  assert.match(script, /\['route-status', 'tv-route-status'\]/);
   assert.match(script, /if \(view === 'series' && updateHash\)[\s\S]*?chooseNodeRoute\(selectedNodeDetails, true\)/);
-  assert.match(script, /setRouteStatus\(`Direct Tailscale route active \(\$\{route\.latencyMs\.toFixed\(0\)} ms\)\.`, 'direct'\)/);
+  assert.match(script, /if \(deviceRoute\?\.status === 'direct'\) return chooseDirectRoute\(node, deviceRoute\.directRoute\)/);
+  assert.match(script, /const relayRoute = \{ nodeId: node\.nodeId, base: `\/nodes\/\$\{encodeURIComponent\(node\.nodeId\)\}`, direct: false \}/);
   assert.match(script, /Direct Tailscale route active/);
-  assert.match(script, /Roarlay relay route active \(direct Tailscale route unavailable\)\./);
-  assert.match(script, /direct request failed; using fallback/);
-  assert.match(script, /`\/nodes\/\$\{encodeURIComponent\(nodeId\)\}`/);
   assert.match(compose, /RAWARR_NODE_DIRECT_TARGETS/);
   assert.match(compose, /RUST_ARR_DIRECT_LISTEN_ADDR: 127\.0\.0\.1:8082/);
   assert.match(compose, /mac-mini-storage.*rawrarr-mini\.risk-mermaid\.ts\.net/);

@@ -35,7 +35,8 @@ test('standalone metadata Compose identifies the service and device as fossil', 
 test('Mini storage and Serve proxy use only loopback in the Tailscale namespace', () => {
   assert.match(storage, /network_mode: "container:\$\{RAWARR_TAILSCALE_CONTAINER:-rawrarr-mini-tailscale\}"/);
   assert.match(storage, /RUST_ARR_LISTEN_ADDR: 127\.0\.0\.1:8080/);
-  assert.match(storage, /RAWARR_COORDINATOR_SOCKS5_URL: .*127\.0\.0\.1:1055/);
+  assert.match(storage, /RUST_ARR_DIRECT_LISTEN_ADDR: 127\.0\.0\.1:8083/);
+  assert.match(storage, /RAWARR_DIRECT_ALLOWED_ORIGIN: https:\/\/rawrarr\.risk-mermaid\.ts\.net/);
   assert.match(miniRelays, /storage-proxy\.Caddyfile/);
   assert.match(proxyConfig, /bind 127\.0\.0\.1/);
   assert.match(proxyConfig, /reverse_proxy 127\.0\.0\.1:8080/);

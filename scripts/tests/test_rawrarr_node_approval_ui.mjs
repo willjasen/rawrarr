@@ -48,7 +48,7 @@ test('approved node registration synchronizes its configured name without breaki
   assert.match(coordinator, /UPDATE rawrarr_node_enrollments SET display_name=\$2 WHERE node_id=\$1 AND approved_at IS NOT NULL/);
   assert.match(coordinator, /#\[serde\(default\)\][\s\S]*display_name: Option<String>/);
   assert.match(coordinator, /#\[serde\(rename_all = "camelCase", deny_unknown_fields\)\][\s\S]*struct Registration/);
-  assert.match(coordinator, /SELECT id, role, user_id FROM rawrarr_nodes WHERE token_sha256=\$1/);
+  assert.match(coordinator, /SELECT id, role, user_id, signing_public_key FROM rawrarr_nodes WHERE token_sha256=\$1/);
   assert.match(coordinator, /already loaded for its original identity/);
   assert.match(coordinator, /SET display_name=\$2 WHERE node_id=\$1 AND user_id=\$3 AND approved_at IS NOT NULL/);
 });
@@ -58,7 +58,7 @@ test('the coordinator assigns enrollment to the signed-in account and filters ap
   assert.match(coordinator, /e\.user_id=\$1/);
   assert.match(coordinator, /request_id=\$1 AND user_id=\$2/);
   assert.match(coordinator, /owner_display_name/);
-  assert.match(coordinator, /rawrarr_nodes\(id, role, token_sha256, origin, rp_id, user_id\)/);
+  assert.match(coordinator, /rawrarr_nodes\(id, role, token_sha256, origin, rp_id, user_id, signing_public_key, signing_fingerprint, signing_approval_payload, signing_approval_signature\)/);
 });
 
 test('reject removes only an owner-scoped pending request without approving it', () => {

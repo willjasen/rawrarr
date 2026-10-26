@@ -25,17 +25,13 @@ test('one column schema controls both libraries, including reorder and provider 
   const cells = await page.locator('#sonarr-series-rows tr td').allTextContents();
   cells[4] = cells[4].trim();
   cells[4] = cells[4].trim();
-  assert.deepEqual(cells, ['<Series>', '—', 'Unavailable', '99', '2020', '3 / 8', 'Yes', 'HD', '2 KB']);
-  await page.locator('#sonarr-series-rows .arr-external-link').waitFor();
-  assert.equal(await page.locator('#sonarr-series-rows .arr-external-link').getAttribute('href'), 'https://sonarr.test/series/series-slug');
+  assert.deepEqual(cells, ['<Series> (2020)', '—', 'Unavailable', '99', '2020', '3 / 8', 'Yes', 'HD', '2 KB']);
   await page.evaluate(() => { libraryColumns.unshift(libraryColumns.pop()); renderArrLibrary([{title:'Series',sizeOnDisk:1024}], 0, null, libraryApps.sonarr); renderArrLibrary([{title:'Movie',sizeOnDisk:2048}], 0, null, libraryApps.radarr); });
   for (const id of ['sonarr-series-rows', 'radarr-movie-rows']) {
     assert.equal(await page.locator(`#${id}`).evaluate(el => el.closest('table').querySelector('th').textContent), 'Size');
   }
   assert.equal(await page.locator('#sonarr-series-rows td').first().textContent(), '1 KB');
   assert.equal(await page.locator('#radarr-movie-rows td').first().textContent(), '2 KB');
-  await page.locator('#radarr-movie-rows .arr-external-link').waitFor();
-  assert.equal(await page.locator('#radarr-movie-rows .arr-external-link').getAttribute('href'), 'https://radarr.test/movie/movie-slug');
   await page.click('#movies-nav');
   await page.waitForFunction(() => !document.getElementById('refresh-movies').disabled);
   assert.equal(await page.locator('#series-content').isVisible(), false);

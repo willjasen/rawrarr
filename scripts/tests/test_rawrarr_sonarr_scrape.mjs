@@ -25,7 +25,7 @@ test('Arr backfills share one low-rate record lock across Radarr and Sonarr', ()
   assert.match(main, /let \(series, profiles\) = match \{\s*let _guard = state\.artwork_scrape_lock\.lock\(\)\.await;\s*match sonarr::raw_series\(&client\)\.await/);
   assert.match(main, /for tmdb_id in missing\s*\{[\s\S]*?artwork_scrape_lock\.lock\(\)\.await[\s\S]*?scrape_and_store_movie_artwork/);
   assert.match(main, /for \(tvdb_id, item\) in records\s*\{[\s\S]*?artwork_scrape_lock\.lock\(\)\.await[\s\S]*?sonarr::scrape_and_store/);
-  assert.equal((main.match(/sleep\(Duration::from_secs\(2\)\)/g) ?? []).length, 2);
+  assert.equal((main.match(/sleep\(Duration::from_secs\(2\)\)/g) ?? []).length, 3);
   assert.match(main, /let _guard = state\.artwork_scrape_lock\.lock\(\)\.await;[\s\S]*?scrape_and_store_movie_artwork/);
 });
 
@@ -58,9 +58,10 @@ test('Sonarr metadata and artwork stay in separate HMAC-named age-encrypted TV f
   assert.match(config, /store_tv_metadata[\s\S]*?encrypt_shared_file/);
   assert.match(workspace, /id="sonarr-scrape-status"/);
   assert.match(workspace, /id="sonarr-scrape-progress"/);
-  assert.match(workspaceScript, /arrDirectRequest\('\/metadata\/sonarr\/backfill'\)/);
-  assert.match(workspaceScript, /Saving Sonarr metadata and artwork to encrypted shared metadata/);
-  assert.match(workspaceScript, /poster\.src = `\$\{artworkBase\}\/sonarr\/series\/\$\{encodeURIComponent\(item\.tvdbId\)\}\/poster`/);
+  assert.match(workspaceScript, /arrDirectRequest\(provider === 'radarr' \? '\/metadata\/artwork\/backfill' : '\/metadata\/sonarr\/backfill'\)/);
+  assert.match(workspaceScript, /Scraping .* metadata and artwork to encrypted shared metadata/);
+  assert.match(workspaceScript, /async function attachSonarrPosters\(rows\)/);
+  assert.match(workspaceScript, /poster\.src = `\$\{artworkBase\}\/sonarr\/series\/\$\{encodeURIComponent\(poster\.dataset\.tvdbId\)\}\/poster`/);
   assert.match(workspaceScript, /poster\.loading = 'lazy'/);
   assert.match(main, /\.route\("\/api\/sonarr\/series\/\{tvdb_id\}\/poster", get\(get_sonarr_poster\)\)/);
   assert.match(main, /vault\.load_tv_artwork_cached\(tvdb_id/);

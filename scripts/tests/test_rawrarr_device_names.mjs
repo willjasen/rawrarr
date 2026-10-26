@@ -25,19 +25,21 @@ test('device names are persisted as a backward-compatible age config field', () 
   assert.match(browser, /new age\.Encrypter\(\)/);
 });
 
-test('Overview stays minimal and device management lives in its own tab without a rename button', () => {
+test('Overview and device management stay separate, with age-encrypted name editing', () => {
   assert.match(html, /data-view="devices"[^>]*>[\s\S]*?Devices/);
-  assert.match(html, /id="overview-view"><h1 class="page-title">Overview<\/h1><\/section>/);
-  assert.match(html, /id="devices-view"[\s\S]*?id="nodes"[\s\S]*?id="pending"/);
+  assert.match(html, /id="overview-view"><h1 class="page-title">Overview<\/h1>/);
+  assert.match(html, /id="devices-view"[\s\S]*?id="pending"[\s\S]*?id="nodes"/);
   assert.match(workspace, /'overview', 'devices', 'movies'/);
   assert.match(workspace, /className = 'device-name-input'/);
   assert.match(workspace, /nameInput\.addEventListener\('change'/);
   assert.match(workspace, /event\.key === 'Enter'/);
   assert.match(workspace, /card\.addEventListener\('click', event =>/);
-  assert.match(workspace, /card\.append\(heading, detail\)/);
+  assert.match(workspace, /card\.append\(identityRow, detail\)/);
   assert.doesNotMatch(workspace, /textContent = 'Open node'/);
   assert.match(workspace, /document\.activeElement\?\.classList\.contains\('device-name-input'\)/);
-  assert.doesNotMatch(workspace, /rename-device|textContent = 'Rename'/i);
+  assert.match(workspace, /editNameButton\.textContent = 'Edit'/);
+  assert.match(workspace, /nameGroup\.append\(nameInput, editNameButton\)/);
+  assert.match(html, /\.device-name-group \{ display:flex/);
 });
 
 test('coordinator UI decrypts names in the browser and only relays age ciphertext for writes', () => {
