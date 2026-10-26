@@ -1,6 +1,6 @@
 - `test_rawrarr_library_text_cache.mjs` — checks node-scoped browser library text caching, immediate Movies/TV rendering, live refresh, and separately loaded artwork. Run with `node --test scripts/tests/test_rawrarr_library_text_cache.mjs`.
 - `test_rawrarr_library_browser.mjs` — checks that Movies and TV use one responsive, searchable, filterable poster-card renderer with service-specific availability. Run with `node --test scripts/tests/test_rawrarr_library_browser.mjs`.
-- `test_rawrarr_artwork_cache.rs` — checks disabled-cache file reads and disk fallback when Redis is unreachable; runs with the Rust suite or `cargo test artwork_cache` in the isolated test image.
+- `test_rawrarr_artwork_cache.rs` — checks disabled-cache file reads and disk fallback when Redis is unreachable. Its Valkey integration test additionally verifies PING and encrypted-byte storage with `RAWARR_TEST_VALKEY_URL=redis://valkey:6379/`; run it in the isolated Rust test image with a Valkey 8 service on the same disposable Docker network using `cargo test --locked --offline --manifest-path /workspace/rust-arr/Cargo.toml valkey_stores_and_returns_encrypted_artwork_when_configured -- --nocapture`.
 
 - `test_rawrarr_coordinator_arr_links.mjs` — checks the coordinator's encrypted Radarr slug flow, direct metadata route, browser-only reachability gate, and year-cell icon wiring for Movies and TV. Run with `node --test scripts/tests/test_rawrarr_coordinator_arr_links.mjs`.
 # Rawrarr tests

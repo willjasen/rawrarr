@@ -23,10 +23,11 @@ Use Valkey for the Rawrarr MacBook metadata-node artwork cache and record the lo
 - `node --test scripts/tests/test_rawrarr_node_network_isolation.mjs` passed (5 tests).
 - `docker compose -f docker-compose.metadata.yml config --quiet` passed with validation-only required variable paths and node ID.
 - `docker compose -f docker-compose.yml -f docker-compose.tailscale-macbook.yml config --quiet` passed with validation-only secret-file paths and identity fingerprint. No secret file contents were read.
+- Started isolated Docker network `rawrarr-valkey-verification` with `valkey/valkey:8-alpine` and a separate Rust test container from `rawrarr-testing-base:local`. `cargo test ... valkey_stores_and_returns_encrypted_artwork_when_configured -- --nocapture` passed against that Valkey service: PING succeeded and the exact encrypted fixture bytes were present under a versioned artwork key.
 - `git diff --check` passed.
 
 ## Deployment and remaining work
 
-No live deployment was performed. The MacBook host's active Compose file is outside this repository, and this branch has not been published to GitHub `main`. After code review/merge, update the host-owned Compose source to the published Valkey version, explicitly choose whether to enable the artwork cache, acquire the fossil deployment lock, and verify Valkey `PONG`, fossil health, cache reachability when enabled, and existing Tailscale Serve routes. Do not change roarlay or the coordinator.
+No internal deployment was performed yet. The MacBook host's active Compose file is outside this repository. After code review/merge, update the host-owned Compose source from the published `main` revision, acquire the fossil deployment lock, and verify Valkey `PONG`, fossil health, cache reachability, and existing Tailscale Serve routes. Preserve the existing cache-enable setting unless the owner explicitly asks to change it. Do not change roarlay or the coordinator.
 
 The Valkey service is only a node-local artwork cache. Peer metadata distribution via RPC and Merkle trees remains design work requiring a protocol specification, security review, two-node prototype, conflict/tombstone policy, and adversarial/offline tests.
