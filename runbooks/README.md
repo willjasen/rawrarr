@@ -45,6 +45,8 @@
 
 # Rawrarr runbooks
 
+- [Restore the current MacBook fossil route](2026-10-26-restore-current-macbook-fossil-route.md) — Map the live MacBook node ID to its verified tailnet relay and direct API endpoints so the Devices card can report a usable route (issue [#181](https://github.com/willjasen/rawrarr/issues/181)).
+
 - [Check coordinator UI releases every five minutes](2026-10-26-coordinator-ui-update-five-minute-poll.md) — Restore five-minute polling for the coordinator-only UI bundle updater (issue [#169](https://github.com/willjasen/rawrarr/issues/169)).
 
 - [Move Arr connection setup to Movies and TV](2026-10-26-move-arr-connection-setup.md) — Put Radarr and Sonarr connection forms on their respective library pages and hide library details until configured; issue creation was unavailable.
