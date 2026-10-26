@@ -42,6 +42,8 @@
 
 # Rawrarr runbooks
 
+- [Separate node check-in and browser route status](2026-10-25-separate-node-online-and-route-status.md) — Clarify coordinator heartbeat versus browser direct/relay reachability and allow device avatars through either route (issue [#86](https://github.com/willjasen/rawrarr/issues/86)).
+
 - [Hide topology until a device is online](2026-10-25-hide-topology-until-online.md) — Keep the topology section hidden until the first enrolled device reports online; cover empty, offline, and online states in regression and browser tests (issue [#75](https://github.com/willjasen/rawrarr/issues/75)).
 
 - [Fetch GitHub before creating branches or worktrees](2026-10-25-fetch-github-before-new-worktree.md) — Start new task branches and worktrees from the latest fetched intended GitHub ref while preserving existing local work.

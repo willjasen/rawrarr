@@ -1578,13 +1578,14 @@ async function loadNodes() {
       const routeLabel = {
         direct: 'Direct',
         relay: 'Relay',
-        offline: 'Offline',
+        offline: node.online ? 'Route unavailable' : 'Not checking in',
       }[route?.status || 'offline'];
+      const nodeStateLabel = node.online ? `Online · ${routeLabel}` : routeLabel;
       const latencyLabel = route?.status === 'direct' && route.directRoute
         ? `${route.directRoute.latencyMs.toFixed(0)} ms`
         : '';
       const routeState = routeLabel.toLowerCase();
-      state.className = `node-state ${routeState}`;
+      state.className = `node-state ${node.online ? 'online' : 'offline'} ${routeState}`;
       state.setAttribute('aria-label', route?.status === 'direct' && latencyLabel
         ? `Direct Tailscale route active (${latencyLabel}).`
         : routeLabel);
@@ -1593,7 +1594,7 @@ async function loadNodes() {
       indicator.setAttribute('aria-hidden', 'true');
       const stateLabel = document.createElement('span');
       stateLabel.className = 'node-state-label';
-      stateLabel.textContent = latencyLabel || routeLabel;
+      stateLabel.textContent = latencyLabel ? `Online · ${latencyLabel}` : nodeStateLabel;
       state.append(indicator, stateLabel);
       const nameInput = document.createElement('input');
       nameInput.className = 'device-name-input';

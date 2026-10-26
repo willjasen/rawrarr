@@ -367,7 +367,9 @@ test('coordinator node buttons display accessible direct, relay, and offline rou
   assert.match(deviceRoutes, /status: 'offline'/);
   assert.match(deviceRoutes, /device\.relayAvailable \? 'relay' : 'offline'/);
   assert.match(deviceRoutes, /status, directRoute/);
-  assert.match(workspaceScript, /stateLabel\.textContent = latencyLabel \|\| routeLabel/);
+  assert.match(workspaceScript, /nodeStateLabel = node\.online \? `Online · \$\{routeLabel\}` : routeLabel/);
+  assert.match(workspaceScript, /stateLabel\.textContent = latencyLabel \? `Online · \$\{latencyLabel\}` : nodeStateLabel/);
+  assert.match(workspaceScript, /if \(!node\.online \|\| !node\.relayAvailable\) return/);
   assert.match(workspaceScript, /if \(!node\.relayAvailable && !node\.directUrl\)/);
   assert.match(workspaceScript, /const canOpenNode = node => node\.relayAvailable \|\| Boolean\(node\.directUrl\)/);
   assert.match(workspace, /\.node-state\.online \.node-state-indicator \{ border-color:#a6e3a1; background:#3bc46b/);
@@ -384,7 +386,7 @@ test('default metadata selection measures online direct metadata nodes and selec
   assert.match(deviceRoutes, /signal: AbortSignal\.timeout\(2500\)/);
   assert.match(deviceRoutes, /probeCacheMilliseconds = 15_000/);
   assert.match(workspaceScript, /checkDeviceRoutes\(workspaceNodes, \{ refresh \}\)/);
-  assert.match(workspaceScript, /stateLabel\.textContent = latencyLabel \|\| routeLabel/);
+  assert.match(workspaceScript, /stateLabel\.textContent = latencyLabel \? `Online · \$\{latencyLabel\}` : nodeStateLabel/);
   assert.match(workspaceScript, /Direct Tailscale route active \(\$\{latencyLabel\}\)/);
   assert.match(workspaceScript, /const relayRoute = \{ nodeId: node\.nodeId, base: `\/nodes\/\$\{encodeURIComponent\(node\.nodeId\)\}`, direct: false \}/);
 });
