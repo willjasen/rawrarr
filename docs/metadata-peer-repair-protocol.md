@@ -2,7 +2,7 @@
 
 ## Status
 
-Design for the initial two-fossil implementation. No config RPC/Merkle repair is implemented. The current MacBook Valkey service caches encrypted artwork only; the Mac mini fossil has no Valkey service. The MacBook has `/shared/config.aged`; the Mac mini does not. See [issue #100](https://github.com/willjasen/rawrarr/issues/100) and the [task runbook](../runbooks/2026-10-26-valkey-metadata-mirror-rpc.md).
+Approved design for the initial two-fossil implementation. The code now has a ciphertext-only local Valkey mirror/rehydration foundation and Merkle/conflict-order primitives; authenticated peer RPC, signed durable revision exchange, and reconnect repair are not implemented yet. At the initial inspection, the MacBook Valkey service cached encrypted artwork only, the Mac mini fossil had no Valkey service, the MacBook had `/shared/config.aged`, and the Mac mini did not. See [issue #100](https://github.com/willjasen/rawrarr/issues/100) and the [task runbook](../runbooks/2026-10-26-valkey-metadata-mirror-rpc.md).
 
 ## Scope and data boundary
 

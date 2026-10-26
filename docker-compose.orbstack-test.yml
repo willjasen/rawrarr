@@ -158,6 +158,8 @@ services:
       RAWARR_DATA_DIR: /data
       RAWARR_SHARED_DATA_DIR: /shared
       RAWARR_METADATA_DIR: /metadata
+      RAWARR_CONFIG_CACHE_URL: redis://127.0.0.1:6379/
+      RAWARR_LOCAL_PLAINTEXT_CONFIG: "false"
       RAWARR_COORDINATOR_URL: http://coordinator:8080
       RAWARR_COORDINATOR_LOCAL_HTTP: "true"
       RAWARR_ARR_CA_CERT_FILE: /run/secrets/arr_test_ca
@@ -171,7 +173,7 @@ services:
         target: arr_test_ca
     volumes:
       - orbstack-test-node-a:/data
-      - orbstack-test-shared:/shared
+      - orbstack-test-shared-a:/shared
     network_mode: service:tailscale-a
     depends_on:
       roarlay:
@@ -181,6 +183,21 @@ services:
       sonarr:
         condition: service_healthy
       arr-proxy:
+        condition: service_started
+      valkey-a:
+        condition: service_healthy
+
+  valkey-a:
+    image: valkey/valkey:8-alpine
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    network_mode: service:tailscale-a
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    depends_on:
+      tailscale-a:
         condition: service_started
 
   tailscale-b:
@@ -215,6 +232,8 @@ services:
       RAWARR_DATA_DIR: /data
       RAWARR_SHARED_DATA_DIR: /shared
       RAWARR_METADATA_DIR: /metadata
+      RAWARR_CONFIG_CACHE_URL: redis://127.0.0.1:6379/
+      RAWARR_LOCAL_PLAINTEXT_CONFIG: "false"
       RAWARR_COORDINATOR_URL: http://coordinator:8080
       RAWARR_COORDINATOR_LOCAL_HTTP: "true"
       RAWARR_NODE_TOKEN_FILE: /run/secrets/node_token
@@ -225,11 +244,26 @@ services:
         target: node_token
     volumes:
       - orbstack-test-node-b:/data
-      - orbstack-test-shared:/shared
+      - orbstack-test-shared-b:/shared
     network_mode: service:tailscale-b
     depends_on:
       roarlay:
         condition: service_healthy
+      valkey-b:
+        condition: service_healthy
+
+  valkey-b:
+    image: valkey/valkey:8-alpine
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    network_mode: service:tailscale-b
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    depends_on:
+      tailscale-b:
+        condition: service_started
 
 volumes:
   orbstack-test-postgres:
@@ -238,7 +272,8 @@ volumes:
   orbstack-test-headscale:
   orbstack-test-node-a:
   orbstack-test-node-b:
-  orbstack-test-shared:
+  orbstack-test-shared-a:
+  orbstack-test-shared-b:
   orbstack-test-ts-a:
   orbstack-test-ts-b:
   orbstack-test-ts-coordinator:

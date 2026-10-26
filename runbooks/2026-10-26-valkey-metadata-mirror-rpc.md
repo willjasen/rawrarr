@@ -22,6 +22,10 @@ Replicate only encrypted `/shared/config.aged` through authenticated RPC/Merkle 
 - The user explicitly requires no plaintext config copy on node-local disk. Revision journals must contain only ciphertext, signed digests, counters, and opaque IDs.
 - Fetched the newer `origin/main` at `e530450` and rebased this task branch; no other worktree or branch was changed.
 - Keep all operational deployment work on published GitHub `main`; no live service or Syncthing ignore rule was changed during inspection.
+- The user approved the protocol draft. Added a ciphertext-only Valkey cache keyed by pinned root fingerprint and ciphertext SHA-256, startup/periodic mirroring from the active file, local Valkey-to-file rehydration when the active file is missing, age ciphertext bounds checking, and deterministic revision/Merkle primitives.
+- Updated metadata Compose variants to give the app a local Valkey URL; expanded the isolated two-node test Compose with independent `/shared` volumes and Valkey instances.
+- Set `RAWARR_LOCAL_PLAINTEXT_CONFIG=false` for the MacBook metadata overlay and both isolated test fossils so node containers do not write a plaintext settings mirror.
+- Added Rust regression coverage for ciphertext validation, Merkle stability, and deterministic conflict ordering.
 
 ## Verification
 
@@ -30,8 +34,11 @@ Replicate only encrypted `/shared/config.aged` through authenticated RPC/Merkle 
 - Read-only checks confirmed `/data/radarr-config.json` is absent on both live nodes; the MacBook config file has the expected age ciphertext prefix. No plaintext configuration was read or printed.
 - Confirmed both Macs run native Syncthing and neither `/shared` root has `.stignore`. No ignore file was written. The official Syncthing guidance says `.stignore` is local to each synchronized folder and is not propagated to other devices; add and verify the root-level `/config.aged` rule on both nodes only after both run the RPC-capable published release.
 - Confirmed issue #100 is open and updated its title and acceptance criteria.
-- No tests or source behavior changes have been made yet.
+- `docker compose -f docker-compose.orbstack-test.yml config --quiet` passed after separating the test fossils' shared volumes and adding per-node Valkey services.
+- `python3 scripts/tests/run_rawrarr_tests_in_docker.py` passed: 110 Node tests, the browser suite, and 90 Rust unit tests. Python environment integrations were skipped by the runner.
+- `docker compose -f docker-compose.orbstack-test.yml config --quiet` and the standalone metadata Compose config passed. The MacBook Compose file is an overlay, so it must be validated alongside the base deployment file and runtime settings.
+- `git diff --check` passed.
 
 ## Status and remaining work
 
-The protocol draft is in [metadata-peer-repair-protocol.md](../docs/metadata-peer-repair-protocol.md). The project plan requires protocol review before durable RPC implementation or live Syncthing exclusions; those changes have not started. After review, implement and validate the isolated two-fossil path, then publish to `main` before adding Valkey to the mini fossil or excluding `config.aged` from Syncthing. Preserve `/shared/metadata`, artwork, the mini coordinator, and both fossils' node-local state.
+The approved protocol is in [metadata-peer-repair-protocol.md](../docs/metadata-peer-repair-protocol.md). This milestone adds the ciphertext-only Valkey mirror/rebuild foundation, age-format validation, and Merkle/conflict-order primitives. The task is not complete: authenticated peer RPC, durable signed revision journals, anti-entropy transfer, and the full isolated convergence gate remain. Live Syncthing exclusions and production services have not been changed. Complete and validate the two-fossil path, then publish to `main` before excluding `config.aged` from Syncthing. Preserve `/shared/metadata`, artwork, the mini coordinator, and both fossils' node-local state.

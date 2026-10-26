@@ -7,6 +7,7 @@ pub mod auth;
 mod coordinator;
 mod device_signing;
 mod artwork_cache;
+mod config_repair;
 mod coordinator_avatar;
 pub mod devices;
 pub mod download_clients;
@@ -71,6 +72,7 @@ struct AppState {
     artwork_force_rescan: Arc<AtomicBool>,
     sonarr_scrape_notify: Arc<tokio::sync::Notify>,
     artwork_cache: Arc<artwork_cache::ArtworkCache>,
+    config_mirror: Arc<config_repair::CiphertextMirror>,
 }
 
 #[derive(Clone, Default, Serialize)]
@@ -961,6 +963,7 @@ mod dashboard_event_tests {
             artwork_force_rescan: Arc::new(AtomicBool::new(false)),
             sonarr_scrape_notify: Arc::new(tokio::sync::Notify::new()),
             artwork_cache: Arc::new(artwork_cache::ArtworkCache::disabled()),
+            config_mirror: Arc::new(config_repair::CiphertextMirror::from_env()),
         });
         let response = dashboard_events(State(state)).await.into_response();
         assert_eq!(response.headers()[header::CONTENT_TYPE], "text/event-stream");
@@ -2629,6 +2632,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut radarr = None;
     let mut vault = None;
     secure_config::AgeVault::enforce_local_config_policy()?;
+    let config_mirror = Arc::new(config_repair::CiphertextMirror::from_env());
+    if role == node_role::NodeRole::Metadata {
+        let path = secure_config::AgeVault::config_path();
+        if let Err(error) = config_mirror.restore_from_valkey(&path) {
+            eprintln!("rawrarr config ciphertext restore from Valkey failed: {error}");
+        }
+    }
     let local_settings = secure_config::AgeVault::load_local_config()?;
     let identity_path = env::var_os("RAWARR_AGE_IDENTITY_FILE")
         .filter(|path| !path.is_empty())
@@ -2705,7 +2715,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         artwork_force_rescan: Arc::new(AtomicBool::new(false)),
         sonarr_scrape_notify: Arc::new(tokio::sync::Notify::new()),
         artwork_cache: Arc::new(artwork_cache::ArtworkCache::from_env()),
+        config_mirror: config_mirror.clone(),
     });
+    if role == node_role::NodeRole::Metadata {
+        let mirror = state.config_mirror.clone();
+        let path = secure_config::AgeVault::config_path();
+        tokio::spawn(async move {
+            loop {
+                if let Err(error) = mirror.rebuild_from_file(&path) {
+                    eprintln!("rawrarr config ciphertext mirror refresh failed: {error}");
+                }
+                tokio::time::sleep(Duration::from_secs(30)).await;
+            }
+        });
+    }
     if role == node_role::NodeRole::Metadata {
         tokio::spawn(run_metadata_artwork_backfill(state.clone()));
         tokio::spawn(run_metadata_sonarr_backfill(state.clone()));
