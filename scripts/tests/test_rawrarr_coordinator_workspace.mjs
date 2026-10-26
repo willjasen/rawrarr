@@ -417,8 +417,13 @@ test('overview distinguishes an available metadata node from no online metadata 
 });
 
 test('Overview genre charts show the top ten genres and combine the remainder as Other', () => {
-  assert.match(workspace, /class="overview-card overview-genre-card"><h2>Radarr genres<\/h2><div id="overview-movie-genres" class="overview-genre-chart/);
-  assert.match(workspace, /class="overview-card overview-genre-card"><h2>Sonarr genres<\/h2><div id="overview-series-genres" class="overview-genre-chart/);
+  assert.match(workspace, /id="overview-radarr-genres-card" class="overview-card overview-genre-card" hidden><h2>Radarr genres<\/h2><div id="overview-movie-genres" class="overview-genre-chart/);
+  assert.match(workspace, /id="overview-sonarr-genres-card" class="overview-card overview-genre-card" hidden><h2>Sonarr genres<\/h2><div id="overview-series-genres" class="overview-genre-chart/);
+  assert.match(workspace, /id="overview-radarr-card" class="overview-card" hidden><h2>Radarr<\/h2>/);
+  assert.match(workspace, /id="overview-sonarr-card" class="overview-card" hidden><h2>Sonarr<\/h2>/);
+  assert.match(workspaceScript, /overviewCards: \['overview-radarr-card', 'overview-radarr-genres-card'\]/);
+  assert.match(workspaceScript, /overviewCards: \['overview-sonarr-card', 'overview-sonarr-genres-card'\]/);
+  assert.match(workspaceScript, /for \(const id of fields\.overviewCards\) document\.getElementById\(id\)\.hidden = true;[\s\S]*?for \(const id of fields\.overviewCards\) document\.getElementById\(id\)\.hidden = !settings\.configured/);
   assert.match(workspace, /\.overview-genre-card \{ grid-column:span 2; min-height:370px; padding:24px \}/);
   assert.match(workspaceScript, /const topGenres = genres\.slice\(0, 10\)/);
   assert.match(workspaceScript, /const remaining = genres\.slice\(10\)/);

@@ -265,10 +265,10 @@
       <div class="overview-grid" aria-label="Workspace overview">
         <article class="overview-card"><h2>Shared folder</h2><div id="overview-folder-state" class="overview-value">Checking…</div><div id="overview-folder-detail" class="overview-detail" role="status" aria-live="polite">Loading shared-folder status…</div></article>
         <article class="overview-card"><h2>Shared metadata</h2><div id="overview-metadata-size" class="overview-value">—</div><div id="overview-metadata-detail" class="overview-detail">Encrypted metadata stored on the selected fossil node</div></article>
-        <article class="overview-card"><h2>Radarr</h2><div id="overview-movie-count" class="overview-value">—</div><div id="overview-movie-detail" class="overview-detail">Movie library statistics</div></article>
-        <article class="overview-card"><h2>Sonarr</h2><div id="overview-series-count" class="overview-value">—</div><div id="overview-series-detail" class="overview-detail">TV library statistics</div></article>
-        <article class="overview-card overview-genre-card"><h2>Radarr genres</h2><div id="overview-movie-genres" class="overview-genre-chart overview-detail" aria-live="polite">Genre breakdown loads with the movie library.</div></article>
-        <article class="overview-card overview-genre-card"><h2>Sonarr genres</h2><div id="overview-series-genres" class="overview-genre-chart overview-detail" aria-live="polite">Genre breakdown loads with the TV library.</div></article>
+        <article id="overview-radarr-card" class="overview-card" hidden><h2>Radarr</h2><div id="overview-movie-count" class="overview-value">—</div><div id="overview-movie-detail" class="overview-detail">Movie library statistics</div></article>
+        <article id="overview-sonarr-card" class="overview-card" hidden><h2>Sonarr</h2><div id="overview-series-count" class="overview-value">—</div><div id="overview-series-detail" class="overview-detail">TV library statistics</div></article>
+        <article id="overview-radarr-genres-card" class="overview-card overview-genre-card" hidden><h2>Radarr genres</h2><div id="overview-movie-genres" class="overview-genre-chart overview-detail" aria-live="polite">Genre breakdown loads with the movie library.</div></article>
+        <article id="overview-sonarr-genres-card" class="overview-card overview-genre-card" hidden><h2>Sonarr genres</h2><div id="overview-series-genres" class="overview-genre-chart overview-detail" aria-live="polite">Genre breakdown loads with the TV library.</div></article>
       </div>
     </section>
     <section id="assistant-view" hidden><h1 class="page-title">rawrs</h1>
