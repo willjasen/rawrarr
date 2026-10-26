@@ -45,3 +45,11 @@ The verified age-setup test adjustment is saved on this branch. The coordinator 
 - Rebuilt the disposable regression image and ran `python3 scripts/tests/run_rawrarr_tests_in_docker.py --context orbstack` from the integration snapshot.
 - Verification: Node 122 passed / 0 failed; Playwright 1 passed; Rust 82 passed / 0 failed. Python integration checks were skipped by the container runner because they require separate PostgreSQL, age, or Syncthing fixtures. Overall container regression result: passed.
 - Successful test-container logs are retained in `rawrarr-test-regression-tests-mvojtaxm`. Remaining work is to review the broader pending worktree diff and decide what belongs in a PR; no GitHub PR was created or merged in this retest.
+
+## 2026-10-26 clean PR candidate verification
+
+- Applied the committed issue #55 changes to a clean branch based on current `origin/main`; the original dirty `rawrarr-test-failures` worktree was not changed.
+- Updated the workspace copy assertion to match the current `main` text rather than an uncommitted wording change from the source worktree.
+- Rebuilt the regression dependency image for the clean candidate, then ran `python3 scripts/tests/run_rawrarr_tests_in_docker.py --context orbstack`.
+- Verification on the clean candidate: Node 122 passed / 0 failed; Playwright 1 passed; Rust 82 passed / 0 failed. Python integration checks were skipped because the unit-test container does not provide PostgreSQL, age, or Syncthing fixtures. Overall container regression result: passed.
+- Final test logs are retained in `rawrarr-test-regression-tests-mvok2jhx`.
