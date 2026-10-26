@@ -1,5 +1,7 @@
 # Scripts
 
+The coordinator Devices heading action has a focused source regression test under [`tests/`](tests/README.md): `node --test scripts/tests/test_rawrarr_devices_add_button.mjs`.
+
 This project keeps a local Radarr inspection helper and repeatable checks under [`tests/`](tests/). See the [test index](tests/README.md) for coverage, dependencies, and invocation.
 
 - `tests/test_orbstack_arr_connectivity.py` — Verify both fossil nodes and Tailscale sidecars have no host-published ports (`--ports-only` checks an existing environment), then check fossil unlocks its age vault, saves and reads back encrypted HTTPS connections, and loads Radarr/Sonarr status and library APIs through a private test CA. `--start` builds and starts the isolated `rawrarr-test-environment`; it requires Node.js and installed `rust-arr/web-export` modules. See the [test runbook](../runbooks/2026-10-26-fossil-port-forward-tests.md).

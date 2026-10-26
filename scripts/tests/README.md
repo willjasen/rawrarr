@@ -5,6 +5,8 @@
 - `test_rawrarr_coordinator_arr_links.mjs` — checks the coordinator's encrypted Radarr slug flow, direct metadata route, browser-only reachability gate, and year-cell icon wiring for Movies and TV. Run with `node --test scripts/tests/test_rawrarr_coordinator_arr_links.mjs`.
 # Rawrarr tests
 
+- `test_rawrarr_devices_add_button.mjs` — checks the coordinator Devices heading has a right-aligned “Add a device” link to `/setup/node`, wraps responsively, and preserves the first-node setup link; run with `node --test scripts/tests/test_rawrarr_devices_add_button.mjs`.
+
 - `test_rawrarr_dashboard_sse.mjs` — Chromium regression coverage for the dashboard EventSource connection, named snapshot handling, and open/error status states; run with `node --test scripts/tests/test_rawrarr_dashboard_sse.mjs` in the isolated Playwright test image. The Rust `dashboard_event_tests` verifies `text/event-stream`, cache headers, the initial named JSON snapshot, and fixture dashboard state.
 
 - `test_coordinator_availability.mjs` — Checks repeated health failures before showing the coordinator pending modal, stable recovery before refreshing the current view, visibility/network retry hooks, and the served/bundled monitor asset. Run `node --test scripts/tests/test_coordinator_availability.mjs`.
