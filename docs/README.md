@@ -39,6 +39,7 @@ Start here for the current project state and everyday use:
 - [Donation plan](donation-plan.md) — proposed optional one-time contributions, separate from subscription entitlements.
 - [Tailscale integration](tailscale-integration-plan.md) — optional overlay transport plan; SwarmSail will manage one tailnet per subscriber account.
 - [Account-bound subscriber tailnet provisioning](account-tailnet-provisioning-plan.md) — planned eligibility, isolation, provisioning, key lifecycle, and revocation requirements.
+- [Managed Radarr and Sonarr paths](managed-arr-paths-plan.md) — planned same-origin paths for Arr UIs provisioned inside a subscriber's Docker environment; distinct from external metadata connections.
 
 ## Tests and operational notes
 
