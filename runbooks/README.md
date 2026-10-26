@@ -44,6 +44,8 @@
 
 # Rawrarr runbooks
 
+- [Move Arr connection setup to Movies and TV](2026-10-26-move-arr-connection-setup.md) — Put Radarr and Sonarr connection forms on their respective library pages and hide library details until configured; issue creation was unavailable.
+
 - [Hide unconfigured Arr services from Overview](2026-10-26-hide-unconfigured-arr-overview.md) — Hide Radarr and Sonarr summary and genre cards until each service is configured on the selected metadata node (issue [#157](https://github.com/willjasen/rawrarr/issues/157)).
 
 - [Hide generated device IDs from device labels](2026-10-26-hide-device-id-label.md) — Keep opaque stable IDs out of visible topology labels while preserving their internal use (issue [#155](https://github.com/willjasen/rawrarr/issues/155)).
