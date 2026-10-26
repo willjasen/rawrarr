@@ -72,11 +72,11 @@ test('device shared-folder health is concise and formatted without exposing the 
 });
 
 test('Devices shows a network diagram with one link for each device pair', () => {
-  assert.match(workspace, /<section id="devices-view"[^>]*>[\s\S]*?<h1 class="page-title">Devices<\/h1>\s*<p><a class="button-link" href="\/setup\/node">Add a device with Docker Compose<\/a><\/p>/);
+  assert.match(workspace, /<section id="devices-view"[^>]*><div class="devices-page-heading"><h1 class="page-title">Devices<\/h1><a class="button-link" href="\/setup\/node">Add a device<\/a><\/div>/);
   assert.match(workspace, /<section id="device-topology" class="topology-section" aria-labelledby="device-topology-title" hidden>[\s\S]*?<h2 id="device-topology-title">Topology<\/h2>/);
   assert.match(workspace, /<div id="device-topology-content"><\/div>/);
   assert.match(workspaceScript, /function renderDeviceTopology\(nodes, observedPeers, deviceNames\)/);
-  assert.match(workspaceScript, /deviceNames\[node\.nodeId\] \|\| node\.displayName \|\| node\.nodeId/);
+  assert.match(workspaceScript, /deviceNames\[node\.nodeId\] \|\| \(node\.displayName && node\.displayName !== node\.nodeId \? node\.displayName : roleLabel\(node\.role\)\)/);
   assert.match(workspaceScript, /deviceNameTokens\(node\.displayName\)/);
   assert.match(workspaceScript, /getElementById\('device-topology-content'\)/);
   assert.match(workspaceScript, /nodes\.length \* \(nodes\.length - 1\) \/ 2/);

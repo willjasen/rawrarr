@@ -44,6 +44,8 @@
 
 # Rawrarr runbooks
 
+- [Hide generated device IDs from device labels](2026-10-26-hide-device-id-label.md) — Keep opaque stable IDs out of visible topology labels while preserving their internal use (issue [#155](https://github.com/willjasen/rawrarr/issues/155)).
+
 - [Fix database integration tests](2026-10-26-fix-db-integrations.md) — Update the disposable coordinator, node, and configuration integrations for explicit roles, coordinator trust, and current owner bootstrap (issue [#130](https://github.com/willjasen/rawrarr/issues/130)).
 - [Restore the MacBook direct route](2026-10-26-restore-macbook-direct-route.md) — Update the MacBook subscriber to match the coordinator's direct health and session endpoints (issue [#141](https://github.com/willjasen/rawrarr/issues/141)).
 
