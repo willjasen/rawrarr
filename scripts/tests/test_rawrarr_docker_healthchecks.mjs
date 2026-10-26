@@ -27,6 +27,7 @@ test('Docker test containers have unique names in the rawrarr-test-regression gr
   assert.match(testRunner, /shutil\.copytree/);
   assert.doesNotMatch(testRunner, /copytree\([^\n]*web-export/);
   assert.match(testRunner, /ROOT \/ "docs"/);
+  assert.match(testRunner, /ROOT \/ "\.github"/);
   assert.match(testRunner, /f"\{rust_source\}\/\."/);
   assert.match(testRunner, /f"\{tests_source\}\/\."/);
   assert.match(testRunner, /--rebuild-base/);

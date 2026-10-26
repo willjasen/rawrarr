@@ -22,6 +22,7 @@ Start here for the current project state and everyday use:
 - [Node types](node-types.md) — roarlay, fossil, and boneyard node roles, plus SwarmSail enrollment.
 - [One-line node deployment plan](one-line-node-deployment-plan.md) — planned curl-based installer containing generated Compose, Docker prerequisite setup, safe reruns, and explicit owner approval.
 - [Device signing design](device-signing-design.md) — proposed signed device enrollment and configuration integrity.
+- [Identity domains](identity-domains.md) — agreed user, device, group, and app key boundaries, with current and planned lifecycle clearly separated.
 - [Data domains](data-domains.md) — placement and synchronization boundaries for `/media`, `/metadata`, `/shared`, `/data`, and backups.
 - [Radarr recovery](user-guide.md#recover-radarr-on-a-chosen-node) — age-encrypted shared native backups and user-directed restores to a Radarr deployed on the chosen node.
 - [Shared config schema v1](shared-config-v1.schema.json) — versioned age-encrypted config document with Radarr and Sonarr entries in `services`.

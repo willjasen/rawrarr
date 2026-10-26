@@ -64,6 +64,8 @@ The following generated/imported ID flow describes the fossil-node onboarding in
 
 The public recipient is safe to share for encryption, but it cannot unlock the config. Never send the private identity to another node or service.
 
+Rawrarr currently uses the owner age identity for the shared vault. Subscriber devices also create separate device age and signing keys. Separate group and Radarr/Sonarr age identities, group-key distribution, and revocation rotation are planned, not available setup options. See [identity domains](identity-domains.md) for the current and planned key lifecycle.
+
 ## Configure Radarr
 
 1. Open the Rawrarr dashboard and its **Settings** section.

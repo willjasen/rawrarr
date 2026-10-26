@@ -4,7 +4,7 @@ import { subscriberCompose } from '../../rust-arr/web-export/subscriber-compose.
 
 const base = { nodeId: `device-${'a'.repeat(24)}`, coordinatorUrl: 'https://rawrarr.example.test', networkMode: 'internal-tailscale', authKey: 'tskey-auth-test-fixture', rootFingerprint: 'a'.repeat(64) };
 
-test('subscriber Compose offers fossil and boneyard with private UI update credentials', () => {
+test('subscriber Compose offers fossil and boneyard without coordinator GitHub updater credentials', () => {
   for (const role of ['metadata', 'storage']) {
     const yaml = subscriberCompose({ ...base, role, mediaPath: '/srv/media' });
     assert.doesNotMatch(yaml, /^\s*ports\s*:/m, `${role} subscriber Compose must not publish any container port to the host`);
@@ -13,8 +13,7 @@ test('subscriber Compose offers fossil and boneyard with private UI update crede
     assert.match(yaml, /TS_AUTHKEY: "tskey-auth-test-fixture"/);
     assert.doesNotMatch(yaml, /tailscale-authkey/);
     assert.match(yaml, /rawrarr-ui:\/ui/);
-    assert.match(yaml, /RAWARR_UI_GITHUB_TOKEN_FILE: \/run\/secrets\/rawrarr_ui_github_token/);
-    assert.match(yaml, /RAWARR_UI_GITHUB_TOKEN_PATH/);
+    assert.doesNotMatch(yaml, /RAWARR_UI_GITHUB_TOKEN|rawrarr_ui_github_token/);
     assert.match(yaml, new RegExp(`TS_HOSTNAME: rawrarr-my-${role === 'storage' ? 'boneyard' : 'fossil'}-node`));
     assert.match(yaml, /tailscale-state:\/var\/lib\/tailscale/);
     assert.match(yaml, /rawrarr-data:\/data/);
@@ -47,6 +46,8 @@ test('public mode configures the selected Headscale control server without embed
   const yaml = subscriberCompose({ ...base, role: 'metadata', networkMode: 'headscale', controlServer: 'https://headscale.example.test' });
   assert.match(yaml, /TS_EXTRA_ARGS: "--accept-dns=false --login-server=https:\/\/headscale\.example\.test"/);
   assert.match(yaml, /TS_AUTHKEY: file:\/run\/secrets\/tailscale-authkey/);
+  assert.match(yaml, /secrets:\n  tailscale-authkey:/);
+  assert.doesNotMatch(yaml, /RAWARR_UI_GITHUB_TOKEN|rawrarr_ui_github_token/);
   assert.doesNotMatch(yaml, /TS_EXTRA_ARGS:.*tailscale\.com/);
   assert.throws(() => subscriberCompose({ ...base, role: 'metadata', networkMode: 'headscale' }), /Headscale control server URL/);
   assert.throws(() => subscriberCompose({ ...base, role: 'metadata', networkMode: 'headscale', controlServer: 'http://headscale.example.test' }), /HTTPS Headscale/);

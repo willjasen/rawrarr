@@ -363,6 +363,12 @@ impl ScanController {
         Ok(status.clone())
     }
 
+    #[cfg(test)]
+    fn start_for_test(&self) {
+        let mut status = self.status.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        *status = ScanStatus { active: true, files_total: 3, ..ScanStatus::default() };
+    }
+
     pub async fn start(
         &self,
         options: ScanOptions,

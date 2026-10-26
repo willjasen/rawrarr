@@ -44,6 +44,10 @@
 # Rawrarr runbooks
 
 - [Test fossil host port isolation](2026-10-26-fossil-port-forward-tests.md) — Add generated-Compose regression and live two-fossil OrbStack checks for host-published ports (issue [#126](https://github.com/willjasen/rawrarr/issues/126)).
+
+- [Define user, device, group, and app identity domains](2026-10-26-identity-domains.md) — Consolidate key ownership and purpose, distinguish implemented behavior from planned group/app lifecycles, and link current design references (issue [#95](https://github.com/willjasen/rawrarr/issues/95)).
+
+- [Regression and browser coverage for implemented behavior gaps](2026-10-26-regression-browser-coverage.md) — Add storage scan cancellation coverage and coordinator reconnect browser coverage; document the existing Radarr mirror lifecycle integration test (issue [#120](https://github.com/willjasen/rawrarr/issues/120)).
 - [Polish the About page layout](2026-10-26-about-page-visual-polish.md) — Present the current web app flow in a responsive hero, workflow cards, and privacy callout.
 - [Complete OrbStack Arr connection testing](2026-10-26-complete-orbstack-arr-connections.md) — Exercise fossil's encrypted Radarr/Sonarr connection, status, and library paths through a private test CA (issue [#99](https://github.com/willjasen/rawrarr/issues/99)).
 
@@ -605,3 +609,5 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Temporarily disable UI signature enforcement](2026-10-26-temporarily-disable-ui-signature.md) — Remove the UI signature badge and release-signature requirement while retaining checksum/archive validation; deploy and verify the coordinator update (issue [#107](https://github.com/willjasen/rawrarr/issues/107)).
 - [Show only device latency](2026-10-26-show-only-device-latency.md) — Remove the `Online ·` prefix from directly reachable device cards while retaining measured milliseconds and accessible route context (issue [#121](https://github.com/willjasen/rawrarr/issues/121)).
 - [Add a Devices page entry point for node Compose](2026-10-26-add-device-compose-entrypoint.md) — Keep the subscriber Docker Compose setup link available on Devices after the first node is enrolled (issue [#34](https://github.com/willjasen/rawrarr/issues/34)).
+- [Reuse the saved age ID in node setup](2026-10-26-reuse-saved-age-id-node-setup.md) — Load the existing browser-local age ID into subscriber setup and retain manual entry as a fallback (issue [#125](https://github.com/willjasen/rawrarr/issues/125)).
+- [Remove coordinator GitHub token from subscriber Compose](2026-10-26-remove-subscriber-github-token.md) — Remove the coordinator-only private UI updater credential from generated fossil and boneyard Compose (issue [#34](https://github.com/willjasen/rawrarr/issues/34)).
