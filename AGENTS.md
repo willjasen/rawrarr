@@ -37,6 +37,13 @@
 - Noninteractive sessions may start with a minimal `PATH` that omits Docker and GitHub CLI. In remote command strings, prepend `export PATH=/usr/local/bin:/opt/homebrew/bin:$PATH`; the verified Docker executable on the Mac mini is `/usr/local/bin/docker` and `gh` is also available after adding `/usr/local/bin`.
 - Before running Docker commands remotely, confirm the context with `docker context show`; the Mac mini currently uses `orbstack`. Use `/usr/local/bin/docker` explicitly if setting `PATH` is not practical.
 
+## GitHub access from this host
+
+- Use the authenticated `gh` CLI for private `willjasen/rawrarr` repository operations. Its credential is stored in macOS Keychain; run GitHub commands in a host context that can access Keychain and the network. Do not copy, print, or store the token in repository files, environment dumps, logs, or runbooks.
+- If `gh auth status` fails inside a sandbox but succeeds when run with approved host access, treat that as a sandbox Keychain/network restriction rather than an invalid credential. Request the narrow host access needed for GitHub operations; do not log out, replace, or reauthenticate the saved credential based only on a sandbox failure.
+- Diagnose connectivity separately from authentication: `gh auth status` checks the CLI credential, while `git fetch origin <ref>` confirms Git remote access. A DNS failure or GitHub API rate limit is not evidence that the saved credential is invalid; retry after the reported rate-limit reset where needed.
+- Prefer `gh` for private repository issues, pull requests, Actions, and metadata. Use the GitHub app connector only when it has access to the specific repository; a 404 on a private repository can mean the connector lacks access.
+
 ## Serialized container deployments
 
 - Serialize deployments per container with hidden, local-only markers in `~/Library/Application Support/Rawrarr/`, alongside (but never inside) `shared-data`. Use a distinct marker for each Compose container/service, named `.container-rebuild-<container-name>.lock` (for example, `.container-rebuild-roarlay.lock`, `.container-rebuild-fossil.lock`, or `.container-rebuild-boneyard.lock`). These runtime files must never be added to or committed in Git. Before rebuilding, restarting, recreating, or otherwise deploying a container, check its marker. If it exists, another task owns that container's deployment: wait and periodically recheck until it is removed; do not change that container while waiting, and do not remove another task's marker. A task may deploy a different container concurrently, provided it does not restart or otherwise disrupt the container locked by another task.
