@@ -185,9 +185,10 @@ def verify_configuration(session, mode):
     print('PASS Radarr settings are HTTPS-validated, encrypted in shared config, redacted on readback, and mirrored with private file permissions')
 
     wrong_identity = subprocess.run(['age-keygen', '-pq'], check=True, capture_output=True, text=True).stdout
-    expect_json('/api/settings/age', 'POST', {
+    wrong_identity_response = expect_json('/api/settings/age', 'POST', {
         'identityEnvelope': encrypt_identity_for_node(wrong_identity),
     }, 400)
+    assert 'invalid or does not match the group identity' in wrong_identity_response['error']
     assert expect_json('/api/settings/age')['unlocked'] is True
 
     poster = b'disposable encrypted poster fixture'

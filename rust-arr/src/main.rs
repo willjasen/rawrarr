@@ -2320,6 +2320,35 @@ async fn generate_age_identity() -> Result<Json<GeneratedAgeIdentity>, (StatusCo
     }))
 }
 
+fn age_vault_open_error(error: secure_config::VaultError) -> (StatusCode, &'static str) {
+    match error {
+        secure_config::VaultError::InvalidIdentity => (
+            StatusCode::BAD_REQUEST,
+            "This user age ID is invalid or does not match the group identity for this shared data.",
+        ),
+        secure_config::VaultError::AgeUnavailable => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Post-quantum age tools are unavailable on this node. Update or repair the node before saving settings.",
+        ),
+        secure_config::VaultError::StorageFailed => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "This node could not access its local or shared age-key files.",
+        ),
+        secure_config::VaultError::EncryptionFailed => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "This node could not initialize encrypted settings.",
+        ),
+        secure_config::VaultError::DecryptionFailed => (
+            StatusCode::BAD_REQUEST,
+            "This user age ID could not decrypt the group-encrypted settings.",
+        ),
+        secure_config::VaultError::InvalidConfig => (
+            StatusCode::BAD_REQUEST,
+            "The encrypted settings have an invalid format.",
+        ),
+    }
+}
+
 async fn unlock_age_settings(
     State(state): State<Arc<AppState>>,
     Json(request): Json<AgeIdentityRequest>,
@@ -2329,22 +2358,13 @@ async fn unlock_age_settings(
             StatusCode::BAD_REQUEST,
             Json(ApiError { error: "The age-wrapped user identity could not be opened by this device" }),
         ))?;
-    let vault = secure_config::AgeVault::from_identity(identity)
-        .map_err(|_| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(ApiError {
-                    error: "Import a valid post-quantum age identity",
-                }),
-            )
-        })?;
-    let stored = vault.load().map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ApiError {
-                error: "Could not decrypt the saved config with this identity",
-            }),
-        )
+    let vault = secure_config::AgeVault::from_identity(identity).map_err(|error| {
+        let (status, message) = age_vault_open_error(error);
+        (status, Json(ApiError { error: message }))
+    })?;
+    let stored = vault.load().map_err(|error| {
+        let (status, message) = age_vault_open_error(error);
+        (status, Json(ApiError { error: message }))
     })?;
     if request.remember_on_device {
         vault.persist_identity_locally().map_err(|_| {
@@ -3206,6 +3226,42 @@ mod age_identity_request_tests {
         )
         .expect("decode age unlock request");
         assert!(request.remember_on_device);
+    }
+}
+
+#[cfg(test)]
+mod age_vault_open_error_tests {
+    use super::{age_vault_open_error, secure_config::VaultError};
+    use axum::http::StatusCode;
+
+    #[test]
+    fn reports_invalid_identity_separately_from_node_setup_failures() {
+        let (status, message) = age_vault_open_error(VaultError::InvalidIdentity);
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(message.contains("invalid or does not match the group identity"));
+
+        let (status, message) = age_vault_open_error(VaultError::AgeUnavailable);
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert!(message.contains("age tools are unavailable"));
+
+        let (status, message) = age_vault_open_error(VaultError::StorageFailed);
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(message.contains("could not access its local or shared age-key files"));
+    }
+
+    #[test]
+    fn reports_encryption_and_config_failures_without_exposing_sensitive_data() {
+        let (status, message) = age_vault_open_error(VaultError::EncryptionFailed);
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(message.contains("could not initialize encrypted settings"));
+
+        let (status, message) = age_vault_open_error(VaultError::DecryptionFailed);
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(message.contains("could not decrypt the group-encrypted settings"));
+
+        let (status, message) = age_vault_open_error(VaultError::InvalidConfig);
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(message.contains("invalid format"));
     }
 }
 
