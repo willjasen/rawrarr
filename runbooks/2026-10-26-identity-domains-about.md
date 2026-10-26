@@ -23,3 +23,4 @@ Started from fetched `origin/main` at `8b4776a` in `/Users/willjasen/.codex/work
 
 ## Final state and remaining work
 The source now presents all four identity domains and current/planned boundaries in About. The group/app lifecycle and encrypted messaging remain planned implementation work in #109–#112, with signed trust and metadata verification in #40. No deployment was performed.
+- Committed source and runbook as `1bd7090` on `codex/issue-95-identity-ui`, pushed to `origin`, and opened [PR #131](https://github.com/willjasen/rawrarr/pull/131). The PR is open and mergeable; GitHub Actions Basic script tests passed. No merge or deployment was performed.
