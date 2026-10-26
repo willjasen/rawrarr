@@ -36,3 +36,12 @@ Diagnose the Node failures from issue #55's local OrbStack run, fix genuine erro
 ## Final state and remaining work
 
 The verified age-setup test adjustment is saved on this branch. The coordinator health and UI updater tests match the current local behavior. The isolated coordinator and two-node Compose fixture is operational, and peer connectivity is verified. Remaining Node failures need the current implementation and regression expectations reconciled. The full regression suite is not green; no deployment was performed.
+
+## 2026-10-26 current-main integration retest
+
+- Created a disposable test worktree combining current `origin/main`, this branch, and the tracked local diff. Resolved test-only conflicts using current-main expectations and rebuilt the generated metadata-export asset from the combined source. The actual worktree and GitHub `main` were not merged or changed by this integration step.
+- Updated the workspace, direct-route, onboarding-browser, and coordinator Sonarr-settings tests for current-main behavior. Kept owner/private-data assertions, refreshed stale fossil-node and route expectations, and retained the Sonarr library-size assertion.
+- Restored the age-ID guard before rendering cached Movies or TV library data. Cached private metadata remains hidden until the user unlocks it in the current tab.
+- Rebuilt the disposable regression image and ran `python3 scripts/tests/run_rawrarr_tests_in_docker.py --context orbstack` from the integration snapshot.
+- Verification: Node 122 passed / 0 failed; Playwright 1 passed; Rust 82 passed / 0 failed. Python integration checks were skipped by the container runner because they require separate PostgreSQL, age, or Syncthing fixtures. Overall container regression result: passed.
+- Successful test-container logs are retained in `rawrarr-test-regression-tests-mvojtaxm`. Remaining work is to review the broader pending worktree diff and decide what belongs in a PR; no GitHub PR was created or merged in this retest.
