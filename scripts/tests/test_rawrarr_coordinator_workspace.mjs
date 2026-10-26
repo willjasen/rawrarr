@@ -200,7 +200,8 @@ test('device approvals use a volatile browser form and root-signed exact node re
   assert.match(onboardingScript, /rootFingerprint: pinnedFingerprint/);
   assert.match(subscriberComposeSource, /RAWARR_INSTANCE_ROOT_FINGERPRINT/);
   assert.match(onboardingScript, /pagehide/);
-  assert.doesNotMatch(onboardingScript, /localStorage|sessionStorage/);
+  assert.match(onboardingScript, /localStorage\.getItem\('rawrarr\.browser\.age-id'\)/);
+  assert.doesNotMatch(onboardingScript, /localStorage\.(?:setItem|removeItem)|sessionStorage/);
 });
 
 test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from the public age ID', () => {
