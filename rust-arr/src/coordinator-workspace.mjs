@@ -1087,7 +1087,7 @@ async function chooseDirectRoute(node, route) {
       body: JSON.stringify({ nodeId: node.nodeId })
     });
     if (new URL(route.base, window.location.href).origin !== window.location.origin) {
-      const response = await fetch(`${route.base}/api/direct/session`, {
+      const response = await fetch(`${route.base}/session`, {
         method: 'POST', cache: 'no-store', credentials: 'include', redirect: 'error',
         headers: { Authorization: `Bearer ${session.token}` }
       });

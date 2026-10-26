@@ -2751,8 +2751,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             node_auth::require_session,
         ));
     let direct_app = Router::new()
-        .route("/api/direct/health", get(direct_health))
-        .route("/api/direct/session", post(direct_session_cookie))
+        .route("/health", get(direct_health))
+        .route("/session", post(direct_session_cookie))
         .merge(direct_protected)
         .layer(middleware::from_fn(log_request))
         .layer(middleware::from_fn(direct_api_cors))

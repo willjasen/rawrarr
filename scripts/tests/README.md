@@ -35,7 +35,7 @@
 
 - `test_rawrarr_sonarr_completion_ui.mjs` — confirms Movies and TV use the shared provider-aware scrape status/progress updater, and that the TV view hides scrape completion and successful-load messages after the Sonarr artwork cache is complete while retaining errors. Run with `node --test scripts/tests/test_rawrarr_sonarr_completion_ui.mjs`.
 
-- `test_rawrarr_direct_route.mjs` — static regression checks for Tailscale direct metadata routing, the short-lived node-scoped session, separate node check-in and browser route labels, visible automatic selection, and coordinator fallback. Run with `node --test scripts/tests/test_rawrarr_direct_route.mjs`.
+- `test_rawrarr_direct_route.mjs` — static regression checks for Tailscale direct metadata routing, concise `/direct-api/health` and `/direct-api/session` endpoints, the short-lived node-scoped session, separate node check-in and browser route labels, visible automatic selection, and coordinator fallback. Run with `node --test scripts/tests/test_rawrarr_direct_route.mjs`.
 - `test_rawrarr_device_routes.mjs` — checks the shared all-device route-status helper for Direct, Relay, and Offline states, Redis cache reachability in measured node latency, cached probes, and explicit refresh. Run with `node --test scripts/tests/test_rawrarr_device_routes.mjs`.
 - `test_rawrarr_device_routes.mjs` — checks the shared all-device route-status helper for Direct, Relay, and Offline states, Redis cache reachability in measured node latency, probe caching, and explicit refresh. Run with `node --test scripts/tests/test_rawrarr_device_routes.mjs`.
 

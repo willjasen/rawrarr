@@ -306,6 +306,8 @@ test('node list and relay are restricted to the signed-in owner and trusted conf
 test('internal coordinator maps the newly approved fossil ID to its relay and direct Tailscale routes', () => {
   assert.match(internalMiniCompose, /"device-d3ee53b1d561fb349955b199":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/"/);
   assert.match(internalMiniCompose, /"device-d3ee53b1d561fb349955b199":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/direct-api\/"/);
+  assert.match(internalMiniCompose, /"device-86fc42158c1426b89d460f59":"https:\/\/rawrarr-mac-mini\.risk-mermaid\.ts\.net\/"/);
+  assert.match(internalMiniCompose, /"device-86fc42158c1426b89d460f59":"https:\/\/rawrarr-mac-mini\.risk-mermaid\.ts\.net\/direct-api\/"/);
   assert.match(internalMiniCompose, /"device-9288eb3b039608d16a9102a5"/);
 });
 
