@@ -8,7 +8,7 @@ Planning only. No multi-person sharing, MLS protocol, revocation cleanup, or age
 
 - Every new cluster starts **isolated** with one owner.
 - The owner can make a one-way transition to **shared** by inviting another person. The cluster remains shared even after every invitee is removed. Starting over in isolated mode means creating a new cluster with a new cluster identity, age identity, and signing root; it does not erase prior access.
-- The owner alone controls membership. Invitees may use the cluster but cannot invite others or approve membership changes.
+- The owner alone controls membership. Adding or removing a device requires an explicit user-authorized membership change; a device signing key can never grant membership or approve another device. Invitees may use the cluster but cannot invite others or approve membership changes.
 - Each person authenticates with their own passkey and uses their own age identity. Private age identities, passkeys, and the owner's root signing key are never shared.
 - Revocation ends future access after the group state advances. A removed person can retain any earlier data, plaintext, or keys they already obtained.
 - The owner portal distinguishes **access revoked** from cleanup state: pending/waiting for the node, node-reported cleanup complete, or unconfirmed. A report is not proof of secure erasure.
@@ -20,10 +20,13 @@ Planning only. No multi-person sharing, MLS protocol, revocation cleanup, or age
 The long-term goal is for approved Rawrarr nodes in one cluster to exchange metadata directly, with a Garage S3-inspired model: RPC handles authenticated peer coordination and bounded data exchange, while Merkle trees summarize replicated records and identify which branches or objects differ. This is a design direction only; no peer metadata RPC or Merkle reconciliation is implemented by this proposal.
 
 - Keep encrypted metadata objects as the replicated payload. Peers validate cluster/instance identity, membership, object class, size limits, and signed revision metadata before accepting data; a Merkle match is an integrity/reconciliation aid, not an authorization proof.
-- Define a versioned, canonical leaf record that binds an opaque object key, ciphertext digest, object/schema version, and signed revision or tombstone. Build deterministic tree nodes from sorted leaves so different peers produce the same root for the same accepted state.
+- Each approved device signs its metadata revisions. The signed envelope binds the cluster/instance, device, record class, opaque logical key, ciphertext object key and digest, schema/mapping version, and revision. The signature identifies and authenticates the author; it neither encrypts content nor changes device membership. Membership changes require a separate user-authorized record.
+- Compare both encrypted object files and logical metadata records. A versioned mapping links logical records to one or more opaque ciphertext objects. Canonically encode the mapping and leaf records, sort deterministically, and build Merkle trees over both views so peers can find either missing payloads or logical references whose objects differ.
+- The current logical revision is the newest signed revision under a deterministic, wall-clock-independent order: a persistent monotonic logical counter advanced beyond the highest observed counter, then stable device ID, then ciphertext digest as a final tie-breaker. Peers validate counters and signatures and apply the same ordering. Host timestamps do not decide winners. Preserve enough signed revision history to detect rollback and recover from stale replicas; whether losing concurrent payloads can later be compacted remains open.
 - Expose authenticated RPC operations for peer hello/capability negotiation, accepted cluster epoch and tree-root exchange, bounded subtree comparison, and ciphertext object transfer. Prefer direct peer routes; retain coordinator/relay-assisted rendezvous only for discovery or transport fallback, never as a metadata plaintext authority.
 - Reconcile missing leaves and tombstones incrementally. Verify hashes while streaming, stage received objects, validate signatures and authorization, then atomically publish them into the local metadata store. Retries must be idempotent and safe after interruption.
-- Treat concurrent writes as explicit conflicts unless a record type has a documented deterministic merge rule. Do not silently select the newest wall-clock timestamp. Authority-changing state continues to follow the signed trust history and owner authorization rules above.
+- For concurrent revisions, converge on the highest revision in the deterministic order above. A device cannot authorize membership or other authority changes by signing a metadata revision; those continue to follow user-authorized trust-history rules.
+- Retain each deletion tombstone until every currently active, authorized device has acknowledged it. A device removed through a user-authorized membership change no longer blocks acknowledgement, and it must pass revocation/catch-up gates before any later re-enrollment. A newly added device must receive the current tree/tombstones before it can publish writes. An active device that stays offline can therefore delay tombstone compaction; do not drop tombstones on a timer and risk resurrecting deleted records.
 - Persist each node's last accepted trust-history head and per-instance Merkle root locally. On rollback, stale snapshots, unknown roots, or incompatible schemas, quarantine the affected sync state and require a validated catch-up or recovery path before serving it as current.
 - Keep node-local Valkey caches disposable and outside the replication protocol. Merkle leaves refer to authoritative encrypted objects; cache residency, cache keys, and cache health must not affect convergence.
 
@@ -101,10 +104,9 @@ The person controlling an invitee node can refuse cleanup, preserve backups, or 
 
 ## Open decisions
 
-- Which stable object-key namespace should Merkle leaves cover: current encrypted files, logical metadata records, or both through a versioned mapping?
 - What authenticated peer identity and transport will RPC use across local Tailscale and future non-Tailscale networks?
-- How are tombstones retained long enough for long-offline peers, and what is the safe full-resync behavior after a peer falls behind that retention window?
-- Which record classes can merge deterministically, and which require owner review when two nodes edit concurrently?
+- What is the safe full-resync behavior when an active device has been offline so long that retained tombstones or revision history become expensive?
+- When can losing signed revisions and their ciphertext objects be compacted without harming rollback detection or recovery?
 
 - Is MLS preferable to a smaller owner-signed membership log for Rawrarr's infrequent changes?
 - Does an invitation expose the existing library by default? If yes, what is the supported no-payload-re-encryption migration for existing age files?
