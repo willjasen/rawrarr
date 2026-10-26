@@ -49,15 +49,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, default=DEFAULT_BINARY)
     parser.add_argument(
+        "--base-url",
+        help="test an already-running coordinator; otherwise launch --binary locally",
+    )
+    parser.add_argument(
         "--database-url",
         default=os.environ.get("RAWARR_TEST_DATABASE_URL"),
         help="URL for an empty, disposable PostgreSQL database whose name ends in _test",
     )
     args = parser.parse_args()
-    compose = (ROOT / "docker-compose.yml").read_text()
-    assert "RAWARR_WEBAUTHN_ORIGIN: ${RAWARR_WEBAUTHN_ORIGIN:-http://localhost:${RAWARR_HOST_PORT:-8080}}" in compose
     binary = args.binary.resolve()
-    if not binary.is_file():
+    if not args.base_url and not binary.is_file():
         parser.error(f"Rawrarr binary not found: {binary}; build with cargo build --release --locked")
     if not shutil.which("psql"):
         parser.error("required executable 'psql' is not on PATH")
@@ -66,29 +68,41 @@ def main() -> int:
     database_name = urlsplit(args.database_url).path.rsplit("/", 1)[-1].split("?", 1)[0]
     if not database_name.endswith("_test"):
         parser.error("refusing to run: database name must end in _test")
+    if args.base_url:
+        target = urlsplit(args.base_url)
+        if target.scheme not in ("http", "https") or target.hostname not in ("localhost", "127.0.0.1", "::1") or target.username or target.password or target.path not in ("", "/") or target.query or target.fragment:
+            parser.error("--base-url must be a loopback HTTP(S) origin")
 
     with tempfile.TemporaryDirectory(prefix="rawrarr-passkey-test-") as temporary:
-        with socket.socket() as listener:
-            listener.bind(("127.0.0.1", 0))
-            port = listener.getsockname()[1]
-        base_url = f"http://localhost:{port}"
-        env = os.environ.copy()
-        env.update(
-            RAWARR_DATABASE_URL=args.database_url,
-            RAWARR_DATA_DIR=str(Path(temporary) / "data"),
-            RAWARR_WEBAUTHN_RP_ID="localhost",
-            RAWARR_WEBAUTHN_ORIGIN=base_url,
-            RUST_ARR_LISTEN_ADDR=f"127.0.0.1:{port}",
-        )
-        env.pop("RAWARR_AGE_IDENTITY_FILE", None)
-        process = subprocess.Popen(
-            [str(binary)], cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        )
+        registry = Path(temporary) / "approved-nodes.json"
+        registry.write_text("[]")
+        process = None
+        if args.base_url:
+            base_url = args.base_url.rstrip("/")
+        else:
+            with socket.socket() as listener:
+                listener.bind(("127.0.0.1", 0))
+                port = listener.getsockname()[1]
+            base_url = f"http://localhost:{port}"
+            env = os.environ.copy()
+            env.update(
+                RAWARR_ROLE="coordinator",
+                RAWARR_DATABASE_URL=args.database_url,
+                RAWARR_DATA_DIR=str(Path(temporary) / "data"),
+                RAWARR_APPROVED_NODES_FILE=str(registry),
+                RAWARR_COORDINATOR_WEB_RP_ID="localhost",
+                RAWARR_COORDINATOR_WEB_ORIGIN=base_url,
+                RUST_ARR_LISTEN_ADDR=f"127.0.0.1:{port}",
+            )
+            env.pop("RAWARR_AGE_IDENTITY_FILE", None)
+            process = subprocess.Popen(
+                [str(binary)], cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
         challenge_id = None
         try:
             deadline = time.monotonic() + 15
             while time.monotonic() < deadline:
-                if process.poll() is not None:
+                if process is not None and process.poll() is not None:
                     raise RuntimeError("Rawrarr exited before becoming ready")
                 try:
                     status, _, _ = request(base_url, "/health")
@@ -106,10 +120,14 @@ def main() -> int:
             assert b"status.userExists ? 'login-panel' : 'register-panel'" in page
             status, _, payload = request(base_url, "/api/auth/status")
             assert status == 200 and json.loads(payload) == {"userExists": False}
-            status, headers, _ = request(base_url, "/")
-            assert 300 <= status < 400 and headers.get("Location") == "/auth"
+            status, _, landing_page = request(base_url, "/")
+            assert status == 200 and b"Sign in" in landing_page
+            status, _, auth_page = request(base_url, "/auth")
+            assert status == 200 and b"Sign in with passkey" in auth_page
             status, _, _ = request(base_url, "/api/radarr/status")
-            assert status == 401
+            assert status in (401, 404), "node-only APIs must not serve protected data on the coordinator"
+            status, _, _ = request(base_url, "/api/workspace/nodes")
+            assert status == 401, "coordinator workspace data requires an owner session"
 
             status, _, payload = request(
                 base_url,
@@ -136,10 +154,18 @@ def main() -> int:
             assert status in (401, 422)
             status, _, payload = request(base_url, "/api/auth/status")
             assert status == 200 and json.loads(payload) == {"userExists": False}
+            users = subprocess.run(
+                ["psql", "-v", "ON_ERROR_STOP=1", "-Atc", "SELECT count(*) FROM rawrarr_users"],
+                env={**os.environ, "PGDATABASE": args.database_url},
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            assert users == "0", "malformed first registration must not create a database user"
             print("PASS minimal sign-in page, first-user registration challenge, and protected route")
             print("PASS malformed registration is rejected before creating a user or session")
         finally:
-            if process.poll() is None:
+            if process is not None and process.poll() is None:
                 process.terminate()
                 try:
                     process.wait(timeout=5)
@@ -164,5 +190,8 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except (AssertionError, OSError, RuntimeError, subprocess.CalledProcessError, urllib.error.URLError) as error:
-        print(f"FAIL Rawrarr passkey integration: {type(error).__name__}", file=sys.stderr)
+        detail = f": {error}" if isinstance(error, AssertionError) and str(error) else ""
+        if isinstance(error, subprocess.CalledProcessError):
+            detail = f": subprocess exited {error.returncode}"
+        print(f"FAIL Rawrarr passkey integration: {type(error).__name__}{detail}", file=sys.stderr)
         raise SystemExit(1)

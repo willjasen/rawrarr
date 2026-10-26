@@ -43,6 +43,8 @@
 
 # Rawrarr runbooks
 
+- [Fix database integration tests](2026-10-26-fix-db-integrations.md) — Update the disposable coordinator, node, and configuration integrations for explicit roles, coordinator trust, and current owner bootstrap (issue [#130](https://github.com/willjasen/rawrarr/issues/130)).
+
 - [Test fossil host port isolation](2026-10-26-fossil-port-forward-tests.md) — Add generated-Compose regression and live two-fossil OrbStack checks for host-published ports (issue [#126](https://github.com/willjasen/rawrarr/issues/126)).
 
 - [Define user, device, group, and app identity domains](2026-10-26-identity-domains.md) — Consolidate key ownership and purpose, distinguish implemented behavior from planned group/app lifecycles, and link current design references (issue [#95](https://github.com/willjasen/rawrarr/issues/95)).
