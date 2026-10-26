@@ -4,19 +4,35 @@ import { readFile } from 'node:fs/promises';
 
 const root = new URL('../../', import.meta.url);
 const read = path => readFile(new URL(path, root), 'utf8');
-const [base, metadata, storage, macbookTailscale, miniRelays, proxyConfig] = await Promise.all([
+const [base, metadata, storage, macbookTailscale, miniRelays, proxyConfig, orbstackEnvironment] = await Promise.all([
   read('docker-compose.yml'),
   read('docker-compose.metadata.yml'),
   read('docker-compose.storage.yml'),
   read('docker-compose.tailscale-macbook.yml'),
   read('docker-compose.mini-relays.yml'),
   read('storage-proxy.Caddyfile'),
+  read('docker-compose.orbstack-test.yml'),
 ]);
 
+function serviceBlock(compose, service) {
+  const lines = compose.split(/\r?\n/);
+  const start = lines.findIndex(line => line === `  ${service}:`);
+  assert.notEqual(start, -1, `missing Compose service ${service}`);
+  let end = start + 1;
+  while (end < lines.length && !/^(?:  \S[^:]*:|\S)/.test(lines[end])) end++;
+  return lines.slice(start, end).join('\n');
+}
+
 test('metadata and storage have no host-published application ports', () => {
-  for (const compose of [base, metadata, storage]) {
-    assert.doesNotMatch(compose, /127\.0\.0\.1:\$?\{?RAWARR_HOST_PORT[^\n]*:8080/);
-    assert.doesNotMatch(compose, /127\.0\.0\.1:7297:8080/);
+  for (const [compose, services] of [
+    [base, ['fossil']],
+    [metadata, ['fossil', 'artwork-cache']],
+    [storage, ['boneyard']],
+    [orbstackEnvironment, ['metadata-a', 'metadata-b', 'tailscale-a', 'tailscale-b']],
+  ]) {
+    for (const service of services) {
+      assert.doesNotMatch(serviceBlock(compose, service), /^\s+ports\s*:/m, `${service} must not publish container ports to the host`);
+    }
   }
 });
 
