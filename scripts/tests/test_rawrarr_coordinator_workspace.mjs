@@ -53,6 +53,14 @@ test('Movies and TV cached library data stays hidden until an age ID is loaded',
   assert.match(workspaceScript, /if \(view === 'series' && updateHash\) \{\s*const cachedSeries = ageIdentityInMemory \? readLibraryTextCache\(selectedNode, 'tv'\) : null;/);
 });
 
+test('pending-node approval dialog is outside the hidden Settings section', () => {
+  const settingsSection = workspace.match(/<section id="settings-view" hidden>[\s\S]*?<\/section>/)?.[0];
+  assert.ok(settingsSection, 'Settings section exists');
+  assert.doesNotMatch(settingsSection, /id="approve-node-dialog"/);
+  assert.match(workspace, /<\/section>\s*<dialog id="approve-node-dialog"/);
+  assert.match(workspaceScript, /approveNodeDialog\.showModal\(\)/);
+});
+
 test('device shared-folder health is concise and formatted without exposing the folder ID', () => {
   assert.match(workspace, /\.device-sync-health \{ display:flex; flex-wrap:wrap; align-items:center; gap:4px/);
   assert.match(workspaceScript, /const setSyncHealth = parts =>/);
