@@ -1553,9 +1553,10 @@ async function loadNodes() {
     }
     nodesPanel.replaceChildren();
     const emptyDevices = document.getElementById('empty-devices');
+    const topologySection = document.getElementById('device-topology');
     emptyDevices.hidden = nodes.length !== 0;
+    topologySection.hidden = !nodes.some(node => node.online === true);
     if (nodes.length === 0) {
-      renderDeviceTopology([], [], {});
       status.textContent = 'No nodes yet. Add a fossil or boneyard to get started.';
       contentPanel.hidden = true;
       return;
@@ -1875,7 +1876,9 @@ async function loadNodes() {
         if (!defaultNode) defaultNode = node;
       }
     }
-    renderDeviceTopology(nodes, observedSyncthingPeers, deviceNames);
+    if (nodes.some(node => node.online === true)) {
+      renderDeviceTopology(nodes, observedSyncthingPeers, deviceNames);
+    }
     status.textContent = 'Choose a connected fossil or boneyard node to open its Rawrarr page.';
     const canOpen = canOpenNode;
     const requested = requestedNode && nodes.find(node => node.nodeId === requestedNode && canOpen(node));
