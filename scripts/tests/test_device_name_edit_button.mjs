@@ -8,12 +8,18 @@ const [workspace, script] = await Promise.all([
   readFile(new URL('rust-arr/src/coordinator-workspace.mjs', root), 'utf8'),
 ]);
 
-test('device name has an adjacent Edit button that unlocks the name field', () => {
-  assert.match(script, /nameInput\.readOnly = true/);
-  assert.match(script, /editNameButton\.textContent = 'Edit'/);
-  assert.match(script, /nameGroup\.append\(nameInput, editNameButton\)/);
-  assert.match(script, /nameInput\.readOnly = false;\s*nameInput\.focus\(\);/);
+test('device card Edit action opens a dialog to rename or delete the device', () => {
+  assert.match(script, /editButton\.textContent = 'Edit'/);
+  assert.match(script, /editButton\.setAttribute\('aria-label', `Edit \$\{currentDeviceName\}`\)/);
+  assert.match(script, /deviceEditDialog\.showModal\(\)/);
+  assert.match(script, /deviceEditForm\.addEventListener\('submit'/);
   assert.match(script, /saveDeviceName\(ageIdentity/);
-  assert.match(workspace, /\.device-name-group \{ display:flex/);
-  assert.match(workspace, /\.device-name-edit-button \{ flex:none/);
+  assert.match(script, /deviceEditDelete\.addEventListener\('click'/);
+  assert.match(script, /method: 'DELETE'/);
+  assert.match(script, /does not delete data on the device/);
+  assert.doesNotMatch(script, /device-delete-button|textContent = 'Delete device'/);
+  assert.match(workspace, /<button id="device-edit-delete" class="device-edit-delete" type="button">Delete device<\/button>/);
+  assert.match(workspace, /<button id="device-edit-save" type="submit">Save name<\/button>/);
+  assert.match(workspace, /\.device-edit-dialog::backdrop/);
+  assert.match(workspace, /\.device-edit-delete:hover/);
 });

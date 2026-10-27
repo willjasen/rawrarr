@@ -8,6 +8,14 @@ const status = document.getElementById('status');
 const nodesPanel = document.getElementById('nodes');
 const pendingPanel = document.getElementById('pending');
 const approveNodeDialog = document.getElementById('approve-node-dialog');
+const deviceEditDialog = document.getElementById('device-edit-dialog');
+const deviceEditForm = document.getElementById('device-edit-form');
+const deviceEditName = document.getElementById('device-edit-name');
+const deviceEditDescription = document.getElementById('device-edit-description');
+const deviceEditStatus = document.getElementById('device-edit-status');
+const deviceEditDelete = document.getElementById('device-edit-delete');
+const deviceEditCancel = document.getElementById('device-edit-cancel');
+let deviceEditContext = null;
 const approveNodeForm = document.getElementById('approve-node-form');
 const approveNodeIdentity = document.getElementById('approve-node-age-id');
 const approveNodeBackup = document.getElementById('approve-node-root-backup');
@@ -1633,8 +1641,70 @@ clearKeyButton.addEventListener('click', () => {
   contentStatus.textContent = 'Private ID cleared from this browser.';
 });
 
+deviceEditCancel.addEventListener('click', () => deviceEditDialog.close());
+deviceEditDialog.addEventListener('close', () => { deviceEditContext = null; });
+deviceEditForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const context = deviceEditContext;
+  if (!context?.ageIdentity || !context.configNode) return;
+  const { node, ageIdentity, configNode } = context;
+  const cleaned = deviceEditName.value.trim();
+  if (!cleaned || cleaned.length > 80 || /[\u0000-\u001f\u007f]/.test(cleaned)) {
+    deviceEditStatus.textContent = 'Enter a name of 1 to 80 printable characters.';
+    deviceEditName.focus();
+    return;
+  }
+  const stored = deviceNames[node.nodeId] || '';
+  if (cleaned === (stored || node.nodeId)) {
+    deviceEditDialog.close();
+    return;
+  }
+  document.getElementById('device-edit-save').disabled = true;
+  deviceEditName.disabled = true;
+  savingDeviceName = true;
+  deviceEditStatus.textContent = 'Saving device name into the age-encrypted config…';
+  try {
+    await window.rawrarrMiniExport.saveDeviceName(ageIdentity, `/nodes/${encodeURIComponent(configNode.nodeId)}`, node.nodeId, cleaned === node.nodeId ? '' : cleaned);
+    deviceNames[node.nodeId] = cleaned === node.nodeId ? '' : cleaned;
+    document.getElementById('device-name-status').textContent = 'Device name saved in the shared age-encrypted config.';
+    savingDeviceName = false;
+    deviceEditDialog.close();
+    await loadNodes();
+  } catch (error) {
+    savingDeviceName = false;
+    deviceEditStatus.textContent = error.message || 'Could not save this device name.';
+    deviceEditName.disabled = false;
+    document.getElementById('device-edit-save').disabled = false;
+    deviceEditName.focus();
+  }
+});
+deviceEditDelete.addEventListener('click', async () => {
+  const context = deviceEditContext;
+  if (!context) return;
+  const { node } = context;
+  const displayName = deviceNames[node.nodeId] || node.displayName || node.nodeId;
+  if (!window.confirm(`Remove ${displayName} from Rawrarr? This revokes coordinator access but does not delete data on the device.`)) return;
+  deviceEditDelete.disabled = true;
+  deviceEditStatus.textContent = 'Removing device access…';
+  try {
+    await jsonRequest(`/api/workspace/nodes/${encodeURIComponent(node.nodeId)}`, { method: 'DELETE' });
+    if (selectedNode === node.nodeId) {
+      selectedNode = null;
+      selectedNodeDetails = null;
+      selectedRoute = null;
+      contentPanel.hidden = true;
+    }
+    delete deviceNames[node.nodeId];
+    deviceEditDialog.close();
+    await loadNodes();
+  } catch (error) {
+    deviceEditDelete.disabled = false;
+    deviceEditStatus.textContent = error.message || 'Could not delete this device.';
+  }
+});
+
 async function loadNodes() {
-  if (savingDeviceName || document.activeElement?.classList.contains('device-name-input')) return;
+  if (savingDeviceName) return;
   try {
     const nodes = await jsonRequest('/api/workspace/nodes');
     workspaceNodes = nodes;
@@ -1733,33 +1803,15 @@ async function loadNodes() {
       stateLabel.className = 'node-state-label';
       stateLabel.textContent = latencyLabel || nodeStateLabel;
       state.append(indicator, stateLabel);
-      const nameInput = document.createElement('input');
-      nameInput.className = 'device-name-input';
-      nameInput.type = 'text';
-      nameInput.value = deviceNames[node.nodeId] || (node.displayName && node.displayName !== node.nodeId ? node.displayName : roleLabel(node.role));
-      nameInput.maxLength = 80;
-      nameInput.setAttribute('aria-label', `Name for ${node.nodeId}`);
-      nameInput.title = 'Device name';
-      nameInput.readOnly = true;
-      nameInput.disabled = !ageIdentity || !configNode;
-      const editNameButton = document.createElement('button');
-      editNameButton.type = 'button';
-      editNameButton.className = 'device-name-edit-button';
-      editNameButton.textContent = 'Edit';
-      editNameButton.setAttribute('aria-label', `Edit name for ${node.nodeId}`);
-      editNameButton.disabled = !ageIdentity || !configNode;
-      editNameButton.title = ageIdentity && configNode ? 'Edit this device name.' : 'Unlock the age identity to edit device names.';
-      editNameButton.addEventListener('click', event => {
-        event.stopPropagation();
-        nameInput.readOnly = false;
-        nameInput.focus();
-        nameInput.select();
-      });
+      const currentDeviceName = deviceNames[node.nodeId] || (node.displayName && node.displayName !== node.nodeId ? node.displayName : roleLabel(node.role));
+      const nameLabel = document.createElement('strong');
+      nameLabel.className = 'device-name';
+      nameLabel.textContent = currentDeviceName;
       const heading = document.createElement('div');
       heading.className = 'device-heading';
       const nameGroup = document.createElement('div');
       nameGroup.className = 'device-name-group';
-      nameGroup.append(nameInput, editNameButton);
+      nameGroup.append(nameLabel);
       heading.append(nameGroup, state);
       const detail = document.createElement('small');
       detail.className = 'device-detail';
@@ -1777,30 +1829,22 @@ async function loadNodes() {
       identityRow.append(avatarPicture, heading);
       card.append(identityRow, detail);
       void loadNodeAvatar(node, avatarSource, avatar);
-      const deleteButton = document.createElement('button');
-      deleteButton.type = 'button';
-      deleteButton.className = 'device-delete-button';
-      deleteButton.textContent = 'Delete device';
-      deleteButton.setAttribute('aria-label', `Delete ${deviceNames[node.nodeId] || node.displayName || node.nodeId}`);
-      deleteButton.addEventListener('click', async event => {
+      const editButton = document.createElement('button');
+      editButton.type = 'button';
+      editButton.className = 'device-edit-button';
+      editButton.textContent = 'Edit';
+      editButton.setAttribute('aria-label', `Edit ${currentDeviceName}`);
+      editButton.addEventListener('click', event => {
         event.stopPropagation();
-        const displayName = deviceNames[node.nodeId] || node.displayName || node.nodeId;
-        if (!window.confirm(`Remove ${displayName} from Rawrarr? This revokes coordinator access but does not delete data on the device.`)) return;
-        deleteButton.disabled = true;
-        try {
-          await jsonRequest(`/api/workspace/nodes/${encodeURIComponent(node.nodeId)}`, { method: 'DELETE' });
-          if (selectedNode === node.nodeId) {
-            selectedNode = null;
-            selectedNodeDetails = null;
-            selectedRoute = null;
-            contentPanel.hidden = true;
-          }
-          delete deviceNames[node.nodeId];
-          await loadNodes();
-        } catch (error) {
-          deleteButton.disabled = false;
-          status.textContent = error.message || 'Could not delete this device.';
-        }
+        deviceEditContext = { node, ageIdentity, configNode };
+        deviceEditName.value = currentDeviceName;
+        deviceEditName.disabled = !ageIdentity || !configNode;
+        document.getElementById('device-edit-save').disabled = !ageIdentity || !configNode;
+        deviceEditStatus.textContent = ageIdentity && configNode ? '' : 'Unlock the age identity to change device names. Deletion remains available.';
+        deviceEditDescription.textContent = `${roleLabel(node.role)} · ${node.nodeId}`;
+        deviceEditDelete.disabled = false;
+        deviceEditDialog.showModal();
+        if (ageIdentity && configNode) deviceEditName.focus();
       });
       const syncHealth = document.createElement('small');
       syncHealth.className = 'device-detail device-sync-health';
@@ -1862,7 +1906,6 @@ async function loadNodes() {
         merkleBadge.setAttribute('aria-label', detail.textContent ? `${label.textContent}; ${detail.textContent}.` : `${label.textContent}.`);
         card.append(merkleBadge);
       }
-      card.append(deleteButton);
       if (node.role === 'storage') {
         const scanActions = document.createElement('div');
         scanActions.className = 'storage-scan-actions';
@@ -1987,48 +2030,14 @@ async function loadNodes() {
         card.append(scanActions, scanStatus, scheduleForm);
         void refreshStorageSchedule(node, scheduleForm, scheduleSummary, scanMessage);
       }
+      card.append(editButton);
       card.addEventListener('click', event => {
-        if (event.target !== nameInput) openNode(node);
+        if (!event.target.closest('button')) openNode(node);
       });
       card.addEventListener('keydown', event => {
         if (event.target === card && (event.key === 'Enter' || event.key === ' ')) {
           event.preventDefault();
           openNode(node);
-        }
-      });
-      nameInput.addEventListener('keydown', event => {
-        if (event.key === 'Enter') { event.preventDefault(); nameInput.blur(); }
-        if (event.key === 'Escape') {
-          nameInput.value = deviceNames[node.nodeId] || node.displayName || node.nodeId;
-          nameInput.readOnly = true;
-          nameInput.blur();
-        }
-      });
-      nameInput.addEventListener('change', async () => {
-        nameInput.readOnly = true;
-        const cleaned = nameInput.value.trim();
-        if (!cleaned || cleaned.length > 80 || /[\u0000-\u001f\u007f]/.test(cleaned)) {
-          nameInput.value = deviceNames[node.nodeId] || node.displayName || node.nodeId;
-          document.getElementById('device-name-status').textContent = 'Enter a name of 1 to 80 printable characters.';
-          return;
-        }
-        const stored = deviceNames[node.nodeId] || '';
-        if (cleaned === (stored || node.nodeId)) return;
-        nameInput.disabled = true;
-        savingDeviceName = true;
-        document.getElementById('device-name-status').textContent = 'Saving device name into the age-encrypted config…';
-        try {
-          await window.rawrarrMiniExport.saveDeviceName(ageIdentity, `/nodes/${encodeURIComponent(configNode.nodeId)}`, node.nodeId, cleaned === node.nodeId ? '' : cleaned);
-          deviceNames[node.nodeId] = cleaned === node.nodeId ? '' : cleaned;
-          document.getElementById('device-name-status').textContent = 'Device name saved in the shared age-encrypted config.';
-          savingDeviceName = false;
-          await loadNodes();
-        } catch (error) {
-          savingDeviceName = false;
-          document.getElementById('device-name-status').textContent = error.message || 'Could not save this device name.';
-          nameInput.disabled = false;
-          nameInput.readOnly = false;
-          nameInput.focus();
         }
       });
       nodesPanel.append(card);
