@@ -23,6 +23,7 @@ const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, me
 
 test('rawrs Talk stays available from a persistent bottom-left voice panel', () => {
   assert.match(workspace, /id="rawrs-launcher" class="rawrs-launcher"[^>]*aria-controls="ai-voice-panel"/);
+  assert.match(workspace, /id="rawrs-launcher"[^>]*aria-label="Open rawrs voice agent"[^>]*>rawr<\/button>/);
   assert.match(workspace, /id="ai-voice-panel" class="rawrs-voice-panel"[^>]*hidden/);
   assert.match(workspace, /\.rawrs-launcher \{ position:fixed;[^}]*bottom:20px/);
   assert.match(workspace, /@media\(max-width:640px\) \{ \.rawrs-launcher \{ left:12px/);
