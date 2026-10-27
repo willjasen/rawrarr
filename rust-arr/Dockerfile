@@ -28,9 +28,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg libssl3 librsvg2-bin libjxl-tools openssl python3 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin rustarr \
-    && mkdir -p /data /shared /ui \
-    && ln -s /shared/metadata /metadata \
-    && chown 10001:10001 /data /shared /ui
+    && mkdir -p /data /shared/in /shared/out /ui \
+    && ln -s /shared/in/metadata /metadata \
+    && chown 10001:10001 /data /shared /shared/in /shared/out /ui
 COPY --from=builder /rust-arr /usr/local/bin/rust-arr
 COPY --from=builder /rust-arr-target-arch /usr/share/rawrarr/target-arch
 COPY --from=age-builder /go/bin/age /go/bin/age-keygen /usr/local/bin/
