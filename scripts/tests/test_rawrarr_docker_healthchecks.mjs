@@ -56,6 +56,7 @@ test('Docker test containers have unique names in the rawrarr-test-regression gr
   assert.doesNotMatch(testRunner, /copytree\([^\n]*web-export/);
   assert.match(testRunner, /ROOT \/ "docs"/);
   assert.match(testRunner, /ROOT \/ "\.github"/);
+  assert.match(testRunner, /ROOT \/ "stripe-service"/);
   assert.match(testEntrypoint, /grep -Eq.*playwright-core/);
   assert.match(testEntrypoint, /chromium.*launch/);
   assert.match(testEntrypoint, /puppeteer/);

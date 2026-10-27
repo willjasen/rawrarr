@@ -9,18 +9,17 @@ test('movies render while link checks are pending and survive a failed refresh',
   const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
   t.after(() => browser.close());
   const page = await browser.newPage();
-  let releaseSettings;
-  const settingsGate = new Promise(resolve => { releaseSettings = resolve; });
+  let releaseProbe;
+  const probeGate = new Promise(resolve => { releaseProbe = resolve; });
   let releaseRefresh;
   const refreshGate = new Promise(resolve => { releaseRefresh = resolve; });
-  t.after(() => { releaseSettings(); releaseRefresh(); });
+  t.after(() => { releaseProbe(); releaseRefresh(); });
   let requests = 0;
   await page.route('http://rawrarr.test/**', async route => {
     const path = new URL(route.request().url()).pathname;
     if (path === '/') return route.fulfill({ body: html, contentType: 'text/html' });
     if (path === '/api/settings/radarr') {
-      await settingsGate;
-      return route.fulfill({ status: 503, json: {} });
+      return route.fulfill({ json: { configured: true, persisted: true, url: 'https://radarr.test/' } });
     }
     if (path === '/api/radarr/movies') {
       requests++;
@@ -33,8 +32,12 @@ test('movies render while link checks are pending and survive a failed refresh',
     if (path === '/poster.svg') return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="72"/>' });
     return route.fulfill({ status: 503, json: {} });
   });
+  await page.route('https://radarr.test/**', async route => {
+    await probeGate;
+    return route.fulfill({ body: 'Radarr', contentType: 'text/html' });
+  });
   await page.goto('http://rawrarr.test/#movies');
-  // The settings response remains blocked: the previous implementation cannot render here.
+  // The cross-origin reachability probe remains pending; it must not delay the library or poster.
   await page.locator('#radarr-movie-rows tr').waitFor({ timeout: 1500 });
   assert.equal(await page.locator('#refresh-movies').isEnabled(), true);
   await page.waitForFunction(() => document.querySelector('#radarr-movie-rows img')?.naturalWidth > 0);
@@ -45,7 +48,7 @@ test('movies render while link checks are pending and survive a failed refresh',
   await page.waitForFunction(() => !document.getElementById('refresh-movies').disabled);
   assert.match(await page.locator('#movies-message').textContent(), /Showing the previous list/);
   assert.equal(await page.locator('#radarr-movie-rows tr').count(), 1);
-  releaseSettings();
+  releaseProbe();
 });
 
 test('reload shows server snapshot before slow live results and never lets a late snapshot overwrite them', async t => {
@@ -60,6 +63,7 @@ test('reload shows server snapshot before slow live results and never lets a lat
   await page.route('http://rawrarr.test/**', async route => {
     const path = new URL(route.request().url()).pathname;
     if (path === '/') return route.fulfill({ body: html, contentType: 'text/html' });
+    if (path === '/api/settings/radarr') return route.fulfill({ json: { configured: true, persisted: true, url: 'https://radarr.test/' } });
     if (path === '/api/radarr/movies/snapshot') {
       await snapshotGate;
       return route.fulfill({ json: snapshot });
