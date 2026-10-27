@@ -169,6 +169,10 @@ impl PeerRpc {
 
     pub fn peer_urls(&self) -> Vec<(String, String)> { self.peers.iter().map(|(id,url)|(id.clone(),url.trim_end_matches('/').to_owned())).collect() }
 
+    fn configured_remote_peer_count(&self) -> usize {
+        self.peers.keys().filter(|peer_id| peer_id.as_str() != self.node_id).count()
+    }
+
     pub fn issue_challenge(&self) -> Option<(String, String)> {
         if self.peers.is_empty() || self.root_fingerprint.len() != 64 { return None; }
         let mut bytes=[0u8;32]; getrandom::fill(&mut bytes).ok()?; let nonce=encode_hex(&bytes);
@@ -220,7 +224,7 @@ impl PeerRpc {
     }
 
     pub async fn reconcile_once(&self, mirror: &CiphertextMirror, path: &Path, certificate: Option<&serde_json::Value>, status: &PeerSyncStatus) -> bool {
-        let Some(certificate)=certificate else{status.update(merkle_root(&load_revisions()),0,self.peers.len());return false;};
+        let Some(certificate)=certificate else{status.update(merkle_root(&load_revisions()),0,self.configured_remote_peer_count());return false;};
         let mut repaired=false;
         let mut peer_roots=HashMap::new();
         for (peer_id,base) in self.peer_urls() {
@@ -269,7 +273,7 @@ impl PeerRpc {
         }
         let local_root = merkle_root(&load_revisions());
         let matching = peer_roots.values().filter(|root| *root == &local_root).count();
-        status.update(local_root, matching, peer_roots.len().max(self.peers.len()));
+        status.update(local_root, matching, self.configured_remote_peer_count());
         repaired
     }
 }

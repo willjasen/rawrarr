@@ -27,6 +27,15 @@ fn peer_allowlist_requires_stable_ids_and_direct_tailnet_https_urls() {
 }
 
 #[test]
+fn configured_merkle_peer_count_excludes_the_local_node() {
+    let peer = PeerRpc::fixture("node-a", &"a".repeat(64), HashMap::from([
+        ("node-a".to_owned(), "https://node-a.example.ts.net/direct-api".to_owned()),
+        ("node-b".to_owned(), "https://node-b.example.ts.net/direct-api".to_owned()),
+    ]));
+    assert_eq!(peer.configured_remote_peer_count(), 1);
+}
+
+#[test]
 fn repaired_config_is_written_as_exact_private_ciphertext() {
     let root=std::env::temp_dir().join(format!("rawrarr-config-repair-{}",uuid::Uuid::new_v4().simple()));
     let path=root.join("shared").join("config.aged");
