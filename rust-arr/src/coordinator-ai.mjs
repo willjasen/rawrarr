@@ -85,33 +85,22 @@ export function initAiChat({ getMovies, getSeries, loadSeries, openMovies }) {
   const history = document.getElementById('ai-history');
   const submit = document.getElementById('ai-submit');
   const talk = document.getElementById('ai-talk');
-  const chatTab = document.getElementById('ai-tab-chat');
-  const voiceTab = document.getElementById('ai-tab-voice');
-  const chatPanel = document.getElementById('ai-chat-panel');
   const voicePanel = document.getElementById('ai-voice-panel');
+  const launcher = document.getElementById('rawrs-launcher');
+  const closeVoice = document.getElementById('rawrs-close');
   document.getElementById('ai-open-movies').addEventListener('click', openMovies);
   let recorder = null;
-
-  function selectMode(mode) {
-    const chat = mode === 'chat';
-    chatTab.setAttribute('aria-selected', String(chat));
-    voiceTab.setAttribute('aria-selected', String(!chat));
-    chatTab.tabIndex = chat ? 0 : -1;
-    voiceTab.tabIndex = chat ? -1 : 0;
-    chatPanel.hidden = !chat;
-    voicePanel.hidden = chat;
+  function setVoicePanelOpen(open) {
+    voicePanel.hidden = !open;
+    launcher.setAttribute('aria-expanded', String(open));
+    if (open) talk.focus();
+    else launcher.focus();
   }
-  chatTab.addEventListener('click', () => selectMode('chat'));
-  voiceTab.addEventListener('click', () => selectMode('voice'));
-  for (const [tab, mode] of [[chatTab, 'chat'], [voiceTab, 'voice']]) {
-    tab.addEventListener('keydown', event => {
-      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-      event.preventDefault();
-      const next = event.key === 'Home' ? 'chat' : event.key === 'End' ? 'voice' : mode === 'chat' ? 'voice' : 'chat';
-      selectMode(next);
-      (next === 'chat' ? chatTab : voiceTab).focus();
-    });
-  }
+  launcher.addEventListener('click', () => setVoicePanelOpen(voicePanel.hidden));
+  closeVoice.addEventListener('click', () => setVoicePanelOpen(false));
+  voicePanel.addEventListener('keydown', event => {
+    if (event.key === 'Escape') setVoicePanelOpen(false);
+  });
 
   function speak(answerText) {
     if (!('speechSynthesis' in window)) return;
