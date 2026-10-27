@@ -9,9 +9,9 @@ function formatStorageSize(bytes) {
 }
 
 export function answerMovieQuery(intent, movies, series = null) {
-  if (!Array.isArray(movies)) return 'Could you unlock Movies first? Then I can look through your library.';
+  if (!Array.isArray(movies)) return 'Could you unlock Movies first? Then I can take a little look through your library.';
   if (intent?.kind === 'library_storage_share') {
-    if (!Array.isArray(series)) return 'I can see Movies, but I could not load TV sizes yet. Open TV and check its Sonarr connection, then try again.';
+    if (!Array.isArray(series)) return 'I can see Movies, but I could not load TV sizes just yet. Could you open TV and check its Sonarr connection? Then I can try again.';
     const totalSize = records => records.reduce((total, item) => {
       const size = Number(item.sizeOnDisk);
       return total + (Number.isFinite(size) && size > 0 ? size : 0);
@@ -19,10 +19,10 @@ export function answerMovieQuery(intent, movies, series = null) {
     const movieBytes = totalSize(movies);
     const tvBytes = totalSize(series);
     const combined = movieBytes + tvBytes;
-    if (!combined) return 'I could not find reported file sizes for Movies or TV yet. What would you like to check next?';
-    return `From the file sizes reported by Radarr and Sonarr, Movies use ${formatStorageSize(movieBytes)} (${(movieBytes / combined * 100).toFixed(1)}%) and TV uses ${formatStorageSize(tvBytes)} (${(tvBytes / combined * 100).toFixed(1)}%) of their combined ${formatStorageSize(combined)}. What else are you curious about?`;
+    if (!combined) return 'I could not find reported file sizes for Movies or TV just yet, so I cannot work out their share. What shall we check next?';
+    return `I had a look at the file sizes reported by Radarr and Sonarr. Movies use ${formatStorageSize(movieBytes)} (${(movieBytes / combined * 100).toFixed(1)}%) and TV uses ${formatStorageSize(tvBytes)} (${(tvBytes / combined * 100).toFixed(1)}%) of their combined ${formatStorageSize(combined)}. What else are you curious about?`;
   }
-  if (intent?.kind !== 'movie_filter') return 'I saved that question for review. I can search your movies by year or genre right now. What would you like to try?';
+  if (intent?.kind !== 'movie_filter') return 'I saved that question for review so it can get a closer look. Right now, I can search your movies by year or genre. What would you like to try?';
   const start = Number.isInteger(intent.startYear) ? intent.startYear : null;
   const end = Number.isInteger(intent.endYear) ? intent.endYear : null;
   const genre = typeof intent.genre === 'string' ? intent.genre.trim().toLowerCase() : '';
@@ -34,11 +34,11 @@ export function answerMovieQuery(intent, movies, series = null) {
   });
   const yearLabel = start !== null && end !== null ? ` from ${start}–${end}` : start !== null ? ` from ${start} onward` : end !== null ? ` through ${end}` : '';
   const genreLabel = genre ? ` in ${genre}` : '';
-  const header = `I found ${matches.length} movie${matches.length === 1 ? '' : 's'}${yearLabel}${genreLabel} in your unlocked library.`;
-  if (!matches.length) return `${header}\nI couldn't find a matching title in the records loaded here.`;
+  const header = `I found ${matches.length} movie${matches.length === 1 ? '' : 's'}${yearLabel}${genreLabel} in the library records loaded here.`;
+  if (!matches.length) return `${header}\nNo matching title showed up in those records. Want to try another year or genre?`;
   const titles = matches.slice(0, 30).map(movie => `• ${movie.title}${movie.year ? ` (${movie.year})` : ''}`);
-  const more = matches.length > 30 ? `\n…and ${matches.length - 30} more.` : '';
-  return `${header}\n${titles.join('\n')}${more}`;
+  const more = matches.length > 30 ? `\n…and ${matches.length - 30} more. There are lots to look through!` : '';
+  return `${header}\n${titles.join('\n')}${more}\nWhat else are you curious about?`;
 }
 
 export async function readAiStream(response, onDelta) {
