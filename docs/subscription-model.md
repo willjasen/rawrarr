@@ -2,7 +2,7 @@
 
 ## Purpose and current decisions
 
-Rawrarr is intended to be self-hosted from a packaged Docker image. A new account on a public deployment receives a three-day trial; internal deployments do not receive a billing trial. Trial status is recorded and displayed, while post-trial enforcement remains unimplemented. The selected direction is hosted checkout plus a signed license. Billing, licensing, and the blind data relay are separate services. This document proposes a model for discussion; it does not implement billing or enforcement.
+Rawrarr is intended to be self-hosted from a packaged Docker image. A new account on a public deployment receives a three-day trial; internal deployments do not receive a billing trial. Trial status is recorded and displayed, while post-trial enforcement remains unimplemented. The selected direction is hosted checkout plus a signed license. Billing, licensing, and the blind data relay are separate services. A separate Stripe service verifies selected webhook signatures, deduplicates event IDs, and associates Stripe customer/subscription references with the same `rawrarr_users.id` account row that owns linked passkeys. It does not read passkey records. Checkout and entitlement processing remain unimplemented. See the [Stripe service boundary](stripe-service.md).
 
 ## Proposed commercial shape
 
@@ -22,7 +22,7 @@ A new account on a public deployment receives one three-day evaluation, beginnin
 
 1. Rawrarr creates a random instance identity and starts its trial after setup is complete.
 2. The owner selects **Subscribe** in the app and goes to a hosted checkout page. Payment details stay with the billing provider.
-3. A separate licensing service receives the provider's verified subscription events and associates the active plan with the opaque instance ID.
+3. The hosted account portal creates a Stripe customer linked to the authenticated `rawrarr_users.id`. The separate Stripe service verifies selected provider events, records an idempotent event inbox, and maintains customer/subscription references against that same account row. A later licensing worker must associate the active plan with the opaque instance ID.
 4. The licensing service issues a signed entitlement. The app stores the signed payload in shared Rawrarr app data so connected nodes can verify the same entitlement without sharing a database.
 5. Every node verifies the signature locally against a public verification key packaged with Rawrarr. The app does not need the license-signing private key or billing credentials.
 6. Nodes periodically refresh entitlement state. When the licensing service is unavailable, a previously valid signed entitlement continues to work through a proposed 14-day renewal grace window.
@@ -68,7 +68,7 @@ The hosted service may associate public age recipients with the account's passke
 
 1. Finalize product rules and write a feature/lock-state matrix.
 2. Define versioned trial and entitlement records keyed by `instance_id`, with safe conflict handling under eventual synchronization.
-3. Build a licensing service that verifies payment-provider webhooks and signs licenses; keep it separate from the relay.
+3. Build on the separate Stripe webhook inbox with event processing and signed license issuance; keep billing and licensing separate from the blind relay.
 4. Add hosted checkout and customer-portal links without collecting card data in Rawrarr.
 5. Add local signature verification, shared-folder license storage, refresh/grace handling, and key rotation.
 6. Gate server-side API mutations and workflows, not only UI buttons; keep recovery/export routes available.
