@@ -248,6 +248,7 @@
 - [Browse the Sonarr library on TV](2026-10-18-browse-sonarr-library.md) — Load the configured Sonarr series list directly from metadata and show TV library statistics and refresh controls.
 
 - [Add suggested account words](2026-10-18-add-suggested-account-words.md) — Expand generated names with the previously suggested eras, settings, and creatures.
+- [Add short Mesozoic creature words](2026-10-27-add-short-mesozoic-creature-words.md) — Expand generated profile names with approved short dinosaur words.
 - [Expand generated account vocabulary](2026-10-18-expand-generated-account-vocabulary.md) — Add the supplied prehistoric word pools while preserving username limits.
 
 - [Display the generated account name](2026-10-18-display-generated-account-name.md) — Show the generated dinosaur-themed label in the workspace profile for existing and new accounts.

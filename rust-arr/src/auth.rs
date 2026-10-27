@@ -85,6 +85,17 @@ const ACCOUNT_NAME_CREATURES: &[&str] = &[
     "ceratopsian",
     "glyptodon",
     "gorgonops",
+    "alba",
+    "ankylo",
+    "cera",
+    "dilo",
+    "giga",
+    "mosa",
+    "ptera",
+    "rex",
+    "stego",
+    "theri",
+    "trike",
 ];
 
 #[derive(Clone)]
