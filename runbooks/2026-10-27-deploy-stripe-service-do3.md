@@ -42,3 +42,9 @@ Deploy the published Stripe webhook service beside Roarlay on `rawrarr-roarlay`,
 - Installed it at `/opt/rawrarr-roarlay-prod/secrets/stripe-webhook-secret`, owner UID/GID 10001 and mode 0400. The service initially retained the old empty file bind mount after a restart, so only `stripe-service` was force-recreated with `--pull never --no-deps`; no other service was changed.
 - Verified the recreated container is running with restart count 0 and the mounted secret source is the protected host file. From the Roarlay container, `curl -fsS -o /dev/null -w 'HTTP %{http_code}\n' http://stripe-service:8090/health` returned HTTP 200, confirming the service is ready with the secret configured.
 - No Stripe test event was sent because accepting billing events requires a Rawrarr account mapping. Invalid-signature behavior and end-to-end event delivery remain unverified; live payments remain disabled.
+
+## Public-route verification (2026-10-27)
+
+- From `rawrarr-roarlay`, sent a synthetic non-billing `codex.probe` event to `https://rawrarr.willjasen.net/v1/webhooks/stripe` with a fresh Stripe-compatible HMAC generated in memory from the mounted test secret. The public route returned HTTP 204 as expected; non-billing events are acknowledged without database writes.
+- Repeated the same public request with an invalid signature; the route returned HTTP 400 as expected. This confirms the public Caddy route reaches the configured service and rejects invalid signatures.
+- No secret or signature was printed. No billing event was sent or persisted. A Stripe Dashboard test delivery and an account-mapped billing event remain unverified; the latter needs a test customer/account mapping.
