@@ -251,11 +251,77 @@ async function loadProfile() {
     document.getElementById('crypto-wallet-status').textContent = walletName ? `Linked wallet · ${walletName}` : 'No ENS wallet linked';
     if (walletName) document.getElementById('crypto-ens-name').value = walletName;
     await loadProfileAvatar();
+    await loadBillingStatus();
   } catch (error) {
     document.getElementById('profile-name').textContent = error.message;
     document.getElementById('sidebar-profile-name').textContent = 'Profile unavailable';
   }
 }
+async function loadBillingStatus() {
+  const status = document.getElementById('billing-status');
+  const checkout = document.getElementById('billing-checkout');
+  const portal = document.getElementById('billing-portal');
+  try {
+    const billing = await jsonRequest('/api/workspace/billing');
+    checkout.hidden = !billing.checkoutEnabled || ['active', 'trialing', 'past_due', 'unpaid', 'incomplete', 'paused'].includes(billing.subscriptionStatus);
+    portal.hidden = !billing.checkoutEnabled || !billing.customerLinked;
+    if (!billing.checkoutEnabled) {
+      status.textContent = 'Stripe test checkout is not configured on this public instance.';
+    } else if (billing.subscriptionStatus) {
+      const periodEnd = billing.currentPeriodEnd ? ` · current period ends ${new Date(billing.currentPeriodEnd).toLocaleString()}` : '';
+      const cancellation = billing.cancelAtPeriodEnd ? ' · cancellation is scheduled' : '';
+      status.textContent = `Test subscription status: ${billing.subscriptionStatus}${periodEnd}${cancellation}. Rawrarr access is not controlled by this test subscription.`;
+    } else {
+      status.textContent = billing.customerLinked
+        ? 'Stripe test customer linked; no current subscription is recorded.'
+        : 'No Stripe test subscription is linked to this account.';
+    }
+    const returned = new URLSearchParams(location.search).get('billing');
+    const feedback = document.getElementById('billing-feedback');
+    if (returned === 'success') {
+      feedback.textContent = 'Stripe Checkout completed in test mode. Subscription status appears here after Stripe delivers its webhook.';
+    } else if (returned === 'cancelled') {
+      feedback.textContent = 'Stripe test Checkout was canceled; no subscription was created.';
+    }
+    if (returned) {
+      const cleanUrl = new URL(location.href);
+      cleanUrl.searchParams.delete('billing');
+      history.replaceState(null, '', `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
+    }
+  } catch (error) {
+    checkout.hidden = true;
+    portal.hidden = true;
+    status.textContent = error.message || 'Stripe test billing status is unavailable.';
+  }
+}
+document.getElementById('billing-checkout').addEventListener('click', async () => {
+  const status = document.getElementById('billing-status');
+  const button = document.getElementById('billing-checkout');
+  button.disabled = true;
+  status.textContent = 'Opening Stripe test Checkout…';
+  try {
+    const session = await jsonRequest('/api/workspace/billing/checkout', { method: 'POST' });
+    if (!session?.url) throw new Error('Stripe did not return a Checkout URL.');
+    window.location.assign(session.url);
+  } catch (error) {
+    status.textContent = error.message || 'Could not start Stripe test Checkout.';
+    button.disabled = false;
+  }
+});
+document.getElementById('billing-portal').addEventListener('click', async () => {
+  const status = document.getElementById('billing-status');
+  const button = document.getElementById('billing-portal');
+  button.disabled = true;
+  status.textContent = 'Opening Stripe test billing portal…';
+  try {
+    const session = await jsonRequest('/api/workspace/billing/portal', { method: 'POST' });
+    if (!session?.url) throw new Error('Stripe did not return a billing portal URL.');
+    window.location.assign(session.url);
+  } catch (error) {
+    status.textContent = error.message || 'Could not open the Stripe test billing portal.';
+    button.disabled = false;
+  }
+});
 void loadProfile();
 const cryptoLinkForm = document.getElementById('crypto-wallet-link-form');
 cryptoLinkForm.addEventListener('submit', async event => {

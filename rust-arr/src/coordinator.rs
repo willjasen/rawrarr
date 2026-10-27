@@ -1,6 +1,8 @@
 //! Central passkey authentication and owner-approved node enrollment.
 #[path = "coordinator_ai.rs"]
 mod ai;
+#[path = "coordinator_stripe.rs"]
+mod stripe;
 use crate::{auth::AuthState, node_role::NodeRole};
 use axum::{
     Extension, Json, Router,
@@ -52,6 +54,7 @@ pub(super) struct CoordinatorState {
     relay_targets: HashMap<String, reqwest::Url>,
     direct_targets: HashMap<String, reqwest::Url>,
     relay_client: reqwest::Client,
+    stripe_billing: stripe::BillingState,
 }
 
 #[derive(Deserialize)]
@@ -247,6 +250,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         let url = validate_direct_target(&web_origin.origin().ascii_serialization(), &target)?;
         direct_targets.insert(node_id, url);
     }
+    let stripe_billing = stripe::BillingState::from_env()?;
     let state = CoordinatorState {
         pool,
         approved: Arc::new(RwLock::new(approved)),
@@ -256,6 +260,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         relay_targets,
         direct_targets,
         relay_client,
+        stripe_billing,
     };
     let public = Router::new()
         .route("/", get(coordinator_home))
@@ -322,6 +327,9 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/api/workspace/nodes", get(workspace_nodes))
         .route("/api/workspace/nodes/{node_id}", delete(delete_workspace_node))
         .route("/api/workspace/profile", get(workspace_profile))
+        .route("/api/workspace/billing", get(stripe::status))
+        .route("/api/workspace/billing/checkout", post(stripe::checkout))
+        .route("/api/workspace/billing/portal", post(stripe::portal))
         .route("/api/workspace/profile-picture/{seed}/jxl", get(workspace_profile_picture_jxl))
         .route("/api/workspace/profile-picture/{seed}/png", get(workspace_profile_picture_png))
         .route("/api/workspace/device-picture/{seed}/jxl", get(workspace_device_picture_jxl))

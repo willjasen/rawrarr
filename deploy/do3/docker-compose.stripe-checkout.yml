@@ -1,0 +1,14 @@
+services:
+  roarlay:
+    environment:
+      STRIPE_TEST_SECRET_KEY_FILE: /run/secrets/stripe-test-secret-key
+      STRIPE_TEST_PRICE_ID_FILE: /run/secrets/stripe-test-price-id
+    secrets:
+      - stripe-test-secret-key
+      - stripe-test-price-id
+
+secrets:
+  stripe-test-secret-key:
+    file: /opt/rawrarr-roarlay-prod/secrets/stripe-test-secret-key
+  stripe-test-price-id:
+    file: /opt/rawrarr-roarlay-prod/secrets/stripe-test-price-id
