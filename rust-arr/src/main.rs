@@ -5,6 +5,7 @@ mod sonarr;
 
 pub mod auth;
 mod coordinator;
+mod coordinator_crypto;
 mod device_signing;
 mod artwork_cache;
 mod config_repair;

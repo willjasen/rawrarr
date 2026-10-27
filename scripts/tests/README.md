@@ -6,6 +6,8 @@
 - `test_rawrarr_subscriber_compose.mjs` — checks subscriber role Compose generation and private GHCR image/auth guidance; run `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
 # Rawrarr tests
 
+- `test_rawrarr_crypto_ui.mjs` — Playwright and source-backed regressions for signed-out donations, donation/entitlement separation, Ethereum mainnet gating, manual subscription verification flow, preflight rejection for unsigned or mismatched wallets, ENS challenge signing and selected-account rejection, one-fossil tier enforcement across enrollment/approval/proxy access, account tier display, and server-side finalized-transfer requirements. Run with `node --test scripts/tests/test_rawrarr_crypto_ui.mjs` in the isolated Playwright test image.
+
 - `test_rawrarr_stripe_service.mjs` — checks hosted account/passkey ownership linkage, billing-table foreign keys, event idempotency, and service isolation. Run with `node --test scripts/tests/test_rawrarr_stripe_service.mjs`.
 
 - `test_rawrarr_trial.mjs` — checks that public account registration records a three-day trial, internal Compose audiences do not, legacy accounts are not backfilled, and the authenticated profile reports local-time trial status. Run with `node --test scripts/tests/test_rawrarr_trial.mjs` or through the OrbStack regression runner.

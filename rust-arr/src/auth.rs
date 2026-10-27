@@ -492,7 +492,7 @@ pub(super) async fn finish_authentication(
     Ok(session_response(token, auth.secure_cookie, auth.next_path))
 }
 
-async fn issue_session(
+pub(super) async fn issue_session(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     user_id: Uuid,
     node_id: &str,
@@ -512,7 +512,7 @@ async fn issue_session(
     Ok(token)
 }
 
-fn session_response(token: Zeroizing<String>, secure: bool, next: &'static str) -> Response<Body> {
+pub(super) fn session_response(token: Zeroizing<String>, secure: bool, next: &'static str) -> Response<Body> {
     let mut cookie = format!(
         "{SESSION_COOKIE}={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_SECONDS}",
         token.as_str()
