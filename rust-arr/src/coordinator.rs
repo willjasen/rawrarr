@@ -55,6 +55,7 @@ pub(super) struct CoordinatorState {
     direct_targets: HashMap<String, reqwest::Url>,
     relay_client: reqwest::Client,
     stripe_billing: stripe::BillingState,
+    avatar_cache: Arc<RwLock<HashMap<String, Arc<Vec<u8>>>>>,
 }
 
 #[derive(Deserialize)]
@@ -261,6 +262,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         direct_targets,
         relay_client,
         stripe_billing,
+        avatar_cache: Arc::new(RwLock::new(HashMap::new())),
     };
     let public = Router::new()
         .route("/", get(coordinator_home))
@@ -1400,6 +1402,7 @@ async fn workspace_profile(
 }
 
 async fn workspace_profile_picture_jxl(
+    State(state): State<CoordinatorState>,
     Extension(auth): Extension<AuthState>,
     headers: HeaderMap,
     Path(seed): Path<String>,
@@ -1408,14 +1411,15 @@ async fn workspace_profile_picture_jxl(
         return StatusCode::UNAUTHORIZED.into_response();
     }
     if !crate::coordinator_avatar::valid_seed(&seed) { return StatusCode::BAD_REQUEST.into_response(); }
-    let encoded = match tokio::task::spawn_blocking(move || crate::coordinator_avatar::render_jxl(&seed)).await {
-        Ok(Ok(bytes)) => bytes,
+    let encoded = match cached_workspace_avatar(&state, format!("profile:jxl:v1:{seed}"), move || crate::coordinator_avatar::render_jxl(&seed)).await {
+        Ok(bytes) => bytes,
         _ => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
     workspace_profile_picture_response(encoded, "image/jxl")
 }
 
 async fn workspace_profile_picture_png(
+    State(state): State<CoordinatorState>,
     Extension(auth): Extension<AuthState>,
     headers: HeaderMap,
     Path(seed): Path<String>,
@@ -1424,14 +1428,15 @@ async fn workspace_profile_picture_png(
         return StatusCode::UNAUTHORIZED.into_response();
     }
     if !crate::coordinator_avatar::valid_seed(&seed) { return StatusCode::BAD_REQUEST.into_response(); }
-    let encoded = match tokio::task::spawn_blocking(move || crate::coordinator_avatar::render_png(&seed)).await {
-        Ok(Ok(bytes)) => bytes,
+    let encoded = match cached_workspace_avatar(&state, format!("profile:png:v1:{seed}"), move || crate::coordinator_avatar::render_png(&seed)).await {
+        Ok(bytes) => bytes,
         _ => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
     workspace_profile_picture_response(encoded, "image/png")
 }
 
 async fn workspace_device_picture_jxl(
+    State(state): State<CoordinatorState>,
     Extension(auth): Extension<AuthState>,
     headers: HeaderMap,
     Path(seed): Path<String>,
@@ -1440,14 +1445,15 @@ async fn workspace_device_picture_jxl(
         return StatusCode::UNAUTHORIZED.into_response();
     }
     if !crate::coordinator_avatar::valid_seed(&seed) { return StatusCode::BAD_REQUEST.into_response(); }
-    let encoded = match tokio::task::spawn_blocking(move || crate::coordinator_avatar::render_fossil_jxl(&seed)).await {
-        Ok(Ok(bytes)) => bytes,
+    let encoded = match cached_workspace_avatar(&state, format!("device:jxl:v1:{seed}"), move || crate::coordinator_avatar::render_fossil_jxl(&seed)).await {
+        Ok(bytes) => bytes,
         _ => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
     workspace_profile_picture_response(encoded, "image/jxl")
 }
 
 async fn workspace_device_picture_png(
+    State(state): State<CoordinatorState>,
     Extension(auth): Extension<AuthState>,
     headers: HeaderMap,
     Path(seed): Path<String>,
@@ -1456,11 +1462,28 @@ async fn workspace_device_picture_png(
         return StatusCode::UNAUTHORIZED.into_response();
     }
     if !crate::coordinator_avatar::valid_seed(&seed) { return StatusCode::BAD_REQUEST.into_response(); }
-    let encoded = match tokio::task::spawn_blocking(move || crate::coordinator_avatar::render_fossil_png(&seed)).await {
-        Ok(Ok(bytes)) => bytes,
+    let encoded = match cached_workspace_avatar(&state, format!("device:png:v1:{seed}"), move || crate::coordinator_avatar::render_fossil_png(&seed)).await {
+        Ok(bytes) => bytes,
         _ => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
     workspace_profile_picture_response(encoded, "image/png")
+}
+
+async fn cached_workspace_avatar<F>(state: &CoordinatorState, key: String, render: F) -> Result<Vec<u8>, ()>
+where
+    F: FnOnce() -> Result<Vec<u8>, ()> + Send + 'static,
+{
+    if let Some(encoded) = state.avatar_cache.read().await.get(&key) {
+        return Ok(encoded.as_ref().clone());
+    }
+    {
+        let mut cache = state.avatar_cache.write().await;
+        if cache.len() >= 256 { cache.clear(); }
+    }
+    let encoded = tokio::task::spawn_blocking(render).await.map_err(|_| ())??;
+    let encoded = Arc::new(encoded);
+    let mut cache = state.avatar_cache.write().await;
+    Ok(cache.entry(key).or_insert_with(|| encoded.clone()).as_ref().clone())
 }
 
 fn workspace_profile_picture_response(encoded: Vec<u8>, content_type: &'static str) -> Response {
