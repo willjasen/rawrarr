@@ -6,10 +6,13 @@ Make the product idea of “eventually” explicit in Rawrarr's high-level docum
 
 Reviewed [product direction](../docs/product-direction.md), [product design](../docs/DESIGN.md), [data domains](../docs/data-domains.md), [technical status](../docs/technical-status.md), and prior [data-domain runbook](2026-10-18-rawrarr-data-domains.md).
 
+The user clarified the intended directory structure: `/shared/in` for app data such as Radarr metadata shared between fossils, and `/shared/out` for larger files such as selected media collections. Both use Syncthing. The current implementation stores metadata under `/shared/metadata`; no filesystem migration or runtime change was requested or performed.
+
 ## Actions
 
-- Added the “eventually” idea and its current-state caveat to the product direction, product design, data-domain registry, and technical status.
+- Added the “eventually” idea and its current-state caveat to the product direction, product design, data-domain registry, technical status, and security guide.
 - Clarified that portability applies to explicitly designed records with defined encryption, authorization, conflict, and recovery behavior; it does not mean arbitrary database replication.
+- Documented `/shared/in` and `/shared/out` as the target Syncthing tree layout, while identifying `/shared/metadata` and the separate `/media` share as current behavior. `/shared/out` media requires explicit approval and is ordinary file content unless separately encrypted.
 - Added the product-direction document to the documentation index and this task to the runbook index.
 
 ## Verification
@@ -20,4 +23,4 @@ Reviewed [product direction](../docs/product-direction.md), [product design](../
 
 ## Final state and remaining work
 
-The high-level docs now describe “eventually” as a future capability for portable app records between approved peers, and distinguish that direction from current `/shared` Syncthing replication. No sync behavior was implemented or enabled by this task.
+The high-level docs now describe “eventually” as a future capability for portable app records between approved peers, with `/shared/in` for exchanged app data and `/shared/out` for large published files. Current `/shared/metadata` storage and the separate `/media` Syncthing workflow remain unchanged; no sync behavior or filesystem migration was implemented or enabled by this task.

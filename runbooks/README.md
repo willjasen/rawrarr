@@ -50,7 +50,7 @@
 
 # Rawrarr runbooks
 
-- [Document the “eventually” app-data direction](2026-10-27-document-eventually-app-data-direction.md) — Clarify the future goal of portable app records syncing between approved nodes while distinguishing it from current `/shared` replication.
+- [Document the “eventually” app-data direction](2026-10-27-document-eventually-app-data-direction.md) — Define `/shared/in` for app data and `/shared/out` for selected large files as the target Syncthing layout, while distinguishing it from current paths.
 - [Restore the current MacBook fossil route](2026-10-26-restore-current-macbook-fossil-route.md) — Map the live MacBook node ID to its verified tailnet relay and direct API endpoints so the Devices card can report a usable route (issue [#181](https://github.com/willjasen/rawrarr/issues/181)).
 
 - [Check coordinator UI releases every five minutes](2026-10-26-coordinator-ui-update-five-minute-poll.md) — Restore five-minute polling for the coordinator-only UI bundle updater (issue [#169](https://github.com/willjasen/rawrarr/issues/169)).
