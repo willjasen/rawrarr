@@ -245,6 +245,14 @@ impl AgeVault {
             .unwrap_or_else(|| PathBuf::from("data/shared"))
     }
 
+    pub fn shared_in_dir() -> PathBuf {
+        shared_in_dir_for(&Self::shared_dir())
+    }
+
+    pub fn shared_out_dir() -> PathBuf {
+        shared_out_dir_for(&Self::shared_dir())
+    }
+
     /// The metadata domain is mounted at /metadata in the container and remains
     /// a subtree of the Syncthing shared root by default.
     pub fn metadata_dir() -> PathBuf {
@@ -905,6 +913,7 @@ impl AgeVault {
             metadata_filename_key: std::sync::Arc::new(std::sync::OnceLock::new()),
             shared_dir,
         };
+        migrate_legacy_metadata(&vault.shared_dir)?;
         // The first approved node creates the shared config as soon as it
         // installs the user's identity. `write_config` always encrypts with
         // the group recipient, never the user's or device's recipient.
@@ -1521,7 +1530,89 @@ fn set_private_directory_permissions(path: &Path) -> Result<(), VaultError> {
 }
 
 fn metadata_dir_for(shared_dir: &Path, override_dir: Option<PathBuf>) -> PathBuf {
-    override_dir.unwrap_or_else(|| shared_dir.join("metadata"))
+    override_dir.unwrap_or_else(|| shared_dir.join("in").join("metadata"))
+}
+
+fn shared_in_dir_for(shared_dir: &Path) -> PathBuf {
+    shared_dir.join("in")
+}
+
+fn shared_out_dir_for(shared_dir: &Path) -> PathBuf {
+    shared_dir.join("out")
+}
+
+fn migrate_legacy_metadata(shared_dir: &Path) -> Result<(), VaultError> {
+    let legacy = shared_dir.join("metadata");
+    let incoming = shared_in_dir_for(shared_dir);
+    if !legacy.exists() {
+        return Ok(());
+    }
+    let legacy_type = fs::symlink_metadata(&legacy).map_err(|_| VaultError::StorageFailed)?;
+    if !legacy_type.is_dir() {
+        return Err(VaultError::StorageFailed);
+    }
+    if let Ok(incoming_type) = fs::symlink_metadata(&incoming) {
+        if incoming_type.file_type().is_symlink() || !incoming_type.is_dir() {
+            return Err(VaultError::StorageFailed);
+        }
+    }
+    copy_missing_shared_tree(&legacy, &incoming.join("metadata"))
+}
+
+fn copy_missing_shared_tree(source: &Path, target: &Path) -> Result<(), VaultError> {
+    if !fs::symlink_metadata(source)
+        .map_err(|_| VaultError::StorageFailed)?
+        .is_dir()
+    {
+        return Err(VaultError::StorageFailed);
+    }
+    if let Ok(target_type) = fs::symlink_metadata(target) {
+        if target_type.file_type().is_symlink() || !target_type.is_dir() {
+            return Err(VaultError::StorageFailed);
+        }
+    }
+    fs::create_dir_all(target).map_err(|_| VaultError::StorageFailed)?;
+    set_shared_directory_permissions(target)?;
+    for entry in fs::read_dir(source).map_err(|_| VaultError::StorageFailed)? {
+        let entry = entry.map_err(|_| VaultError::StorageFailed)?;
+        let source_path = entry.path();
+        let target_path = target.join(entry.file_name());
+        let entry_type = entry.file_type().map_err(|_| VaultError::StorageFailed)?;
+        if entry_type.is_symlink() {
+            return Err(VaultError::StorageFailed);
+        }
+        if entry_type.is_dir() {
+            copy_missing_shared_tree(&source_path, &target_path)?;
+            continue;
+        }
+        if !entry_type.is_file() {
+            return Err(VaultError::StorageFailed);
+        }
+        if let Ok(existing) = fs::symlink_metadata(&target_path) {
+            if existing.file_type().is_symlink() || !existing.is_file() {
+                return Err(VaultError::StorageFailed);
+            }
+            // The target is authoritative once the new layout is active.
+            // Keep the legacy source untouched when the contents differ.
+            continue;
+        }
+        let temporary = temporary_path(&target_path);
+        let copied = (|| {
+            fs::copy(&source_path, &temporary).map_err(|_| VaultError::StorageFailed)?;
+            set_shared_ciphertext_permissions(&temporary)?;
+            fs::File::open(&temporary)
+                .and_then(|file| file.sync_all())
+                .map_err(|_| VaultError::StorageFailed)?;
+            match fs::hard_link(&temporary, &target_path) {
+                Ok(()) => Ok(()),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+                Err(_) => Err(VaultError::StorageFailed),
+            }
+        })();
+        let _ = fs::remove_file(&temporary);
+        copied?;
+    }
+    Ok(())
 }
 
 pub fn is_post_quantum_recipient(recipient: &str) -> bool {
@@ -1964,12 +2055,43 @@ mod tests {
         let shared = PathBuf::from("/shared");
         assert_eq!(
             metadata_dir_for(&shared, None),
-            PathBuf::from("/shared/metadata")
+            PathBuf::from("/shared/in/metadata")
         );
         assert_eq!(
             metadata_dir_for(&shared, Some(PathBuf::from("/metadata"))),
             PathBuf::from("/metadata")
         );
+    }
+
+    #[test]
+    fn shared_tree_exposes_in_and_out_subtrees() {
+        let shared = PathBuf::from("/shared");
+        assert_eq!(shared.join("in"), shared_in_dir_for(&shared));
+        assert_eq!(shared.join("out"), shared_out_dir_for(&shared));
+    }
+
+    #[test]
+    fn legacy_metadata_migration_copies_without_removing_or_overwriting() {
+        let root = env::temp_dir().join(format!(
+            "rawrarr-shared-in-migration-{}-{}",
+            std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        let legacy = root.join("metadata");
+        let target = root.join("in/metadata");
+        fs::create_dir_all(legacy.join("movies/text")).unwrap();
+        fs::write(legacy.join("movies/text/movie.aged"), b"ciphertext").unwrap();
+
+        migrate_legacy_metadata(&root).unwrap();
+        assert_eq!(fs::read(target.join("movies/text/movie.aged")).unwrap(), b"ciphertext");
+        assert_eq!(fs::read(legacy.join("movies/text/movie.aged")).unwrap(), b"ciphertext");
+        migrate_legacy_metadata(&root).unwrap();
+
+        fs::write(target.join("movies/text/movie.aged"), b"different ciphertext").unwrap();
+        migrate_legacy_metadata(&root).unwrap();
+        assert_eq!(fs::read(legacy.join("movies/text/movie.aged")).unwrap(), b"ciphertext");
+        assert_eq!(fs::read(target.join("movies/text/movie.aged")).unwrap(), b"different ciphertext");
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -2003,7 +2125,7 @@ mod tests {
             .store_radarr_backup(archive)
             .expect("store encrypted backup");
 
-        let path = shared_dir.join("metadata/radarr/recovery.zip.aged");
+        let path = shared_dir.join("in/metadata/radarr/recovery.zip.aged");
         let ciphertext = fs::read(&path).expect("read shared backup ciphertext");
         assert!(ciphertext.starts_with(b"age-encryption.org/v1\n"));
         assert!(!ciphertext
