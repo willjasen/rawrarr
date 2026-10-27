@@ -4,6 +4,7 @@
 - [Security](SECURITY.md) — trust boundaries, age encryption, browser-to-node encrypted transport through the coordinator, authentication, storage, and current limitations.
 - [Production deployment plan](production-deployment-plan.md) — start with coordinator-local PostgreSQL, production launch requirements, and a future managed-database migration path.
 - [Admin console](admin-console.md) — private, separate-container dashboard preview, network boundaries, and the authentication gate required before live account data.
+- [Stripe service](stripe-service.md) — hosted webhook intake, account linkage, database boundary, and current billing limitations.
 
 Start here for the current project state and everyday use:
 
@@ -38,6 +39,7 @@ Start here for the current project state and everyday use:
 - [Cloud access](cloud-access-architecture.md) — passkey account service, blind relay, and subscriber-data boundary.
 - [Optional direct node connections](direct-node-connection-plan.md) — direct Tailscale route and coordinator fallback, with remaining transport and security work.
 - [Subscription model](subscription-model.md) — proposed trial, hosted checkout, and signed entitlement model.
+- [Stripe service](stripe-service.md) — isolated billing service boundary and current webhook intake implementation.
 - [Donation plan](donation-plan.md) — proposed optional one-time contributions, separate from subscription entitlements.
 - [Tailscale integration](tailscale-integration-plan.md) — optional overlay transport plan; SwarmSail will manage one tailnet per subscriber account.
 - [Account-bound subscriber tailnet provisioning](account-tailnet-provisioning-plan.md) — planned eligibility, isolation, provisioning, key lifecycle, and revocation requirements.
