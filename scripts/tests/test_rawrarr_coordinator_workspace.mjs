@@ -71,6 +71,17 @@ test('device shared-folder health is concise and formatted without exposing the 
   assert.doesNotMatch(workspaceScript, /\$\{peer\.folderId\} ·/);
 });
 
+test('metadata device cards display verified Merkle freshness from the node peer status route', () => {
+  assert.match(workspaceScript, /\/nodes\/\$\{encodeURIComponent\(node\.nodeId\)\}\/api\/config-peer\/status/);
+  assert.match(workspaceScript, /state: 'unreachable'/);
+  assert.match(workspaceScript, /Merkle up to date/);
+  assert.match(workspaceScript, /Merkle sync incomplete/);
+  assert.match(workspaceScript, /Merkle peers unreachable/);
+  assert.match(workspaceScript, /merkleStatus\.matchingPeers/);
+  assert.match(mainRs, /\.route\("\/api\/config-peer\/status", get\(config_peer_status\)\)/);
+  assert.match(coordinator, /path == "api\/config-peer\/status"/);
+});
+
 test('Devices shows a network diagram with one link for each device pair', () => {
   assert.match(workspace, /<section id="devices-view"[^>]*><div class="devices-page-heading"><h1 class="page-title">Devices<\/h1><a class="button-link" href="\/setup\/node">Add a device<\/a><\/div>/);
   assert.match(workspace, /<section id="device-topology" class="topology-section" aria-labelledby="device-topology-title" hidden>[\s\S]*?<h2 id="device-topology-title">Topology<\/h2>/);

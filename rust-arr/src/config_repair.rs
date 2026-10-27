@@ -5,7 +5,7 @@
 use redis::Commands;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{collections::HashMap, env, fs, io::Write, path::{Path, PathBuf}, sync::Mutex, time::{Duration, Instant}};
+use std::{collections::HashMap, env, fs, io::Write, path::{Path, PathBuf}, sync::{Arc, Mutex}, time::{Duration, Instant, SystemTime, UNIX_EPOCH}};
 use std::os::unix::fs::OpenOptionsExt;
 use axum::{Json, body::Body, extract::{Request, State}, http::{HeaderMap, StatusCode, header}, response::Response};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
@@ -128,6 +128,32 @@ impl CiphertextMirror {
 #[derive(Clone)]
 pub struct PeerRpc { node_id: String, root_fingerprint: String, peers: HashMap<String, String>, challenges: std::sync::Arc<Mutex<HashMap<String, Instant>>> }
 
+#[derive(Clone, Default)]
+pub struct PeerSyncStatus(Arc<Mutex<Option<PeerSyncSnapshot>>>);
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PeerSyncSnapshot { state: &'static str, local_merkle_root: String, matching_peers: usize, configured_peers: usize, checked_at: u64 }
+
+impl PeerSyncStatus {
+    fn update(&self, root: String, matching_peers: usize, configured_peers: usize) {
+        let state = if configured_peers == 0 { "unreachable" } else if matching_peers == configured_peers { "current" } else if matching_peers > 0 { "partial" } else { "unreachable" };
+        let snapshot = PeerSyncSnapshot { state, local_merkle_root: root, matching_peers, configured_peers, checked_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() };
+        if let Ok(mut status) = self.0.lock() { *status = Some(snapshot); }
+    }
+
+    pub fn snapshot(&self) -> serde_json::Value {
+        self.0.lock().ok().and_then(|status| status.clone()).map_or_else(|| serde_json::json!({"state":"checking","matchingPeers":0,"configuredPeers":0}), |mut status| {
+            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+            if now.saturating_sub(status.checked_at) > 90 { status.state = "stale"; }
+            serde_json::to_value(status).unwrap_or_else(|_| serde_json::json!({"state":"unknown"}))
+        })
+    }
+
+    #[cfg(test)]
+    fn update_for_test(&self, root: &str, matching: usize, configured: usize) { self.update(root.to_owned(), matching, configured); }
+}
+
 impl PeerRpc {
     pub fn from_env(node_id: &str) -> Self {
         let root_fingerprint = env::var("RAWARR_INSTANCE_ROOT_FINGERPRINT").unwrap_or_default().trim().to_ascii_lowercase();
@@ -193,9 +219,10 @@ impl PeerRpc {
         Ok(headers)
     }
 
-    pub async fn reconcile_once(&self, mirror: &CiphertextMirror, path: &Path, certificate: Option<&serde_json::Value>) -> bool {
-        let Some(certificate)=certificate else{return false;};
+    pub async fn reconcile_once(&self, mirror: &CiphertextMirror, path: &Path, certificate: Option<&serde_json::Value>, status: &PeerSyncStatus) -> bool {
+        let Some(certificate)=certificate else{status.update(merkle_root(&load_revisions()),0,self.peers.len());return false;};
         let mut repaired=false;
+        let mut peer_roots=HashMap::new();
         for (peer_id,base) in self.peer_urls() {
             if peer_id==self.node_id {continue;}
             let Ok(client)=reqwest::Client::builder().timeout(Duration::from_secs(10)).redirect(reqwest::redirect::Policy::none()).build() else{continue;};
@@ -226,6 +253,7 @@ impl PeerRpc {
                 mirror.mirror_revision(revision);
             }
             if !accepted {continue;}
+            if let Some(root)=announced_root { peer_roots.insert(peer_id.clone(), root); }
             let mut all=load_revisions(); all.extend(peer_revisions);
             let Some(winner)=winner(&all).cloned() else{continue;};
             let Some(digest)=winner.ciphertext_digest.as_deref().filter(|_|winner.operation=="put") else{continue;};
@@ -239,6 +267,9 @@ impl PeerRpc {
             if bytes.len()>MAX_CONFIG_BYTES || !valid_ciphertext(&bytes) || hex(&Sha256::digest(&bytes))!=digest.to_ascii_lowercase(){continue;}
             if write_active_ciphertext(path,&bytes).is_ok(){mirror.mirror(&bytes);repaired=true;}
         }
+        let local_root = merkle_root(&load_revisions());
+        let matching = peer_roots.values().filter(|root| *root == &local_root).count();
+        status.update(local_root, matching, peer_roots.len().max(self.peers.len()));
         repaired
     }
 }

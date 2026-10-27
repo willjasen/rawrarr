@@ -1645,7 +1645,7 @@ async fn proxy_node_request(
         parts.method == Method::GET && request_body.is_empty()
     } else {
         parts.method == Method::GET
-            && (ciphertext_export_path(&path) || path == "api/syncthing/shared-health")
+            && (ciphertext_export_path(&path) || path == "api/syncthing/shared-health" || path == "api/config-peer/status")
             && request_body.is_empty()
     };
     if !method_allowed {

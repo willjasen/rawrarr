@@ -79,6 +79,12 @@
     .device-sync-health { display:flex; flex-wrap:wrap; align-items:center; gap:4px; line-height:1.5 }
     .sync-health-state { color:var(--text); font-weight:600 }
     .sync-health-detail { color:var(--muted) }
+    .merkle-status { align-items:center; gap:7px }
+    .merkle-status-icon { display:inline-grid; width:17px; height:17px; place-items:center; border:1px solid currentColor; border-radius:50%; font-size:11px; font-weight:700 }
+    .merkle-current .merkle-status-icon { color:var(--green) }
+    .merkle-partial .merkle-status-icon,.merkle-checking .merkle-status-icon { color:#e5bd62 }
+    .merkle-stale .merkle-status-icon { color:#e5bd62 }
+    .merkle-unreachable .merkle-status-icon { color:#ef7777 }
     .topology-section { margin-top:30px; padding:20px; border:1px solid var(--line); border-radius:12px; background:var(--panel) }
     .topology-section h2 { margin:0; font-size:20px }
     .topology-intro,.topology-empty { color:var(--muted); margin:6px 0 16px }

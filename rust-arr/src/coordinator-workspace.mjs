@@ -258,6 +258,7 @@ const storageScanStatusByNode = new Map();
 const storageScansActive = new Set();
 const storageScheduleDrafts = new Map();
 const syncthingHealthCache = new Map();
+const configPeerStatusCache = new Map();
 const nodeAvatarSeeds = new Map();
 let deviceRouteStatusByNode = new Map();
 function deviceNameTokens(value) {
@@ -1552,6 +1553,19 @@ async function loadNodes() {
         return [node.nodeId, null];
       }
     })));
+    const configPeerStatusByNode = new Map(await Promise.all(nodes.filter(node => node.role === 'metadata').map(async node => {
+      if (!node.online || !node.relayAvailable) return [node.nodeId, { state: 'unreachable' }];
+      const cached = configPeerStatusCache.get(node.nodeId);
+      if (cached && Date.now() - cached.checkedAt < 15000) return [node.nodeId, cached.value];
+      try {
+        const value = await jsonRequest(`/nodes/${encodeURIComponent(node.nodeId)}/api/config-peer/status`);
+        configPeerStatusCache.set(node.nodeId, { checkedAt: Date.now(), value });
+        return [node.nodeId, value];
+      } catch (_) {
+        configPeerStatusCache.set(node.nodeId, { checkedAt: Date.now(), value: { state: 'unreachable' } });
+        return [node.nodeId, { state: 'unreachable' }];
+      }
+    })));
     if (location.hash === '' || location.hash === '#overview') void loadOverviewMetadata();
     deviceRouteStatusByNode = await checkDeviceRoutes(nodes);
     const observedSyncthingPeers = nodes.flatMap(source => {
@@ -1730,6 +1744,25 @@ async function loadNodes() {
         setSyncHealth(['No shared folders configured']);
       }
       card.append(syncHealth);
+      if (node.role === 'metadata') {
+        const merkleStatus = configPeerStatusByNode.get(node.nodeId) || { state: 'checking' };
+        const merkleBadge = document.createElement('small');
+        merkleBadge.className = `device-detail device-sync-health merkle-status merkle-${merkleStatus.state}`;
+        const icon = document.createElement('span');
+        icon.className = 'merkle-status-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = ({ current: '✓', partial: '↻', stale: '◷', unreachable: '!', checking: '◌' })[merkleStatus.state] || '?';
+        const label = document.createElement('span');
+        label.className = 'sync-health-state';
+        label.textContent = ({ current: 'Merkle up to date', partial: 'Merkle sync incomplete', stale: 'Merkle status stale', unreachable: 'Merkle peers unreachable', checking: 'Checking Merkle status' })[merkleStatus.state] || 'Merkle status unknown';
+        const detail = document.createElement('span');
+        detail.className = 'sync-health-detail';
+        if (Number.isFinite(merkleStatus.matchingPeers) && Number.isFinite(merkleStatus.configuredPeers)) detail.textContent = `${merkleStatus.matchingPeers}/${merkleStatus.configuredPeers} peers match`;
+        merkleBadge.append(icon, label, ...(detail.textContent ? [detail] : []));
+        merkleBadge.setAttribute('role', 'status');
+        merkleBadge.setAttribute('aria-label', detail.textContent ? `${label.textContent}; ${detail.textContent}.` : `${label.textContent}.`);
+        card.append(merkleBadge);
+      }
       card.append(deleteButton);
       if (node.role === 'storage') {
         const scanActions = document.createElement('div');
