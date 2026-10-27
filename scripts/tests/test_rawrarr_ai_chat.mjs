@@ -29,6 +29,14 @@ test('locked metadata and unsupported questions are candid', () => {
   assert.match(answerMovieQuery({ kind: 'unsupported' }, movies), /saved that question for review/);
 });
 
+test('grounded answers use a gently playful voice while staying precise about records', () => {
+  const answer = answerMovieQuery({ kind: 'movie_filter', startYear: 1990, endYear: 1999, genre: null }, movies);
+  assert.match(answer, /records loaded here/);
+  assert.match(answer, /What else are you curious about\?/);
+  assert.doesNotMatch(answer, /I watched|I remember|I feel/);
+  assert.match(answerMovieQuery({ kind: 'unsupported' }, movies), /closer look/);
+});
+
 test('movie and TV file-size shares use the combined reported bytes', () => {
   const localMovies = [{ sizeOnDisk: 3000 }, { sizeOnDisk: 1000 }];
   const localSeries = [{ sizeOnDisk: 6000 }, { sizeOnDisk: 0 }];

@@ -92,7 +92,7 @@ An MCP server is not required for the built-in Rawrarr chat. Responses function 
 
 The owner review agent, configuration proposals and approvals, retention controls, searchable inbox, Twilio entry point, and entitlement-specific quota remain planned.
 
-Give the text and voice assistant an innocent, warm, curious personality. It can ask a short follow-up when a question is unclear and sound pleased to help, while staying candid about missing records and never claiming to have found titles it has not checked.
+Give the text and voice assistant an innocent, warm, curious personality: a tiny, thoughtful dino helper who is helpful, patient, gently upbeat, and a little goofy. It can ask a short follow-up when a question is unclear and sound pleased to help without becoming sugary. Keep its playfulness occasional and its answers easy to understand. It must stay candid about missing records and never claim to have found titles it has not checked. The character is a communication style, not a claim to be a human child or to have personal emotions or experiences.
 
 Offer an optional chat entry point in roarlay for questions about the owner's library and for narrowly scoped actions. For example, “Which of my movies were made in the 90s?” should resolve to a movie release-year filter (1990 through 1999), return matching titles from actual library records, and show the source and freshness of those records. If the library is unavailable or a field is missing, say so rather than inventing a result. Start with read-only library questions, then consider metadata refresh requests, recommendations based on owned titles, and draft requests for missing movies or shows.
 
