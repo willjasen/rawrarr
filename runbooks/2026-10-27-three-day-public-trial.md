@@ -17,4 +17,4 @@ Trial expiry does not yet gate product features or connect to Stripe entitlement
 
 ## Verification
 
-No tests or runtime checks were run in this implementation turn. The public and internal deployments were not rebuilt or restarted.
+`test_rawrarr_trial.mjs` checks public-only timestamp creation, the three-day expiry, legacy-account behavior, Compose audience settings, authenticated profile visibility, and local-time display. The focused trial and coordinator profile tests passed locally (32 assertions). The OrbStack `rawrarr-test-regression` run passed all 118 Node tests and all 97 Rust tests. Its Chromium suite had 11 failures in existing movie artwork timing, movie-link reachability, stale library snapshot, navigation, shared-library, and Sonarr settings cases; no browser test covers trial behavior. Python integration tests were skipped by the runner. No PostgreSQL-backed migration/account-creation integration test was run, and the public and internal deployments were not rebuilt or restarted.

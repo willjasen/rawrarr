@@ -209,7 +209,7 @@ test('device approvals use a volatile browser form and root-signed exact node re
 
 test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from the public age ID', () => {
   assert.match(coordinator, /\.route\("\/api\/workspace\/profile", get\(workspace_profile\)\)/);
-  assert.match(coordinator, /SELECT id FROM rawrarr_users WHERE id=\$1/);
+  assert.match(coordinator, /SELECT id, to_char\(trial_started_at AT TIME ZONE 'UTC'[\s\S]*?trial_started_at \+ interval '3 days'[\s\S]*?WHERE id=\$1/);
   assert.match(coordinator, /display_name: crate::auth::generated_account_name\(user_id\)/);
   assert.match(coordinator, /account_id: user_id/);
   assert.match(workspace, /id="profile-picture"/);
