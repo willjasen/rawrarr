@@ -50,6 +50,7 @@
 # Rawrarr runbooks
 
 - [ETH donations, ENS sign-in, and subscription tiers](2026-10-27-eth-donations-ens-subscriptions.md) — Add voluntary ETH donations, SIWE wallet login by ENS name, manual Ethereum mainnet subscriptions, and a one-fossil free tier (issue [#208](https://github.com/willjasen/rawrarr/issues/208)).
+- [Refresh linked regression test clones](2026-10-27-refresh-test-clone-dependencies.md) — Prepare each isolated OrbStack test clone with current lockfile dependencies and architecture-correct tools before running the offline suites (issue [#208](https://github.com/willjasen/rawrarr/issues/208)).
 
 - [Restore the current MacBook fossil route](2026-10-26-restore-current-macbook-fossil-route.md) — Map the live MacBook node ID to its verified tailnet relay and direct API endpoints so the Devices card can report a usable route (issue [#181](https://github.com/willjasen/rawrarr/issues/181)).
 

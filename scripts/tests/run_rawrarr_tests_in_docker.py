@@ -152,17 +152,35 @@ def main() -> int:
         "--label", f"com.docker.compose.project={PROJECT}",
         "--label", f"com.docker.compose.service=tests-{run_id}",
         "--env", "HOME=/tmp/rawrarr-test-home",
-        "--network", "none",
+        "--network", "bridge",
         IMAGE,
-        "-c", "sh /workspace/scripts/tests/run-tests-in-container.sh",
+        "-c", "sh /workspace/scripts/tests/wait-for-test-trigger.sh",
     )
     with tempfile.TemporaryDirectory(prefix="rawrarr-test-source-") as temp_dir:
         copy_project_into_container(args.context, name, Path(temp_dir))
 
     print(f"TEST CONTAINER: {name}", flush=True)
     docker(args.context, "start", name)
-    subprocess.run(["docker", "--context", args.context, "logs", "--follow", name], check=False)
-    exit_code = int(docker(args.context, "inspect", "--format", "{{.State.ExitCode}}", name))
+    try:
+        # Refresh this container's writable linked-clone layer from the copied
+        # source and lockfile before test networking is disabled.
+        subprocess.run(
+            ["docker", "--context", args.context, "exec", name,
+             "sh", "/workspace/scripts/tests/prepare-test-clone.sh"],
+            check=True,
+        )
+        docker(args.context, "network", "disconnect", "bridge", name)
+        docker(args.context, "exec", name, "touch", "/tmp/rawrarr-test-ready")
+        subprocess.run(["docker", "--context", args.context, "logs", "--follow", name], check=False)
+        exit_code = int(docker(args.context, "inspect", "--format", "{{.State.ExitCode}}", name))
+    except subprocess.CalledProcessError:
+        docker(args.context, "stop", name, check=False)
+        if args.remove_after:
+            docker(args.context, "rm", name, check=False)
+            print(f"REMOVED TEST CONTAINER: {name}")
+        else:
+            print(f"TEST LOGS RETAINED: docker --context {args.context} logs {name}")
+        raise
     print(f"TEST CONTAINER EXIT: {exit_code}")
     if args.remove_after:
         docker(args.context, "rm", name)
