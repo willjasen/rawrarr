@@ -11,6 +11,7 @@ This is the living product-design guide for how Rawrarr should behave and feel t
 - **Show useful status.** Tell the user whether an integration or device is connected, when information last changed, and what action can fix a problem. Prefer live updates over asking the user to reload.
 - **Keep control with the user.** Make sharing, scanning, backup, and connection actions explicit. Explain the effect before an action that changes or sends data.
 - **Remain understandable when nodes are offline.** Show which data is local or shared, which device can perform an action, and whether it is waiting for a peer to reconnect.
+- **Design for “eventually.”** App data that should be useful across approved nodes should have a path to become portable and synchronize when peers reconnect. This is a product direction, not a claim that all app data syncs today: Syncthing currently replicates the configured `/shared` folder, while databases and other node-local state remain local unless explicitly designed otherwise.
 - **Support sharing beyond media.** Treat device-to-device file sharing as a core direction for Rawrarr, following the broader Synkpieces idea. Users should eventually be able to share ordinary files and folders; media automation is the first focused use case, not a required data type.
 
 ## Visual identity

@@ -10,6 +10,7 @@ Start here for the current project state and everyday use:
 
 - [Project roadmap](../ROADMAP.md) — completed work, outstanding work, and recommended next milestones.
 - [Technical boundaries](technical-status.md) — data placement, privacy, and security constraints.
+- [Product direction](product-direction.md) — long-term product scope, including the “eventually” goal for portable app data across approved nodes.
 - [User guide](user-guide.md) — persistent local Compose usage, passkey and age setup, Radarr connections, Movies/TV summaries, artwork, health checks, and local scanning.
 
 ## Product design
