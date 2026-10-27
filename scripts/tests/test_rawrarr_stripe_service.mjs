@@ -30,3 +30,22 @@ test('event inbox and account updates use one transaction', async () => {
   assert.match(handler, /transaction\.commit\(\)\.await/);
   assert.match(handler, /DefaultBodyLimit::max\(1_048_576\)/);
 });
+
+test('Stripe migrations use an independent ledger from the account service', async () => {
+  const handler = await source('stripe-service/src/main.rs');
+  assert.match(handler, /CREATE TABLE IF NOT EXISTS rawrarr_stripe_migrations/);
+  assert.match(handler, /SELECT checksum FROM rawrarr_stripe_migrations/);
+  assert.match(handler, /raw_sql\(migration_sql\)/);
+  assert.doesNotMatch(handler, /sqlx::migrate!/);
+});
+
+test('do3 webhook service stays private behind Caddy and file-based secrets', async () => {
+  const compose = await source('deploy/do3/docker-compose.stripe-service.yml');
+  const caddy = await source('deploy/do3/stripe-service.Caddyfile');
+  assert.match(compose, /BILLING_DATABASE_PASSWORD_FILE: \/run\/secrets\/stripe-db-password/);
+  assert.match(compose, /STRIPE_WEBHOOK_SECRET_FILE: \/run\/secrets\/stripe-webhook-secret/);
+  assert.match(compose, /rawrarr-roarlay-prod-control/);
+  assert.doesNotMatch(compose, /ports:/);
+  assert.match(caddy, /path \/v1\/webhooks\/stripe/);
+  assert.match(caddy, /reverse_proxy stripe-service:8090/);
+});

@@ -6,7 +6,7 @@
 - `test_rawrarr_subscriber_compose.mjs` — checks subscriber role Compose generation and private GHCR image/auth guidance; run `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
 # Rawrarr tests
 
-- `test_rawrarr_stripe_service.mjs` — checks hosted account/passkey ownership linkage, billing-table foreign keys, event idempotency, and service isolation. Run with `node --test scripts/tests/test_rawrarr_stripe_service.mjs`.
+- `test_rawrarr_stripe_service.mjs` — checks hosted account/passkey ownership linkage, independent migration tracking, private do3 Compose routing, file-secret configuration, event idempotency, and service isolation. Run with `node --test scripts/tests/test_rawrarr_stripe_service.mjs`.
 
 - `test_rawrarr_trial.mjs` — checks that public account registration records a three-day trial, internal Compose audiences do not, legacy accounts are not backfilled, and the authenticated profile reports local-time trial status. Run with `node --test scripts/tests/test_rawrarr_trial.mjs` or through the OrbStack regression runner.
 
