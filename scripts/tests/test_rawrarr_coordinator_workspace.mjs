@@ -297,6 +297,13 @@ test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from th
   assert.match(coordinatorAvatar, /if wings\.is_empty\(\)/);
   assert.match(coordinatorAvatar, /encodes_generated_avatar_as_a_jpeg_xl_codestream/);
   assert.match(coordinator, /private, max-age=31536000, immutable/);
+  assert.match(coordinator, /avatar_cache: Arc<RwLock<HashMap<String, Arc<Vec<u8>>>>/);
+  assert.match(coordinator, /async fn cached_workspace_avatar/);
+  assert.match(coordinator, /profile:jxl:v1:\{seed\}/);
+  assert.match(coordinator, /profile:png:v1:\{seed\}/);
+  assert.match(coordinator, /device:jxl:v1:\{seed\}/);
+  assert.match(coordinator, /device:png:v1:\{seed\}/);
+  assert.match(coordinator, /cache\.len\(\) >= 256/);
   assert.match(workspaceScript, /Generated dinosaur profile picture/);
   assert.doesNotMatch(workspaceScript, /Generated in this browser from your public age ID\. No image is uploaded\./);
   assert.match(workspaceScript, /profile-avatar-status'\)\.textContent = ''/);
