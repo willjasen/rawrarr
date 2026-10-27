@@ -189,18 +189,26 @@ export function initAiChat({ getMovies, getSeries, loadSeries, openMovies }) {
     await ask('text', question.value);
   });
 
-  if (talk && navigator.mediaDevices?.getUserMedia && window.MediaRecorder) {
+  if (talk) {
     talk.hidden = false;
-    talk.addEventListener('click', async () => {
+    const mediaRecorderAvailable = typeof window.MediaRecorder === 'function';
+    const getUserMedia = navigator.mediaDevices?.getUserMedia?.bind(navigator.mediaDevices);
+    if (!mediaRecorderAvailable || !getUserMedia) {
+      talk.disabled = true;
+      voiceAnswer.textContent = 'Voice recording is unavailable in this browser. Try the chat tab instead.';
+    } else talk.addEventListener('click', async () => {
       if (recorder?.state === 'recording') { recorder.stop(); return; }
       if (!getMovies()) { voiceAnswer.textContent = 'Unlock Movies first so I can answer from your library.'; return; }
       let stream;
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mimeType = ['audio/webm', 'audio/mp4', 'audio/ogg'].find(type => MediaRecorder.isTypeSupported(type));
+        stream = await getUserMedia({ audio: true });
+        const mimeType = ['audio/webm', 'audio/mp4', 'audio/ogg'].find(type => {
+          try { return !window.MediaRecorder.isTypeSupported || window.MediaRecorder.isTypeSupported(type); }
+          catch { return false; }
+        });
         if (!mimeType) throw new Error('This browser cannot record a supported audio format.');
         const chunks = [];
-        const activeRecorder = new MediaRecorder(stream, { mimeType });
+        const activeRecorder = new window.MediaRecorder(stream, { mimeType });
         recorder = activeRecorder;
         activeRecorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
         activeRecorder.onstop = async () => {
