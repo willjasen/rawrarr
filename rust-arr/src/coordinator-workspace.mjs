@@ -114,12 +114,12 @@ const ageStorageMessage = document.getElementById('age-storage-message');
 const settingsAgeIdInput = document.getElementById('settings-age-id');
 const saveAgeIdButton = document.getElementById('save-age-id');
 const removeAgeIdButton = document.getElementById('remove-age-id');
-const views = Object.fromEntries(['overview', 'devices', 'movies', 'series', 'assistant', 'configuration', 'settings', 'about'].map(name => [name, document.getElementById(`${name}-view`)]));
+const views = Object.fromEntries(['overview', 'fossils', 'movies', 'series', 'assistant', 'configuration', 'settings', 'about'].map(name => [name, document.getElementById(`${name}-view`)]));
 function roleLabel(role) {
   return role === 'coordinator' ? 'roarlay' : role === 'storage' ? 'boneyard' : 'fossil';
 }
 function showView(name, updateHash = true) {
-  const requestedView = name === 'tv' ? 'series' : name;
+  const requestedView = name === 'tv' ? 'series' : name === 'devices' ? 'fossils' : name;
   const view = views[requestedView] ? requestedView : 'overview';
   for (const [key, element] of Object.entries(views)) element.hidden = key !== view;
   for (const button of document.querySelectorAll('.nav-item[data-view]')) {
@@ -162,6 +162,7 @@ window.addEventListener('hashchange', () => showView(location.hash.slice(1) || '
 document.querySelectorAll('.nav-item[data-view]').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
 document.getElementById('configure-sonarr')?.addEventListener('click', () => showView('settings'));
 showView(location.hash.slice(1) || 'overview', false);
+if (location.hash === '#devices') history.replaceState(null, '', `${location.pathname}${location.search}#fossils`);
 if (location.hash === '#series') history.replaceState(null, '', `${location.pathname}${location.search}#tv`);
 let profileAvatarSeed = '';
 let profileBaseName = '';
@@ -534,7 +535,7 @@ function clearConfigStrings(value) {
 async function arrDirectUrl() {
   const node = selectedNodeDetails;
   if (!node || node.role !== 'metadata' || !node.online || !node.directUrl) {
-    throw new Error('Select an online fossil node with a direct Tailscale route in Devices.');
+    throw new Error('Select an online fossil node with a direct Tailscale route in Fossils.');
   }
   const route = await chooseNodeRoute(node, true);
   if (!route.direct) {
@@ -1232,8 +1233,8 @@ async function loadOverviewMetadata() {
     const onlineMetadata = workspaceNodes.some(candidate => candidate.role === 'metadata' && candidate.online);
     state.textContent = onlineMetadata ? 'Fossil node not selected' : 'No online fossil node';
     detail.textContent = onlineMetadata
-      ? 'An online fossil node is available in Devices, but it is not selected for this overview.'
-      : 'Connect an online fossil node in Devices to see shared-folder details.';
+      ? 'An online fossil node is available in Fossils, but it is not selected for this overview.'
+      : 'Connect an online fossil node in Fossils to see shared-folder details.';
     document.getElementById('overview-metadata-size').textContent = '—';
     return;
   }

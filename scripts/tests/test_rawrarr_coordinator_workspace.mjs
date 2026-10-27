@@ -82,8 +82,8 @@ test('metadata device cards display verified Merkle freshness from the node peer
   assert.match(coordinator, /path == "api\/config-peer\/status"/);
 });
 
-test('Devices shows a network diagram with one link for each device pair', () => {
-  assert.match(workspace, /<section id="devices-view"[^>]*><div class="devices-page-heading"><h1 class="page-title">Devices<\/h1><a class="button-link" href="\/setup\/node">Add a device<\/a><\/div>/);
+test('Fossils shows a network diagram with one link for each node pair', () => {
+  assert.match(workspace, /<section id="fossils-view"[^>]*><div class="devices-page-heading"><h1 class="page-title">Fossils<\/h1><a class="button-link" href="\/setup\/node">Add a fossil<\/a><\/div>/);
   assert.match(workspace, /<section id="device-topology" class="topology-section" aria-labelledby="device-topology-title" hidden>[\s\S]*?<h2 id="device-topology-title">Topology<\/h2>/);
   assert.match(workspace, /<div id="device-topology-content"><\/div>/);
   assert.match(workspaceScript, /function renderDeviceTopology\(nodes, observedPeers, deviceNames\)/);
@@ -97,6 +97,12 @@ test('Devices shows a network diagram with one link for each device pair', () =>
   assert.match(workspaceScript, /Add another device to see its links in the network diagram\./);
   assert.match(workspace, /\.topology-edge\.connected \{ stroke:var\(--green\); stroke-width:3 \}/);
   assert.match(workspace, /\.topology-edge\.disconnected \{ stroke:#ef7777 \}/);
+});
+
+test('Fossils uses the new page hash and redirects the old Devices bookmark', () => {
+  assert.match(workspaceScript, /name === 'devices' \? 'fossils' : name/);
+  assert.match(workspaceScript, /location\.hash === '#devices'[\s\S]*#fossils/);
+  assert.match(workspaceScript, /\['overview', 'fossils', 'movies'/);
 });
 
 test('Devices keeps topology hidden until an enrolled device is online', () => {

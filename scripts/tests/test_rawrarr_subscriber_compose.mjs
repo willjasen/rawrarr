@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { subscriberCompose } from '../../rust-arr/web-export/subscriber-compose.js';
 
-const base = { nodeId: `device-${'a'.repeat(24)}`, coordinatorUrl: 'https://rawrarr.example.test', networkMode: 'internal-tailscale', authKey: 'tskey-auth-test-fixture', rootFingerprint: 'a'.repeat(64) };
+const base = { nodeId: `fossil-${'a'.repeat(24)}`, coordinatorUrl: 'https://rawrarr.example.test', networkMode: 'internal-tailscale', authKey: 'tskey-auth-test-fixture', rootFingerprint: 'a'.repeat(64) };
 
 test('subscriber Compose offers fossil and boneyard without coordinator GitHub updater credentials', () => {
   for (const role of ['metadata', 'storage']) {
@@ -44,6 +45,17 @@ test('subscriber Compose offers fossil and boneyard without coordinator GitHub u
   assert.throws(() => subscriberCompose({ ...base, role: 'metadata', deviceName: 'x'.repeat(65) }), /device name/);
   assert.throws(() => subscriberCompose({ ...base, rootFingerprint: 'invalid', role: 'metadata' }), /root fingerprint/);
   assert.throws(() => subscriberCompose({ nodeId: base.nodeId, coordinatorUrl: base.coordinatorUrl, role: 'metadata' }), /Choose internal Tailscale/);
+});
+
+test('generated node IDs use the fossil prefix', () => {
+  return Promise.all([
+    readFile(new URL('../../rust-arr/web-export/subscriber-onboarding.js', import.meta.url), 'utf8'),
+    readFile(new URL('../../rust-arr/src/assets/subscriber-onboarding.js', import.meta.url), 'utf8'),
+  ]).then(([source, bundle]) => {
+    assert.match(source, /const nodeId = `fossil-/);
+    assert.match(bundle, /g0=`fossil-/);
+    assert.match(bundle, /\^fossil-\[0-9a-f\]\{24\}\$/);
+  });
 });
 
 test('public mode configures the selected Headscale control server without embedding its key', () => {

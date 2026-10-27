@@ -257,7 +257,7 @@
    <aside aria-label="Main navigation">
     <div class="brand"><picture><source srcset="/assets/rawrarr-logo.jxl" type="image/jxl"><img src="/assets/rawrarr-logo.png" alt="rawrarr" width="180" height="60"></picture></div><div class="section-label">rawrchive</div>
     <button class="nav-item active" data-view="overview"><span class="nav-icon">⌂</span><span class="nav-text">Overview</span></button>
-    <button class="nav-item" data-view="devices"><span class="nav-icon">◫</span><span class="nav-text">Devices</span></button>
+    <button class="nav-item" data-view="fossils"><span class="nav-icon">◫</span><span class="nav-text">Fossils</span></button>
     <button class="nav-item" data-view="movies"><span class="nav-icon">▧</span><span class="nav-text">Movies</span></button>
     <button class="nav-item" data-view="series"><span class="nav-icon">▧</span><span class="nav-text">TV</span></button>
     <button class="nav-item" data-view="assistant"><span class="nav-icon">✦</span><span class="nav-text">rawrs</span></button>
@@ -307,7 +307,7 @@
           <ol id="ai-history" class="ai-history"></ol></details>
       </div>
     </section>
-    <section id="devices-view" hidden><div class="devices-page-heading"><h1 class="page-title">Devices</h1><a class="button-link" href="/setup/node">Add a device</a></div>
+    <section id="fossils-view" hidden><div class="devices-page-heading"><h1 class="page-title">Fossils</h1><a class="button-link" href="/setup/node">Add a fossil</a></div>
     <section id="pending" aria-label="Nodes waiting for approval" hidden></section>
     <div id="status" role="status" aria-live="polite">Loading your connected nodes…</div>
     <article id="empty-devices" class="connection-card" hidden aria-labelledby="empty-devices-title">
@@ -326,7 +326,7 @@
     <section id="movies-view" hidden><h1 class="page-title">Movies</h1>
     <article id="radarr-connection-card" class="connection-card" aria-labelledby="radarr-connection-title" hidden>
       <h2 id="radarr-connection-title">Radarr connection</h2>
-      <p class="connection-intro" id="radarr-node-note">Select an online metadata node in Devices. The URL, API key, and optional UI login go directly from this browser to that node; roarlay never receives the credentials. Settings are saved in its age-encrypted config.</p>
+      <p class="connection-intro" id="radarr-node-note">Select an online metadata node in Fossils. The URL, API key, and optional UI login go directly from this browser to that node; roarlay never receives the credentials. Settings are saved in its age-encrypted config.</p>
       <form id="radarr-settings" class="connection-form">
         <label for="radarr-url">Radarr URL</label>
         <input id="radarr-url" name="url" type="url" placeholder="https://radarr.example.com" autocomplete="url" required>
@@ -365,7 +365,7 @@
     <section id="series-view" hidden><h1 class="page-title">TV</h1>
       <article id="sonarr-connection-card" class="connection-card" aria-labelledby="sonarr-connection-title" hidden>
         <h2 id="sonarr-connection-title">Sonarr connection</h2>
-        <p class="connection-intro" id="sonarr-node-note">Select an online fossil node in Devices. The URL and API key go directly from this browser to that node; roarlay never receives the API key. Settings are saved in its age-encrypted config.</p>
+        <p class="connection-intro" id="sonarr-node-note">Select an online fossil node in Fossils. The URL and API key go directly from this browser to that node; roarlay never receives the API key. Settings are saved in its age-encrypted config.</p>
         <form id="sonarr-settings" class="connection-form">
           <label for="sonarr-url">Sonarr URL</label>
           <input id="sonarr-url" name="url" type="url" placeholder="https://sonarr.example.com" autocomplete="url" required>
@@ -399,7 +399,7 @@
         <p class="about-lead">Sign in with your passkey, choose an approved online fossil, and use Rawrarr’s web app to browse the libraries connected to that node.</p>
       </div>
       <div class="about-steps" aria-label="How the Rawrarr web app works">
-        <article class="about-step"><span class="about-step-index" aria-hidden="true">01</span><h3>Choose a node</h3><p>Devices shows your enrolled nodes and available routes. Select an approved, online fossil to work with its libraries.</p></article>
+        <article class="about-step"><span class="about-step-index" aria-hidden="true">01</span><h3>Choose a node</h3><p>Fossils shows your enrolled nodes and available routes. Select an approved, online fossil to work with its libraries.</p></article>
         <article class="about-step"><span class="about-step-index" aria-hidden="true">02</span><h3>Connect Radarr or Sonarr</h3><p>Connect an existing service in Settings. Your browser sends its URL and credentials directly to the selected fossil, which saves them in its age-encrypted configuration.</p></article>
         <article class="about-step"><span class="about-step-index" aria-hidden="true">03</span><h3>Browse your library</h3><p>Open Movies or TV to load that node’s library. Enter your age private ID in this browser to unlock encrypted metadata.</p></article>
       </div>
@@ -425,7 +425,7 @@
         <article class="connection-card" aria-labelledby="settings-radarr-title">
           <h2 id="settings-radarr-title">Radarr</h2>
           <div id="settings-radarr-saved" class="connection-saved" hidden role="status" aria-live="polite"><strong>Radarr details saved</strong><span id="settings-radarr-saved-url" class="connection-saved-url"></span><span class="connection-saved-note">API key and optional UI login stored in the age-encrypted config.</span></div>
-          <p class="connection-intro" id="settings-radarr-node-note">Select an online metadata node in Devices to manage this connection.</p>
+          <p class="connection-intro" id="settings-radarr-node-note">Select an online metadata node in Fossils to manage this connection.</p>
           <form id="settings-radarr-settings" class="connection-form">
             <label for="settings-radarr-url">Radarr URL</label>
             <input id="settings-radarr-url" name="url" type="url" placeholder="https://radarr.example.com" autocomplete="url" required>
@@ -444,7 +444,7 @@
         <article class="connection-card" aria-labelledby="settings-sonarr-title">
           <h2 id="settings-sonarr-title">Sonarr</h2>
           <div id="settings-sonarr-saved" class="connection-saved" hidden role="status" aria-live="polite"><strong>Sonarr details saved</strong><span id="settings-sonarr-saved-url" class="connection-saved-url"></span><span class="connection-saved-note">API key stored in the age-encrypted config.</span></div>
-          <p class="connection-intro" id="settings-sonarr-node-note">Select an online fossil node in Devices to manage this connection.</p>
+          <p class="connection-intro" id="settings-sonarr-node-note">Select an online fossil node in Fossils to manage this connection.</p>
           <form id="settings-sonarr-settings" class="connection-form">
             <label for="settings-sonarr-url">Sonarr URL</label>
             <input id="settings-sonarr-url" name="url" type="url" placeholder="https://sonarr.example.com" autocomplete="url" required>
