@@ -2086,7 +2086,7 @@ async fn metadata_status(State(state): State<Arc<AppState>>) -> Json<MetadataSta
     })
 }
 
-async fn config_peer_status(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
+async fn config_peer_status_handler(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
     Json(state.config_peer_status.snapshot())
 }
 
@@ -2832,7 +2832,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(get_movie_poster),
         )
         .route("/api/metadata/status", get(metadata_status))
-        .route("/api/config-peer/status", get(config_peer_status))
+        .route("/api/config-peer/status", get(config_peer_status_handler))
         .route("/api/metadata/export/mini", get(mini_metadata_export_index))
         .route("/api/metadata/session/library", axum::routing::post(encrypted_radarr_library))
         .route("/api/metadata/export/config", get(export_config_ciphertext).put(replace_config_ciphertext))
