@@ -21,6 +21,17 @@ const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, me
   read('docker-compose.internal-mini.yml'),
 ]);
 
+test('rawrs Talk stays available from a persistent bottom-left voice panel', () => {
+  assert.match(workspace, /id="rawrs-launcher" class="rawrs-launcher"[^>]*aria-controls="ai-voice-panel"/);
+  assert.match(workspace, /id="ai-voice-panel" class="rawrs-voice-panel"[^>]*hidden/);
+  assert.match(workspace, /\.rawrs-launcher \{ position:fixed;[^}]*bottom:20px/);
+  assert.match(workspace, /@media\(max-width:640px\) \{ \.rawrs-launcher \{ left:12px/);
+  assert.match(workspace, /id="ai-talk" type="button"/);
+  assert.match(workspace, /id="ai-voice-transcript"/);
+  assert.match(workspace, /id="ai-voice-answer"/);
+  assert.doesNotMatch(workspace, /id="ai-tab-voice"/);
+});
+
 test('coordinator labels the Sonarr section TV in navigation and its page heading', () => {
   assert.doesNotMatch(workspace, /id="tv-route-status" class="route-status"/);
   assert.match(workspace, /data-view=\"series\"[^>]*>[\s\S]*?<span class=\"nav-text\">TV<\/span>/);
