@@ -231,6 +231,14 @@ async function loadProfile() {
     profileBaseName = profile.displayName || 'Rawrarr user';
     document.getElementById('profile-name').textContent = profileBaseName;
     document.getElementById('sidebar-profile-name').textContent = profileBaseName;
+    const trialStatus = document.getElementById('trial-status');
+    if (profile.trialStartedAt && profile.trialEndsAt) {
+      const endsAt = new Date(profile.trialEndsAt.replace(' ', 'T'));
+      trialStatus.hidden = false;
+      trialStatus.textContent = endsAt.getTime() > Date.now()
+        ? `Three-day trial · ends ${endsAt.toLocaleString()}`
+        : `Three-day trial ended ${endsAt.toLocaleString()}`;
+    }
     await loadProfileAvatar();
   } catch (error) {
     document.getElementById('profile-name').textContent = error.message;

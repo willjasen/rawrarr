@@ -20,6 +20,10 @@ use zeroize::Zeroizing;
 const SESSION_COOKIE: &str = "rawrarr_session";
 const SESSION_SECONDS: i64 = 8 * 60 * 60;
 const CHALLENGE_SECONDS: i64 = 5 * 60;
+
+fn public_billing_audience() -> bool {
+    env::var("RAWARR_BILLING_AUDIENCE").is_ok_and(|value| value == "public")
+}
 const ACCOUNT_NAME_PREFIXES: &[&str] = &[
     "jurassic",
     "ancient",
@@ -314,10 +318,11 @@ pub(super) async fn finish_registration(
     let credential_id = passkey.cred_id().as_ref();
     let passkey_json = serde_json::to_value(&passkey).map_err(|_| invalid_auth())?;
 
-    sqlx::query("INSERT INTO rawrarr_users (id, username, display_name) VALUES ($1, $2, $3)")
+    sqlx::query("INSERT INTO rawrarr_users (id, username, display_name, trial_started_at) VALUES ($1, $2, $3, CASE WHEN $4 THEN now() ELSE NULL END)")
         .bind(user_id)
         .bind(username)
         .bind(display_name)
+        .bind(public_billing_audience())
         .execute(&mut *transaction)
         .await
         .map_err(|_| invalid_auth())?;
