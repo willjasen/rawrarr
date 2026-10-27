@@ -69,7 +69,8 @@ test('voice recording starts and stops through Talk, transcribes, and submits th
     });
     return elements.get(id);
   };
-  const ids = ['ai-form', 'ai-question', 'ai-answer', 'ai-voice-answer', 'ai-voice-transcript', 'ai-quota', 'ai-history', 'ai-submit', 'ai-talk', 'ai-tab-chat', 'ai-tab-voice', 'ai-chat-panel', 'ai-voice-panel', 'ai-open-movies'];
+  const ids = ['ai-form', 'ai-question', 'ai-answer', 'ai-voice-answer', 'ai-voice-transcript', 'ai-quota', 'ai-history', 'ai-submit', 'ai-talk', 'ai-chat-panel', 'ai-voice-panel', 'ai-open-movies', 'rawrs-launcher', 'rawrs-close'];
+  element('ai-voice-panel').hidden = true;
   const originalDocument = globalThis.document;
   const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
   const originalWindow = globalThis.window;
@@ -99,6 +100,15 @@ test('voice recording starts and stops through Talk, transcribes, and submits th
     initAiChat({ getMovies: () => movies, getSeries: () => [], loadSeries: async () => {}, openMovies() {} });
     const talk = element('ai-talk');
     assert.equal(talk.hidden, false);
+    const launcher = element('rawrs-launcher');
+    assert.equal(element('ai-voice-panel').hidden, true);
+    await launcher.handlers.click();
+    assert.equal(element('ai-voice-panel').hidden, false);
+    assert.equal(launcher.attributes['aria-expanded'], 'true');
+    await element('rawrs-close').handlers.click();
+    assert.equal(element('ai-voice-panel').hidden, true);
+    assert.equal(launcher.attributes['aria-expanded'], 'false');
+    await launcher.handlers.click();
     await talk.handlers.click();
     assert.equal(talk.textContent, 'Stop recording');
     assert.match(element('ai-voice-answer').textContent, /I’m listening/);
@@ -122,12 +132,13 @@ test('voice recording starts and stops through Talk, transcribes, and submits th
   }
 });
 
-test('voice tab explains when microphone capture is unavailable', () => {
-  const ids = ['ai-form', 'ai-question', 'ai-answer', 'ai-voice-answer', 'ai-voice-transcript', 'ai-quota', 'ai-history', 'ai-submit', 'ai-talk', 'ai-tab-chat', 'ai-tab-voice', 'ai-chat-panel', 'ai-voice-panel', 'ai-open-movies'];
+test('floating Talk panel explains when microphone capture is unavailable', () => {
+  const ids = ['ai-form', 'ai-question', 'ai-answer', 'ai-voice-answer', 'ai-voice-transcript', 'ai-quota', 'ai-history', 'ai-submit', 'ai-talk', 'ai-chat-panel', 'ai-voice-panel', 'ai-open-movies', 'rawrs-launcher', 'rawrs-close'];
   const elements = Object.fromEntries(ids.map(id => [id, { hidden: false, disabled: false, textContent: '', handlers: {}, attributes: {}, addEventListener(name, handler) { this.handlers[name] = handler; }, setAttribute(name, value) { this.attributes[name] = value; }, append() {}, replaceChildren() {}, reset() {} }]));
   const originalDocument = globalThis.document;
   const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
   const originalWindow = globalThis.window;
+  elements['ai-voice-panel'].hidden = true;
   globalThis.document = { getElementById: id => elements[id] || null, createElement: () => ({}) };
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {} });
   globalThis.window = {};

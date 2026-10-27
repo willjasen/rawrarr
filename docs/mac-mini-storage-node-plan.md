@@ -14,7 +14,7 @@ This MacBook's existing local deployment is the **coordinator**: web UI/API, sig
 | --- | --- | --- |
 | Media | `/Volumes/silo/Media/data` | `/media`, read-only |
 | Authorized shared app data | `~/Library/Application Support/rawrarr/shared-data` | `/shared`; scope provisioned after approval |
-| Encrypted scan metadata | Within shared metadata or an approved upload spool | `/metadata` aliases `/shared/metadata` in the current image |
+| Encrypted scan metadata | Within shared metadata or an approved upload spool | `/metadata` aliases `/shared/in/metadata` in the current image |
 | Device key, identity, scan/queue state | Dedicated OrbStack local volume | `/data`; never synchronized |
 | User passkeys, sessions, PostgreSQL | Remain on the MacBook coordinator | Not deployed to storage-only Mini |
 | Age private ID | Owner-only local file outside checkout/shared data, entered directly on the Mini | Read-only secret mount; never delivered by linking |

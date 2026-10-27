@@ -1,0 +1,4 @@
+	@stripe_webhook path /v1/webhooks/stripe
+	handle @stripe_webhook {
+		reverse_proxy stripe-service:8090
+	}

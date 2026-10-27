@@ -21,6 +21,17 @@ const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, me
   read('docker-compose.internal-mini.yml'),
 ]);
 
+test('rawrs Talk stays available from a persistent bottom-left voice panel', () => {
+  assert.match(workspace, /id="rawrs-launcher" class="rawrs-launcher"[^>]*aria-controls="ai-voice-panel"/);
+  assert.match(workspace, /id="ai-voice-panel" class="rawrs-voice-panel"[^>]*hidden/);
+  assert.match(workspace, /\.rawrs-launcher \{ position:fixed;[^}]*bottom:20px/);
+  assert.match(workspace, /@media\(max-width:640px\) \{ \.rawrs-launcher \{ left:12px/);
+  assert.match(workspace, /id="ai-talk" type="button"/);
+  assert.match(workspace, /id="ai-voice-transcript"/);
+  assert.match(workspace, /id="ai-voice-answer"/);
+  assert.doesNotMatch(workspace, /id="ai-tab-voice"/);
+});
+
 test('coordinator labels the Sonarr section TV in navigation and its page heading', () => {
   assert.doesNotMatch(workspace, /id="tv-route-status" class="route-status"/);
   assert.match(workspace, /data-view=\"series\"[^>]*>[\s\S]*?<span class=\"nav-text\">TV<\/span>/);
@@ -71,8 +82,20 @@ test('device shared-folder health is concise and formatted without exposing the 
   assert.doesNotMatch(workspaceScript, /\$\{peer\.folderId\} ·/);
 });
 
-test('Devices shows a network diagram with one link for each device pair', () => {
-  assert.match(workspace, /<section id="devices-view"[^>]*><div class="devices-page-heading"><h1 class="page-title">Devices<\/h1><a class="button-link" href="\/setup\/node">Add a device<\/a><\/div>/);
+test('metadata device cards display verified Merkle freshness from the node peer status route', () => {
+  assert.match(workspaceScript, /\/nodes\/\$\{encodeURIComponent\(node\.nodeId\)\}\/api\/config-peer\/status/);
+  assert.match(workspaceScript, /state: 'unreachable'/);
+  assert.match(workspaceScript, /Merkle up to date/);
+  assert.match(workspaceScript, /Merkle sync incomplete/);
+  assert.match(workspaceScript, /Merkle peers unreachable/);
+  assert.match(workspaceScript, /merkleStatus\.matchingPeers/);
+  assert.match(mainRs, /\.route\("\/api\/config-peer\/status", get\(config_peer_status_handler\)\)/);
+  assert.match(mainRs, /async fn config_peer_status_handler\(State\(state\): State<Arc<AppState>>\)/);
+  assert.match(coordinator, /path == "api\/config-peer\/status"/);
+});
+
+test('Fossils shows a network diagram with one link for each node pair', () => {
+  assert.match(workspace, /<section id="fossils-view"[^>]*><div class="devices-page-heading"><h1 class="page-title">Fossils<\/h1><a class="button-link" href="\/setup\/node">Add a fossil<\/a><\/div>/);
   assert.match(workspace, /<section id="device-topology" class="topology-section" aria-labelledby="device-topology-title" hidden>[\s\S]*?<h2 id="device-topology-title">Topology<\/h2>/);
   assert.match(workspace, /<div id="device-topology-content"><\/div>/);
   assert.match(workspaceScript, /function renderDeviceTopology\(nodes, observedPeers, deviceNames\)/);
@@ -86,6 +109,12 @@ test('Devices shows a network diagram with one link for each device pair', () =>
   assert.match(workspaceScript, /Add another device to see its links in the network diagram\./);
   assert.match(workspace, /\.topology-edge\.connected \{ stroke:var\(--green\); stroke-width:3 \}/);
   assert.match(workspace, /\.topology-edge\.disconnected \{ stroke:#ef7777 \}/);
+});
+
+test('Fossils uses the new page hash and redirects the old Devices bookmark', () => {
+  assert.match(workspaceScript, /name === 'devices' \? 'fossils' : name/);
+  assert.match(workspaceScript, /location\.hash === '#devices'[\s\S]*#fossils/);
+  assert.match(workspaceScript, /\['overview', 'fossils', 'movies'/);
 });
 
 test('Devices keeps topology hidden until an enrolled device is online', () => {

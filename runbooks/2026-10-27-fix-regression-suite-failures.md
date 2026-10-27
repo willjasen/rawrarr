@@ -11,9 +11,10 @@ Issue: [#223](https://github.com/willjasen/rawrarr/issues/223)
 - Configured Movies and TV libraries now expose a Connection settings button so the existing encrypted update and clear actions remain reachable after setup.
 - Navigation coverage now expects the Settings button's actual Configuration view and verifies Radarr settings can be reopened.
 - Updated visible auth copy to keep the product name lowercase.
+- After integrating current `main`, extended clone fixtures to include `deploy/` for the Stripe deployment regression, updated recovery-route coverage from `#devices` to `#fossils`, and aligned Rust storage assertions with `/shared/in/metadata`.
 
 ## Verification
 
 - `node --test scripts/tests/test_rawrarr_docker_healthchecks.mjs scripts/tests/test_rawrarr_brand_case.mjs` — passed, 5/5.
 - `sh -n scripts/tests/prepare-test-clone.sh scripts/tests/wait-for-test-trigger.sh`, `python3 -m py_compile scripts/tests/run_rawrarr_tests_in_docker.py`, and `git diff --check` — passed.
-- `python3 scripts/tests/run_rawrarr_tests_in_docker.py --remove-after` — passed on OrbStack `linux/aarch64`: Node.js passed (121/121), all serial Playwright browser files passed (including movie responsiveness/navigation, Sonarr clearing, Stripe service fixture tests, and ETH/ENS regressions), and Rust passed (106/106). Python integration checks were skipped as documented by the runner; they require disposable PostgreSQL, age, or Syncthing fixtures.
+- `python3 scripts/tests/run_rawrarr_tests_in_docker.py --remove-after` on the integrated branch — passed on OrbStack `linux/aarch64`: Node.js passed (127/127), all serial Playwright browser files passed (including movie responsiveness/navigation, Sonarr clearing, Stripe service fixtures, Fossils recovery, and ETH/ENS regressions), and Rust passed (108/108). Python integration checks were skipped as documented by the runner; they require disposable PostgreSQL, age, or Syncthing fixtures.

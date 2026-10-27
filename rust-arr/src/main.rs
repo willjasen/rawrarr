@@ -75,6 +75,7 @@ struct AppState {
     artwork_cache: Arc<artwork_cache::ArtworkCache>,
     config_mirror: Arc<config_repair::CiphertextMirror>,
     config_peer: config_repair::PeerRpc,
+    config_peer_status: config_repair::PeerSyncStatus,
 }
 
 #[derive(Clone, Default, Serialize)]
@@ -967,6 +968,7 @@ mod dashboard_event_tests {
             artwork_cache: Arc::new(artwork_cache::ArtworkCache::disabled()),
             config_mirror: Arc::new(config_repair::CiphertextMirror::from_env()),
             config_peer: config_repair::PeerRpc::from_env("fixture"),
+            config_peer_status: config_repair::PeerSyncStatus::default(),
         });
         let response = dashboard_events(State(state)).await.into_response();
         assert_eq!(response.headers()[header::CONTENT_TYPE], "text/event-stream");
@@ -2085,6 +2087,10 @@ async fn metadata_status(State(state): State<Arc<AppState>>) -> Json<MetadataSta
     })
 }
 
+async fn config_peer_status_handler(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
+    Json(state.config_peer_status.snapshot())
+}
+
 async fn get_radarr_settings(State(state): State<Arc<AppState>>) -> Json<ArrSettingsInfo> {
     let radarr = state.radarr.read().await;
     Json(ArrSettingsInfo {
@@ -2657,6 +2663,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     secure_config::AgeVault::enforce_local_config_policy()?;
     let config_mirror = Arc::new(config_repair::CiphertextMirror::from_env());
     let config_peer = config_repair::PeerRpc::from_env(&node_id);
+    let config_peer_status = config_repair::PeerSyncStatus::default();
     if role == node_role::NodeRole::Metadata {
         let path = secure_config::AgeVault::config_path();
         config_mirror.restore_revisions();
@@ -2664,7 +2671,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!("rawrarr config ciphertext restore from Valkey failed: {error}");
         }
         let certificate = auth.signing_certificate();
-        let _ = config_peer.reconcile_once(&config_mirror, &path, certificate.as_ref()).await;
+        let _ = config_peer.reconcile_once(&config_mirror, &path, certificate.as_ref(), &config_peer_status).await;
     }
     let local_settings = secure_config::AgeVault::load_local_config()?;
     let identity_path = env::var_os("RAWARR_AGE_IDENTITY_FILE")
@@ -2744,6 +2751,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         artwork_cache: Arc::new(artwork_cache::ArtworkCache::from_env()),
         config_mirror: config_mirror.clone(),
         config_peer: config_peer.clone(),
+        config_peer_status: config_peer_status.clone(),
     });
     if role == node_role::NodeRole::Metadata {
         let mirror = state.config_mirror.clone();
@@ -2771,7 +2779,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let peer_mirror = mirror.clone();
                 let peer_path = path.clone();
                 let peer_certificate = revision_certificate.clone();
-                let repaired = peer_state.reconcile_once(&peer_mirror, &peer_path, peer_certificate.as_ref()).await;
+                let repaired = peer_state.reconcile_once(&peer_mirror, &peer_path, peer_certificate.as_ref(), &application_state.config_peer_status).await;
                 if repaired {
                     let vault = application_state.vault.read().await.clone();
                     if let Some(vault) = vault {
@@ -2825,6 +2833,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(get_movie_poster),
         )
         .route("/api/metadata/status", get(metadata_status))
+        .route("/api/config-peer/status", get(config_peer_status_handler))
         .route("/api/metadata/export/mini", get(mini_metadata_export_index))
         .route("/api/metadata/session/library", axum::routing::post(encrypted_radarr_library))
         .route("/api/metadata/export/config", get(export_config_ciphertext).put(replace_config_ciphertext))
