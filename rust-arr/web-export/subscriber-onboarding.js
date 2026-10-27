@@ -7,7 +7,7 @@ let ageIdentity = '';
 let rootBackup = '';
 let generatedAge = false;
 let rootFingerprint = '';
-const nodeId = `device-${[...crypto.getRandomValues(new Uint8Array(12))].map(value => value.toString(16).padStart(2, '0')).join('')}`;
+const nodeId = `fossil-${[...crypto.getRandomValues(new Uint8Array(12))].map(value => value.toString(16).padStart(2, '0')).join('')}`;
 
 function fail(id, error) { byId(id).textContent = error instanceof Error ? error.message : 'Setup failed. Try again.'; }
 function clearCompose() {

@@ -1,7 +1,7 @@
 export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, mediaPath = '', networkMode, controlServer, authKey, rootFingerprint }) {
   if (!['metadata', 'storage'].includes(role)) throw new Error('Only fossil and boneyard nodes can be installed here.');
   if (!['internal-tailscale', 'headscale'].includes(networkMode)) throw new Error('Choose internal Tailscale or public Headscale networking.');
-  if (!/^device-[0-9a-f]{24}$/.test(nodeId)) throw new Error('Invalid generated device ID.');
+  if (!/^fossil-[0-9a-f]{24}$/.test(nodeId)) throw new Error('Invalid generated fossil ID.');
   const defaultName = role === 'storage' ? 'My boneyard node' : 'My fossil node';
   const name = String(deviceName ?? defaultName).trim();
   if (!name || name.length > 64 || /[\u0000-\u001f\u007f]/.test(name)) throw new Error('Enter a device name of 1 to 64 characters without control characters.');

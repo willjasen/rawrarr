@@ -3,7 +3,7 @@
 - `test_rawrarr_artwork_cache.rs` — checks disabled-cache file reads and disk fallback when Redis is unreachable. Its Valkey integration test additionally verifies PING and encrypted-byte storage with `RAWARR_TEST_VALKEY_URL=redis://valkey:6379/`; run it in the isolated Rust test image with a Valkey 8 service on the same disposable Docker network using `cargo test --locked --offline --manifest-path /workspace/rust-arr/Cargo.toml valkey_stores_and_returns_encrypted_artwork_when_configured -- --nocapture`.
 
 - `test_rawrarr_coordinator_arr_links.mjs` — checks the coordinator's encrypted Radarr slug flow, direct metadata route, browser-only reachability gate, and year-cell icon wiring for Movies and TV. Run with `node --test scripts/tests/test_rawrarr_coordinator_arr_links.mjs`.
-- `test_rawrarr_subscriber_compose.mjs` — checks subscriber role Compose generation and private GHCR image/auth guidance; run `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
+- `test_rawrarr_subscriber_compose.mjs` — checks subscriber role Compose generation, fossil-prefixed generated IDs, and private GHCR image/auth guidance; run `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
 # Rawrarr tests
 
 - `test_rawrarr_stripe_service.mjs` — checks hosted account/passkey ownership linkage, independent migration tracking, private do3 Compose routing, file-secret configuration, event idempotency, and service isolation. Run with `node --test scripts/tests/test_rawrarr_stripe_service.mjs`.
@@ -12,7 +12,7 @@
 
 - `test_publish_container_workflow.py` — checks that AMD64/ARM64 build as separate jobs, each writes a unique architecture tag, and the manifest job publishes `main` and commit tags only after both succeed; run `python3 scripts/tests/test_publish_container_workflow.py`.
 
-- `test_rawrarr_devices_add_button.mjs` — checks the coordinator Devices heading has a right-aligned “Add a device” link to `/setup/node`, wraps responsively, and preserves the first-node setup link; run with `node --test scripts/tests/test_rawrarr_devices_add_button.mjs`.
+- `test_rawrarr_devices_add_button.mjs` — checks the coordinator Fossils heading has a right-aligned “Add a fossil” link to `/setup/node`, wraps responsively, and preserves the first-node setup link; run with `node --test scripts/tests/test_rawrarr_devices_add_button.mjs`.
 
 - `test_rawrarr_dashboard_sse.mjs` — Chromium regression coverage for the dashboard EventSource connection, named snapshot handling, and open/error status states; run with `node --test scripts/tests/test_rawrarr_dashboard_sse.mjs` in the isolated Playwright test image. The Rust `dashboard_event_tests` verifies `text/event-stream`, cache headers, the initial named JSON snapshot, and fixture dashboard state.
 
