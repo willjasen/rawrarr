@@ -416,6 +416,13 @@
         </form>
       </article>
       </div>
+      <article class="connection-card" aria-labelledby="billing-title">
+        <h2 id="billing-title">Stripe test billing</h2>
+        <p class="connection-intro">Test a temporary $1/month USD subscription through Stripe Checkout. This test flow does not change Rawrarr access or entitlements.</p>
+        <p id="billing-status" class="connection-message" role="status" aria-live="polite">Checking Stripe test billing…</p>
+        <div class="connection-actions"><button id="billing-checkout" type="button" hidden>Start test subscription</button><button id="billing-portal" type="button" hidden>Manage test subscription</button></div>
+        <p id="billing-feedback" class="connection-message" role="status" aria-live="polite"></p>
+      </article>
       <h2 style="margin:26px 0 4px">Media service connections</h2>
       <p class="connection-intro">Save Radarr and Sonarr details to the selected metadata node's age-encrypted config. API keys and the optional Radarr UI login go directly from this browser to that node and are never shown after saving.</p>
       <div class="settings-connections">
