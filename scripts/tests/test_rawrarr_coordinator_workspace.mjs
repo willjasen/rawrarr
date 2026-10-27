@@ -78,7 +78,8 @@ test('metadata device cards display verified Merkle freshness from the node peer
   assert.match(workspaceScript, /Merkle sync incomplete/);
   assert.match(workspaceScript, /Merkle peers unreachable/);
   assert.match(workspaceScript, /merkleStatus\.matchingPeers/);
-  assert.match(mainRs, /\.route\("\/api\/config-peer\/status", get\(config_peer_status\)\)/);
+  assert.match(mainRs, /\.route\("\/api\/config-peer\/status", get\(config_peer_status_handler\)\)/);
+  assert.match(mainRs, /async fn config_peer_status_handler\(State\(state\): State<Arc<AppState>>\)/);
   assert.match(coordinator, /path == "api\/config-peer\/status"/);
 });
 
