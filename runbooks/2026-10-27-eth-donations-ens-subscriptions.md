@@ -27,9 +27,9 @@ Do not configure a real treasury or price until the operator wallet, recovery pr
 
 ## Verification status
 
-- Passed: `cargo test --locked coordinator_crypto::tests` in the Rust 1.85 OrbStack container (6 tests). This compiles the coordinator binary and test target; the focused crypto tests cover ENS name normalization/namehash/resolver ABI, EIP-191 recovery, SIWE fields, and crypto input validation.
+- Passed: `cargo test --locked coordinator_crypto::tests` in the Rust 1.85 OrbStack container (9 tests). This compiles the coordinator binary and test target; the focused crypto tests cover ENS name normalization/namehash/resolver ABI, EIP-191 recovery, SIWE fields, crypto input validation, mocked-RPC exact transfer checks, finality, canonical-block reorg detection, and failed-receipt rejection.
 - Passed: `node --experimental-global-webcrypto --test scripts/tests/test_rawrarr_crypto_ui.mjs` in the isolated Playwright image (12 tests, including browser-driven donations, manual subscription, mainnet and linked-wallet preflight, ENS sign-in and wrong-account rejection, plus free-tier enforcement assertions).
 - Passed: `git diff --check`.
-- Broader Rust suite attempted: `cargo test --locked` compiled successfully; 90 of 103 tests passed and 13 unrelated environment-dependent tests failed because this minimal Rust container lacks `age-keygen`, image encoders, and some test fixture files. The six focused crypto tests pass.
+- Broader Rust suite attempted before the three RPC tests were added: `cargo test --locked` compiled successfully; 90 of 103 tests passed and 13 unrelated environment-dependent tests failed because this minimal Rust container lacks `age-keygen`, image encoders, and some test fixture files. The six focused crypto tests pass.
 - Not run: the complete Rawrarr regression and environment stacks. An earlier full runner attempt also reported existing failures in branding, Stripe files absent from this task branch, and browser timing/layout cases; the ETH/ENS Playwright suite passes independently.
 - No live coordinator deployment, live RPC/ENS request, or real payment was performed.

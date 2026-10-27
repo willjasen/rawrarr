@@ -857,6 +857,97 @@ mod tests {
         verifying_key_address(key.verifying_key()).unwrap()
     }
 
+    async fn verifier_with_rpc_responses(results: Vec<Value>) -> (CoordinatorCryptoState, tokio::task::JoinHandle<()>) {
+        use std::sync::{Arc, Mutex};
+        let responses = Arc::new(Mutex::new(results));
+        let app = Router::new().route("/", post(mock_rpc)).with_state(responses);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap(); });
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .connect_lazy("postgres://rawrarr:unused@127.0.0.1/unused")
+            .unwrap();
+        let web_origin = Url::parse("https://rawrarr.example").unwrap();
+        let webauthn = webauthn_rs::prelude::WebauthnBuilder::new("rawrarr.example", &web_origin)
+            .unwrap().rp_name("rawrarr").build().unwrap();
+        let auth = crate::auth::AuthState {
+            pool: pool.clone(), webauthn, secure_cookie: true,
+            node_id: "coordinator".to_owned(), next_path: "/",
+        };
+        let state = CoordinatorCryptoState {
+            pool, auth, origin: "https://rawrarr.example".to_owned(),
+            rpc_url: Url::parse(&format!("http://{address}/")).unwrap(),
+            treasury: Some("0x2222222222222222222222222222222222222222".to_owned()),
+            monthly_price_wei: Some(25_000_000_000_000_000), annual_price_wei: None,
+            client: reqwest::Client::new(),
+        };
+        (state, server)
+    }
+
+    async fn mock_rpc(
+        State(responses): State<std::sync::Arc<std::sync::Mutex<Vec<Value>>>>,
+        Json(_request): Json<Value>,
+    ) -> Json<Value> {
+        let result = responses.lock().unwrap().remove(0);
+        Json(json!({"jsonrpc":"2.0","id":1,"result":result}))
+    }
+
+    fn finalized_rpc_responses() -> Vec<Value> {
+        vec![
+            json!("0x1"),
+            json!({"from":"0x1111111111111111111111111111111111111111","to":"0x2222222222222222222222222222222222222222","value":"0x58d15e17628000","input":"0x","chainId":"0x1","blockNumber":"0x64","blockHash":format!("0x{}","a".repeat(64))}),
+            json!({"status":"0x1","blockNumber":"0x64","blockHash":format!("0x{}","a".repeat(64))}),
+            json!({"number":"0x65"}),
+            json!({"hash":format!("0x{}","a".repeat(64))}),
+        ]
+    }
+
+    #[tokio::test]
+    async fn rpc_subscription_claim_requires_finalized_canonical_exact_mainnet_transfer() {
+        let (state, server) = verifier_with_rpc_responses(finalized_rpc_responses()).await;
+        let result = state.verify_subscription_tx(
+            &format!("0x{}", "b".repeat(64)),
+            "0x1111111111111111111111111111111111111111",
+            25_000_000_000_000_000,
+        ).await.unwrap();
+        assert!(matches!(result, TxVerification::Verified { block_number: 100, .. }));
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn rpc_subscription_claim_stays_pending_until_finality_and_matching_canonical_block() {
+        let mut unfinalized = finalized_rpc_responses();
+        unfinalized[3] = json!({"number":"0x63"});
+        let (state, server) = verifier_with_rpc_responses(unfinalized).await;
+        let result = state.verify_subscription_tx(&format!("0x{}", "b".repeat(64)), "0x1111111111111111111111111111111111111111", 25_000_000_000_000_000).await.unwrap();
+        assert!(matches!(result, TxVerification::Pending));
+        server.abort();
+
+        let mut reorged = finalized_rpc_responses();
+        reorged[4] = json!({"hash":format!("0x{}","c".repeat(64))});
+        let (state, server) = verifier_with_rpc_responses(reorged).await;
+        let result = state.verify_subscription_tx(&format!("0x{}", "b".repeat(64)), "0x1111111111111111111111111111111111111111", 25_000_000_000_000_000).await.unwrap();
+        assert!(matches!(result, TxVerification::Pending));
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn rpc_subscription_claim_rejects_wrong_amount_and_failed_receipt() {
+        let mut wrong_amount = finalized_rpc_responses();
+        wrong_amount[1]["value"] = json!("0x1");
+        let (state, server) = verifier_with_rpc_responses(wrong_amount).await;
+        let result = state.verify_subscription_tx(&format!("0x{}", "b".repeat(64)), "0x1111111111111111111111111111111111111111", 25_000_000_000_000_000).await;
+        assert!(matches!(result, Err(RpcError::InvalidTransaction)));
+        server.abort();
+
+        let mut failed_receipt = finalized_rpc_responses();
+        failed_receipt[2]["status"] = json!("0x0");
+        let (state, server) = verifier_with_rpc_responses(failed_receipt).await;
+        let result = state.verify_subscription_tx(&format!("0x{}", "b".repeat(64)), "0x1111111111111111111111111111111111111111", 25_000_000_000_000_000).await;
+        assert!(matches!(result, Err(RpcError::FailedTransaction)));
+        server.abort();
+    }
+
     #[test]
     fn siwe_message_is_bound_to_origin_chain_nonce_and_expiration() {
         let message = siwe_message("https://rawrarr.example", "0x1111111111111111111111111111111111111111", "willjasen.eth", "0123456789abcdef").unwrap();
