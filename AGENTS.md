@@ -49,6 +49,12 @@
 - Noninteractive sessions may start with a minimal `PATH` that omits Docker and GitHub CLI. In remote command strings, prepend `export PATH=/usr/local/bin:/opt/homebrew/bin:$PATH`; the verified Docker executable on the Mac mini is `/usr/local/bin/docker` and `gh` is also available after adding `/usr/local/bin`.
 - Before running Docker commands remotely, confirm the context with `docker context show`; the Mac mini currently uses `orbstack`. Use `/usr/local/bin/docker` explicitly if setting `PATH` is not practical.
 
+## SSH to the hosted do3 service
+
+- The public hosted Rawrarr instance and Stripe webhook service run on `do3.risk-mermaid.ts.net`. Connect with the local SSH key as root: `ssh root@do3.risk-mermaid.ts.net`. Keep OpenSSH host-key checking enabled; do not accept an unknown or changed host key without verifying it through a trusted channel.
+- Run commands on this Linux host inside its tmux session named `ai`, starting with `TERM=xterm-256color ssh -tt root@do3.risk-mermaid.ts.net 'tmux new-session -A -s ai'` from a PTY-backed terminal. If interactive attachment is unavailable, create or attach to it detached with `ssh root@do3.risk-mermaid.ts.net 'tmux new-session -A -s ai -d'`, then use `tmux send-keys -t ai 'COMMAND' Enter` and inspect with `tmux capture-pane -p -t ai`.
+- Before Docker commands, confirm the intended Docker context and use the host's established deployment files, secrets, and per-container deployment lock. Do not assume do3 shares the internal Mac deployment layout.
+
 ## GitHub access from this host
 
 - Use the authenticated `gh` CLI for private `willjasen/rawrarr` repository operations. Its credential is stored in macOS Keychain; run GitHub commands in a host context that can access Keychain and the network. Do not copy, print, or store the token in repository files, environment dumps, logs, or runbooks.
