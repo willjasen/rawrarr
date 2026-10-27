@@ -43,7 +43,7 @@ struct ApprovedAuth {
 }
 
 #[derive(Clone)]
-struct CoordinatorState {
+pub(super) struct CoordinatorState {
     pool: PgPool,
     approved: Arc<RwLock<Vec<ApprovedAuth>>>,
     webauthn: webauthn_rs::prelude::Webauthn,
@@ -260,10 +260,12 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
     let public = Router::new()
         .route("/", get(coordinator_home))
         .route("/auth", get(coordinator_auth_page))
+        .route("/billing", get(coordinator_billing_page))
         .route("/health", get(coordinator_health))
         .route("/assets/rawrarr-logo.png", get(coordinator_rawrarr_logo))
         .route("/assets/rawrarr-logo.jxl", get(coordinator_rawrarr_logo_jxl))
         .route("/assets/coordinator-workspace.mjs", get(coordinator_workspace_script))
+        .route("/assets/coordinator-billing.mjs", get(coordinator_billing_script))
         .route("/assets/coordinator-availability.mjs", get(coordinator_availability_script))
         .route("/assets/coordinator-node-avatar.mjs", get(coordinator_node_avatar_script))
         .route("/assets/coordinator-ai.mjs", get(coordinator_ai_script))
@@ -296,7 +298,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/api/nodes/enroll/status", post(enrollment_status))
         .route("/api/nodes/signing-root", get(instance_signing_root))
         .with_state(state.clone());
-    let coordinator_browser = Router::new()
+    let mut coordinator_browser = Router::new()
         .route("/setup/node", get(coordinator_subscriber_onboarding_page))
         .route("/api/auth/status", get(crate::auth::status))
         .route(
@@ -336,6 +338,12 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
             coordinator_auth_context,
         ))
         .with_state(state.clone());
+    let crypto_state = crate::coordinator_crypto::CoordinatorCryptoState::new(
+        state.pool.clone(),
+        state.web_origin.clone(),
+        state.coordinator_auth.clone(),
+    )?;
+    coordinator_browser = coordinator_browser.merge(crate::coordinator_crypto::router(crypto_state));
     let authenticated = Router::new()
         .route("/api/nodes/auth/status", get(crate::auth::status))
         .route(
@@ -511,6 +519,18 @@ async fn request_enrollment(
         Ok(id) => id,
         Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
+    if request.role == NodeRole::Metadata {
+        if sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
+            .bind(owner_user_id).execute(&mut *tx).await.is_err()
+        {
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
+        match crate::coordinator_crypto::free_tier_denies_fossil_node(&state.pool, owner_user_id, Some(&request.node_id)).await {
+            Ok(true) => return (StatusCode::PAYMENT_REQUIRED, Json(serde_json::json!({"error":"The free tier includes one fossil node. Upgrade to add another."}))).into_response(),
+            Ok(false) => {},
+            Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+        }
+    }
     let approved =
         sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM rawrarr_nodes WHERE id = $1 AND (token_sha256 IS DISTINCT FROM $2 OR role <> $3))")
             .bind(&request.node_id)
@@ -627,6 +647,13 @@ async fn approve_node(
         Ok(tx) => tx,
         Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
+    // Enrollment requests take the account lock before touching enrollment rows;
+    // approval follows the same order to avoid a row-lock/advisory-lock deadlock.
+    if sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
+        .bind(owner_user_id).execute(&mut *tx).await.is_err()
+    {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    }
     let row = sqlx::query("SELECT node_id, role, display_name, token_sha256, origin, rp_id, user_id, signing_public_key FROM rawrarr_node_enrollments WHERE request_id=$1 AND user_id=$2 AND approved_at IS NULL AND expires_at > now() FOR UPDATE")
         .bind(request.request_id).bind(owner_user_id).fetch_optional(&mut *tx).await;
     let Ok(Some(row)) = row else {
@@ -677,6 +704,13 @@ async fn approve_node(
         Ok(None) => node_id.clone(),
         Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
+    if role == NodeRole::Metadata {
+        match crate::coordinator_crypto::free_tier_denies_fossil_node(&state.pool, owner_user_id, Some(&node_id)).await {
+            Ok(true) => return (StatusCode::PAYMENT_REQUIRED, Json(serde_json::json!({"error":"The free tier includes one fossil node. Upgrade to add another."}))).into_response(),
+            Ok(false) => {},
+            Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+        }
+    }
     let expected_payload = serde_json::json!({
         "domain": "rawrarr-device-approval-v1",
         "requestId": request.request_id.to_string(),
@@ -1226,6 +1260,19 @@ async fn coordinator_health() -> axum::response::Html<String> {
     axum::response::Html(crate::ui_assets::text("coordinator_health.html", include_str!("coordinator_health.html")).await)
 }
 
+async fn coordinator_billing_page() -> Response {
+    let mut response = axum::response::Html(crate::ui_assets::text("coordinator_billing.html", include_str!("coordinator_billing.html")).await).into_response();
+    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+async fn coordinator_billing_script() -> Response {
+    let mut response = Response::new(Body::from(crate::ui_assets::text("assets/coordinator-billing.mjs", include_str!("coordinator-billing.mjs")).await));
+    response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/javascript; charset=utf-8"));
+    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
 async fn coordinator_home(
     State(state): State<CoordinatorState>,
     headers: HeaderMap,
@@ -1616,6 +1663,13 @@ async fn proxy_node_request(
         };
     if !matches!(role.as_str(), "metadata" | "storage") {
         return StatusCode::FORBIDDEN.into_response();
+    }
+    if role == "metadata" {
+        match crate::coordinator_crypto::free_tier_allows_existing_fossil(&state.pool, owner_user_id, &node_id).await {
+            Ok(true) => {},
+            Ok(false) => return (StatusCode::PAYMENT_REQUIRED, Json(serde_json::json!({"error":"The free tier includes access to one fossil node. Upgrade to access additional nodes."}))).into_response(),
+            Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+        }
     }
     let Some(target) = state.relay_targets.get(&node_id) else {
         return (StatusCode::SERVICE_UNAVAILABLE, "No coordinator relay route is configured for this node").into_response();

@@ -34,6 +34,13 @@
     <section id="login-panel" hidden>
       <button id="sign-in" type="button">Sign in with passkey</button>
     </section>
+    <div class="divider" aria-hidden="true"></div>
+    <section id="wallet-login-panel">
+      <label for="ens-name">ENS name</label>
+      <input id="ens-name" name="ensName" type="text" autocomplete="off" spellcheck="false" placeholder="willjasen.eth" aria-label="ENS name">
+      <button id="sign-in-ens" type="button">Sign in with ENS wallet</button>
+      <p>Wallet sign-in requires an ENS name linked to an existing rawrarr account and an Ethereum wallet extension.</p>
+    </section>
     <div id="message" role="status" aria-live="polite"></div>
   </main>
   <script type="module">
@@ -83,6 +90,20 @@
       const result = await post('/api/auth/login/finish', { challengeId: start.challengeId, credential: credentialJson(credential) });
       window.location.assign(result.next);
     }
+    function hexMessage(value) {
+      return `0x${Array.from(new TextEncoder().encode(value), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+    }
+    async function signInWithEns() {
+      const provider = window.ethereum;
+      if (!provider || typeof provider.request !== 'function') throw new Error('Install an Ethereum wallet extension to continue.');
+      const start = await post('/api/auth/eth/login/start', { ensName: document.getElementById('ens-name').value.trim() });
+      const accounts = await provider.request({ method: 'eth_requestAccounts' });
+      const account = Array.isArray(accounts) ? accounts.find(value => value.toLowerCase() === start.address.toLowerCase()) : null;
+      if (!account) throw new Error('Select the wallet currently resolved by this ENS name, then try again.');
+      const signature = await provider.request({ method: 'personal_sign', params: [hexMessage(start.message), account] });
+      await post('/api/auth/eth/login/finish', { challengeId: start.challengeId, signature });
+      window.location.assign('/');
+    }
     async function run(button, action) {
       button.disabled = true;
       message.textContent = 'Waiting for your passkey…';
@@ -92,6 +113,7 @@
     }
     document.getElementById('create-passkey').addEventListener('click', event => run(event.currentTarget, createPasskey));
     document.getElementById('sign-in').addEventListener('click', event => run(event.currentTarget, signIn));
+    document.getElementById('sign-in-ens').addEventListener('click', event => run(event.currentTarget, signInWithEns));
     (async () => {
       if (!window.PublicKeyCredential || !navigator.credentials) {
         message.textContent = 'This browser does not support passkeys.';

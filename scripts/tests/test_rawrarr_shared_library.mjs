@@ -14,8 +14,8 @@ test('one column schema controls both libraries, including reorder and provider 
     if (path === '/') return route.fulfill({ body: html, contentType: 'text/html' });
     if (path === '/api/sonarr/series') return route.fulfill({ json: [{ title: '<Series>', titleSlug: 'series-slug', tvdbId: 99, year: 2020, monitored: true, episodeFileCount: 3, episodeCount: 8, hasFile: true, sizeOnDisk: 2048, qualityProfile: 'HD' }] });
     if (path === '/api/radarr/movies') return route.fulfill({ json: [{ title: 'Movie', titleSlug: 'movie-slug', year: 2021, tmdbId: 42, hasFile: true }] });
-    if (path === '/api/settings/sonarr') return route.fulfill({ json: { url: 'https://sonarr.test/' } });
-    if (path === '/api/settings/radarr') return route.fulfill({ json: { url: 'https://radarr.test/' } });
+    if (path === '/api/settings/sonarr') return route.fulfill({ json: { configured: true, persisted: true, url: 'https://sonarr.test/' } });
+    if (path === '/api/settings/radarr') return route.fulfill({ json: { configured: true, persisted: true, url: 'https://radarr.test/' } });
     return route.fulfill({ status: 503, json: { error: 'Fixture unavailable' } });
   });
   await page.route('https://sonarr.test/**', route => route.fulfill({ body: 'Sonarr', contentType: 'text/html' }));

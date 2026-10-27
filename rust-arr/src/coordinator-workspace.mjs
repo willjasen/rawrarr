@@ -240,6 +240,16 @@ async function loadProfile() {
         ? `Three-day trial · ends ${endsAt.toLocaleString()}`
         : `Three-day trial ended ${endsAt.toLocaleString()}`;
     }
+    const [access, wallet] = await Promise.all([
+      jsonRequest('/api/crypto/access'),
+      jsonRequest('/api/auth/eth/link')
+    ]);
+    document.getElementById('crypto-access-status').textContent = access.tier === 'free'
+      ? `Free tier · ${access.fossilNodes} of ${access.fossilNodeLimit} fossil nodes`
+      : `${access.tier[0].toUpperCase()}${access.tier.slice(1)} tier${access.paidThrough ? ` · paid through ${new Date(access.paidThrough).toLocaleDateString()}` : ''}`;
+    const walletName = wallet.wallets?.[0]?.ensName;
+    document.getElementById('crypto-wallet-status').textContent = walletName ? `Linked wallet · ${walletName}` : 'No ENS wallet linked';
+    if (walletName) document.getElementById('crypto-ens-name').value = walletName;
     await loadProfileAvatar();
   } catch (error) {
     document.getElementById('profile-name').textContent = error.message;
@@ -247,6 +257,28 @@ async function loadProfile() {
   }
 }
 void loadProfile();
+const cryptoLinkForm = document.getElementById('crypto-wallet-link-form');
+cryptoLinkForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = document.getElementById('crypto-link-wallet');
+  const message = document.getElementById('crypto-link-message');
+  button.disabled = true;
+  try {
+    const provider = window.ethereum;
+    if (!provider || typeof provider.request !== 'function') throw new Error('Install an Ethereum wallet extension to link an ENS wallet.');
+    const start = await jsonRequest('/api/auth/eth/link/start', { method: 'POST', body: JSON.stringify({ ensName: document.getElementById('crypto-ens-name').value.trim() }) });
+    const accounts = await provider.request({ method: 'eth_requestAccounts' });
+    const account = Array.isArray(accounts) ? accounts.find(value => value.toLowerCase() === start.address.toLowerCase()) : null;
+    if (!account) throw new Error('Select the wallet currently resolved by this ENS name, then try again.');
+    const hexMessage = `0x${Array.from(new TextEncoder().encode(start.message), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+    const signature = await provider.request({ method: 'personal_sign', params: [hexMessage, account] });
+    await jsonRequest('/api/auth/eth/link/finish', { method: 'POST', body: JSON.stringify({ challengeId: start.challengeId, signature }) });
+    message.textContent = 'ENS wallet linked.';
+    await loadProfile();
+  } catch (error) {
+    message.textContent = error.message || 'Could not link this wallet.';
+  } finally { button.disabled = false; }
+});
 let selectedNode = null;
 let selectedNodeDetails = null;
 let selectedRoute = null;
