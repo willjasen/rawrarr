@@ -76,7 +76,7 @@
     <div class="actions"><button id="copy-root-fingerprint" type="button" class="secondary" hidden>Copy root fingerprint</button></div>
     <p class="warning">Keep the encrypted root backup, root fingerprint, and private age ID in separate safe places. Losing the age ID prevents decrypting your data; losing either the age ID or encrypted root backup can prevent future device approvals. Rawrarr cannot recover them for you.</p>
     <label class="check" id="root-backup-label" hidden><input id="root-backed-up" type="checkbox" disabled>I saved the encrypted user signing-key backup and its fingerprint somewhere outside this browser, and understand I need my age ID to unlock it.</label>
-    <div id="setup-complete-actions" class="actions" hidden><a class="button-link" href="/#devices">Continue to Devices</a><button id="add-node-now" type="button" class="secondary">Set up a node now</button></div>
+    <div id="setup-complete-actions" class="actions" hidden><a class="button-link" href="/#fossils">Continue to Fossils</a><button id="add-node-now" type="button" class="secondary">Set up a node now</button></div>
   </section>
 
   <section class="step" id="deploy-step" aria-labelledby="deploy-title" hidden>
@@ -87,7 +87,7 @@
     <select id="node-role"><option value="metadata">Fossil (metadata)</option><option value="storage">Boneyard (storage)</option></select>
     <label for="device-name">Device name</label>
     <input id="device-name" type="text" maxlength="64" autocomplete="off" value="My fossil node" aria-describedby="device-name-help">
-    <p id="device-name-help">This name appears in the approval request and Devices list. You can change it later.</p>
+    <p id="device-name-help">This name appears in the approval request and Fossils list. You can change it later.</p>
     <label for="root-fingerprint-confirm">Re-enter the root fingerprint you saved separately</label>
     <input id="root-fingerprint-confirm" type="text" inputmode="text" pattern="[0-9a-fA-F]{64}" autocomplete="off" spellcheck="false" placeholder="64 hexadecimal characters">
     <p>This independently pins the root key for the node. Keep the same fingerprint in future node Compose files.</p>
@@ -112,7 +112,7 @@
       <li id="auth-key-instruction">For internal Tailscale, Compose contains the auth key; restrict the file to your user (for example, <code>chmod 600 compose.yaml</code>) and remove the key after the node joins. Headscale mode uses a separate local secret file.</li>
       <li>Check the media path if you selected boneyard. Keep <code>/shared</code> on a separate Syncthing setup; it is not exposed as a Tailscale share.</li>
       <li>In that folder run <code>docker compose config --quiet</code>, then <code>docker compose up -d</code>.</li>
-      <li>Return to roarlay’s Devices page and approve the pending node. Select the approved node there to continue setup. Direct <code>http://localhost:7297</code> sign-in requires a passkey registered for that localhost origin. Keep the age ID and encrypted user signing-key backup with you; do not put either in Compose.</li>
+      <li>Return to roarlay’s Fossils page and approve the pending node. Select the approved node there to continue setup. Direct <code>http://localhost:7297</code> sign-in requires a passkey registered for that localhost origin. Keep the age ID and encrypted user signing-key backup with you; do not put either in Compose.</li>
       <li>Set up and verify a separate Syncthing peer before expecting <code>/shared</code> to replicate to another node. This file starts a standalone local volume; it does not join or share a Syncthing folder.</li>
     </ol>
   </section>

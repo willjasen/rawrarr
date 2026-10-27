@@ -26,10 +26,10 @@ test('device names are persisted as a backward-compatible age config field', () 
 });
 
 test('Overview and device management stay separate, with age-encrypted name editing', () => {
-  assert.match(html, /data-view="devices"[^>]*>[\s\S]*?Devices/);
+  assert.match(html, /data-view="fossils"[^>]*>[\s\S]*?Fossils/);
   assert.match(html, /id="overview-view"><h1 class="page-title">Overview<\/h1>/);
-  assert.match(html, /id="devices-view"[\s\S]*?id="pending"[\s\S]*?id="nodes"/);
-  assert.match(workspace, /'overview', 'devices', 'movies'/);
+  assert.match(html, /id="fossils-view"[\s\S]*?id="pending"[\s\S]*?id="nodes"/);
+  assert.match(workspace, /'overview', 'fossils', 'movies'/);
   assert.match(workspace, /className = 'device-name-input'/);
   assert.match(workspace, /nameInput\.addEventListener\('change'/);
   assert.match(workspace, /event\.key === 'Enter'/);

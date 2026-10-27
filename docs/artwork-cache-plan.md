@@ -4,7 +4,7 @@ The Redis-compatible cache service is Valkey (`valkey/valkey:8-alpine`). The Rus
 
 ## Goal
 
-Let an operator opt a Rawrarr node into a bounded Redis cache for shared encrypted artwork. Cache hits should reduce repeated shared-folder reads while preserving the current age-encryption boundary. The cache is disposable: `/shared/metadata` remains authoritative and every miss or Redis failure falls back to the existing file read and decrypt path.
+Let an operator opt a Rawrarr node into a bounded Redis cache for shared encrypted artwork. Cache hits should reduce repeated shared-folder reads while preserving the current age-encryption boundary. The cache is disposable: `/shared/in/metadata` remains authoritative and every miss or Redis failure falls back to the existing file read and decrypt path.
 
 This is a node-local performance feature, not synchronized app data. Redis must not be added to the coordinator or relay path and must never receive private age identities, plaintext metadata, media, credentials, or decrypted artwork. Cache only age-encrypted `.aged` artwork bytes. Text metadata is small and already has an unlocked-vault-local parsed cache, so it is out of scope for the first implementation.
 

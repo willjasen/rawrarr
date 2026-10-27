@@ -114,12 +114,12 @@ const ageStorageMessage = document.getElementById('age-storage-message');
 const settingsAgeIdInput = document.getElementById('settings-age-id');
 const saveAgeIdButton = document.getElementById('save-age-id');
 const removeAgeIdButton = document.getElementById('remove-age-id');
-const views = Object.fromEntries(['overview', 'devices', 'movies', 'series', 'assistant', 'configuration', 'settings', 'about'].map(name => [name, document.getElementById(`${name}-view`)]));
+const views = Object.fromEntries(['overview', 'fossils', 'movies', 'series', 'assistant', 'configuration', 'settings', 'about'].map(name => [name, document.getElementById(`${name}-view`)]));
 function roleLabel(role) {
   return role === 'coordinator' ? 'roarlay' : role === 'storage' ? 'boneyard' : 'fossil';
 }
 function showView(name, updateHash = true) {
-  const requestedView = name === 'tv' ? 'series' : name;
+  const requestedView = name === 'tv' ? 'series' : name === 'devices' ? 'fossils' : name;
   const view = views[requestedView] ? requestedView : 'overview';
   for (const [key, element] of Object.entries(views)) element.hidden = key !== view;
   for (const button of document.querySelectorAll('.nav-item[data-view]')) {
@@ -162,6 +162,7 @@ window.addEventListener('hashchange', () => showView(location.hash.slice(1) || '
 document.querySelectorAll('.nav-item[data-view]').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
 document.getElementById('configure-sonarr')?.addEventListener('click', () => showView('settings'));
 showView(location.hash.slice(1) || 'overview', false);
+if (location.hash === '#devices') history.replaceState(null, '', `${location.pathname}${location.search}#fossils`);
 if (location.hash === '#series') history.replaceState(null, '', `${location.pathname}${location.search}#tv`);
 let profileAvatarSeed = '';
 let profileBaseName = '';
@@ -258,6 +259,7 @@ const storageScanStatusByNode = new Map();
 const storageScansActive = new Set();
 const storageScheduleDrafts = new Map();
 const syncthingHealthCache = new Map();
+const configPeerStatusCache = new Map();
 const nodeAvatarSeeds = new Map();
 let deviceRouteStatusByNode = new Map();
 function deviceNameTokens(value) {
@@ -533,7 +535,7 @@ function clearConfigStrings(value) {
 async function arrDirectUrl() {
   const node = selectedNodeDetails;
   if (!node || node.role !== 'metadata' || !node.online || !node.directUrl) {
-    throw new Error('Select an online fossil node with a direct Tailscale route in Devices.');
+    throw new Error('Select an online fossil node with a direct Tailscale route in Fossils.');
   }
   const route = await chooseNodeRoute(node, true);
   if (!route.direct) {
@@ -1231,8 +1233,8 @@ async function loadOverviewMetadata() {
     const onlineMetadata = workspaceNodes.some(candidate => candidate.role === 'metadata' && candidate.online);
     state.textContent = onlineMetadata ? 'Fossil node not selected' : 'No online fossil node';
     detail.textContent = onlineMetadata
-      ? 'An online fossil node is available in Devices, but it is not selected for this overview.'
-      : 'Connect an online fossil node in Devices to see shared-folder details.';
+      ? 'An online fossil node is available in Fossils, but it is not selected for this overview.'
+      : 'Connect an online fossil node in Fossils to see shared-folder details.';
     document.getElementById('overview-metadata-size').textContent = '—';
     return;
   }
@@ -1552,6 +1554,19 @@ async function loadNodes() {
         return [node.nodeId, null];
       }
     })));
+    const configPeerStatusByNode = new Map(await Promise.all(nodes.filter(node => node.role === 'metadata').map(async node => {
+      if (!node.online || !node.relayAvailable) return [node.nodeId, { state: 'unreachable' }];
+      const cached = configPeerStatusCache.get(node.nodeId);
+      if (cached && Date.now() - cached.checkedAt < 15000) return [node.nodeId, cached.value];
+      try {
+        const value = await jsonRequest(`/nodes/${encodeURIComponent(node.nodeId)}/api/config-peer/status`);
+        configPeerStatusCache.set(node.nodeId, { checkedAt: Date.now(), value });
+        return [node.nodeId, value];
+      } catch (_) {
+        configPeerStatusCache.set(node.nodeId, { checkedAt: Date.now(), value: { state: 'unreachable' } });
+        return [node.nodeId, { state: 'unreachable' }];
+      }
+    })));
     if (location.hash === '' || location.hash === '#overview') void loadOverviewMetadata();
     deviceRouteStatusByNode = await checkDeviceRoutes(nodes);
     const observedSyncthingPeers = nodes.flatMap(source => {
@@ -1730,6 +1745,25 @@ async function loadNodes() {
         setSyncHealth(['No shared folders configured']);
       }
       card.append(syncHealth);
+      if (node.role === 'metadata') {
+        const merkleStatus = configPeerStatusByNode.get(node.nodeId) || { state: 'checking' };
+        const merkleBadge = document.createElement('small');
+        merkleBadge.className = `device-detail device-sync-health merkle-status merkle-${merkleStatus.state}`;
+        const icon = document.createElement('span');
+        icon.className = 'merkle-status-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = ({ current: '✓', partial: '↻', stale: '◷', unreachable: '!', checking: '◌' })[merkleStatus.state] || '?';
+        const label = document.createElement('span');
+        label.className = 'sync-health-state';
+        label.textContent = ({ current: 'Merkle up to date', partial: 'Merkle sync incomplete', stale: 'Merkle status stale', unreachable: 'Merkle peers unreachable', checking: 'Checking Merkle status' })[merkleStatus.state] || 'Merkle status unknown';
+        const detail = document.createElement('span');
+        detail.className = 'sync-health-detail';
+        if (Number.isFinite(merkleStatus.matchingPeers) && Number.isFinite(merkleStatus.configuredPeers)) detail.textContent = `${merkleStatus.matchingPeers}/${merkleStatus.configuredPeers} peers match`;
+        merkleBadge.append(icon, label, ...(detail.textContent ? [detail] : []));
+        merkleBadge.setAttribute('role', 'status');
+        merkleBadge.setAttribute('aria-label', detail.textContent ? `${label.textContent}; ${detail.textContent}.` : `${label.textContent}.`);
+        card.append(merkleBadge);
+      }
       card.append(deleteButton);
       if (node.role === 'storage') {
         const scanActions = document.createElement('div');

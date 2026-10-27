@@ -1,3 +1,5 @@
+- [Restore Rawrarr on do3](2026-10-27-restore-rawrarr-do3.md) — Stop Synkpieces and run published Rawrarr `main` on a clean database while preserving the previous database volume and backup (issue [#199](https://github.com/willjasen/rawrarr/issues/199)).
+- [Show per-device Merkle metadata freshness](2026-10-27-device-merkle-freshness.md) — Report verified config revision Merkle agreement for each metadata device in the coordinator Devices view (issue [#100](https://github.com/willjasen/rawrarr/issues/100)).
 - [Repair stale coordinator routes for internal devices](2026-10-27-repair-stale-device-routes.md) — Update direct and relay targets for the current internal node IDs and verify coordinator/device routes (issue [#204](https://github.com/willjasen/rawrarr/issues/204)).
 - [Add a three-day public trial](2026-10-27-three-day-public-trial.md) — Record public-only three-day account trials, internal deployment exclusion, profile status reporting, and current enforcement limits (issue [#160](https://github.com/willjasen/rawrarr/issues/160)).
 - [Create local architecture-specific internal base images](2026-10-27-local-internal-base-images.md) — Document and prepare reusable native-architecture Rawrarr images for the internal Macs, preserving per-service deployment boundaries (issue [#198](https://github.com/willjasen/rawrarr/issues/198)).
@@ -49,6 +51,7 @@
 
 # Rawrarr runbooks
 
+- [Document the “eventually” app-data direction](2026-10-27-document-eventually-app-data-direction.md) — Define `/shared/in` for app data and `/shared/out` for selected large files as the target Syncthing layout, while distinguishing it from current paths.
 - [Restore the current MacBook fossil route](2026-10-26-restore-current-macbook-fossil-route.md) — Map the live MacBook node ID to its verified tailnet relay and direct API endpoints so the Devices card can report a usable route (issue [#181](https://github.com/willjasen/rawrarr/issues/181)).
 
 - [Check coordinator UI releases every five minutes](2026-10-26-coordinator-ui-update-five-minute-poll.md) — Restore five-minute polling for the coordinator-only UI bundle updater (issue [#169](https://github.com/willjasen/rawrarr/issues/169)).
@@ -646,3 +649,7 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Publish private subscriber images and route the current Mac mini fossil](2026-10-26-private-ghcr-current-fossil-route.md) — Build private GHCR images per architecture, assemble multi-architecture tags, and deploy coordinator/fossil independently (issue [#176](https://github.com/willjasen/rawrarr/issues/176)).
 - [Keep node avatars visible and route health truthful](2026-10-26-fix-node-avatar-and-route-state.md) — Remove the route dependency from node avatar loading and visually distinguish a live heartbeat from unavailable routes (issue [#181](https://github.com/willjasen/rawrarr/issues/181)).
 - [Deploy the Stripe webhook service on do3](2026-10-27-deploy-stripe-service-do3.md) — Publish and configure the private Stripe webhook service on `rawrarr-roarlay`; install its test-mode signing secret and verify the public route and signature checks (issue [#160](https://github.com/willjasen/rawrarr/issues/160)).
+- [Rename Devices to Fossils](2026-10-27-devices-to-fossils.md) — Rename the coordinator page, bookmark route, and newly generated subscriber node ID prefix; issue [#215](https://github.com/willjasen/rawrarr/issues/215).
+- [Fix the config peer status route build](2026-10-27-fix-peer-status-handler-build.md) — Rename the status handler to avoid shadowing by a local value and restore the Rust release build (issue [#217](https://github.com/willjasen/rawrarr/issues/217)).
+- [Restore the MacBook fossil Valkey service](2026-10-27-restore-macbook-fossil-valkey.md) — Add the missing local Valkey ciphertext cache to the MacBook subscriber project and verify fossil connectivity (issue [#100](https://github.com/willjasen/rawrarr/issues/100)).
+- [Move rawrs Talk to a floating voice control](2026-10-27-rawrs-floating-talk.md) — Keep the voice agent available in a dismissible bottom-left panel across coordinator workspace pages (issue [#218](https://github.com/willjasen/rawrarr/issues/218)).
