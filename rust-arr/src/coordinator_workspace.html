@@ -404,7 +404,7 @@
     </section>
     <section id="settings-view" hidden><h1 class="page-title">Settings</h1>
       <div class="settings-identity">
-      <article class="profile-card"><picture class="profile-avatar"><source id="profile-picture-jxl" type="image/jxl"><img id="profile-picture" alt="Generated dinosaur profile picture"></picture><div class="profile-avatar-copy"><h2 class="profile-name" id="profile-name">Loading profile…</h2><p class="profile-avatar-status" id="profile-avatar-status" role="status" aria-live="polite">Preparing your profile picture…</p><p id="trial-status" class="profile-avatar-status" role="status" aria-live="polite" hidden></p></div></article>
+      <article class="profile-card"><picture class="profile-avatar"><source id="profile-picture-jxl" type="image/jxl"><img id="profile-picture" alt="Generated dinosaur profile picture"></picture><div class="profile-avatar-copy"><h2 class="profile-name" id="profile-name">Loading profile…</h2><p class="profile-avatar-status" id="profile-avatar-status" role="status" aria-live="polite">Preparing your profile picture…</p><p id="trial-status" class="profile-avatar-status" role="status" aria-live="polite" hidden></p><p id="crypto-access-status" class="profile-avatar-status" role="status" aria-live="polite">Loading account tier…</p><p id="crypto-wallet-status" class="profile-avatar-status" role="status" aria-live="polite">Checking linked ENS wallet…</p><form id="crypto-wallet-link-form"><label for="crypto-ens-name">Link an ENS wallet</label><input id="crypto-ens-name" type="text" autocomplete="username" spellcheck="false" placeholder="willjasen.eth"><button id="crypto-link-wallet" type="submit">Link wallet with signature</button><p id="crypto-link-message" role="status" aria-live="polite"></p></form><p><a href="/billing">Subscription and ETH donations</a></p></div></article>
       <article class="age-storage-card" aria-labelledby="age-storage-title">
         <h2 id="age-storage-title">Age private ID in this browser</h2>
         <p id="age-storage-status" class="age-storage-status" role="status" aria-live="polite">Checking browser storage…</p>
@@ -482,7 +482,7 @@
   </main>
    </div>
   </div>
-  <button id="rawrs-launcher" class="rawrs-launcher" type="button" aria-expanded="false" aria-controls="ai-voice-panel">☎ Talk to rawrs</button>
+  <button id="rawrs-launcher" class="rawrs-launcher" type="button" aria-label="Open rawrs voice agent" aria-expanded="false" aria-controls="ai-voice-panel">rawr</button>
   <section id="ai-voice-panel" class="rawrs-voice-panel" aria-label="rawrs voice agent" hidden>
     <div class="rawrs-voice-heading"><h2>Talk to rawrs</h2><button id="rawrs-close" type="button" aria-label="Close rawrs voice panel">×</button></div>
     <p class="ai-note">Your recording is sent to OpenAI for transcription. Spoken answers use a local browser voice when available.</p>

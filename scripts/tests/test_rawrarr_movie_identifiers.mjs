@@ -11,6 +11,7 @@ test('movie titles and TMDb identifiers occupy separate aligned columns', async 
   await page.route('http://rawrarr.test/**', route => {
     const path = new URL(route.request().url()).pathname;
     if (path === '/') return route.fulfill({ body: html, contentType: 'text/html' });
+    if (path === '/api/settings/radarr') return route.fulfill({ json: { configured: true, persisted: true, url: 'https://radarr.test/' } });
     if (path === '/api/radarr/movies') return route.fulfill({ json: [
       { title: 'A <Movie>', tmdbId: 42, year: 2020, path: '/media/example' },
       { title: 'No identifier', year: 2021 }

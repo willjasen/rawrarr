@@ -96,7 +96,7 @@ test('an already-open workspace waits through transient loss and resumes after c
   const page = await browser.newPage();
   const server = await serveWorkspace([]);
   t.after(() => new Promise(resolve => server.close(resolve)));
-  await page.goto(`http://127.0.0.1:${server.address().port}/#devices`);
+  await page.goto(`http://127.0.0.1:${server.address().port}/#fossils`);
   await page.waitForFunction(() => document.querySelector('#status')?.textContent?.startsWith('No nodes yet.'));
   await waitForHealthChecks(server, 1);
   const beforeOffline = server.healthChecks();
@@ -110,5 +110,5 @@ test('an already-open workspace waits through transient loss and resumes after c
   server.setCoordinatorOnline(true);
   await waitForHealthChecks(server, beforeRecovery + 2);
   await page.waitForFunction(() => document.querySelector('#coordinator-pending-dialog')?.open === false, { timeout: 8000 });
-  assert.equal(new URL(page.url()).hash, '#devices', 'recovery preserves the current view route');
+  assert.equal(new URL(page.url()).hash, '#fossils', 'recovery preserves the current view route');
 });

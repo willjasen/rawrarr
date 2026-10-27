@@ -13,6 +13,7 @@ test('workspace navigation survives refresh and browser history', async t => {
   await page.route('http://rawrarr.test/**', async route => {
     const path = new URL(route.request().url()).pathname;
     if (path === '/') return route.fulfill({ contentType: 'text/html', body: html });
+    if (path === '/api/settings/radarr') return route.fulfill({ json: { configured: true, persisted: true, url: 'https://radarr.test/' } });
     if (path === '/api/radarr/movies') {
       movieRequests += 1;
       return route.fulfill({ json: [] });
@@ -28,6 +29,8 @@ test('workspace navigation survives refresh and browser history', async t => {
   await expectView('Overview', 'overview');
   await page.locator('#movies-nav').click();
   await expectView('Movies', 'movies');
+  await page.locator('#edit-radarr-connection').click();
+  await page.locator('#radarr-settings-panel').waitFor({ state: 'visible' });
   assert.equal(await page.locator('#series-nav .nav-text').textContent(), 'TV');
   await page.locator('#series-nav').click();
   await expectView('TV', 'series');
@@ -54,8 +57,7 @@ test('workspace navigation survives refresh and browser history', async t => {
   await page.goForward();
   await expectView('Configuration', 'configuration');
   await page.locator('#settings-nav').click();
-  await expectView('Overview', 'overview');
-  assert.equal(await page.locator('#radarr-url').evaluate(el => el === document.activeElement), true);
+  await expectView('Configuration', 'configuration');
   await page.goto('http://rawrarr.test/#movies');
   await expectView('Movies', 'movies');
   await page.goto('http://rawrarr.test/#unknown');

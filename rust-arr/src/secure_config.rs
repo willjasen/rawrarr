@@ -558,7 +558,7 @@ impl AgeVault {
     }
 
     /// Store a sidecar using only the public age recipient, for storage-only nodes.
-    /// `metadata_dir` is the node's /metadata domain, backed by /shared/metadata.
+    /// `metadata_dir` is the node's /metadata domain, backed by /shared/in/metadata.
     pub fn store_library_sidecar_with_recipient(
         metadata_dir: &Path,
         recipient: &str,
@@ -2384,7 +2384,7 @@ mod tests {
                 0o644
             );
             assert_eq!(
-                fs::metadata(shared_dir.join("metadata"))
+                fs::metadata(shared_dir.join("in/metadata"))
                     .expect("metadata directory")
                     .permissions()
                     .mode()
@@ -2444,7 +2444,7 @@ mod tests {
                 sidecar_json,
             )
             .expect("encrypt media JSON sidecar in shared folder");
-        let sidecar_directory = shared_dir.join("metadata/library/text");
+        let sidecar_directory = shared_dir.join("in/metadata/library/text");
         let sidecar_path = fs::read_dir(&sidecar_directory)
             .expect("sidecar directory exists")
             .next()
