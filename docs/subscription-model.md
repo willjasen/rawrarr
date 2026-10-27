@@ -2,7 +2,7 @@
 
 ## Purpose and current decisions
 
-Rawrarr is intended to be self-hosted from a packaged Docker image. The first setup receives a 24-hour trial; afterward, access is gated until a subscription is active. The selected direction is hosted checkout plus a signed license. Billing, licensing, and the blind data relay are separate services. This document proposes a model for discussion; it does not implement billing or enforcement.
+Rawrarr is intended to be self-hosted from a packaged Docker image. A new account on a public deployment receives a three-day trial; internal deployments do not receive a billing trial. Trial status is recorded and displayed, while post-trial enforcement remains unimplemented. The selected direction is hosted checkout plus a signed license. Billing, licensing, and the blind data relay are separate services. This document proposes a model for discussion; it does not implement billing or enforcement.
 
 ## Proposed commercial shape
 
@@ -16,7 +16,7 @@ This leaves a future product decision: whether collaborator count or optional ho
 
 Start with one paid self-hosted plan, offered monthly and annually once pricing is decided. The plan unlocks the full self-hosted product for one instance and its participating nodes. Consider an optional relay service or collaboration tier later, after their operating costs and access rules are understood. Avoid a multi-tier matrix before Rawrarr has stable feature boundaries.
 
-The trial is a one-time 24-hour evaluation for an instance, beginning when setup reaches the usable dashboard. Persist its start against the shared `instance_id`; restarting or adding a node must not restart it. First-use enforcement can be bypassed by a host owner who controls the container and its data, so it is a product gate rather than tamper-proof licensing.
+A new account on a public deployment receives one three-day evaluation, beginning when passkey registration completes. PostgreSQL records its start timestamp on the new account row; restarting the coordinator does not restart it. Internal deployments set `RAWARR_BILLING_AUDIENCE=internal` and do not record or expose trial timing. Existing accounts are left unset by the migration. The current implementation reports the start and end in the authenticated profile but does not yet gate features after expiry. First-use enforcement can be bypassed by a host owner who controls the container and its data, so it is a product gate rather than tamper-proof licensing.
 
 ## Proposed purchase and license flow
 
@@ -31,7 +31,7 @@ Keep the entitlement payload small and free of personal billing details. Candida
 
 ## Trial expiry, renewal, and offline behavior
 
-- During the 24-hour trial, the instance has the intended paid feature set except that each signed-in account may submit at most five AI questions per UTC calendar day across text and voice. Roarlay enforces this using its local PostgreSQL request records. Show the remaining allowance and local-time reset; do not count failed requests without a usable result, internal model/tool turns, or owner review-agent processing. The initial AI implementation applies this limit to all accounts; trial and paid entitlement enforcement remain planned.
+- During the three-day trial, the instance has the intended paid feature set except that each signed-in account may submit at most five AI questions per UTC calendar day across text and voice. Roarlay enforces this using its local PostgreSQL request records. Show the remaining allowance and local-time reset; do not count failed requests without a usable result, internal model/tool turns, or owner review-agent processing. The initial AI implementation applies this limit to all accounts; connecting this allowance to the new trial record and enforcing paid entitlements remain planned.
 - At trial expiry with no valid subscription, gate product workflows. Always retain passkey sign-in, subscription recovery, data export, backup recovery, and account/data deletion paths. Preserve the user's data; never delete or re-encrypt it as a payment enforcement action.
 - On cancellation, retain access through the provider-confirmed paid-through date. On a failed renewal, allow the proposed 14-day grace period before gating features.
 - An offline node can use the most recent signed entitlement until its grace deadline. Do not treat a temporary billing-service outage as cancellation.

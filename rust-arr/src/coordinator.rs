@@ -1304,6 +1304,8 @@ struct WorkspaceNode {
 struct WorkspaceProfile {
     account_id: Uuid,
     display_name: String,
+    trial_started_at: Option<String>,
+    trial_ends_at: Option<String>,
 }
 
 async fn workspace_profile(
@@ -1314,12 +1316,29 @@ async fn workspace_profile(
     let Some(owner) = crate::auth::authenticated_user_id(&auth, &headers).await else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
-    match sqlx::query_scalar::<_, Uuid>("SELECT id FROM rawrarr_users WHERE id=$1")
+    match sqlx::query("SELECT id, to_char(trial_started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS trial_started_at, to_char((trial_started_at + interval '3 days') AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS trial_ends_at FROM rawrarr_users WHERE id=$1")
         .bind(owner).fetch_optional(&state.pool).await {
-        Ok(Some(user_id)) => axum::Json(WorkspaceProfile {
-            account_id: user_id,
-            display_name: crate::auth::generated_account_name(user_id),
-        }).into_response(),
+        Ok(Some(row)) => {
+            let user_id: Uuid = match row.try_get("id") {
+                Ok(user_id) => user_id,
+                Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+            };
+            let trial_enabled = std::env::var("RAWARR_BILLING_AUDIENCE").is_ok_and(|value| value == "public");
+            let trial_started_at: Option<String> = match row.try_get("trial_started_at") {
+                Ok(value) => value,
+                Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+            };
+            let trial_ends_at: Option<String> = match row.try_get("trial_ends_at") {
+                Ok(value) => value,
+                Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+            };
+            axum::Json(WorkspaceProfile {
+                account_id: user_id,
+                display_name: crate::auth::generated_account_name(user_id),
+                trial_started_at: trial_enabled.then_some(trial_started_at).flatten(),
+                trial_ends_at: trial_enabled.then_some(trial_ends_at).flatten(),
+            }).into_response()
+        }
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(_) => StatusCode::SERVICE_UNAVAILABLE.into_response(),
     }
