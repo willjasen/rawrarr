@@ -61,14 +61,18 @@
     .device-avatar img { display:block; width:100%; height:100%; border-radius:inherit; object-fit:cover }
     .device-heading { display:flex; align-items:center; justify-content:space-between; gap:14px }
     .device-name-group { display:flex; min-width:0; flex:0 1 auto; align-items:center; gap:8px }
-    .device-name-input { display:block; min-width:0; flex:0 1 auto; padding:0; border:0; border-bottom:1px solid transparent; border-radius:0; background:transparent; color:var(--text); font:650 20px/1.3 system-ui }
-    .device-name-input[readonly] { cursor:default }
-    .device-name-input:hover,.device-name-input:focus { border-bottom-color:#46574a; outline:none }
-    .device-name-input:focus { border-bottom-color:var(--green) }
-    .device-name-edit-button { flex:none; padding:5px 9px; font-size:12px }
+    .device-name { overflow-wrap:anywhere; font-size:20px; line-height:1.3; font-weight:650 }
     .device-detail { display:block; color:var(--muted); margin-top:8px; font-size:13px }
-    .device-delete-button { align-self:flex-end; margin-top:12px; border-color:#744747; color:#ffb0b0; padding:6px 9px; font-size:12px }
-    .device-delete-button:hover,.reject-button:hover { border-color:#ff9999; background:#392323 }
+    .device-edit-button { align-self:flex-end; margin-top:12px; padding:6px 9px; font-size:12px }
+    .device-edit-dialog { width:min(460px,calc(100vw - 32px)); border:1px solid var(--line); border-radius:14px; padding:22px; color:var(--text); background:var(--panel); box-shadow:0 20px 70px #0009 }
+    .device-edit-dialog::backdrop { background:#101411c9 }
+    .device-edit-dialog h2 { margin:0 0 8px }
+    .device-edit-dialog label { display:block; margin-top:16px; color:var(--muted) }
+    .device-edit-dialog input { width:100%; min-height:42px; margin-top:6px; border:1px solid #46574a; border-radius:8px; background:#101411; color:var(--text); padding:10px; font:inherit }
+    .device-edit-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-top:18px }
+    .device-edit-actions > div { display:flex; flex-wrap:wrap; gap:8px }
+    .device-edit-delete { border-color:#744747; color:#ffb0b0 }
+    .device-edit-delete:hover,.reject-button:hover { border-color:#ff9999; background:#392323 }
     .storage-scan-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px }
     .storage-scan-status { display:block; color:var(--muted); margin-top:8px; font-size:12px }
     .storage-scan-schedule { display:grid; grid-template-columns:repeat(auto-fit,minmax(115px,1fr)); gap:8px; margin-top:14px; padding-top:12px; border-top:1px solid var(--line) }
@@ -484,6 +488,19 @@
         <label for="approve-node-root-fingerprint">Independently saved root fingerprint</label>
         <input id="approve-node-root-fingerprint" type="text" inputmode="text" pattern="[0-9a-fA-F]{64}" autocomplete="off" required style="width:100%;min-height:42px;margin-top:6px;border:1px solid #46574a;border-radius:8px;background:#101411;color:var(--text);padding:10px;font:12px ui-monospace,monospace">
         <div class="connection-actions"><button type="submit">Sign and approve</button><button id="approve-node-cancel" type="button">Cancel</button></div>
+      </form>
+    </dialog>
+    <dialog id="device-edit-dialog" class="device-edit-dialog" aria-labelledby="device-edit-title">
+      <form id="device-edit-form">
+        <h2 id="device-edit-title">Edit device</h2>
+        <p id="device-edit-description" class="sub"></p>
+        <label for="device-edit-name">Device name</label>
+        <input id="device-edit-name" type="text" maxlength="80" autocomplete="off" required>
+        <p id="device-edit-status" class="connection-message" role="status" aria-live="polite"></p>
+        <div class="device-edit-actions">
+          <button id="device-edit-delete" class="device-edit-delete" type="button">Delete device</button>
+          <div><button id="device-edit-cancel" type="button">Cancel</button><button id="device-edit-save" type="submit">Save name</button></div>
+        </div>
       </form>
     </dialog>
   </main>

@@ -75,7 +75,7 @@ test('delete revokes an owner device, clears sessions, and survives startup regi
   assert.match(coordinator, /DELETE FROM rawrarr_sessions WHERE node_id=\$1/);
   assert.match(coordinator, /state\.approved\.write\(\)\.await\.retain\(\|entry\| entry\.auth\.node_id != node_id\)/);
   assert.match(coordinator, /SELECT EXISTS\(SELECT 1 FROM rawrarr_revoked_nodes WHERE node_id=\$1 AND token_sha256=\$2\)/);
-  assert.match(coordinatorWorkspace, /textContent = 'Delete device'/);
+  assert.match(coordinatorWorkspace, /deviceEditDelete\.addEventListener\('click'/);
   assert.match(coordinatorWorkspace, /method: 'DELETE'/);
   assert.match(coordinatorWorkspace, /does not delete data on the device/);
 });
