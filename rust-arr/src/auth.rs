@@ -54,6 +54,18 @@ const ACCOUNT_NAME_PREFIXES: &[&str] = &[
     "boggy",
     "tundra",
     "badlands",
+    "arctic",
+    "briny",
+    "buried",
+    "cavern",
+    "chalky",
+    "coastal",
+    "dusky",
+    "earthy",
+    "eocene",
+    "fossilized",
+    "igneous",
+    "ironclad",
 ];
 const ACCOUNT_NAME_CREATURES: &[&str] = &[
     "raptor",
