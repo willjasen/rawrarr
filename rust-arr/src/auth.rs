@@ -54,6 +54,18 @@ const ACCOUNT_NAME_PREFIXES: &[&str] = &[
     "boggy",
     "tundra",
     "badlands",
+    "arctic",
+    "briny",
+    "buried",
+    "cavern",
+    "chalky",
+    "coastal",
+    "dusky",
+    "earthy",
+    "eocene",
+    "fossilized",
+    "igneous",
+    "ironclad",
 ];
 const ACCOUNT_NAME_CREATURES: &[&str] = &[
     "raptor",
@@ -85,6 +97,17 @@ const ACCOUNT_NAME_CREATURES: &[&str] = &[
     "ceratopsian",
     "glyptodon",
     "gorgonops",
+    "alba",
+    "ankylo",
+    "cera",
+    "dilo",
+    "giga",
+    "mosa",
+    "ptera",
+    "rex",
+    "stego",
+    "theri",
+    "trike",
 ];
 
 #[derive(Clone)]
