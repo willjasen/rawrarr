@@ -132,6 +132,16 @@ test('Fossils shows a network diagram with one link for each node pair', () => {
   assert.match(workspace, /\.topology-edge\.disconnected \{ stroke:#ef7777 \}/);
 });
 
+test('Fossils layout wraps cards, statuses, actions, and topology at mobile widths', () => {
+  assert.match(workspace, /\.devices-page-heading \{ align-items:flex-start; gap:10px \}/);
+  assert.match(workspace, /\.device-card \{ box-sizing:border-box; min-width:0; flex-basis:100%; width:100%; max-width:none/);
+  assert.match(workspace, /\.device-heading \{ flex-wrap:wrap/);
+  assert.match(workspace, /\.node-state \{ flex:0 1 auto; max-width:100%; white-space:normal; overflow-wrap:anywhere/);
+  assert.match(workspace, /\.device-edit-button \{ min-height:40px/);
+  assert.match(workspace, /\.topology-device \{ width:min\(140px,30%\)/);
+  assert.match(workspace, /\.topology-device strong,\.topology-device small \{ min-width:0; overflow-wrap:anywhere \}/);
+});
+
 test('Fossils uses the new page hash and redirects the old Devices bookmark', () => {
   assert.match(workspaceScript, /name === 'devices' \? 'fossils' : name/);
   assert.match(workspaceScript, /location\.hash === '#devices'[\s\S]*#fossils/);
