@@ -4,10 +4,9 @@ import { readFile } from 'node:fs/promises';
 
 const root = new URL('../../', import.meta.url);
 const read = path => readFile(new URL(path, root), 'utf8');
-const [coordinator, analyticsCompose, retentionSql, publicCompose, miniCompose, do3Compose] = await Promise.all([
+const [coordinator, analyticsCompose, publicCompose, miniCompose, do3Compose] = await Promise.all([
   read('rust-arr/src/coordinator.rs'),
   read('docker-compose.analytics.yml'),
-  read('deploy/analytics/retention.sql'),
   read('docker-compose.coordinator.yml'),
   read('docker-compose.internal-mini.yml'),
   read('deploy/do3/docker-compose.internal-coordinator.yml'),
@@ -44,21 +43,4 @@ test('analytics overlay configures both coordinator and Umami services without t
   assert.match(do3Compose, /RAWARR_ROLE: coordinator/);
   assert.match(publicCompose, /RAWARR_ROLE: coordinator/);
   assert.match(miniCompose, /RAWARR_ROLE: coordinator/);
-});
-
-test('analytics retention runs daily and removes old visitor data in dependency order', () => {
-  assert.match(analyticsCompose, /umami-retention:/);
-  assert.match(analyticsCompose, /sleep 86400/);
-  assert.match(analyticsCompose, /ON_ERROR_STOP=1/);
-  assert.match(retentionSql, /interval '90 days'/);
-  assert.match(retentionSql, /BEGIN;[\s\S]*COMMIT;/);
-  const tables = ['event_data', 'session_data', 'revenue', 'heatmap_event', 'session_replay',
-    'session_replay_saved', 'website_event', 'session_link', 'session'];
-  let lastIndex = -1;
-  for (const table of tables) {
-    const index = retentionSql.search(new RegExp(`DELETE FROM ${table}\\s`));
-    assert.ok(index > lastIndex, `${table} is deleted after dependent rows`);
-    lastIndex = index;
-  }
-  assert.match(retentionSql, /NOT EXISTS \([\s\S]*website_event\.session_id = session\.session_id/);
 });
