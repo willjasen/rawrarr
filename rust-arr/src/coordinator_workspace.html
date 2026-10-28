@@ -431,7 +431,7 @@
     </section>
     <section id="settings-view" hidden><h1 class="page-title">Settings</h1>
       <div class="settings-identity">
-      <article class="profile-card"><picture class="profile-avatar"><source id="profile-picture-jxl" type="image/jxl"><img id="profile-picture" alt="Generated dinosaur profile picture"></picture><div class="profile-avatar-copy"><h2 class="profile-name" id="profile-name">Loading profile…</h2><p class="profile-avatar-status" id="profile-avatar-status" role="status" aria-live="polite">Preparing your profile picture…</p><p id="trial-status" class="profile-avatar-status" role="status" aria-live="polite" hidden></p><p id="crypto-access-status" class="profile-avatar-status" role="status" aria-live="polite">Loading account tier…</p><p id="crypto-wallet-status" class="profile-avatar-status" role="status" aria-live="polite">Checking linked ENS wallet…</p><form id="crypto-wallet-link-form"><label for="crypto-ens-name">Link an ENS wallet</label><input id="crypto-ens-name" type="text" autocomplete="username" spellcheck="false" placeholder="willjasen.eth"><button id="crypto-link-wallet" type="submit">Link wallet with signature</button><p id="crypto-link-message" role="status" aria-live="polite"></p></form><p><a href="/billing">Subscription and ETH donations</a></p></div></article>
+      <article class="profile-card"><picture class="profile-avatar"><source id="profile-picture-jxl" type="image/jxl"><img id="profile-picture" alt="Generated dinosaur profile picture"></picture><div class="profile-avatar-copy"><h2 class="profile-name" id="profile-name">Loading profile…</h2><p class="profile-avatar-status" id="profile-avatar-status" role="status" aria-live="polite">Preparing your profile picture…</p><p id="trial-status" class="profile-avatar-status" role="status" aria-live="polite" hidden></p><p id="crypto-access-status" class="profile-avatar-status" role="status" aria-live="polite">Loading account tier…</p><p id="crypto-wallet-status" class="profile-avatar-status" role="status" aria-live="polite">Checking linked ENS wallet…</p><form id="crypto-wallet-link-form"><label for="crypto-ens-name">Link an ENS wallet</label><input id="crypto-ens-name" type="text" autocomplete="username" spellcheck="false" placeholder="willjasen.eth"><button id="crypto-link-wallet" type="submit">Link wallet with signature</button><p id="crypto-link-message" role="status" aria-live="polite"></p></form><p><a href="/billing">Manage subscription</a></p></div></article>
       <article class="age-storage-card" aria-labelledby="age-storage-title">
         <h2 id="age-storage-title">Age private ID in this browser</h2>
         <p id="age-storage-status" class="age-storage-status" role="status" aria-live="polite">Checking browser storage…</p>
@@ -443,13 +443,6 @@
         </form>
       </article>
       </div>
-      <article class="connection-card" aria-labelledby="billing-title">
-        <h2 id="billing-title">Stripe test billing</h2>
-        <p class="connection-intro">Test a temporary $1/month USD subscription through Stripe Checkout. This test flow does not change Rawrarr access or entitlements.</p>
-        <p id="billing-status" class="connection-message" role="status" aria-live="polite">Checking Stripe test billing…</p>
-        <div class="connection-actions"><button id="billing-checkout" type="button" hidden>Start test subscription</button><button id="billing-portal" type="button" hidden>Manage test subscription</button></div>
-        <p id="billing-feedback" class="connection-message" role="status" aria-live="polite"></p>
-      </article>
       <h2 style="margin:26px 0 4px">Media service connections</h2>
       <p class="connection-intro">Connect services to the selected fossil. Credentials are tested and saved by that node in its age-encrypted config; roarlay never receives them.</p>
       <div class="settings-connections">
