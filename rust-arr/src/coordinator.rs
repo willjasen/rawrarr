@@ -1328,7 +1328,7 @@ fn with_analytics_tracker(mut page: String, web_origin: &str) -> String {
 fn analytics_upstream() -> Option<reqwest::Url> {
     let url = reqwest::Url::parse(&env::var("RAWARR_ANALYTICS_UPSTREAM").ok()?).ok()?;
     (url.scheme() == "http"
-        && url.host_str() == Some("127.0.0.1")
+        && url.host_str() == Some("umami")
         && url.port() == Some(3000)
         && url.path() == "/"
         && url.query().is_none()
@@ -1349,7 +1349,7 @@ async fn coordinator_analytics_proxy(request: Request) -> Response {
     let user_agent = request.headers().get(header::USER_AGENT).cloned();
     let content_type = request.headers().get(header::CONTENT_TYPE).cloned();
     let client_ip = request.headers().get("true-client-ip")
-        .or_else(|| request.headers().get(header::X_FORWARDED_FOR))
+        .or_else(|| request.headers().get("x-forwarded-for"))
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.split(',').next())
         .map(str::trim)
@@ -1363,7 +1363,7 @@ async fn coordinator_analytics_proxy(request: Request) -> Response {
     let mut outbound = client.request(method, upstream).body(body);
     if let Some(value) = user_agent { outbound = outbound.header(header::USER_AGENT.as_str(), value); }
     if let Some(value) = content_type { outbound = outbound.header(header::CONTENT_TYPE.as_str(), value); }
-    if let Some(value) = client_ip { outbound = outbound.header(header::X_FORWARDED_FOR.as_str(), value); }
+    if let Some(value) = client_ip { outbound = outbound.header("x-forwarded-for", value); }
     let response = match outbound.send().await {
         Ok(response) => response,
         Err(_) => return StatusCode::BAD_GATEWAY.into_response(),

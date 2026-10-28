@@ -15,10 +15,13 @@ const [coordinator, analyticsCompose, publicCompose, miniCompose, do3Compose] = 
 test('coordinator analytics are opt-in and only emit a fixed page label', () => {
   assert.match(coordinator, /RAWARR_ANALYTICS_SITE_ID/);
   assert.match(coordinator, /RAWARR_ANALYTICS_UPSTREAM/);
-  assert.match(coordinator, /url\.host_str\(\) == Some\("127\.0\.0\.1"\)/);
+  assert.match(coordinator, /url\.host_str\(\) == Some\("umami"\)/);
   assert.match(coordinator, /url\.port\(\) == Some\(3000\)/);
   assert.match(coordinator, /Method::GET, "script\.js"/);
   assert.match(coordinator, /Method::POST, "api\/send"/);
+  assert.match(coordinator, /get\("true-client-ip"\)[\s\S]*?get\("x-forwarded-for"\)/);
+  assert.match(coordinator, /outbound\.header\("x-forwarded-for", value\)/);
+  assert.doesNotMatch(coordinator, /header::X_FORWARDED_FOR/);
   assert.match(coordinator, /data-auto-track="false"/);
   assert.match(coordinator, /website:'\{site_id\}',url:'\/coordinator',title:'Rawrarr coordinator'/);
   assert.doesNotMatch(coordinator, /umami\.track\(\)/);
