@@ -752,7 +752,7 @@ fn poster_image(movie: &serde_json::Value) -> Option<&serde_json::Value> {
 async fn health() -> Html<&'static str> {
     Html(
         r##"<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101514"><title>rawrarr — System health</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101514"><link rel="icon" type="image/svg+xml" href="/assets/rawrarr-favicon.svg"><title>rawrarr — System health</title>
 <style>
 :root{color-scheme:dark;--bg:#101514;--panel:#171e1a;--line:#303b33;--text:#edf3ed;--muted:#9aa89e;--green:#b8f36a;font:16px Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 75% 0,#263322 0,transparent 42%),var(--bg)}main{width:min(760px,100%);margin:auto;padding:64px 24px}.brand{color:var(--green);font-size:13px;letter-spacing:.14em;text-transform:uppercase;font-weight:750}.eyebrow{margin-top:62px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.14em}h1{font-size:clamp(36px,8vw,62px);letter-spacing:-.06em;margin:10px 0 12px}.summary{color:var(--muted);line-height:1.65;max-width:520px}.state{display:inline-flex;align-items:center;gap:9px;margin-top:22px;border:1px solid #435638;background:#202a1b;color:#d5f7aa;border-radius:999px;padding:9px 13px;font-size:13px}.dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 14px #b8f36a99}.panel{margin-top:42px;border:1px solid var(--line);background:var(--panel);border-radius:16px;overflow:hidden}.panel h2{font-size:14px;margin:0;padding:19px 21px;border-bottom:1px solid var(--line)}.check{display:flex;justify-content:space-between;align-items:center;padding:17px 21px;border-bottom:1px solid #27312a}.check:last-child{border:0}.check strong{font-size:14px;font-weight:600}.check span{font-size:12px;color:var(--muted)}.ok{color:var(--green)!important}.foot{margin-top:24px;color:#718076;font-size:12px}a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}@media(max-width:520px){main{padding:36px 20px}.eyebrow{margin-top:48px}.check{gap:12px}.check span{text-align:right}}
 </style></head><body><main><div class="brand">rawrarr</div><div class="eyebrow">System status</div><h1>All systems ready.</h1><p class="summary">The rawrarr service is responding and ready to handle requests. This page checks the web process; connected services are reported separately in the app.</p><div class="state"><i class="dot"></i>Operational</div><section class="panel" aria-label="Health checks"><h2>Service checks</h2><div class="check"><strong>Web service</strong><span class="ok">● &nbsp;Responding</span></div><div class="check"><strong>Health endpoint</strong><span>/health · HTTP 200</span></div><div class="check"><strong>Checked</strong><span id="checked">Just now</span></div></section><p class="foot"><a href="/">Open rawrarr</a> &nbsp;·&nbsp; Auto-refreshes every 30 seconds</p></main><script>const checked=document.getElementById('checked');function update(){checked.textContent=new Intl.DateTimeFormat(undefined,{hour:'numeric',minute:'2-digit',second:'2-digit'}).format(new Date())}update();setInterval(()=>location.reload(),30000)</script></body></html>"##,
@@ -798,6 +798,10 @@ async fn rawrarr_favicon() -> Response<Body> {
         "image/svg+xml",
         ui_assets::text("assets/rawrarr-favicon.svg", include_str!("assets/rawrarr-favicon.svg")).await.into_bytes(),
     )
+}
+
+async fn rawrarr_favicon_ico() -> Response<Body> {
+    rawrarr_favicon().await
 }
 
 async fn passkey_client_js() -> Response<Body> {
@@ -2945,6 +2949,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/assets/rawrarr-logo.png", get(rawrarr_logo))
         .route("/assets/rawrarr-logo.jxl", get(rawrarr_logo_jxl))
         .route("/assets/rawrarr-favicon.svg", get(rawrarr_favicon))
+        .route("/favicon.ico", get(rawrarr_favicon_ico))
         .route("/assets/passkey-client.mjs", get(passkey_client_js))
         .route("/assets/metadata-export.js", get(metadata_export_js))
         .route("/api/auth/status", get(node_auth::proxy))
