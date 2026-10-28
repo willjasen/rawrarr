@@ -90,6 +90,76 @@ for (const [name, devices, expectedVisible] of [
   });
 }
 
+test('Fossils fits desktop and narrow mobile viewports with long labels and reachable actions', async t => {
+  const devices = [
+    { nodeId: 'device-alpha', role: 'metadata', online: true, relayAvailable: false, displayName: 'Brandon workstation with an exceptionally long display name' },
+    { nodeId: 'device-beta', role: 'storage', online: true, relayAvailable: false, displayName: 'Living room media and backup storage node' },
+    { nodeId: 'device-gamma', role: 'metadata', online: true, relayAvailable: false, displayName: 'Travel laptop with a deliberately long device label' },
+  ];
+  const server = await serveWorkspace(devices);
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+
+  for (const viewport of [
+    { name: 'desktop', width: 1280, height: 800 },
+    { name: 'narrow mobile', width: 375, height: 812 },
+  ]) {
+    const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height } });
+    page.setDefaultTimeout(8000);
+    page.setDefaultNavigationTimeout(8000);
+    await page.goto(`http://127.0.0.1:${server.address().port}/#fossils`);
+    await page.waitForFunction(() => document.querySelectorAll('#nodes .device-card').length === 3, null, { timeout: 10000 });
+    await page.waitForFunction(() => document.querySelectorAll('#device-topology-content .topology-device').length === 3, null, { timeout: 10000 });
+
+    const layout = await page.evaluate(() => {
+      const rect = element => {
+        const { x, y, right, bottom, width, height } = element.getBoundingClientRect();
+        return { x, y, right, bottom, width, height };
+      };
+      return {
+        viewportWidth: window.innerWidth,
+        documentWidth: document.documentElement.scrollWidth,
+        heading: rect(document.querySelector('#fossils-view .devices-page-heading')),
+        title: rect(document.querySelector('#fossils-view .devices-page-heading .page-title')),
+        addAction: rect(document.querySelector('#fossils-view .devices-page-heading .button-link')),
+        cards: [...document.querySelectorAll('#nodes .device-card')].map(rect),
+        statuses: [...document.querySelectorAll('#nodes .device-card .node-state')].map(rect),
+        graph: rect(document.querySelector('.topology-graph')),
+        topologyDevices: [...document.querySelectorAll('.topology-graph .topology-device')].map(rect),
+      };
+    });
+
+    assert.ok(layout.documentWidth <= layout.viewportWidth, `${viewport.name}: page should not overflow horizontally (${layout.documentWidth}px > ${layout.viewportWidth}px)`);
+    assert.ok(layout.title.x >= layout.heading.x && layout.title.right <= layout.heading.right, `${viewport.name}: Fossils heading should stay inside its layout`);
+    assert.ok(layout.addAction.x >= layout.heading.x && layout.addAction.right <= layout.heading.right, `${viewport.name}: Add a fossil action should stay inside its layout`);
+    if (viewport.name === 'desktop') {
+      assert.ok(layout.cards[0].width < layout.viewportWidth / 2, 'desktop: device cards should retain a multi-column layout');
+    }
+    for (const [index, card] of layout.cards.entries()) {
+      assert.ok(card.x >= 0 && card.right <= layout.viewportWidth, `${viewport.name}: device card ${index + 1} should fit the viewport`);
+      const status = layout.statuses[index];
+      assert.ok(status.x >= card.x && status.right <= card.right, `${viewport.name}: connection status ${index + 1} should remain within its card`);
+    }
+    for (const [index, node] of layout.topologyDevices.entries()) {
+      assert.ok(node.x >= layout.graph.x && node.right <= layout.graph.right, `${viewport.name}: topology node ${index + 1} should fit inside the graph`);
+    }
+
+    const edit = page.getByRole('button', { name: 'Edit Brandon workstation with an exceptionally long display name' });
+    const editBounds = await edit.boundingBox();
+    assert.ok(editBounds && editBounds.x >= 0 && editBounds.x + editBounds.width <= viewport.width && editBounds.y >= 0 && editBounds.y + editBounds.height <= viewport.height, `${viewport.name}: Edit action should be visible in the viewport`);
+    await edit.click();
+    await page.getByRole('dialog', { name: 'Edit device' }).waitFor({ state: 'visible' });
+    const deleteButton = page.getByRole('button', { name: 'Delete device' });
+    assert.equal(await deleteButton.isVisible(), true, `${viewport.name}: Delete action should be reachable from Edit`);
+    assert.equal(await deleteButton.isEnabled(), true, `${viewport.name}: Delete action should be enabled`);
+    const deleteBounds = await deleteButton.boundingBox();
+    assert.ok(deleteBounds && deleteBounds.x >= 0 && deleteBounds.x + deleteBounds.width <= viewport.width && deleteBounds.y >= 0 && deleteBounds.y + deleteBounds.height <= viewport.height, `${viewport.name}: Delete action should fit within the viewport`);
+    await page.locator('#device-edit-cancel').click();
+    await page.close();
+  }
+});
+
 test('an already-open workspace waits through transient loss and resumes after coordinator recovery', async t => {
   const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
   t.after(() => browser.close());
