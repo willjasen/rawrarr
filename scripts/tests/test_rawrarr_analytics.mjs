@@ -47,10 +47,11 @@ test('analytics overlay configures both coordinator and Umami services without t
   assert.match(miniCompose, /RAWARR_ROLE: coordinator/);
 });
 
-test('internal dashboard Caddy route stays in the Tailscale namespace and proxies Umami at root', () => {
+test('internal dashboard Caddy route stays in the Tailscale namespace and separates dashboard from coordinator', () => {
   assert.match(internalDashboardCompose, /network_mode: service:tailscale/);
   assert.match(internalDashboardCompose, /rawrarr-internal-do3-analytics-caddy/);
-  assert.match(internalDashboardCaddy, /:8081 \{[\s\S]*reverse_proxy umami:3000/);
-  assert.doesNotMatch(internalDashboardCaddy, /127\.0\.0\.1:8080/);
+  assert.match(internalDashboardCompose, /image: rawrarr-umami:559e3c607c23-basepath-analytics/);
+  assert.match(internalDashboardCaddy, /handle \/analytics\* \{[\s\S]*reverse_proxy umami:3000/);
+  assert.match(internalDashboardCaddy, /handle \{[\s\S]*reverse_proxy 127\.0\.0\.1:8080/);
   assert.doesNotMatch(internalDashboardCompose, /ports:/);
 });
