@@ -29,7 +29,7 @@ test('Overview and device management stay separate, with age-encrypted name edit
   assert.match(html, /data-view="fossils"[^>]*>[\s\S]*?Fossils/);
   assert.match(html, /id="overview-view"><h1 class="page-title">Overview<\/h1>/);
   assert.match(html, /id="fossils-view"[\s\S]*?id="pending"[\s\S]*?id="nodes"/);
-  assert.match(workspace, /'overview', 'fossils', 'movies'/);
+  assert.match(workspace, /'overview', 'roarlay', 'fossils', 'movies'/);
   assert.match(workspace, /nameLabel\.className = 'device-name'/);
   assert.match(workspace, /deviceEditForm\.addEventListener\('submit'/);
   assert.match(workspace, /deviceEditDialog\.showModal\(\)/);

@@ -112,3 +112,21 @@ test('an already-open workspace waits through transient loss and resumes after c
   await page.waitForFunction(() => document.querySelector('#coordinator-pending-dialog')?.open === false, { timeout: 8000 });
   assert.equal(new URL(page.url()).hash, '#fossils', 'recovery preserves the current view route');
 });
+
+test('Roarlay page shows the coordinator health state separately from Fossils', async t => {
+  const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  const server = await serveWorkspace([]);
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  await page.goto(`http://127.0.0.1:${server.address().port}/#roarlay`);
+  await page.waitForFunction(() => document.querySelector('#roarlay-health-label')?.textContent === 'Responding');
+  assert.equal(new URL(page.url()).hash, '#roarlay');
+  assert.equal(await page.locator('#roarlay-view').isVisible(), true);
+  assert.equal(await page.locator('#fossils-view').isVisible(), false);
+  assert.match(await page.locator('#roarlay-address').textContent(), /^http:\/\/127\.0\.0\.1:/);
+  server.setCoordinatorOnline(false);
+  await page.click('#roarlay-health-refresh');
+  await page.waitForFunction(() => document.querySelector('#roarlay-health-label')?.textContent === 'Unavailable');
+  assert.match(await page.locator('#roarlay-health-detail').textContent(), /HTTP 503/);
+});
