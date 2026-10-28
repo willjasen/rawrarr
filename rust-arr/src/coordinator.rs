@@ -108,6 +108,12 @@ struct ApproveRequest {
     signed_payload: serde_json::Value,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RejectRequest {
+    request_id: Uuid,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct InstanceSigningRoot {
@@ -901,7 +907,7 @@ async fn reject_node(
     State(state): State<CoordinatorState>,
     Extension(auth): Extension<AuthState>,
     headers: HeaderMap,
-    Json(request): Json<ApproveRequest>,
+    Json(request): Json<RejectRequest>,
 ) -> StatusCode {
     let Some(owner_user_id) = crate::auth::authenticated_user_id(&auth, &headers).await else {
         return StatusCode::UNAUTHORIZED;

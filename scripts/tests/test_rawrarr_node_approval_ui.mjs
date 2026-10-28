@@ -63,6 +63,8 @@ test('the coordinator assigns enrollment to the signed-in account and filters ap
 
 test('reject removes only an owner-scoped pending request without approving it', () => {
   assert.match(coordinator, /\.route\("\/api\/workspace\/reject", post\(reject_node\)\)/);
+  assert.match(coordinator, /struct RejectRequest\s*\{\s*request_id: Uuid,/);
+  assert.match(coordinator, /async fn reject_node\([\s\S]*?Json\(request\): Json<RejectRequest>/);
   assert.match(coordinator, /DELETE FROM rawrarr_node_enrollments WHERE request_id=\$1 AND user_id=\$2 AND approved_at IS NULL/);
   assert.match(coordinatorWorkspace, /reject\.textContent = 'Reject'/);
   assert.match(coordinatorWorkspace, /jsonRequest\('\/api\/workspace\/reject', \{ method: 'POST'/);
