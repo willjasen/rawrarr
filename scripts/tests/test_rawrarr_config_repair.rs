@@ -132,5 +132,8 @@ async fn two_peer_rpc_reconcile_exchanges_a_signed_manifest_over_the_config_rout
     tokio::spawn(async move { let _=axum::serve(listener,app).await; });
     let sender=PeerRpc::fixture("node-a",&root_fingerprint,HashMap::from([("node-b".into(),format!("http://{address}"))]));
     let mirror=CiphertextMirror{client:None,root_fingerprint:root_fingerprint.clone()};
-    assert!(!sender.reconcile_once(&mirror,Path::new("/path/which/does/not/exist"),Some(&certificate),&PeerSyncStatus::default()).await);
+    let status=PeerSyncStatus::default();
+    assert!(!sender.reconcile_once(&mirror,Path::new("/path/which/does/not/exist"),Some(&certificate),&status).await);
+    let snapshot=status.snapshot();
+    assert_eq!(snapshot["reachablePeers"],serde_json::json!(["node-b"]));
 }
