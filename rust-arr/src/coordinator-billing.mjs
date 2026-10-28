@@ -2,6 +2,9 @@ const configElement = document.getElementById('payment-config');
 const donateButton = document.getElementById('donate');
 const subscribeButton = document.getElementById('subscribe');
 const planSelect = document.getElementById('plan');
+const billingStatus = document.getElementById('billing-status');
+const checkoutButton = document.getElementById('billing-checkout');
+const portalButton = document.getElementById('billing-portal');
 let config = null;
 
 async function requestJson(url, options = {}) {
@@ -86,6 +89,64 @@ subscribeButton.addEventListener('click', async () => {
 
 planSelect.addEventListener('change', updateSubscriptionButton);
 
+async function loadStripeBilling() {
+  try {
+    const billing = await requestJson('/api/workspace/billing');
+    checkoutButton.hidden = !billing.checkoutEnabled || ['active', 'trialing', 'past_due', 'unpaid', 'incomplete', 'paused'].includes(billing.subscriptionStatus);
+    portalButton.hidden = !billing.checkoutEnabled || !billing.customerLinked;
+    if (!billing.checkoutEnabled) {
+      billingStatus.textContent = 'Stripe test checkout is not configured on this public instance.';
+    } else if (billing.subscriptionStatus) {
+      const periodEnd = billing.currentPeriodEnd ? ` · current period ends ${new Date(billing.currentPeriodEnd).toLocaleString()}` : '';
+      const cancellation = billing.cancelAtPeriodEnd ? ' · cancellation is scheduled' : '';
+      billingStatus.textContent = `Test subscription status: ${billing.subscriptionStatus}${periodEnd}${cancellation}. Rawrarr access is not controlled by this test subscription.`;
+    } else {
+      billingStatus.textContent = billing.customerLinked
+        ? 'Stripe test customer linked; no current subscription is recorded.'
+        : 'No Stripe test subscription is linked to this account.';
+    }
+    const returned = new URLSearchParams(location.search).get('billing');
+    const feedback = document.getElementById('billing-feedback');
+    if (returned === 'success') feedback.textContent = 'Stripe Checkout completed in test mode. Subscription status appears here after Stripe delivers its webhook.';
+    if (returned === 'cancelled') feedback.textContent = 'Stripe test Checkout was canceled; no subscription was created.';
+    if (returned) {
+      const cleanUrl = new URL(location.href);
+      cleanUrl.searchParams.delete('billing');
+      history.replaceState(null, '', `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
+    }
+  } catch (error) {
+    checkoutButton.hidden = true;
+    portalButton.hidden = true;
+    billingStatus.textContent = error.message || 'Stripe test billing status is unavailable.';
+  }
+}
+
+checkoutButton.addEventListener('click', async () => {
+  checkoutButton.disabled = true;
+  billingStatus.textContent = 'Opening Stripe test Checkout…';
+  try {
+    const session = await requestJson('/api/workspace/billing/checkout', { method: 'POST' });
+    if (!session?.url) throw new Error('Stripe did not return a Checkout URL.');
+    window.location.assign(session.url);
+  } catch (error) {
+    billingStatus.textContent = error.message || 'Could not start Stripe test Checkout.';
+    checkoutButton.disabled = false;
+  }
+});
+
+portalButton.addEventListener('click', async () => {
+  portalButton.disabled = true;
+  billingStatus.textContent = 'Opening Stripe test billing portal…';
+  try {
+    const session = await requestJson('/api/workspace/billing/portal', { method: 'POST' });
+    if (!session?.url) throw new Error('Stripe did not return a billing portal URL.');
+    window.location.assign(session.url);
+  } catch (error) {
+    billingStatus.textContent = error.message || 'Could not open the Stripe test billing portal.';
+    portalButton.disabled = false;
+  }
+});
+
 try {
   config = await requestJson('/api/crypto/config');
   if (config.donationEnabled && config.treasuryAddress) {
@@ -99,3 +160,4 @@ try {
 } catch (error) {
   configElement.textContent = error.message || 'Could not load ETH payment options.';
 }
+void loadStripeBilling();

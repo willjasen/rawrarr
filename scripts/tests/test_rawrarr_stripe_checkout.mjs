@@ -4,12 +4,14 @@ import test from 'node:test';
 
 const root = new URL('../../', import.meta.url);
 const read = path => readFile(new URL(path, root), 'utf8');
-const [billing, coordinator, compose, workspace, script] = await Promise.all([
+const [billing, coordinator, compose, workspace, workspaceScript, billingPage, billingScript] = await Promise.all([
   read('rust-arr/src/coordinator_stripe.rs'),
   read('rust-arr/src/coordinator.rs'),
   read('deploy/do3/docker-compose.stripe-checkout.yml'),
   read('rust-arr/src/coordinator_workspace.html'),
   read('rust-arr/src/coordinator-workspace.mjs'),
+  read('rust-arr/src/coordinator_billing.html'),
+  read('rust-arr/src/coordinator-billing.mjs'),
 ]);
 
 test('checkout uses only a configured test key and validates the temporary one-dollar monthly price', () => {
@@ -39,7 +41,13 @@ test('do3 config mounts test billing credentials from host files and UI disclose
   assert.match(compose, /STRIPE_TEST_PRICE_ID_FILE: \/run\/secrets\/stripe-test-price-id/);
   assert.match(compose, /file: \/opt\/rawrarr-roarlay-prod\/secrets\/stripe-test-secret-key/);
   assert.match(compose, /file: \/opt\/rawrarr-roarlay-prod\/secrets\/stripe-test-price-id/);
-  assert.match(workspace, /temporary \$1\/month USD subscription through Stripe Checkout/);
-  assert.match(workspace, /does not change Rawrarr access or entitlements/i);
-  assert.match(script, /billing-status/);
+  assert.match(billingPage, /test mode/i);
+  assert.match(billingPage, /does not control Rawrarr access/i);
+  assert.match(billingPage, /id="billing-checkout"/);
+  assert.match(billingScript, /\/api\/workspace\/billing\/checkout/);
+  assert.match(billingScript, /\/api\/workspace\/billing\/portal/);
+  assert.match(billingScript, /get\('billing'\)/);
+  assert.doesNotMatch(workspace, /id="billing-checkout"|id="billing-status"/);
+  assert.doesNotMatch(workspaceScript, /loadBillingStatus|api\/workspace\/billing/);
+  assert.match(workspace, /href="\/billing">Manage subscription/);
 });

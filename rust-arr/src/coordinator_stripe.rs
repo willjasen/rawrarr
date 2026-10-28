@@ -189,11 +189,11 @@ fn checkout_params(
         ),
         (
             "success_url".into(),
-            format!("{origin}/?billing=success"),
+            format!("{origin}/billing?billing=success"),
         ),
         (
             "cancel_url".into(),
-            format!("{origin}/?billing=cancelled"),
+            format!("{origin}/billing?billing=cancelled"),
         ),
     ];
     if let Some(customer_id) = customer_id {
@@ -325,7 +325,7 @@ pub(super) async fn portal(
         ("customer".into(), customer_id),
         (
             "return_url".into(),
-            format!("{}/#settings", state.web_origin),
+            format!("{}/billing", state.web_origin),
         ),
     ];
     match create_session(&state, "billing_portal/sessions", &params, "billing.stripe.com").await {
@@ -363,7 +363,8 @@ mod tests {
         assert_eq!(params.get("client_reference_id").map(String::as_str), Some("9e1a96b4-0a43-4f40-9eb4-1e5e9ae68f17"));
         assert_eq!(params.get("metadata[rawrarr_account_id]"), params.get("subscription_data[metadata][rawrarr_account_id]"));
         assert_eq!(params.get("customer").map(String::as_str), Some("cus_test_123"));
-        assert_eq!(params.get("success_url").map(String::as_str), Some("https://rawrarr.willjasen.net/?billing=success"));
+        assert_eq!(params.get("success_url").map(String::as_str), Some("https://rawrarr.willjasen.net/billing?billing=success"));
+        assert_eq!(params.get("cancel_url").map(String::as_str), Some("https://rawrarr.willjasen.net/billing?billing=cancelled"));
     }
 
     #[test]

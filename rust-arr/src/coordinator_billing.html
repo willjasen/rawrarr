@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <link rel="icon" type="image/svg+xml" href="/assets/rawrarr-favicon.svg">
-  <title>ETH payments · rawrarr</title>
+  <title>Subscription · rawrarr</title>
   <style>
     :root { color-scheme:dark; --bg:#101411; --panel:#171d19; --line:#29332c; --text:#edf3ec; --muted:#96a397; --green:#a6e3a1 }
     * { box-sizing:border-box }
@@ -16,6 +16,7 @@
     h2 { margin:0 0 8px; font-size:20px }
     .muted { color:var(--muted) }
     .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; margin-top:22px }
+    .stripe { margin-top:22px }
     article { padding:20px; border:1px solid var(--line); border-radius:12px; background:var(--panel) }
     button,select,input { width:100%; margin-top:10px; padding:11px 12px; border:1px solid #46574a; border-radius:8px; color:var(--text); background:#202821; font:inherit }
     button { cursor:pointer } button:disabled { opacity:.55; cursor:wait }
@@ -26,8 +27,9 @@
 <body>
   <main>
     <a href="/">← rawrarr</a>
-    <h1>ETH payments</h1>
-    <p class="muted">Donations are voluntary and never change account access. Subscriptions currently renew manually on Ethereum mainnet. No recurring smart contract is used.</p>
+    <h1>Subscription</h1>
+    <p class="muted">Manage your Rawrarr subscription and support the project with an optional ETH donation.</p>
+    <p><a href="/#settings">Link or manage your ENS wallet in Settings</a></p>
     <p id="payment-config" role="status" aria-live="polite">Loading payment options…</p>
     <div class="cards">
       <article>
@@ -45,6 +47,16 @@
         <p id="subscription-message" role="status" aria-live="polite"></p>
       </article>
     </div>
+    <section class="stripe" aria-labelledby="stripe-title">
+      <article>
+        <h2 id="stripe-title">Stripe subscription</h2>
+        <p class="muted">Stripe checkout is currently in test mode. This test subscription does not control Rawrarr access.</p>
+        <p id="billing-status" role="status" aria-live="polite">Checking Stripe test billing…</p>
+        <button id="billing-checkout" type="button" hidden>Start test subscription</button>
+        <button id="billing-portal" type="button" hidden>Manage test subscription</button>
+        <p id="billing-feedback" role="status" aria-live="polite"></p>
+      </article>
+    </section>
   </main>
   <script type="module" src="/assets/coordinator-billing.mjs"></script>
 </body>
