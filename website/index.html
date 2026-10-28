@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f5f6f1">
+  <meta name="description" content="Rawrarr brings your Radarr and Sonarr libraries, devices, and storage together in a self-hosted media workspace.">
+  <link rel="canonical" href="https://rawrarr.net/">
+  <link rel="icon" type="image/png" href="/assets/rawrarr-logo.png">
+  <link rel="stylesheet" href="/styles.css">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="rawrarr — Your library. Your devices.">
+  <meta property="og:description" content="A self-hosted workspace for your media libraries and the devices you control.">
+  <meta property="og:url" content="https://rawrarr.net/">
+  <title>rawrarr — Your library. Your devices.</title>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header wrap">
+    <a class="brand" href="#top" aria-label="rawrarr home">
+      <img src="/assets/rawrarr-logo.png" alt="">
+      <span class="brand-tagline">all the arrs</span>
+    </a>
+    <nav aria-label="Main navigation">
+      <a href="#how-it-works">How it works</a>
+      <a href="#privacy">Privacy</a>
+      <a class="nav-cta" href="#project-status">Project status <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero wrap" id="top" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span> A self-hosted media workspace</p>
+        <h1 id="hero-title">Your library.<br><span>Your devices.</span></h1>
+        <p class="lede">Bring your Radarr and Sonarr libraries together with the devices and storage you control. Rawrarr gives your setup a shared view while your media stays on your own disks.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#how-it-works">See how Rawrarr fits <span aria-hidden="true">↓</span></a>
+          <a class="text-link" href="#privacy">Understand the privacy boundaries <span aria-hidden="true">→</span></a>
+        </div>
+        <p class="hero-note"><span aria-hidden="true">✳</span> Built for the devices you control.</p>
+      </div>
+
+      <div class="network-card" role="img" aria-label="Rawrarr connects your media metadata devices and storage through a coordinator">
+        <div class="network-grid" aria-hidden="true"></div>
+        <div class="network-label label-top"><span class="status-dot"></span> YOUR SETUP</div>
+        <div class="network-node node-fossil"><span class="node-icon">F</span><span><strong>Fossil</strong><small>Metadata node</small></span></div>
+        <div class="network-node node-roarlay"><span class="node-icon">R</span><span><strong>Roarlay</strong><small>Coordinator</small></span></div>
+        <div class="network-node node-boneyard"><span class="node-icon">B</span><span><strong>Boneyard</strong><small>Storage node</small></span></div>
+        <svg class="network-lines" viewBox="0 0 470 340" fill="none" aria-hidden="true">
+          <path d="M130 108C174 108 185 153 218 164" />
+          <path d="M252 164C292 153 304 108 344 108" />
+          <path d="M252 187C292 200 304 245 344 245" />
+          <circle cx="130" cy="108" r="4"/><circle cx="344" cy="108" r="4"/><circle cx="344" cy="245" r="4"/>
+        </svg>
+        <div class="network-center"><img src="/assets/rawrarr-logo.png" alt=""><span>your library, connected</span></div>
+        <div class="network-caption">A shared view of the pieces you run.</div>
+      </div>
+    </section>
+
+    <section class="intro-section" id="how-it-works" aria-labelledby="how-title">
+      <div class="wrap">
+        <div class="section-heading">
+          <p class="eyebrow">A better view of your setup</p>
+          <h2 id="how-title">Your media stack,<br class="mobile-break"> in one place.</h2>
+          <p>Rawrarr connects the tools you already use and helps your own devices share the work.</p>
+        </div>
+        <div class="steps">
+          <article class="step-card">
+            <span class="step-number">01 <span>LIBRARIES</span></span>
+            <h3>Bring your libraries into view</h3>
+            <p>Connect Radarr and Sonarr to browse movie and TV libraries in the Rawrarr workspace.</p>
+            <span class="step-mark mark-library" aria-hidden="true">▤</span>
+          </article>
+          <article class="step-card">
+            <span class="step-number">02 <span>DEVICES</span></span>
+            <h3>Use the devices you trust</h3>
+            <p>Coordinate approved metadata nodes and storage nodes as part of your own setup.</p>
+            <span class="step-mark mark-devices" aria-hidden="true">⌘</span>
+          </article>
+          <article class="step-card">
+            <span class="step-number">03 <span>STORAGE</span></span>
+            <h3>Keep files where they belong</h3>
+            <p>Storage nodes scan media where it lives. Rawrarr does not upload your media files to the coordinator.</p>
+            <span class="step-mark mark-storage" aria-hidden="true">⌂</span>
+          </article>
+        </div>
+        <div class="callout"><span class="callout-icon" aria-hidden="true">↗</span><p><strong>Rawrarr works alongside your media tools.</strong> It helps you see and coordinate your setup; Radarr and Sonarr remain the tools that manage their respective libraries.</p></div>
+      </div>
+    </section>
+
+    <section class="privacy-section" id="privacy" aria-labelledby="privacy-title">
+      <div class="wrap privacy-layout">
+        <div class="privacy-heading">
+          <p class="eyebrow">Privacy, clearly</p>
+          <h2 id="privacy-title">Useful boundaries.<br><span>Honest limits.</span></h2>
+          <p>Rawrarr is built around keeping your media and private keys under your control. Here is what that means today.</p>
+        </div>
+        <div class="privacy-details">
+          <div class="privacy-row"><span class="privacy-icon">01</span><p><strong>Your media stays on your storage.</strong> The coordinator handles device coordination; media files remain on storage you control.</p></div>
+          <div class="privacy-row"><span class="privacy-icon">02</span><p><strong>Private age identities stay with you.</strong> The coordinator does not need your age private identity.</p></div>
+          <div class="privacy-row"><span class="privacy-icon">03</span><p><strong>Coordination still reveals metadata.</strong> The coordinator can see account, device, routing, timing, and traffic-size information.</p></div>
+          <div class="privacy-row"><span class="privacy-icon">04</span><p><strong>Encryption support is still developing.</strong> Shared configuration and metadata are designed to be age-encrypted before synchronization; some content flows are incomplete or not yet verified end to end.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="status-section wrap" id="project-status" aria-labelledby="status-title">
+      <div class="status-panel">
+        <div class="status-symbol" aria-hidden="true"><span>r</span></div>
+        <div class="status-copy">
+          <p class="eyebrow">A project in progress</p>
+          <h2 id="status-title">Early, evolving, and still in development.</h2>
+          <p>Rawrarr is under active development. Features and workflows are still changing, and the project has not had an independent security audit. Treat its privacy and security goals as direction, not a certification of every current flow.</p>
+          <p class="status-footnote">Rawrarr is a media workspace, not a video player or a download client.</p>
+        </div>
+        <a class="status-link" href="#top" aria-label="Back to top">↑</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer wrap">
+    <a class="footer-brand" href="#top"><img src="/assets/rawrarr-logo.png" alt="rawrarr"><span>all the arrs</span></a>
+    <p>Self-hosted media workspace · Built for the devices you control.</p>
+    <a class="back-top" href="#top">Back to top ↑</a>
+  </footer>
+</body>
+</html>
