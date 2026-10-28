@@ -39,6 +39,24 @@ services:
       retries: 12
     restart: unless-stopped
 
+  umami-retention:
+    image: postgres:17-alpine
+    environment:
+      PGHOST: umami-postgres
+      PGPORT: "5432"
+      PGDATABASE: umami
+      PGUSER: umami
+      PGPASSWORD: ${RAWARR_ANALYTICS_DB_PASSWORD:?Set a strong analytics DB password}
+    volumes:
+      - ./deploy/analytics/retention.sql:/retention.sql:ro
+    networks:
+      - control
+    depends_on:
+      umami-postgres:
+        condition: service_healthy
+    command: ["sh", "-c", "while true; do psql -v ON_ERROR_STOP=1 -f /retention.sql || echo 'Umami retention purge failed; will retry in 24 hours' >&2; sleep 86400; done"]
+    restart: unless-stopped
+
 volumes:
   umami-postgres-data:
 
