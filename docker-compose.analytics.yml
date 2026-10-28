@@ -1,48 +1,7 @@
-# Optional Umami services for a coordinator Compose project that has a
-# `control` network. Roarlay proxies /analytics on its existing origin.
+# Coordinator-only analytics settings. This file does not start Umami or a database.
+# Analytics remain disabled unless both variables are explicitly configured.
 services:
   roarlay:
     environment:
       RAWARR_ANALYTICS_SITE_ID: ${RAWARR_ANALYTICS_SITE_ID:-}
-      RAWARR_ANALYTICS_UPSTREAM: http://umami:3000
-
-  umami:
-    image: ghcr.io/umami-software/umami:3.4.1
-    networks:
-      - control
-    environment:
-      DATABASE_URL: postgresql://umami:${RAWARR_ANALYTICS_DB_PASSWORD:?Set a strong analytics DB password}@umami-postgres:5432/umami
-      APP_SECRET: ${RAWARR_ANALYTICS_APP_SECRET:?Set a random Umami app secret}
-      TWO_FACTOR_ENCRYPTION_KEY: ${RAWARR_ANALYTICS_2FA_KEY:?Set a 64-character hex Umami 2FA key}
-      DISABLE_TELEMETRY: "1"
-    depends_on:
-      umami-postgres:
-        condition: service_healthy
-    ports:
-      - "127.0.0.1:${RAWARR_ANALYTICS_PORT:-7300}:3000"
-    restart: unless-stopped
-
-  umami-postgres:
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_DB: umami
-      POSTGRES_USER: umami
-      POSTGRES_PASSWORD: ${RAWARR_ANALYTICS_DB_PASSWORD:?Set a strong analytics DB password}
-    volumes:
-      - umami-postgres-data:/var/lib/postgresql/data
-    networks:
-      - control
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U umami -d umami"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
-    restart: unless-stopped
-
-volumes:
-  umami-postgres-data:
-
-networks:
-  control:
-    external: true
-    name: ${RAWARR_ANALYTICS_NETWORK:?Set the coordinator private Docker network name}
+      RAWARR_ANALYTICS_UPSTREAM: ${RAWARR_ANALYTICS_UPSTREAM:-}
