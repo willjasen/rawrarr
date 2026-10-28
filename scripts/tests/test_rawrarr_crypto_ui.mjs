@@ -63,6 +63,31 @@ test('crypto payments browser regressions', async t => {
   const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
   t.after(() => browser.close());
 
+  await t.test('subscription page stays usable on desktop and narrow mobile viewports', async () => {
+    for (const viewport of [{ width: 1280, height: 800 }, { width: 375, height: 812 }]) {
+      const page = await browser.newPage({ viewport });
+      await serveBilling(page, async route => {
+        const path = new URL(route.request().url()).pathname;
+        if (path === '/api/crypto/config') return route.fulfill({ json: { chainId: 1, treasuryAddress: '0x2222222222222222222222222222222222222222', donationEnabled: true, subscriptionsEnabled: true, monthlyPriceWei: '25000000000000000', annualPriceWei: '250000000000000000', currency: 'ETH' } });
+        if (path === '/api/workspace/billing') return route.fulfill({ json: { checkoutEnabled: true, customerLinked: false, subscriptionStatus: null } });
+        return route.fulfill({ status: 404, json: { error: `unexpected API path ${path}` } });
+      });
+      await page.waitForFunction(() => document.getElementById('billing-status')?.textContent.includes('No Stripe test subscription'));
+      const geometry = await page.evaluate(() => ({ width: window.innerWidth, documentWidth: document.documentElement.scrollWidth }));
+      assert.ok(geometry.documentWidth <= geometry.width, `horizontal overflow at ${viewport.width}px: ${geometry.documentWidth}px`);
+      assert.equal(await page.getByRole('heading', { name: 'Subscription', exact: true }).isVisible(), true);
+      for (const selector of ['#donate', '#subscribe', '#billing-checkout']) {
+        const action = page.locator(selector);
+        await action.scrollIntoViewIfNeeded();
+        assert.equal(await action.isVisible(), true, `${selector} is hidden at ${viewport.width}px`);
+        const rect = await action.boundingBox();
+        assert.ok(rect.width > 0 && rect.height > 0, `${selector} has no usable size at ${viewport.width}px`);
+        assert.ok(rect.x >= 0 && rect.x + rect.width <= viewport.width, `${selector} exceeds the viewport at ${viewport.width}px`);
+      }
+      await page.close();
+    }
+  });
+
   await t.test('donations stay available without account sign-in and do not call subscription claims', async () => {
     const page = await browser.newPage();
     await page.addInitScript(() => {
@@ -251,12 +276,14 @@ test('crypto payments browser regressions', async t => {
     assert.match(coordinatorRust, /Err\(_\) => return StatusCode::SERVICE_UNAVAILABLE/);
   });
 
-  await t.test('workspace surfaces tier limits, wallet linking, and billing', async () => {
+  await t.test('workspace surfaces tier limits, wallet linking, and Subscription navigation', async () => {
     assert.match(workspaceHtml, /crypto-access-status/);
     assert.match(workspaceHtml, /crypto-wallet-link-form/);
-    assert.match(workspaceHtml, /Subscription and ETH donations/);
+    assert.match(workspaceHtml, /href="\/billing">Manage subscription/);
+    assert.doesNotMatch(workspaceHtml, /id="billing-checkout"|id="billing-status"/);
     assert.match(workspaceScript, /Free tier · \$\{access\.fossilNodes\} of \$\{access\.fossilNodeLimit\} fossil nodes/);
     assert.match(workspaceScript, /api\/auth\/eth\/link\/finish/);
+    assert.doesNotMatch(workspaceScript, /api\/workspace\/billing/);
   });
 
   await t.test('server makes donations independent and requires exact finalized mainnet subscription transfers', async () => {
