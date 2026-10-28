@@ -9,12 +9,12 @@ Make the internal Umami dashboard available at `https://rawrarr.risk-mermaid.ts.
 ## Change
 
 - Add an internal-only Caddy service in the internal coordinator's shared Tailscale network namespace. It forwards `/analytics*` to the internal Umami service and all other requests to the existing coordinator on `127.0.0.1:8080`.
-- Configure the internal Umami instance with `BASE_PATH=/analytics`. Leave the public Umami instance's base path unset; its tracker continues through the existing coordinator allow-list proxy.
+- Configure the internal Umami instance with `BASE_PATH=/analytics` in the internal-only Compose overlay. Leave the public Umami instance's base path unset; its tracker continues through the existing coordinator allow-list proxy.
 - Tailscale Serve HTTPS 443 routes to Caddy at `127.0.0.1:8081`. No public Caddy site, public DNS, PostgreSQL port, or public dashboard route is added.
 
 ## Rollout
 
-Publish and merge this change first. On do3, deploy only from the matching GitHub `main` archive. Back up the internal Tailscale Serve configuration before changing the HTTPS target. Acquire the internal Tailscale sidecar deployment lock, apply the analytics base path, start the internal Caddy service, then update only the existing HTTPS 443 Serve target to `http://127.0.0.1:8081`. Preserve TCP handlers and all unrelated Serve configuration. Release locks after verification.
+Publish and merge this change first. On do3, deploy only from the matching GitHub `main` archive. Back up the internal Tailscale Serve configuration before changing the HTTPS target. Acquire the internal Tailscale sidecar deployment lock, recreate only the internal Umami service with the new base path, start the internal Caddy service, then update only the existing HTTPS 443 Serve target to `http://127.0.0.1:8081`. Preserve TCP handlers and all unrelated Serve configuration. Release locks after verification.
 
 ## Verification
 
@@ -25,4 +25,4 @@ Publish and merge this change first. On do3, deploy only from the matching GitHu
 
 ## Rollback
 
-Restore the prior internal Tailscale Serve HTTPS target (`http://127.0.0.1:8080`), remove only the internal Caddy service, and unset `RAWARR_ANALYTICS_BASE_PATH` for the internal Umami service. Preserve both analytics PostgreSQL volumes and the Tailscale state volume. Confirm the HTTPS health route still identifies roarlay.
+Restore the prior internal Tailscale Serve HTTPS target (`http://127.0.0.1:8080`), remove only the internal Caddy service, and recreate internal Umami using only the base analytics Compose file. Preserve both analytics PostgreSQL volumes and the Tailscale state volume. Confirm the HTTPS health route still identifies roarlay.
