@@ -60,6 +60,14 @@ test('coordinator labels the Sonarr section TV in navigation and its page headin
   assert.match(workspaceScript, /catch \(error\) \{[\s\S]*?moviesPanel\.replaceChildren\(\);\s*updateAgeIdControls\(\);\s*contentStatus\.textContent/);
 });
 
+test('left navigation renders every visible option in lowercase', () => {
+  const sidebar = workspace.match(/<aside aria-label="Main navigation">([\s\S]*?)<\/aside>/)?.[1];
+  assert.ok(sidebar, 'main navigation sidebar exists');
+  assert.match(workspace, /\.nav-text\s*\{[^}]*text-transform:\s*lowercase/i);
+  const labels = [...sidebar.matchAll(/<span class="nav-text">([^<]+)<\/span>/g)].map(([, label]) => label);
+  assert.deepEqual(labels.map(label => label.toLowerCase()), ['overview', 'fossils', 'movies', 'tv', 'rawrs', 'configuration', 'settings', 'about']);
+});
+
 test('Movies and TV cached library data stays hidden until an age ID is loaded', () => {
   assert.match(workspaceScript, /async function unlockMetadata\(\) \{[\s\S]*?if \(!selectedNode \|\| !identity\) return;/);
   assert.match(workspaceScript, /if \(view === 'movies' && updateHash\) \{[\s\S]*?if \(ageIdentityInMemory && selectedNode\) void unlockMetadata\(\)/);
