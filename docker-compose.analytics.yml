@@ -14,7 +14,6 @@ services:
       DATABASE_URL: postgresql://umami:${RAWARR_ANALYTICS_DB_PASSWORD:?Set a strong analytics DB password}@umami-postgres:5432/umami
       APP_SECRET: ${RAWARR_ANALYTICS_APP_SECRET:?Set a random Umami app secret}
       TWO_FACTOR_ENCRYPTION_KEY: ${RAWARR_ANALYTICS_2FA_KEY:?Set a 64-character hex Umami 2FA key}
-      BASE_PATH: ${RAWARR_ANALYTICS_BASE_PATH:-}
       DISABLE_TELEMETRY: "1"
     depends_on:
       umami-postgres:
