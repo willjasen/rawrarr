@@ -1322,7 +1322,7 @@ fn with_analytics_tracker(mut page: String, web_origin: &str) -> String {
 fn analytics_upstream() -> Option<reqwest::Url> {
     let url = reqwest::Url::parse(&env::var("RAWARR_ANALYTICS_UPSTREAM").ok()?).ok()?;
     (url.scheme() == "http"
-        && url.host_str() == Some("127.0.0.1")
+        && url.host_str() == Some("umami")
         && url.port() == Some(3000)
         && url.path() == "/"
         && url.query().is_none()
