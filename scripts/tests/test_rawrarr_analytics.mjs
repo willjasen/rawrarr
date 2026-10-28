@@ -4,12 +4,14 @@ import { readFile } from 'node:fs/promises';
 
 const root = new URL('../../', import.meta.url);
 const read = path => readFile(new URL(path, root), 'utf8');
-const [coordinator, analyticsCompose, publicCompose, miniCompose, do3Compose] = await Promise.all([
+const [coordinator, analyticsCompose, publicCompose, miniCompose, do3Compose, internalDashboardCompose, internalDashboardCaddy] = await Promise.all([
   read('rust-arr/src/coordinator.rs'),
   read('docker-compose.analytics.yml'),
   read('docker-compose.coordinator.yml'),
   read('docker-compose.internal-mini.yml'),
   read('deploy/do3/docker-compose.internal-coordinator.yml'),
+  read('deploy/do3/docker-compose.analytics-dashboard-internal.yml'),
+  read('deploy/do3/analytics-dashboard-internal.Caddyfile'),
 ]);
 
 test('coordinator analytics are opt-in and only emit a fixed page label', () => {
@@ -43,4 +45,13 @@ test('analytics overlay configures both coordinator and Umami services without t
   assert.match(do3Compose, /RAWARR_ROLE: coordinator/);
   assert.match(publicCompose, /RAWARR_ROLE: coordinator/);
   assert.match(miniCompose, /RAWARR_ROLE: coordinator/);
+});
+
+test('internal dashboard Caddy route stays in the Tailscale namespace and proxies other paths to roarlay', () => {
+  assert.match(analyticsCompose, /BASE_PATH: \$\{RAWARR_ANALYTICS_BASE_PATH:-\}/);
+  assert.match(internalDashboardCompose, /network_mode: service:tailscale/);
+  assert.match(internalDashboardCompose, /rawrarr-internal-do3-analytics-caddy/);
+  assert.match(internalDashboardCaddy, /handle \/analytics\* \{[\s\S]*reverse_proxy umami:3000/);
+  assert.match(internalDashboardCaddy, /handle \{[\s\S]*reverse_proxy 127\.0\.0\.1:8080/);
+  assert.doesNotMatch(internalDashboardCompose, /ports:/);
 });
