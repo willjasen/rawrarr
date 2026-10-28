@@ -266,6 +266,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
     };
     let public = Router::new()
         .route("/", get(coordinator_home))
+        .route("/analytics/{*path}", any(coordinator_analytics_proxy))
         .route("/auth", get(coordinator_auth_page))
         .route("/billing", get(coordinator_billing_page))
         .route("/health", get(coordinator_health))
@@ -1287,13 +1288,91 @@ async fn coordinator_home(
     State(state): State<CoordinatorState>,
     headers: HeaderMap,
 ) -> Response {
-    let mut response = if crate::auth::is_authenticated(&state.coordinator_auth, &headers).await {
-        axum::response::Html(crate::ui_assets::text("coordinator_workspace.html", include_str!("coordinator_workspace.html")).await).into_response()
+    let page = if crate::auth::is_authenticated(&state.coordinator_auth, &headers).await {
+        crate::ui_assets::text("coordinator_workspace.html", include_str!("coordinator_workspace.html")).await
     } else {
-        axum::response::Html(crate::ui_assets::text("landing.html", include_str!("landing.html")).await).into_response()
+        crate::ui_assets::text("landing.html", include_str!("landing.html")).await
     };
+    let mut response = axum::response::Html(with_analytics_tracker(page, &state.web_origin)).into_response();
     response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
+}
+
+/// Add the optional, deployment-configured Umami tracker to coordinator pages.
+/// Keep automatic URL collection disabled: the app can contain sensitive paths
+/// and query strings, so analytics receives only a fixed page label.
+fn with_analytics_tracker(mut page: String, web_origin: &str) -> String {
+    let Some(site_id) = env::var("RAWARR_ANALYTICS_SITE_ID").ok().filter(|value| {
+        !value.is_empty() && value.len() <= 80 && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"-_".contains(&byte))
+    }) else {
+        return page;
+    };
+    if analytics_upstream().is_none() {
+        return page;
+    }
+    let tracker = format!(
+        r#"<script defer src="/analytics/script.js" data-host-url="{web_origin}/analytics" data-website-id="{site_id}" data-auto-track="false"></script><script>window.addEventListener('load',function(){{if(window.umami)window.umami.track({{website:'{site_id}',url:'/coordinator',title:'Rawrarr coordinator'}})}});</script>"#
+    );
+    if let Some(head_end) = page.to_ascii_lowercase().find("</head>") {
+        page.insert_str(head_end, &tracker);
+    }
+    page
+}
+
+fn analytics_upstream() -> Option<reqwest::Url> {
+    let url = reqwest::Url::parse(&env::var("RAWARR_ANALYTICS_UPSTREAM").ok()?).ok()?;
+    (url.scheme() == "http"
+        && url.host_str() == Some("127.0.0.1")
+        && url.port() == Some(3000)
+        && url.path() == "/"
+        && url.query().is_none()
+        && url.fragment().is_none())
+    .then_some(url)
+}
+
+async fn coordinator_analytics_proxy(request: Request) -> Response {
+    let path = request.uri().path().strip_prefix("/analytics/").unwrap_or_default();
+    let method = request.method().clone();
+    if !matches!((method.clone(), path), (Method::GET, "script.js") | (Method::POST, "api/send")) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let Some(mut upstream) = analytics_upstream() else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    upstream.set_path(path);
+    let user_agent = request.headers().get(header::USER_AGENT).cloned();
+    let content_type = request.headers().get(header::CONTENT_TYPE).cloned();
+    let client_ip = request.headers().get("true-client-ip")
+        .or_else(|| request.headers().get(header::X_FORWARDED_FOR))
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(',').next())
+        .map(str::trim)
+        .filter(|value| value.parse::<std::net::IpAddr>().is_ok())
+        .map(str::to_owned);
+    let body = match to_bytes(request.into_body(), 64 * 1024).await {
+        Ok(body) => body,
+        Err(_) => return StatusCode::PAYLOAD_TOO_LARGE.into_response(),
+    };
+    let client = reqwest::Client::new();
+    let mut outbound = client.request(method, upstream).body(body);
+    if let Some(value) = user_agent { outbound = outbound.header(header::USER_AGENT.as_str(), value); }
+    if let Some(value) = content_type { outbound = outbound.header(header::CONTENT_TYPE.as_str(), value); }
+    if let Some(value) = client_ip { outbound = outbound.header(header::X_FORWARDED_FOR.as_str(), value); }
+    let response = match outbound.send().await {
+        Ok(response) => response,
+        Err(_) => return StatusCode::BAD_GATEWAY.into_response(),
+    };
+    let status = StatusCode::from_u16(response.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+    let response_type = response.headers().get(header::CONTENT_TYPE).cloned();
+    let response_body = match response.bytes().await {
+        Ok(body) if body.len() <= 1024 * 1024 => body,
+        _ => return StatusCode::BAD_GATEWAY.into_response(),
+    };
+    let mut result = Response::new(Body::from(response_body));
+    *result.status_mut() = status;
+    if let Some(value) = response_type { result.headers_mut().insert(header::CONTENT_TYPE, value); }
+    result.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    result
 }
 
 async fn coordinator_auth_page(

@@ -5,6 +5,7 @@
 - [Production deployment plan](production-deployment-plan.md) — start with coordinator-local PostgreSQL, production launch requirements, and a future managed-database migration path.
 - [Admin console](admin-console.md) — private, separate-container dashboard preview, network boundaries, and the authentication gate required before live account data.
 - [Stripe service](stripe-service.md) — hosted webhook intake, account linkage, database boundary, and current billing limitations.
+- [Coordinator analytics](coordinator-analytics.md) — optional self-hosted Umami analytics with fixed, privacy-limited coordinator pageviews.
 
 Start here for the current project state and everyday use:
 
