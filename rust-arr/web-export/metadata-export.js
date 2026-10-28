@@ -29,6 +29,15 @@ async function decrypt(identity, ciphertext, type = 'uint8array') {
   throw new Error('Could not decrypt this age file. Check the private ID and selected metadata.');
 }
 
+function normalizePostQuantumIdentity(value) {
+  const lines = String(value).split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const identities = lines.filter(line => line.startsWith('AGE-SECRET-KEY-PQ-1'));
+  if (identities.length !== 1 || lines.some(line => line !== identities[0] && !line.startsWith('#'))) {
+    throw new Error('The group identity envelope is invalid.');
+  }
+  return identities[0];
+}
+
 async function fetchBytes(url) {
   const response = await fetch(url, { cache: 'no-store', credentials: 'include', headers: { Accept: 'application/octet-stream' } });
   if (!response.ok) throw new Error(`Could not fetch encrypted metadata (${response.status})`);
@@ -44,10 +53,23 @@ async function resolveGroupIdentity(userIdentity, base) {
   if (response.status === 404) return userIdentity;
   if (!response.ok) throw new Error('Could not read the group identity envelope for this user.');
   const ciphertext = new Uint8Array(await response.arrayBuffer());
-  const plaintext = await decrypt(userIdentity, ciphertext, 'text');
-  ciphertext.fill(0);
-  const groupIdentity = String(plaintext).trim();
-  if (!groupIdentity.startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('The group identity envelope is invalid.');
+  let plaintext;
+  try { plaintext = await decrypt(userIdentity, ciphertext); }
+  finally { ciphertext.fill(0); }
+  let groupIdentity;
+  try { groupIdentity = normalizePostQuantumIdentity(decoder.decode(plaintext)); }
+  finally { plaintext.fill(0); }
+  let groupRecipient;
+  try { groupRecipient = await age.identityToRecipient(groupIdentity); }
+  catch { throw new Error('The group identity envelope is invalid.'); }
+  const recipientResponse = await fetch(`${prefix}api/metadata/export/recipient`, {
+    cache: 'no-store', credentials: 'include', headers: { Accept: 'text/plain' },
+  });
+  if (!recipientResponse.ok) throw new Error('Could not read the shared group recipient.');
+  const publishedRecipient = (await recipientResponse.text()).trim();
+  if (groupRecipient !== publishedRecipient) {
+    throw new Error('The group identity envelope does not match the shared group recipient.');
+  }
   return groupIdentity;
 }
 
@@ -86,29 +108,30 @@ async function prepareGroupIdentityForDevice(userIdentity, apiBase = '/api') {
   const userEnvelope = new Uint8Array(await envelopeResponse.arrayBuffer());
   const groupIdentityBytes = new Uint8Array(await decrypt(userIdentity, userEnvelope));
   userEnvelope.fill(0);
-  const groupIdentity = decoder.decode(groupIdentityBytes).trim();
-  if (!groupIdentity.startsWith('AGE-SECRET-KEY-PQ-1')) {
+  let groupIdentity;
+  try { groupIdentity = normalizePostQuantumIdentity(decoder.decode(groupIdentityBytes)); }
+  catch (error) {
     groupIdentityBytes.fill(0);
-    throw new Error('The group identity envelope is invalid.');
+    throw error;
   }
-  const recipientResponse = await fetch(`${prefix}/metadata/export/node-recipient`, {
-    cache: 'no-store', credentials: 'include', headers: { Accept: 'text/plain' },
-  });
-  if (!recipientResponse.ok) {
-    groupIdentityBytes.fill(0);
-    throw new Error('Could not read this device’s public age recipient.');
-  }
-  const encrypter = new age.Encrypter();
-  encrypter.addRecipient((await recipientResponse.text()).trim());
-  const ciphertext = new Uint8Array(await encrypter.encrypt(groupIdentityBytes));
   groupIdentityBytes.fill(0);
+  const normalizedGroupIdentityBytes = encoder.encode(groupIdentity);
   try {
-    const installed = await fetch(`${prefix}/settings/age/group-identity`, {
-      method: 'PUT', cache: 'no-store', credentials: 'include',
-      headers: { 'Content-Type': 'application/octet-stream' }, body: ciphertext,
+    const recipientResponse = await fetch(`${prefix}/metadata/export/node-recipient`, {
+      cache: 'no-store', credentials: 'include', headers: { Accept: 'text/plain' },
     });
-    if (!installed.ok) throw new Error(`Could not install the group identity on this device (${installed.status}).`);
-  } finally { ciphertext.fill(0); }
+    if (!recipientResponse.ok) throw new Error('Could not read this device’s public age recipient.');
+    const encrypter = new age.Encrypter();
+    encrypter.addRecipient((await recipientResponse.text()).trim());
+    const ciphertext = new Uint8Array(await encrypter.encrypt(normalizedGroupIdentityBytes));
+    try {
+      const installed = await fetch(`${prefix}/settings/age/group-identity`, {
+        method: 'PUT', cache: 'no-store', credentials: 'include',
+        headers: { 'Content-Type': 'application/octet-stream' }, body: ciphertext,
+      });
+      if (!installed.ok) throw new Error(`Could not install the group identity on this device (${installed.status}).`);
+    } finally { ciphertext.fill(0); }
+  } finally { normalizedGroupIdentityBytes.fill(0); }
   return true;
 }
 
