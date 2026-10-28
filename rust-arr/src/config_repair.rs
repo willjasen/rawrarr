@@ -151,7 +151,7 @@ impl PeerSyncStatus {
     }
 
     #[cfg(test)]
-    fn update_for_test(&self, root: &str, matching: usize, configured: usize) { self.update(root.to_owned(), matching, configured, Vec::new()); }
+    fn update_for_test(&self, root: &str, matching: usize, configured: usize, reachable: Vec<String>) { self.update(root.to_owned(), matching, configured, reachable); }
 }
 
 impl PeerRpc {

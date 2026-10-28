@@ -36,6 +36,13 @@ fn configured_merkle_peer_count_excludes_the_local_node() {
 }
 
 #[test]
+fn peer_status_exposes_successfully_reached_tailnet_peers() {
+    let status=PeerSyncStatus::default();
+    status.update_for_test("root",0,1,vec!["node-b".into()]);
+    assert_eq!(status.snapshot()["reachablePeers"],serde_json::json!(["node-b"]));
+}
+
+#[test]
 fn repaired_config_is_written_as_exact_private_ciphertext() {
     let root=std::env::temp_dir().join(format!("rawrarr-config-repair-{}",uuid::Uuid::new_v4().simple()));
     let path=root.join("shared").join("config.aged");
@@ -132,8 +139,5 @@ async fn two_peer_rpc_reconcile_exchanges_a_signed_manifest_over_the_config_rout
     tokio::spawn(async move { let _=axum::serve(listener,app).await; });
     let sender=PeerRpc::fixture("node-a",&root_fingerprint,HashMap::from([("node-b".into(),format!("http://{address}"))]));
     let mirror=CiphertextMirror{client:None,root_fingerprint:root_fingerprint.clone()};
-    let status=PeerSyncStatus::default();
-    assert!(!sender.reconcile_once(&mirror,Path::new("/path/which/does/not/exist"),Some(&certificate),&status).await);
-    let snapshot=status.snapshot();
-    assert_eq!(snapshot["reachablePeers"],serde_json::json!(["node-b"]));
+    assert!(!sender.reconcile_once(&mirror,Path::new("/path/which/does/not/exist"),Some(&certificate),&PeerSyncStatus::default()).await);
 }

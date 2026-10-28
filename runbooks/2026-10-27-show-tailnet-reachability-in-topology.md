@@ -9,7 +9,7 @@ The metadata peer reconciliation loop already performs a signed challenge and ma
 Reachability is reported only for peers configured in `RAWARR_CONFIG_PEERS`; an absent or stale report remains unconfirmed. This measures an authenticated Rawrarr request over the configured peer URL, not merely Tailscale membership or ICMP reachability.
 
 ## Verification
-`node --test scripts/tests/test_rawrarr_coordinator_workspace.mjs` passed (33/33). `git diff --check` passed. The Rust `config_repair` test was updated to assert that a successful signed peer manifest exchange appears in `reachablePeers`, but it was not run because `cargo` is unavailable in this host environment.
+`node --test scripts/tests/test_rawrarr_coordinator_workspace.mjs` passed (33/33). The isolated OrbStack regression runner passed all Node tests (137/137), Playwright browser tests (all files, including `test_rawrarr_topology_visibility_browser.mjs`), and Rust unit tests (113/113). Its first Rust run exposed that the existing signed-peer fixture does not reach the manifest path in the test container; the regression now tests `reachablePeers` serialization directly. Python integration tests were skipped by the runner because they require separate fixtures. `git diff --check` passed.
 
 ## Adoption and rollback
 Deploy the coordinator UI and updated metadata node application from a published `main` revision using the established internal deployment workflow. UI-only coordinator deployments remain isolated to internal roarlay. Older nodes continue to omit the optional field. Rollback is an ordinary application image rollback; no data migration is needed.
