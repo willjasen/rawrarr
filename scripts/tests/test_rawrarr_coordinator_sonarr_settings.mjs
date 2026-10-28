@@ -132,8 +132,11 @@ test('coordinator saves Radarr and Sonarr settings over the direct metadata rout
   assert.equal(await page.locator('#settings-sonarr-saved-url').textContent(), 'https://sonarr.example.test');
   assert.equal(await page.locator('#settings-sonarr-key').inputValue(), '');
   assert.doesNotMatch(await page.locator('#settings-sonarr-saved').textContent(), /sonarr-secret-api-key/);
+  await page.click('#settings-configure-sonarr');
+  await page.locator('#settings-sonarr-dialog').waitFor({ state: 'visible' });
   await page.click('#settings-clear-sonarr');
-  await page.locator('#settings-sonarr-settings-message').getByText('Sonarr settings cleared from the age-encrypted config.').waitFor();
+  await page.locator('#settings-sonarr-saved').waitFor({ state: 'hidden' });
+  await page.getByRole('button', { name: 'Configure Sonarr' }).waitFor({ state: 'visible' });
   await page.click('[data-view="series"]');
   await page.locator('#sonarr-connection-card').waitFor({ state: 'visible' });
   assert.equal(await page.locator('#tv-library').isVisible(), false);
@@ -167,8 +170,11 @@ test('coordinator saves Radarr and Sonarr settings over the direct metadata rout
   assert.equal(await page.locator('#settings-radarr-ui-username').inputValue(), '');
   assert.equal(await page.locator('#settings-radarr-ui-password').inputValue(), '');
   assert.doesNotMatch(await page.locator('#settings-radarr-saved').textContent(), /radarr-secret-api-key/);
+  await page.click('#settings-configure-radarr');
+  await page.locator('#settings-radarr-dialog').waitFor({ state: 'visible' });
   await page.click('#settings-clear-radarr');
-  await page.locator('#settings-radarr-settings-message').getByText('Radarr settings cleared from the age-encrypted config.').waitFor();
+  await page.locator('#settings-radarr-saved').waitFor({ state: 'hidden' });
+  await page.getByRole('button', { name: 'Configure Radarr' }).waitFor({ state: 'visible' });
   await page.click('[data-view="movies"]');
   await page.locator('#radarr-connection-card').waitFor({ state: 'visible' });
   assert.equal(radarr, null);
@@ -250,6 +256,8 @@ test('age ID is remembered after validation, restored on reload, and cleared on 
   const identity = 'AGE-SECRET-KEY-PQ-1remembered-test-fixture';
   let vaultUnlocked = false;
   let releaseAgeCheck;
+  let signalAgeCheckStarted;
+  const ageCheckStarted = new Promise(resolve => { signalAgeCheckStarted = resolve; });
   let delayAgeCheck = true;
   await page.route('http://rawrarr.test/**', async route => {
     const request = route.request();
@@ -271,7 +279,10 @@ test('age ID is remembered after validation, restored on reload, and cleared on 
     if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'GET') {
       if (delayAgeCheck) {
         delayAgeCheck = false;
-        await new Promise(resolve => { releaseAgeCheck = resolve; });
+        await new Promise(resolve => {
+          releaseAgeCheck = resolve;
+          signalAgeCheckStarted();
+        });
       }
       return route.fulfill({ json: { unlocked: vaultUnlocked, encryptedConfigExists: true } });
     }
@@ -294,6 +305,7 @@ test('age ID is remembered after validation, restored on reload, and cleared on 
   await page.click('#unlock');
   await page.waitForFunction(key => localStorage.getItem('rawrarr.browser.age-id') === key, identity);
   assert.equal(await page.evaluate(key => localStorage.getItem('rawrarr.browser.age-id') === key, identity), true, 'persist the locally validated ID before waiting on the node');
+  await ageCheckStarted;
   releaseAgeCheck();
   await page.waitForFunction(() => document.getElementById('age-id').value === '');
   await page.waitForFunction(key => localStorage.getItem('rawrarr.browser.age-id') === key, identity);

@@ -248,6 +248,13 @@
     @media(max-width:560px) { .about-hero { padding:24px 20px; border-radius:16px } .about-hero::after { right:-180px } .about-privacy { padding:13px } }
     .settings-connections { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr)); gap:16px; margin-top:18px }
     .settings-connections .connection-card { margin:0; max-width:none }
+    .settings-connections .connection-card { padding:16px 18px }
+    .settings-connections .connection-intro { margin:6px 0 10px }
+    .settings-connections .connection-saved { margin:8px 0; padding:9px 11px }
+    .arr-settings-dialog { width:min(540px,calc(100% - 28px)); max-height:85vh; overflow:auto; border:1px solid #39463d; border-radius:14px; background:#151b18; color:var(--text); padding:22px }
+    .arr-settings-dialog::backdrop { background:#050806bb; backdrop-filter:blur(3px) }
+    .arr-settings-dialog .connection-form { width:100%; max-width:none }
+    .arr-settings-dialog[open] { display:block }
     .age-security-warning { max-width:640px; margin:7px 0 0; color:#e5c889; font-size:12px }
     .age-storage-card { max-width:780px; margin:18px 0; padding:20px; border:1px solid var(--line); border-radius:12px; background:linear-gradient(135deg,#18211a,#131915 72%) }
     .age-storage-card h2 { margin:0; font-size:18px }
@@ -443,13 +450,16 @@
         <p id="billing-feedback" class="connection-message" role="status" aria-live="polite"></p>
       </article>
       <h2 style="margin:26px 0 4px">Media service connections</h2>
-      <p class="connection-intro">Save Radarr and Sonarr details to the selected metadata node's age-encrypted config. API keys and the optional Radarr UI login go directly from this browser to that node and are never shown after saving.</p>
+      <p class="connection-intro">Connect services to the selected fossil. Credentials are tested and saved by that node in its age-encrypted config; roarlay never receives them.</p>
       <div class="settings-connections">
         <article class="connection-card" aria-labelledby="settings-radarr-title">
           <h2 id="settings-radarr-title">Radarr</h2>
           <div id="settings-radarr-saved" class="connection-saved" hidden role="status" aria-live="polite"><strong>Radarr details saved</strong><span id="settings-radarr-saved-url" class="connection-saved-url"></span><span class="connection-saved-note">API key and optional UI login stored in the age-encrypted config.</span></div>
           <p class="connection-intro" id="settings-radarr-node-note">Select an online metadata node in Fossils to manage this connection.</p>
+          <button id="settings-configure-radarr" type="button">Configure Radarr</button>
+          <dialog class="arr-settings-dialog" id="settings-radarr-dialog" aria-labelledby="settings-radarr-dialog-title">
           <form id="settings-radarr-settings" class="connection-form">
+            <h2 id="settings-radarr-dialog-title">Configure Radarr</h2>
             <label for="settings-radarr-url">Radarr URL</label>
             <input id="settings-radarr-url" name="url" type="url" placeholder="https://radarr.example.com" autocomplete="url" required>
             <label for="settings-radarr-key">Radarr API key</label>
@@ -460,23 +470,28 @@
             <label for="settings-radarr-ui-password">Radarr UI password (optional)</label>
             <input id="settings-radarr-ui-password" name="uiPassword" type="password" autocomplete="current-password">
             <p id="settings-radarr-ui-auth-note" class="connection-note">Enter both only if Radarr requires a UI login to download backups. Stored in the age-encrypted config.</p>
-            <div class="connection-actions"><button id="settings-save-radarr" type="submit">Save and connect</button><button id="settings-clear-radarr" type="button">Clear connection</button></div>
+            <div class="connection-actions"><button id="settings-test-radarr" type="button">Test connection</button><button id="settings-save-radarr" type="submit">Save and connect</button><button id="settings-clear-radarr" type="button">Clear connection</button><button class="arr-dialog-close" type="button">Cancel</button></div>
             <p id="settings-radarr-settings-message" class="connection-message" role="status" aria-live="polite"></p>
           </form>
+          </dialog>
         </article>
         <article class="connection-card" aria-labelledby="settings-sonarr-title">
           <h2 id="settings-sonarr-title">Sonarr</h2>
           <div id="settings-sonarr-saved" class="connection-saved" hidden role="status" aria-live="polite"><strong>Sonarr details saved</strong><span id="settings-sonarr-saved-url" class="connection-saved-url"></span><span class="connection-saved-note">API key stored in the age-encrypted config.</span></div>
           <p class="connection-intro" id="settings-sonarr-node-note">Select an online fossil node in Fossils to manage this connection.</p>
+          <button id="settings-configure-sonarr" type="button">Configure Sonarr</button>
+          <dialog class="arr-settings-dialog" id="settings-sonarr-dialog" aria-labelledby="settings-sonarr-dialog-title">
           <form id="settings-sonarr-settings" class="connection-form">
+            <h2 id="settings-sonarr-dialog-title">Configure Sonarr</h2>
             <label for="settings-sonarr-url">Sonarr URL</label>
             <input id="settings-sonarr-url" name="url" type="url" placeholder="https://sonarr.example.com" autocomplete="url" required>
             <label for="settings-sonarr-key">Sonarr API key</label>
             <input id="settings-sonarr-key" name="apiKey" type="password" autocomplete="new-password">
             <p id="settings-sonarr-key-note" class="connection-note">Required for the first save.</p>
-            <div class="connection-actions"><button id="settings-save-sonarr" type="submit">Save and connect</button><button id="settings-clear-sonarr" type="button">Clear connection</button></div>
+            <div class="connection-actions"><button id="settings-test-sonarr" type="button">Test connection</button><button id="settings-save-sonarr" type="submit">Save and connect</button><button id="settings-clear-sonarr" type="button">Clear connection</button><button class="arr-dialog-close" type="button">Cancel</button></div>
             <p id="settings-sonarr-settings-message" class="connection-message" role="status" aria-live="polite"></p>
           </form>
+          </dialog>
         </article>
       </div>
       <article class="panel" style="max-width:620px;margin-top:16px"><h2>Export metadata</h2><p class="sub">Download all available movie metadata records and matching artwork. Your browser decrypts the files and builds the ZIP locally.</p><button id="export-metadata" class="primary-button" type="button">Export metadata ZIP</button><p id="metadata-export-status" class="sub" role="status" aria-live="polite"></p></article>

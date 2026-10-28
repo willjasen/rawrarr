@@ -40,6 +40,39 @@ pub(super) async fn settings(State(state): State<Arc<AppState>>) -> ApiResult<Ar
         has_ui_auth: false,
     }))
 }
+pub(super) async fn test_connection(
+    Json(mut request): Json<RadarrSettingsRequest>,
+) -> ApiResult<serde_json::Value> {
+    let key = request
+        .api_key
+        .take()
+        .filter(|key| !key.trim().is_empty())
+        .ok_or(failure(
+            StatusCode::BAD_REQUEST,
+            "Enter a Sonarr API key to test the connection",
+        ))?;
+    let client = ArrClient::new(request.url.clone(), key).map_err(|_| {
+        failure(
+            StatusCode::BAD_REQUEST,
+            "Enter a valid Sonarr HTTPS URL and API key",
+        )
+    })?;
+    let status = client.status().await.map_err(|_| {
+        failure(
+            StatusCode::BAD_GATEWAY,
+            "Could not connect to Sonarr; check the URL and API key",
+        )
+    })?;
+    if !status.app_name.eq_ignore_ascii_case("sonarr") {
+        return Err(failure(
+            StatusCode::BAD_GATEWAY,
+            "The service did not identify itself as Sonarr",
+        ));
+    }
+    Ok(Json(
+        serde_json::json!({ "ok": true, "version": status.version }),
+    ))
+}
 pub(super) async fn save(
     State(state): State<Arc<AppState>>,
     Json(mut request): Json<RadarrSettingsRequest>,
