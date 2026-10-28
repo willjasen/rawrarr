@@ -4,9 +4,10 @@ import { readFile } from 'node:fs/promises';
 
 const root = new URL('../../', import.meta.url);
 const read = path => readFile(new URL(path, root), 'utf8');
-const [coordinator, analyticsCompose, publicCompose, miniCompose, do3Compose, internalDashboardCompose, internalDashboardCaddy] = await Promise.all([
+const [coordinator, analyticsCompose, analyticsServicesCompose, publicCompose, miniCompose, do3Compose, internalDashboardCompose, internalDashboardCaddy] = await Promise.all([
   read('rust-arr/src/coordinator.rs'),
   read('docker-compose.analytics.yml'),
+  read('docker-compose.analytics-services.yml'),
   read('docker-compose.coordinator.yml'),
   read('docker-compose.internal-mini.yml'),
   read('deploy/do3/docker-compose.internal-coordinator.yml'),
@@ -29,19 +30,26 @@ test('coordinator analytics are opt-in and only emit a fixed page label', () => 
   assert.doesNotMatch(coordinator, /umami\.track\(\)/);
 });
 
-test('analytics has an isolated pinned Umami and PostgreSQL deployment', () => {
-  assert.match(analyticsCompose, /image: ghcr\.io\/umami-software\/umami:3\.4\.1/);
-  assert.match(analyticsCompose, /127\.0\.0\.1:\$\{RAWARR_ANALYTICS_PORT:-7300\}:3000/);
-  assert.match(analyticsCompose, /umami-postgres-data:/);
-  assert.match(analyticsCompose, /external: true/);
-  assert.match(analyticsCompose, /name: \$\{RAWARR_ANALYTICS_NETWORK/);
-  assert.doesNotMatch(analyticsCompose, /rawrarr-postgres-data|rawarr-internal/);
+test('coordinator analytics settings default off and do not start Umami', () => {
+  assert.match(analyticsCompose, /RAWARR_ANALYTICS_UPSTREAM: \$\{RAWARR_ANALYTICS_UPSTREAM:-\}/);
+  assert.match(analyticsCompose, /RAWARR_ANALYTICS_SITE_ID: \$\{RAWARR_ANALYTICS_SITE_ID:-\}/);
+  assert.doesNotMatch(analyticsCompose, /^  umami(-postgres)?:/m);
 });
 
-test('analytics overlay configures both coordinator and Umami services without telemetry', () => {
-  assert.match(analyticsCompose, /RAWARR_ANALYTICS_UPSTREAM: http:\/\/umami:3000/);
+test('Umami and PostgreSQL have a separate explicit opt-in Compose file', () => {
+  assert.match(analyticsServicesCompose, /image: ghcr\.io\/umami-software\/umami:3\.4\.1/);
+  assert.match(analyticsServicesCompose, /127\.0\.0\.1:\$\{RAWARR_ANALYTICS_PORT:-7300\}:3000/);
+  assert.match(analyticsServicesCompose, /umami-postgres-data:/);
+  assert.match(analyticsServicesCompose, /external: true/);
+  assert.match(analyticsServicesCompose, /name: \$\{RAWARR_ANALYTICS_NETWORK/);
+  assert.match(analyticsServicesCompose, /RAWARR_ANALYTICS_DB_PASSWORD/);
+  assert.match(analyticsServicesCompose, /DISABLE_TELEMETRY: "1"/);
+  assert.doesNotMatch(analyticsServicesCompose, /rawrarr-postgres-data|rawrarr-internal/);
+});
+
+test('coordinator overlay leaves analytics upstream opt-in across deployment variants', () => {
+  assert.match(analyticsCompose, /RAWARR_ANALYTICS_UPSTREAM: \$\{RAWARR_ANALYTICS_UPSTREAM:-\}/);
   assert.match(analyticsCompose, /RAWARR_ANALYTICS_SITE_ID: \$\{RAWARR_ANALYTICS_SITE_ID:-\}/);
-  assert.match(analyticsCompose, /DISABLE_TELEMETRY: "1"/);
   assert.match(do3Compose, /RAWARR_ROLE: coordinator/);
   assert.match(publicCompose, /RAWARR_ROLE: coordinator/);
   assert.match(miniCompose, /RAWARR_ROLE: coordinator/);
