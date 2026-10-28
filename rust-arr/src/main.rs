@@ -2566,6 +2566,64 @@ async fn put_radarr_settings(
     }))
 }
 
+async fn test_radarr_settings(
+    Json(mut settings): Json<RadarrSettingsRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
+    let api_key = settings.api_key.take().filter(|key| !key.trim().is_empty()).ok_or((
+        StatusCode::BAD_REQUEST,
+        Json(ApiError {
+            error: "Enter a Radarr API key to test the connection",
+        }),
+    ))?;
+    let ui_username = settings
+        .ui_username
+        .take()
+        .filter(|value| !value.is_empty())
+        .map(Zeroizing::new);
+    let ui_password = settings
+        .ui_password
+        .take()
+        .filter(|value| !value.is_empty())
+        .map(Zeroizing::new);
+    if ui_username.is_some() != ui_password.is_some() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiError {
+                error: "Enter both Radarr UI credentials, or leave both blank",
+            }),
+        ));
+    }
+    let client = RadarrClient::new_with_ui_auth(
+        settings.url.clone(),
+        Zeroizing::new(api_key),
+        ui_username,
+        ui_password,
+    )
+    .map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ApiError {
+                error: "Enter a valid Radarr HTTPS URL and credentials",
+            }),
+        )
+    })?;
+    let status = client.status().await.map_err(|_| (
+        StatusCode::BAD_GATEWAY,
+        Json(ApiError {
+            error: "Could not connect to Radarr; check the URL and API key",
+        }),
+    ))?;
+    if !status.app_name.eq_ignore_ascii_case("radarr") {
+        return Err((
+            StatusCode::BAD_GATEWAY,
+            Json(ApiError {
+                error: "The service did not identify itself as Radarr",
+            }),
+        ));
+    }
+    Ok(Json(serde_json::json!({ "ok": true, "version": status.version })))
+}
+
 async fn delete_radarr_settings(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<ArrSettingsInfo>, (StatusCode, Json<ApiError>)> {
@@ -2850,6 +2908,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/settings/radarr",
             get(get_radarr_settings)
                 .put(put_radarr_settings)
+                .post(test_radarr_settings)
                 .delete(delete_radarr_settings),
         )
         .route(
@@ -2869,6 +2928,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/settings/sonarr",
             get(sonarr::settings)
                 .put(sonarr::save)
+                .post(sonarr::test_connection)
                 .delete(sonarr::clear),
         )
         .route("/api/radarr/status", get(radarr_status))
@@ -2907,12 +2967,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/settings/radarr",
             get(get_radarr_settings)
                 .put(put_radarr_settings)
+                .post(test_radarr_settings)
                 .delete(delete_radarr_settings),
         )
         .route(
             "/api/settings/sonarr",
             get(sonarr::settings)
                 .put(sonarr::save)
+                .post(sonarr::test_connection)
                 .delete(sonarr::clear),
         )
         .route("/api/sonarr/status", get(sonarr::status))

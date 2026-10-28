@@ -792,6 +792,7 @@ const arrSettings = {
       { url: 'settings-radarr-url', key: 'settings-radarr-key', uiUsername: 'settings-radarr-ui-username', uiPassword: 'settings-radarr-ui-password', uiNote: 'settings-radarr-ui-auth-note', form: 'settings-radarr-settings', note: 'settings-radarr-key-note', message: 'settings-radarr-settings-message', button: 'settings-save-radarr', clear: 'settings-clear-radarr', nodeNote: 'settings-radarr-node-note' },
     ],
     mediaCard: 'radarr-connection-card', saved: 'settings-radarr-saved', savedUrl: 'settings-radarr-saved-url', endpoint: '/settings/radarr', label: 'Radarr',
+    dialog: 'settings-radarr-dialog', configure: 'settings-configure-radarr', test: 'settings-test-radarr',
   },
   sonarr: {
     overviewCards: ['overview-sonarr-card', 'overview-sonarr-genres-card'],
@@ -800,6 +801,7 @@ const arrSettings = {
       { url: 'settings-sonarr-url', key: 'settings-sonarr-key', form: 'settings-sonarr-settings', note: 'settings-sonarr-key-note', message: 'settings-sonarr-settings-message', button: 'settings-save-sonarr', clear: 'settings-clear-sonarr', nodeNote: 'settings-sonarr-node-note' },
     ],
     mediaCard: 'sonarr-connection-card', saved: 'settings-sonarr-saved', savedUrl: 'settings-sonarr-saved-url', endpoint: '/settings/sonarr', label: 'Sonarr',
+    dialog: 'settings-sonarr-dialog', configure: 'settings-configure-sonarr', test: 'settings-test-sonarr',
   },
 };
 
@@ -824,7 +826,7 @@ async function loadArrSettings(service) {
       key.value = '';
       key.required = !settings.configured;
       document.getElementById(copy.note).textContent = settings.configured
-        ? 'Leave blank to keep the saved API key.'
+        ? 'Enter the API key to test; leave blank when saving to keep the saved key.'
         : 'Required for the first encrypted save.';
       if (service === 'radarr') {
         document.getElementById(copy.uiUsername).value = '';
@@ -833,9 +835,14 @@ async function loadArrSettings(service) {
           ? 'Leave both blank to keep the encrypted login. Enter both to replace it; clear connection removes it.'
           : 'Optional. Enter both only if Radarr requires a UI login to download backups; saved in the age-encrypted config.';
       }
+      const isSettingsCopy = copy.form === `settings-${service}-settings`;
       document.getElementById(copy.nodeNote).textContent = settings.configured
-        ? `Connected to ${fields.label} on ${selectedNodeDetails.nodeId}. Settings are sent directly from this browser to the node; roarlay does not receive the ${service === 'radarr' ? 'API key or UI login' : 'API key'}.`
-        : `${fields.label} is not configured on ${selectedNodeDetails.nodeId}. Add it here when ready. Credentials go directly from this browser to the node; roarlay never receives them.`;
+        ? isSettingsCopy
+          ? `Connected on ${selectedNodeDetails.nodeId}. Credentials stay encrypted on this node.`
+          : `Connected to ${fields.label} on ${selectedNodeDetails.nodeId}. Settings are sent directly from this browser to the node; roarlay does not receive the ${service === 'radarr' ? 'API key or UI login' : 'API key'}.`
+        : isSettingsCopy
+          ? `Not configured on ${selectedNodeDetails.nodeId}. Add the connection when ready.`
+          : `${fields.label} is not configured on ${selectedNodeDetails.nodeId}. Add it here when ready. Credentials go directly from this browser to the node; roarlay never receives them.`;
       const message = document.getElementById(copy.message);
       message.textContent = settings.configured ? `Saved ${fields.label} settings loaded from the age-encrypted config.` : `Enter your ${fields.label} HTTPS URL and API key.`;
       message.dataset.state = '';
@@ -844,6 +851,7 @@ async function loadArrSettings(service) {
     const savedCard = document.getElementById(fields.saved);
     savedCard.hidden = !settings.configured;
     document.getElementById(fields.savedUrl).textContent = settings.url || '';
+    document.getElementById(fields.configure).textContent = settings.configured ? `Change ${fields.label} settings` : `Configure ${fields.label}`;
     if (service === 'sonarr') {
       const tvLibrary = document.getElementById('tv-library');
       tvLibrary.hidden = !settings.configured;
@@ -873,10 +881,40 @@ async function loadArrSettings(service) {
 }
 
 for (const [service, fields] of Object.entries(arrSettings)) {
+  const dialog = document.getElementById(fields.dialog);
+  document.getElementById(fields.configure).addEventListener('click', () => dialog.showModal());
+  dialog.querySelector('.arr-dialog-close').addEventListener('click', () => dialog.close());
   for (const copy of fields.copies) {
     const form = document.getElementById(copy.form);
     const button = document.getElementById(copy.button);
     const message = document.getElementById(copy.message);
+    if (copy.form === `settings-${service}-settings`) {
+      document.getElementById(fields.test).addEventListener('click', async () => {
+        const testButton = document.getElementById(fields.test);
+        testButton.disabled = true;
+        message.dataset.state = '';
+        message.textContent = `Testing ${fields.label} from the selected node…`;
+        try {
+          const payload = {
+            url: document.getElementById(copy.url).value,
+            apiKey: document.getElementById(copy.key).value,
+            ...(service === 'radarr' ? {
+              uiUsername: document.getElementById(copy.uiUsername).value,
+              uiPassword: document.getElementById(copy.uiPassword).value,
+            } : {}),
+          };
+          const result = await arrDirectRequest(fields.endpoint, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+          });
+          message.textContent = `${fields.label} connection succeeded${result.version ? ` (version ${result.version})` : ''}.`;
+        } catch (error) {
+          message.dataset.state = 'error';
+          message.textContent = error.message || `Could not connect to ${fields.label}.`;
+        } finally {
+          testButton.disabled = false;
+        }
+      });
+    }
     form.addEventListener('submit', async event => {
       event.preventDefault();
       button.disabled = true;
@@ -904,6 +942,7 @@ for (const [service, fields] of Object.entries(arrSettings)) {
         }
         await loadArrSettings(service);
         message.textContent = `Connected to ${fields.label}. Settings saved encrypted.`;
+        if (copy.form === `settings-${service}-settings`) dialog.close();
       } catch (error) {
         message.dataset.state = 'error';
         message.textContent = error.message || `Could not save ${fields.label} settings.`;
@@ -931,6 +970,8 @@ for (const [service, fields] of Object.entries(arrSettings)) {
         }
         document.getElementById(fields.mediaCard).hidden = false;
         document.getElementById(fields.saved).hidden = true;
+        document.getElementById(fields.configure).textContent = `Configure ${fields.label}`;
+        if (copy.form === `settings-${service}-settings`) dialog.close();
         if (service === 'sonarr') document.getElementById('tv-library').hidden = true;
       } catch (error) {
         message.dataset.state = 'error';
