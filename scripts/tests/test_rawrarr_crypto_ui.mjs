@@ -35,6 +35,39 @@ async function serveBilling(page, routeApi) {
   await page.goto(origin);
 }
 
+async function serveWorkspaceNavigation(page, routeApi) {
+  const server = createServer((request, response) => {
+    const path = new URL(request.url, 'http://localhost').pathname;
+    if (path === '/') {
+      response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      response.end(workspaceHtml);
+      return;
+    }
+    if (path === '/billing') {
+      response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      response.end(billingHtml);
+      return;
+    }
+    if (path === '/assets/coordinator-workspace.mjs') {
+      response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
+      response.end('');
+      return;
+    }
+    if (path === '/assets/coordinator-billing.mjs') {
+      response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
+      response.end(billingScript);
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  page.on('close', () => server.close());
+  await page.route(`${origin}/api/**`, routeApi);
+  await page.goto(origin);
+}
+
 
 
 async function serveAuth(page, routeApi) {
@@ -84,6 +117,29 @@ test('crypto payments browser regressions', async t => {
         assert.ok(rect.width > 0 && rect.height > 0, `${selector} has no usable size at ${viewport.width}px`);
         assert.ok(rect.x >= 0 && rect.x + rect.width <= viewport.width, `${selector} exceeds the viewport at ${viewport.width}px`);
       }
+      await page.close();
+    }
+  });
+
+  await t.test('workspace navigation opens Subscription on desktop and mobile without overflow', async () => {
+    for (const viewport of [{ width: 1280, height: 800 }, { width: 375, height: 812 }]) {
+      const page = await browser.newPage({ viewport });
+      await serveWorkspaceNavigation(page, async route => {
+        const path = new URL(route.request().url()).pathname;
+        if (path === '/api/crypto/config') return route.fulfill({ json: { chainId: 1, treasuryAddress: '0x2222222222222222222222222222222222222222', donationEnabled: true, subscriptionsEnabled: true, monthlyPriceWei: '25000000000000000', annualPriceWei: '250000000000000000', currency: 'ETH' } });
+        if (path === '/api/workspace/billing') return route.fulfill({ json: { checkoutEnabled: true, customerLinked: false, subscriptionStatus: null } });
+        return route.fulfill({ status: 404, json: { error: `unexpected API path ${path}` } });
+      });
+      const geometry = await page.evaluate(() => ({ width: window.innerWidth, documentWidth: document.documentElement.scrollWidth }));
+      assert.ok(geometry.documentWidth <= geometry.width, `workspace overflows horizontally at ${viewport.width}px: ${geometry.documentWidth}px`);
+      const link = page.getByRole('link', { name: 'Subscription' });
+      assert.equal(await link.isVisible(), true, `Subscription link is not visible at ${viewport.width}px`);
+      const rect = await link.boundingBox();
+      assert.ok(rect.width > 0 && rect.height > 0, `Subscription link has no usable size at ${viewport.width}px`);
+      assert.ok(rect.x >= 0 && rect.x + rect.width <= viewport.width, `Subscription link exceeds the viewport at ${viewport.width}px`);
+      await link.click();
+      await page.waitForURL(url => url.pathname === '/billing');
+      assert.equal(await page.getByRole('heading', { name: 'Subscription', exact: true }).isVisible(), true);
       await page.close();
     }
   });
