@@ -45,6 +45,7 @@ services:
       RAWARR_ROLE: coordinator
       RAWARR_BILLING_AUDIENCE: internal
       RAWARR_UI_GITHUB_REPO: willjasen/rawrarr
+      RAWARR_UI_GITHUB_TOKEN_FILE: /run/secrets/rawrarr_ui_github_token
       RAWARR_OPENAI_API_KEY_FILE: /run/secrets/rawrarr_openai_api_key
       RAWARR_OPENAI_MODEL: ${RAWARR_OPENAI_MODEL:-gpt-4o-mini}
       RUST_ARR_LISTEN_ADDR: 0.0.0.0:8080
@@ -62,6 +63,7 @@ services:
       - rawrarr_approved_nodes
       - rawrarr_openai_api_key
       - rawrarr_postgres_password
+      - rawrarr_ui_github_token
     volumes:
       - rawrarr-internal-do3-ui:/ui
     network_mode: service:tailscale
@@ -87,6 +89,8 @@ secrets:
     file: ${RAWARR_OPENAI_API_KEY_PATH:-/opt/rawrarr-internal-do3/secrets/openai-api-key}
   rawrarr_postgres_password:
     file: ${RAWARR_POSTGRES_PASSWORD_FILE:-/opt/rawrarr-internal-do3/secrets/postgres-password}
+  rawrarr_ui_github_token:
+    file: ${RAWARR_UI_GITHUB_TOKEN_PATH:-/root/gh-token}
 
 networks:
   control:

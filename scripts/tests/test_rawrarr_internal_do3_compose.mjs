@@ -35,6 +35,8 @@ test('internal roarlay retains the passkey origin, internal billing audience, an
   assert.match(roarlay, /pull_policy: never/);
   assert.match(roarlay, /network_mode: service:tailscale/);
   assert.match(roarlay, /RAWARR_BILLING_AUDIENCE: internal/);
+  assert.match(roarlay, /RAWARR_UI_GITHUB_TOKEN_FILE: \/run\/secrets\/rawrarr_ui_github_token/);
+  assert.match(roarlay, /- rawrarr_ui_github_token/);
   assert.match(roarlay, /RAWARR_COORDINATOR_WEB_RP_ID: risk-mermaid\.ts\.net/);
   assert.match(roarlay, /RAWARR_COORDINATOR_WEB_ORIGIN: https:\/\/rawrarr\.risk-mermaid\.ts\.net/);
   assert.doesNotMatch(roarlay, /^\s+ports\s*:/m);
@@ -48,4 +50,5 @@ test('internal project keeps its Docker networks and app data separate from publ
   for (const path of ['approved-nodes.json', 'openai-api-key', 'postgres-password']) {
     assert.ok(compose.includes(`/opt/rawrarr-internal-do3/secrets/${path}`), `missing protected host secret path ${path}`);
   }
+  assert.match(compose, /RAWARR_UI_GITHUB_TOKEN_PATH:-\/root\/gh-token/);
 });

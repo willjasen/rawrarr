@@ -20,7 +20,11 @@ After the ETH and Stripe controls moved to `/billing`, the Settings page linked 
 
 ## Deployment
 
-- Pending merge and deployment of the published revision to the internal and public coordinator services.
+- Published UI release: `ui-37aaf1124cc600fa8a6c337c2074e52702faf195`.
+- Both do3 coordinator services run the UI bundle updater in their application image. Their Compose setup must mount a fine-grained GitHub token with **Contents: read** access at `/run/secrets/rawrarr_ui_github_token` and provide a persistent `/ui` volume. The internal coordinator already had the volume; the public coordinator receives one through `deploy/do3/docker-compose.public-ui-updater.yml`.
+- On do3, the configured token source is `/root/gh-token`. It is a host-local secret and must not be copied into the repository or emitted in logs. The coordinator containers retrieve and checksum-verify the private UI bundle from GitHub; no app image rebuild is needed for this UI-only release.
+- Deploy by updating only the internal and public `roarlay` coordinator services, preserving PostgreSQL, Tailscale, Caddy and all subscriber services. Verify `/ui/current/bundle.sha256` and `/ui/current/bundle.version` in both services and check `/billing` plus the Subscription sidebar link on both coordinator URLs.
+- Deployment status: pending.
 
 ## Rollback
 
