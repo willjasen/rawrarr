@@ -65,7 +65,15 @@ test('left navigation renders every visible option in lowercase', () => {
   assert.ok(sidebar, 'main navigation sidebar exists');
   assert.match(workspace, /\.nav-text\s*\{[^}]*text-transform:\s*lowercase/i);
   const labels = [...sidebar.matchAll(/<span class="nav-text">([^<]+)<\/span>/g)].map(([, label]) => label);
-  assert.deepEqual(labels.map(label => label.toLowerCase()), ['overview', 'fossils', 'movies', 'tv', 'rawrs', 'configuration', 'settings', 'about']);
+  assert.deepEqual(labels.map(label => label.toLowerCase()), ['overview', 'roarlay', 'fossils', 'movies', 'tv', 'rawrs', 'configuration', 'settings', 'about']);
+});
+
+test('Roarlay has a dedicated coordinator page and uses the same-origin health check', () => {
+  assert.match(workspace, /data-view="roarlay"[^>]*>[\s\S]*?<span class="nav-text">Roarlay<\/span>/);
+  assert.match(workspace, /<section id="roarlay-view" hidden>[\s\S]*?Coordinator node[\s\S]*?id="roarlay-health-label"[\s\S]*?id="roarlay-health-refresh"/);
+  assert.match(workspaceScript, /'overview', 'roarlay', 'fossils'/);
+  assert.match(workspaceScript, /if \(view === 'roarlay'\) void checkRoarlayHealth\(\)/);
+  assert.match(workspaceScript, /fetch\('\/health', \{ cache: 'no-store'/);
 });
 
 test('Movies and TV cached library data stays hidden until an age ID is loaded', () => {
@@ -123,7 +131,7 @@ test('Fossils shows a network diagram with one link for each node pair', () => {
 test('Fossils uses the new page hash and redirects the old Devices bookmark', () => {
   assert.match(workspaceScript, /name === 'devices' \? 'fossils' : name/);
   assert.match(workspaceScript, /location\.hash === '#devices'[\s\S]*#fossils/);
-  assert.match(workspaceScript, /\['overview', 'fossils', 'movies'/);
+  assert.match(workspaceScript, /\['overview', 'roarlay', 'fossils', 'movies'/);
 });
 
 test('Devices keeps topology hidden until an enrolled device is online', () => {
@@ -132,13 +140,13 @@ test('Devices keeps topology hidden until an enrolled device is online', () => {
   assert.match(workspace, /<section id="device-topology"[^>]*hidden/);
 });
 
-test('device names have an adjacent Edit button that unlocks the name field', () => {
-  assert.match(workspaceScript, /nameInput\.readOnly = true/);
-  assert.match(workspaceScript, /editNameButton\.textContent = 'Edit'/);
-  assert.match(workspaceScript, /nameGroup\.append\(nameInput, editNameButton\)/);
-  assert.match(workspaceScript, /nameInput\.readOnly = false;\s*nameInput\.focus\(\);/);
+test('device names open the existing edit dialog from the device card', () => {
+  assert.match(workspaceScript, /editButton\.textContent = 'Edit'/);
+  assert.match(workspaceScript, /editButton\.addEventListener\('click', event => \{[\s\S]*?deviceEditDialog\.showModal\(\)/);
+  assert.match(workspaceScript, /card\.append\(editButton\)/);
+  assert.match(workspace, /<dialog id="device-edit-dialog"[\s\S]*?id="device-edit-name"/);
   assert.match(workspaceScript, /saveDeviceName\(ageIdentity/);
-  assert.match(workspace, /\.device-name-group \{ display:flex/);
+  assert.match(workspace, /\.device-edit-dialog \{ width:min/);
 });
 
 test('metadata export in Settings prompts for an age ID when tab memory is empty', () => {

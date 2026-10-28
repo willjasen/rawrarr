@@ -122,7 +122,11 @@ const ageStorageMessage = document.getElementById('age-storage-message');
 const settingsAgeIdInput = document.getElementById('settings-age-id');
 const saveAgeIdButton = document.getElementById('save-age-id');
 const removeAgeIdButton = document.getElementById('remove-age-id');
-const views = Object.fromEntries(['overview', 'fossils', 'movies', 'series', 'assistant', 'configuration', 'settings', 'about'].map(name => [name, document.getElementById(`${name}-view`)]));
+const views = Object.fromEntries(['overview', 'roarlay', 'fossils', 'movies', 'series', 'assistant', 'configuration', 'settings', 'about'].map(name => [name, document.getElementById(`${name}-view`)]));
+const roarlayHealthState = document.getElementById('roarlay-health-state');
+const roarlayHealthLabel = document.getElementById('roarlay-health-label');
+const roarlayHealthDetail = document.getElementById('roarlay-health-detail');
+document.getElementById('roarlay-address').textContent = location.origin;
 function roleLabel(role) {
   return role === 'coordinator' ? 'roarlay' : role === 'storage' ? 'boneyard' : 'fossil';
 }
@@ -164,6 +168,7 @@ function showView(name, updateHash = true) {
     }
   }
   if (view === 'assistant') void aiChat.refresh();
+  if (view === 'roarlay') void checkRoarlayHealth();
   if ((view === 'movies' || view === 'series') && updateHash) void loadMetadataSizes();
 }
 window.addEventListener('hashchange', () => showView(location.hash.slice(1) || 'overview', false));
@@ -172,6 +177,27 @@ document.getElementById('configure-sonarr')?.addEventListener('click', () => sho
 showView(location.hash.slice(1) || 'overview', false);
 if (location.hash === '#devices') history.replaceState(null, '', `${location.pathname}${location.search}#fossils`);
 if (location.hash === '#series') history.replaceState(null, '', `${location.pathname}${location.search}#tv`);
+async function checkRoarlayHealth() {
+  const button = document.getElementById('roarlay-health-refresh');
+  button.disabled = true;
+  roarlayHealthLabel.textContent = 'Checking…';
+  roarlayHealthState.classList.remove('online');
+  roarlayHealthState.classList.add('offline');
+  try {
+    const response = await fetch('/health', { cache: 'no-store', headers: { Accept: 'text/html' } });
+    if (!response.ok) throw new Error(`Health check returned HTTP ${response.status}.`);
+    roarlayHealthState.classList.remove('offline');
+    roarlayHealthState.classList.add('online');
+    roarlayHealthLabel.textContent = 'Responding';
+    roarlayHealthDetail.textContent = `Roarlay responded at ${new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(new Date())}.`;
+  } catch (error) {
+    roarlayHealthDetail.textContent = error.message || 'Could not reach the Roarlay health endpoint.';
+    roarlayHealthLabel.textContent = 'Unavailable';
+  } finally {
+    button.disabled = false;
+  }
+}
+document.getElementById('roarlay-health-refresh').addEventListener('click', () => void checkRoarlayHealth());
 let profileAvatarSeed = '';
 let profileBaseName = '';
 let profileAccountId = '';
