@@ -36,6 +36,13 @@ fn configured_merkle_peer_count_excludes_the_local_node() {
 }
 
 #[test]
+fn peer_status_exposes_successfully_reached_tailnet_peers() {
+    let status=PeerSyncStatus::default();
+    status.update_for_test("root",0,1,vec!["node-b".into()]);
+    assert_eq!(status.snapshot()["reachablePeers"],serde_json::json!(["node-b"]));
+}
+
+#[test]
 fn repaired_config_is_written_as_exact_private_ciphertext() {
     let root=std::env::temp_dir().join(format!("rawrarr-config-repair-{}",uuid::Uuid::new_v4().simple()));
     let path=root.join("shared").join("config.aged");

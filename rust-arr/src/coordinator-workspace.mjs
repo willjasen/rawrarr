@@ -397,7 +397,7 @@ let deviceRouteStatusByNode = new Map();
 function deviceNameTokens(value) {
   return new Set(String(value || '').toLowerCase().split(/[^a-z0-9]+/).filter(token => token.length >= 4));
 }
-function renderDeviceTopology(nodes, observedPeers, deviceNames) {
+function renderDeviceTopology(nodes, observedPeers, deviceNames, peerStatuses) {
   const panel = document.getElementById('device-topology-content');
   const graph = document.createElement('div');
   graph.className = 'topology-graph';
@@ -441,13 +441,19 @@ function renderDeviceTopology(nodes, observedPeers, deviceNames) {
   for (let leftIndex = 0; leftIndex < count; leftIndex += 1) {
     for (let rightIndex = leftIndex + 1; rightIndex < count; rightIndex += 1) {
       const pair = [nodes[leftIndex].nodeId, nodes[rightIndex].nodeId].sort();
-      const observed = observedEdges.get(`${pair[0]}\u0000${pair[1]}`);
+      const key = `${pair[0]}\u0000${pair[1]}`;
+      const observed = observedEdges.get(key);
+      const leftStatus = peerStatuses.get(pair[0]);
+      const rightStatus = peerStatuses.get(pair[1]);
+      const leftCanReachRight = leftStatus?.state !== 'stale' && (leftStatus?.reachablePeers || []).includes(pair[1]);
+      const rightCanReachLeft = rightStatus?.state !== 'stale' && (rightStatus?.reachablePeers || []).includes(pair[0]);
+      const tailnetReachable = leftCanReachRight || rightCanReachLeft;
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       line.setAttribute('x1', String(points[leftIndex].x));
       line.setAttribute('y1', String(points[leftIndex].y));
       line.setAttribute('x2', String(points[rightIndex].x));
       line.setAttribute('y2', String(points[rightIndex].y));
-      line.setAttribute('class', `topology-edge${observed ? observed.connected ? ' connected' : ' disconnected' : ''}`);
+      line.setAttribute('class', `topology-edge${tailnetReachable ? ' connected' : observed ? observed.connected ? ' connected' : ' disconnected' : ''}`);
       svg.append(line);
     }
   }
@@ -467,7 +473,7 @@ function renderDeviceTopology(nodes, observedPeers, deviceNames) {
 
   const legend = document.createElement('div');
   legend.className = 'topology-legend';
-  legend.innerHTML = '<span><i class="connected-line"></i>Connected</span><span><i class="disconnected-line"></i>Reported disconnected</span><span><i></i>No live peer report</span>';
+  legend.innerHTML = '<span><i class="connected-line"></i>Reachable over tailnet</span><span><i class="disconnected-line"></i>Syncthing reports disconnected</span><span><i></i>No live peer report</span>';
   if (nodes.length < 2) {
     const empty = document.createElement('p');
     empty.className = 'topology-empty';
@@ -2072,7 +2078,7 @@ async function loadNodes() {
       }
     }
     if (nodes.some(node => node.online === true)) {
-      renderDeviceTopology(nodes, observedSyncthingPeers, deviceNames);
+      renderDeviceTopology(nodes, observedSyncthingPeers, deviceNames, configPeerStatusByNode);
     }
     status.textContent = 'Choose a connected fossil or boneyard node to open its Rawrarr page.';
     const canOpen = canOpenNode;

@@ -115,14 +115,18 @@ test('Fossils shows a network diagram with one link for each node pair', () => {
   assert.match(workspace, /<section id="fossils-view"[^>]*><div class="devices-page-heading"><h1 class="page-title">Fossils<\/h1><a class="button-link" href="\/setup\/node">Add a fossil<\/a><\/div>/);
   assert.match(workspace, /<section id="device-topology" class="topology-section" aria-labelledby="device-topology-title" hidden>[\s\S]*?<h2 id="device-topology-title">Topology<\/h2>/);
   assert.match(workspace, /<div id="device-topology-content"><\/div>/);
-  assert.match(workspaceScript, /function renderDeviceTopology\(nodes, observedPeers, deviceNames\)/);
+  assert.match(workspaceScript, /function renderDeviceTopology\(nodes, observedPeers, deviceNames, peerStatuses\)/);
   assert.match(workspaceScript, /deviceNames\[node\.nodeId\] \|\| \(node\.displayName && node\.displayName !== node\.nodeId \? node\.displayName : roleLabel\(node\.role\)\)/);
   assert.match(workspaceScript, /deviceNameTokens\(node\.displayName\)/);
   assert.match(workspaceScript, /getElementById\('device-topology-content'\)/);
   assert.match(workspaceScript, /nodes\.length \* \(nodes\.length - 1\) \/ 2/);
   assert.match(workspaceScript, /for \(let leftIndex = 0; leftIndex < count; leftIndex \+= 1\)/);
   assert.match(workspaceScript, /for \(let rightIndex = leftIndex \+ 1; rightIndex < count; rightIndex \+= 1\)/);
-  assert.match(workspaceScript, /topology-edge\$\{observed \? observed\.connected \? ' connected' : ' disconnected' : ''\}/);
+  assert.match(workspaceScript, /const tailnetReachable = leftCanReachRight \|\| rightCanReachLeft/);
+  assert.match(workspaceScript, /leftStatus\?\.state !== 'stale'/);
+  assert.match(workspaceScript, /rightStatus\?\.state !== 'stale'/);
+  assert.match(workspaceScript, /tailnetReachable \? ' connected'/);
+  assert.match(workspaceScript, /Reachable over tailnet/);
   assert.match(workspaceScript, /Add another device to see its links in the network diagram\./);
   assert.match(workspace, /\.topology-edge\.connected \{ stroke:var\(--green\); stroke-width:3 \}/);
   assert.match(workspace, /\.topology-edge\.disconnected \{ stroke:#ef7777 \}/);
@@ -136,7 +140,7 @@ test('Fossils uses the new page hash and redirects the old Devices bookmark', ()
 
 test('Devices keeps topology hidden until an enrolled device is online', () => {
   assert.match(workspaceScript, /const topologySection = document\.getElementById\('device-topology'\);\s*emptyDevices\.hidden = nodes\.length !== 0;\s*topologySection\.hidden = !nodes\.some\(node => node\.online === true\);/);
-  assert.match(workspaceScript, /if \(nodes\.some\(node => node\.online === true\)\) \{\s*renderDeviceTopology\(nodes, observedSyncthingPeers, deviceNames\);\s*\}/);
+  assert.match(workspaceScript, /if \(nodes\.some\(node => node\.online === true\)\) \{\s*renderDeviceTopology\(nodes, observedSyncthingPeers, deviceNames, configPeerStatusByNode\);\s*\}/);
   assert.match(workspace, /<section id="device-topology"[^>]*hidden/);
 });
 

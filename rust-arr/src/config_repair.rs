@@ -133,12 +133,12 @@ pub struct PeerSyncStatus(Arc<Mutex<Option<PeerSyncSnapshot>>>);
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct PeerSyncSnapshot { state: &'static str, local_merkle_root: String, matching_peers: usize, configured_peers: usize, checked_at: u64 }
+struct PeerSyncSnapshot { state: &'static str, local_merkle_root: String, matching_peers: usize, configured_peers: usize, reachable_peers: Vec<String>, checked_at: u64 }
 
 impl PeerSyncStatus {
-    fn update(&self, root: String, matching_peers: usize, configured_peers: usize) {
+    fn update(&self, root: String, matching_peers: usize, configured_peers: usize, reachable_peers: Vec<String>) {
         let state = if configured_peers == 0 { "unreachable" } else if matching_peers == configured_peers { "current" } else if matching_peers > 0 { "partial" } else { "unreachable" };
-        let snapshot = PeerSyncSnapshot { state, local_merkle_root: root, matching_peers, configured_peers, checked_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() };
+        let snapshot = PeerSyncSnapshot { state, local_merkle_root: root, matching_peers, configured_peers, reachable_peers, checked_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() };
         if let Ok(mut status) = self.0.lock() { *status = Some(snapshot); }
     }
 
@@ -151,7 +151,7 @@ impl PeerSyncStatus {
     }
 
     #[cfg(test)]
-    fn update_for_test(&self, root: &str, matching: usize, configured: usize) { self.update(root.to_owned(), matching, configured); }
+    fn update_for_test(&self, root: &str, matching: usize, configured: usize, reachable: Vec<String>) { self.update(root.to_owned(), matching, configured, reachable); }
 }
 
 impl PeerRpc {
@@ -224,9 +224,10 @@ impl PeerRpc {
     }
 
     pub async fn reconcile_once(&self, mirror: &CiphertextMirror, path: &Path, certificate: Option<&serde_json::Value>, status: &PeerSyncStatus) -> bool {
-        let Some(certificate)=certificate else{status.update(merkle_root(&load_revisions()),0,self.configured_remote_peer_count());return false;};
+        let Some(certificate)=certificate else{status.update(merkle_root(&load_revisions()),0,self.configured_remote_peer_count(),Vec::new());return false;};
         let mut repaired=false;
         let mut peer_roots=HashMap::new();
+        let mut reachable_peers=Vec::new();
         for (peer_id,base) in self.peer_urls() {
             if peer_id==self.node_id {continue;}
             let Ok(client)=reqwest::Client::builder().timeout(Duration::from_secs(10)).redirect(reqwest::redirect::Policy::none()).build() else{continue;};
@@ -236,6 +237,7 @@ impl PeerRpc {
                 let Ok(headers)=self.signed_headers(&base,&peer_id,certificate,"GET","/config-peer/manifest").await else{break;};
                 let Ok(response)=client.get(format!("{base}{request_path}")).headers(headers).send().await else{break;};
                 if !response.status().is_success(){break;}
+                if !reachable_peers.contains(&peer_id) { reachable_peers.push(peer_id.clone()); }
                 let Ok(bytes)=response.bytes().await else{break;};
                 if bytes.len()>10*1024*1024{break;}
                 let Ok(page)=serde_json::from_slice::<serde_json::Value>(&bytes) else{break;};
@@ -273,7 +275,7 @@ impl PeerRpc {
         }
         let local_root = merkle_root(&load_revisions());
         let matching = peer_roots.values().filter(|root| *root == &local_root).count();
-        status.update(local_root, matching, self.configured_remote_peer_count());
+        status.update(local_root, matching, self.configured_remote_peer_count(), reachable_peers);
         repaired
     }
 }
