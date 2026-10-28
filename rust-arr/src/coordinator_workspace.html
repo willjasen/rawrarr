@@ -15,7 +15,7 @@
     .brand { display:block; width:180px; max-width:100%; padding:4px 10px 30px }
     .brand img { display:block; width:100%; height:auto; border-radius:8px; background:#dff4bd }
     .section-label { color:#68766c; font-size:10px; text-transform:uppercase; letter-spacing:.13em; padding:0 10px 8px }
-    .nav-item { display:flex; align-items:center; gap:12px; width:100%; min-height:42px; margin:3px 0; padding:0 12px; border:0; border-radius:9px; color:var(--muted); background:transparent; text-align:left; font:13px system-ui; cursor:pointer }
+    .nav-item { display:flex; align-items:center; gap:12px; width:100%; min-height:42px; margin:3px 0; padding:0 12px; border:0; border-radius:9px; color:var(--muted); background:transparent; text-align:left; font:13px system-ui; cursor:pointer; text-decoration:none }
     .nav-text { text-transform:lowercase }
     .nav-item:hover { color:var(--text); background:#1a231d }
     .nav-item.active { color:var(--text); background:#202a23; box-shadow:inset 2px 0 var(--green) }
@@ -284,6 +284,7 @@
    <aside aria-label="Main navigation">
     <div class="brand"><picture><source srcset="/assets/rawrarr-logo.jxl" type="image/jxl"><img src="/assets/rawrarr-logo.png" alt="rawrarr" width="180" height="60"></picture></div><div class="section-label">rawrchive</div>
     <button class="nav-item active" data-view="overview"><span class="nav-icon">⌂</span><span class="nav-text">Overview</span></button>
+    <a class="nav-item" href="/billing" aria-label="Subscription"><span class="nav-icon" aria-hidden="true">$</span><span class="nav-text">Subscription</span></a>
     <button class="nav-item" data-view="roarlay"><span class="nav-icon">⌂</span><span class="nav-text">Roarlay</span></button>
     <button class="nav-item" data-view="fossils"><span class="nav-icon">◫</span><span class="nav-text">Fossils</span></button>
     <button class="nav-item" data-view="movies"><span class="nav-icon">▧</span><span class="nav-text">Movies</span></button>
