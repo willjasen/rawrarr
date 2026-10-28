@@ -4,13 +4,7 @@
 
 Move ETH donation and subscription controls out of Settings into a dedicated Subscription page, with Stripe billing on that page too. The existing `/billing` route already held the ETH flows, so it now serves as the combined page. Settings keeps the account tier and ENS wallet linking controls and links to `/billing`.
 
-GitHub issue creation was attempted before implementation but is unavailable in this host context: `gh auth status` reports the saved `willjasen` token is invalid, and `gh issue list` could not connect to `api.github.com`. Proposed issue:
-
-> **Title:** Move ETH and Stripe controls to a Subscription page
->
-> **Acceptance criteria:** The coordinator has a dedicated Subscription page containing ETH donations, ETH subscriptions, and Stripe checkout/status/portal controls. Settings retains account tier and ENS wallet linking, with a link to the Subscription page. Stripe Checkout and portal return to the Subscription page. Existing billing, entitlement, and donation behavior is unchanged.
-
-Create or link the issue when authenticated GitHub access is restored.
+GitHub issue [#290](https://github.com/willjasen/rawrarr/issues/290) tracks this change and its acceptance criteria. It was created after authenticated GitHub access became available; the original implementation attempt had recorded the temporary access limitation here.
 
 ## Changes
 
