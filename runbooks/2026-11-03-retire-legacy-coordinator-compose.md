@@ -2,7 +2,7 @@
 
 Issue: [#154](https://github.com/willjasen/rawrarr/issues/154).
 Follows the [inventory/test-layout increment](2026-11-03-compose-inventory-test-layout.md)
-at commit `26c2a3f`, in the same dedicated task worktree.
+in the same dedicated task worktree (rebased milestone `eb7a25e`).
 
 ## Decision and evidence
 
@@ -58,7 +58,7 @@ preserve the remaining file list and explicit project. Do not replay old Mini
 coordinator deployment instructions or substitute the do3 file into the Mini's
 project. Discovering an unexpected dependency means pausing that host's cleanup,
 inspecting state, and planning migration separately. Restore the former
-definitions from `26c2a3f` if required for recovery, retaining existing resources.
+definitions from published commit `94fda4c` if required for recovery, retaining existing resources.
 Never use `down`, recreate a database, or rewrite identities as part of retirement.
 
 ## Verification

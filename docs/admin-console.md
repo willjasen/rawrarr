@@ -40,4 +40,4 @@ changing a coordinator, subscriber, or Serve route. Tailnet access supplied by
 the old shared namespace is no longer provided by this template. No persistent
 data migration is required; the preview has only sample data and no volumes.
 For recovery, the old definition and transport overlay are available at Git
-commit `5286e30`; reverting source alone does not change a running container.
+published commit `94fda4c`; reverting source alone does not change a running container.

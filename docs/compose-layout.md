@@ -164,13 +164,13 @@ Commands for the old Mini coordinator must stop being used; replacing its file
 with the do3 definition is **not** a safe database/passkey/Tailscale migration.
 If an unexpected host still relies on the retired stack, stop the cleanup there
 and inspect its labels and state before making a deployment change. Recover the
-prior definition from Git commit `26c2a3f` if necessary; preserve all databases,
+prior definition from published Git commit `94fda4c` if necessary; preserve all databases,
 volumes, credentials, and tailnet identities. Do not run `down` or remove data.
 
 The removed MacBook overlay must not simply be dropped from an old combined
 stack's command: that changes networking and listeners for more than the admin.
 If an unexpected caller still relies on it, pause and plan migration separately.
-The old overlay is recoverable from `5286e30`; source retirement never authorizes
+The old overlay is recoverable from published commit `94fda4c`; source retirement never authorizes
 teardown of an existing container or subscriber transport.
 
 ## Retired staged Headscale clients
@@ -190,7 +190,7 @@ credentials, peer enrollment, or native host networking changes.
 
 For an unexpected external caller, pause and inspect its project labels and
 identity mounts; the old filename now fails explicitly. Recover either definition
-from Git commit `5286e30` if needed, preserving its original project, hostname,
+from published Git commit `94fda4c` if needed, preserving its original project, hostname,
 container name, and state path. Do not create a replacement identity, revoke a
 key, stop a container, or remove state as part of this source cleanup.
 There is no data/protocol migration or automatic deployment.
