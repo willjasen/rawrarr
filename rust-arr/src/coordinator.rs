@@ -1328,6 +1328,21 @@ mod approved_node_registry_tests {
 }
 
 #[cfg(test)]
+mod coordinator_webauthn_domain_tests {
+    use super::validate_origin;
+
+    #[test]
+    fn rawrarr_net_rp_id_accepts_the_roarlay_app_origin() {
+        let origin = validate_origin("rawrarr.net", "https://roarlay.rawrarr.net/").unwrap();
+        webauthn_rs::prelude::WebauthnBuilder::new("rawrarr.net", &origin)
+            .unwrap()
+            .rp_name("rawrarr")
+            .build()
+            .unwrap();
+    }
+}
+
+#[cfg(test)]
 mod direct_route_tests {
     use super::{storage_scan_relay_allowed, validate_direct_target};
     use axum::http::Method;

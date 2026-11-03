@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 const root = new URL('../../', import.meta.url);
 const read = path => readFile(new URL(path, root), 'utf8');
-const [metadataUi, ageSetup, coordinatorPage, coordinatorScript, coordinator, migration, compose] = await Promise.all([
+const [metadataUi, ageSetup, coordinatorPage, coordinatorScript, coordinator, migration, compose, publicCompose] = await Promise.all([
   read('rust-arr/src/ui.html'),
   read('rust-arr/src/age_setup.html'),
   read('rust-arr/src/coordinator_passkey.html'),
@@ -12,6 +12,7 @@ const [metadataUi, ageSetup, coordinatorPage, coordinatorScript, coordinator, mi
   read('rust-arr/src/coordinator.rs'),
   read('rust-arr/migrations/0005_coordinator_origin_passkey.sql'),
   read('docker-compose.yml'),
+  read('docker-compose.coordinator.yml'),
 ]);
 
 test('signed-in metadata UI starts a coordinator-origin passkey handoff', () => {
@@ -50,4 +51,9 @@ test('new coordinator credential is inserted for the handoff account and Tailsca
   assert.match(migration, /link_token_sha256/);
   assert.match(compose, /RAWARR_COORDINATOR_WEB_RP_ID: \$\{RAWARR_COORDINATOR_WEB_RP_ID:-rawrarr\.risk-mermaid\.ts\.net\}/);
   assert.match(compose, /RAWARR_COORDINATOR_WEB_ORIGIN: \$\{RAWARR_COORDINATOR_WEB_ORIGIN:-https:\/\/rawrarr\.risk-mermaid\.ts\.net\}/);
+});
+
+test('public Roarlay passkeys use the rawrarr.net RP ID at the app subdomain', () => {
+  assert.match(publicCompose, /RAWARR_COORDINATOR_WEB_RP_ID: \$\{RAWARR_COORDINATOR_WEB_RP_ID:-rawrarr\.net\}/);
+  assert.match(publicCompose, /RAWARR_COORDINATOR_WEB_ORIGIN: \$\{RAWARR_COORDINATOR_WEB_ORIGIN:-https:\/\/roarlay\.rawrarr\.net\}/);
 });
