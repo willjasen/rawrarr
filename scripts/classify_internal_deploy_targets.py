@@ -16,6 +16,7 @@ COORDINATOR_FILES = {
     "rust-arr/src/coordinator_health.html",
     "rust-arr/src/coordinator_workspace.html",
     "rust-arr/src/assets/device-signing-client.js",
+    "rust-arr/web-export/device-signing-client.js",
     "rust-arr/src/coordinator-workspace.mjs",
     "rust-arr/src/coordinator-device-routes.mjs",
     "rust-arr/src/coordinator-passkey.mjs",
