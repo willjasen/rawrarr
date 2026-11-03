@@ -270,7 +270,16 @@ async function loadNodeAvatar(node, pictureSource, image) {
 }
 async function loadProfile() {
   try {
-    const profile = await jsonRequest('/api/workspace/profile');
+    let profile;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        profile = await jsonRequest('/api/workspace/profile');
+        break;
+      } catch (error) {
+        if (error.status !== 404 || attempt === 2) throw error;
+        await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)));
+      }
+    }
     profileAccountId = profile.accountId || '';
     profileBaseName = profile.displayName || 'Rawrarr user';
     document.getElementById('profile-name').textContent = profileBaseName;
@@ -295,8 +304,10 @@ async function loadProfile() {
     if (walletName) document.getElementById('crypto-ens-name').value = walletName;
     await loadProfileAvatar();
   } catch (error) {
-    document.getElementById('profile-name').textContent = error.message;
-    document.getElementById('sidebar-profile-name').textContent = 'Profile unavailable';
+    if (!profileBaseName) {
+      document.getElementById('profile-name').textContent = error.message;
+      document.getElementById('sidebar-profile-name').textContent = 'Profile unavailable';
+    }
   }
 }
 void loadProfile();
@@ -1133,7 +1144,9 @@ async function jsonRequest(path, options = {}) {
       clearAgeIdentity();
       throw new Error('Your roarlay sign-in expired. Sign in again.');
     }
-    throw new Error(`Request failed (HTTP ${response.status}).`);
+    const error = new Error(`Request failed (HTTP ${response.status}).`);
+    error.status = response.status;
+    throw error;
   }
   return response.status === 204 ? null : response.json();
 }
