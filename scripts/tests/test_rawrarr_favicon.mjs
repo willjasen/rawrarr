@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { chromium } from '/usr/local/lib/node_modules/playwright-core/index.mjs';
+import { chromium } from 'playwright';
 
 const root = new URL('../../', import.meta.url);
 const read = path => readFile(new URL(path, root));

@@ -74,6 +74,14 @@ test('Docker test containers have unique names in the rawrarr-test-regression gr
   assert.match(testRunner, /"docs"/);
   assert.match(testRunner, /"stripe-service"/);
   assert.match(testEntrypoint, /grep -Eq.*playwright-core/);
+  assert.match(testEntrypoint, /playwright_core=\/usr\/local\/lib\/node_modules\/playwright-core/);
+  assert.match(testEntrypoint, /playwright_alias=\/workspace\/scripts\/tests\/node_modules\/playwright/);
+  assert.match(testEntrypoint, /ln -s "\$playwright_core" "\$playwright_alias"/);
+  assert.match(testEntrypoint, /readlink "\$playwright_alias"/);
+  assert.match(testEntrypoint, /playwright_core=\/usr\/local\/lib\/node_modules\/playwright-core/);
+  assert.match(testEntrypoint, /playwright_alias=\/workspace\/scripts\/tests\/node_modules\/playwright/);
+  assert.match(testEntrypoint, /ln -s "\$playwright_core" "\$playwright_alias"/);
+  assert.match(testEntrypoint, /readlink "\$playwright_alias"/);
   assert.match(testEntrypoint, /chromium.*launch/);
   assert.match(testEntrypoint, /puppeteer/);
   assert.match(testRunner, /f"\{rust_source\}\/\."/);

@@ -22,6 +22,20 @@ if [ ! -e "$web_export_modules" ]; then
     ln -s /opt/rawrarr-web-export/node_modules "$web_export_modules"
 fi
 
+playwright_core=/usr/local/lib/node_modules/playwright-core
+playwright_alias=/workspace/scripts/tests/node_modules/playwright
+if [ ! -f "$playwright_core/index.mjs" ]; then
+    echo "ERROR: Playwright Core is missing from the test image."
+    exit 1
+fi
+mkdir -p /workspace/scripts/tests/node_modules
+if [ ! -e "$playwright_alias" ] && [ ! -L "$playwright_alias" ]; then
+    ln -s "$playwright_core" "$playwright_alias"
+elif [ "$(readlink "$playwright_alias" 2>/dev/null)" != "$playwright_core" ]; then
+    echo "ERROR: the test workspace Playwright alias conflicts with the installed Playwright Core package."
+    exit 1
+fi
+
 node_log="/tmp/rawrarr-node-tests.$$.log"
 playwright_log="/tmp/rawrarr-playwright-tests.$$.log"
 rust_log="/tmp/rawrarr-rust-tests.$$.log"
