@@ -8,6 +8,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -18,6 +19,9 @@ from pathlib import Path
 
 ROOT = Path("/opt/rawrarr-internal-do3")
 BACKUP_ROOT = ROOT / "backups"
+RECIPIENT_FILE = ROOT / "backup-age-recipient"
+STAGING_ROOT = Path("/run")
+AGE_HEADER = b"age-encryption.org/v1\n"
 CONTAINERS = {
     "roarlay": "rawrarr-internal-do3-roarlay",
     "postgres": "rawrarr-internal-do3-postgres",
@@ -62,6 +66,131 @@ def sha256(path: Path) -> str:
         for block in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def require_tmpfs_staging() -> None:
+    mounts = Path("/proc/mounts").read_text(encoding="utf-8")
+    best_mount = None
+    best_type = None
+    for line in mounts.splitlines():
+        fields = line.split()
+        if len(fields) < 3:
+            continue
+        mountpoint = Path(fields[1].replace("\\040", " "))
+        try:
+            STAGING_ROOT.resolve().relative_to(mountpoint.resolve())
+        except ValueError:
+            continue
+        if best_mount is None or len(str(mountpoint)) > len(str(best_mount)):
+            best_mount = mountpoint
+            best_type = fields[2]
+    if best_type != "tmpfs":
+        raise RuntimeError("/run must be a tmpfs so plaintext staging stays in memory")
+    if shutil.disk_usage(STAGING_ROOT).free < 512 * 1024 * 1024:
+        raise RuntimeError("less than 512 MiB is free in /run tmpfs for plaintext staging")
+
+
+def load_recipient(path: Path) -> tuple[str, str]:
+    if path.is_symlink() or not path.is_file():
+        raise RuntimeError(f"missing age recipient file: {path}")
+    stat = path.stat()
+    if (os.geteuid() == 0 and stat.st_uid != 0) or stat.st_mode & 0o077:
+        raise RuntimeError("age recipient file must be root-owned with mode 0600 or stricter")
+    value = path.read_text(encoding="ascii").strip()
+    if not re.fullmatch(r"age1pq1[a-z0-9]{13,4089}", value):
+        raise RuntimeError("age recipient file must contain one post-quantum age recipient")
+    return value, hashlib.sha256(value.encode("ascii")).hexdigest()
+
+
+def validate_age_recipient(recipient: str) -> str:
+    with tempfile.TemporaryFile(dir=STAGING_ROOT) as plaintext, tempfile.TemporaryFile(dir=STAGING_ROOT) as ciphertext:
+        plaintext.write(b"Rawrarr backup recipient preflight\n")
+        plaintext.seek(0)
+        run(
+            ["docker", "exec", "-i", CONTAINERS["roarlay"], "age", "--recipient", recipient],
+            stdin=plaintext,
+            stdout=ciphertext,
+        )
+        ciphertext.seek(0)
+        if ciphertext.read(len(AGE_HEADER)) != AGE_HEADER:
+            raise RuntimeError("age recipient preflight did not produce a valid encrypted-file header")
+    return run(["docker", "exec", CONTAINERS["roarlay"], "age", "--version"]).stdout.strip()
+
+
+def verify_plain_backup(source: Path) -> None:
+    checksum_file = source / "SHA256SUMS"
+    if not checksum_file.is_file() or checksum_file.is_symlink():
+        raise RuntimeError("existing backup has no safe SHA256SUMS file")
+    entries = checksum_file.read_text(encoding="utf-8").splitlines()
+    if not entries:
+        raise RuntimeError("existing backup checksum manifest is empty")
+    expected_paths = set()
+    for line in entries:
+        try:
+            expected, relative = line.split("  ", 1)
+        except ValueError as exc:
+            raise RuntimeError("existing backup has an invalid checksum manifest") from exc
+        path_part = Path(relative)
+        if path_part.is_absolute() or ".." in path_part.parts:
+            raise RuntimeError("existing backup checksum manifest contains an unsafe path")
+        artifact = source / path_part
+        if artifact.is_symlink() or not artifact.is_file() or sha256(artifact) != expected:
+            raise RuntimeError(f"existing backup checksum failed: {relative}")
+        expected_paths.add(path_part.as_posix())
+    actual_paths = set()
+    for item in source.rglob("*"):
+        if item.is_symlink():
+            raise RuntimeError(f"refusing symlink in existing backup: {item.name}")
+        if item.is_file() and item.name != "SHA256SUMS":
+            actual_paths.add(item.relative_to(source).as_posix())
+    if actual_paths != expected_paths:
+        raise RuntimeError("existing backup file set does not match its checksum manifest")
+
+
+def tar_directory(source: Path, destination: Path) -> None:
+    with tarfile.open(destination, "w:gz", format=tarfile.PAX_FORMAT) as archive:
+        for item in sorted(source.rglob("*")):
+            if item.is_symlink():
+                raise RuntimeError(f"refusing symlink in backup staging tree: {item.name}")
+            archive.add(item, arcname=item.relative_to(source).as_posix(), recursive=False)
+    os.chmod(destination, 0o600)
+    validate_archive(destination)
+
+
+def encrypt_directory(source: Path, backup_root: Path, archive_name: str, recipient: str) -> Path:
+    if not archive_name.endswith(".tar.gz.age"):
+        archive_name += ".tar.gz.age"
+    final = backup_root / archive_name
+    if final.exists():
+        raise RuntimeError(f"encrypted backup already exists: {final.name}")
+    with tempfile.NamedTemporaryFile(prefix="rawrarr-backup-", suffix=".tar.gz", dir=STAGING_ROOT, delete=False) as tar_file:
+        tar_path = Path(tar_file.name)
+    with tempfile.NamedTemporaryFile(prefix=f".{archive_name}.", suffix=".incomplete", dir=backup_root, delete=False) as encrypted_file:
+        encrypted_path = Path(encrypted_file.name)
+        os.chmod(encrypted_path, 0o600)
+    try:
+        tar_directory(source, tar_path)
+        with tar_path.open("rb") as plaintext, encrypted_path.open("wb") as ciphertext:
+            run(
+                ["docker", "exec", "-i", CONTAINERS["roarlay"], "age", "--recipient", recipient],
+                stdin=plaintext,
+                stdout=ciphertext,
+            )
+            ciphertext.flush()
+            os.fsync(ciphertext.fileno())
+        with encrypted_path.open("rb") as ciphertext:
+            if ciphertext.read(len(AGE_HEADER)) != AGE_HEADER:
+                raise RuntimeError("age did not produce a valid encrypted-file header")
+        os.link(encrypted_path, final)
+        directory_fd = os.open(backup_root, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+        return final
+    finally:
+        tar_path.unlink(missing_ok=True)
+        encrypted_path.unlink(missing_ok=True)
 
 
 def copy_protected_secrets(destination: Path) -> list[str]:
@@ -187,7 +316,7 @@ def write_checksums(destination: Path) -> None:
     os.chmod(checksums, 0o600)
 
 
-def create_backup(output_root: Path) -> Path:
+def create_backup(output_root: Path, recipient_file: Path) -> Path:
     if os.geteuid() != 0:
         raise RuntimeError("run this command as root on do3")
     if not output_root.is_absolute() or output_root.resolve() != BACKUP_ROOT.resolve():
@@ -198,6 +327,9 @@ def create_backup(output_root: Path) -> Path:
         raise RuntimeError("backup directory must not grant group or other permissions")
     if shutil.disk_usage(output_root).free < 512 * 1024 * 1024:
         raise RuntimeError("less than 512 MiB is free on the backup filesystem")
+    require_tmpfs_staging()
+    recipient, recipient_digest = load_recipient(recipient_file)
+    age_version = validate_age_recipient(recipient)
 
     lock = output_root / ".internal-coordinator-backup.lock"
     lock_fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
@@ -206,8 +338,7 @@ def create_backup(output_root: Path) -> Path:
     try:
         now = dt.datetime.now(dt.timezone.utc)
         backup_id = f"internal-coordinator-{now.strftime('%Y%m%dT%H%M%SZ')}"
-        final = output_root / backup_id
-        stage = Path(tempfile.mkdtemp(prefix=f".{backup_id}.", suffix=".incomplete", dir=output_root))
+        stage = Path(tempfile.mkdtemp(prefix=f".{backup_id}.", suffix=".plaintext", dir=STAGING_ROOT))
         os.chmod(stage, 0o700)
         services = {}
         for role, container in CONTAINERS.items():
@@ -243,6 +374,11 @@ def create_backup(output_root: Path) -> Path:
             "deployment_files": saved_files,
             "secret_filenames": saved_secrets,
             "artifact_sizes_bytes": sizes,
+            "encryption": {
+                "format": "age",
+                "age_version": age_version,
+                "recipient_sha256": recipient_digest,
+            },
             "consistency": {
                 "postgresql": "transaction-consistent logical pg_dump archives",
                 "volumes": "live read-only filesystem archives; restore only while their services are stopped",
@@ -253,31 +389,89 @@ def create_backup(output_root: Path) -> Path:
         manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         os.chmod(manifest_path, 0o600)
         write_checksums(stage)
-        if final.exists():
-            raise RuntimeError(f"backup already exists: {backup_id}")
-        os.rename(stage, final)
-        os.chmod(final, 0o700)
-        return final
+        return encrypt_directory(stage, output_root, backup_id, recipient)
     except BaseException:
         if stage is not None:
             shutil.rmtree(stage, ignore_errors=True)
         raise
     finally:
+        if stage is not None:
+            shutil.rmtree(stage, ignore_errors=True)
+        lock.unlink(missing_ok=True)
+
+
+def encrypt_existing_backup(source: Path, output_root: Path, recipient_file: Path) -> Path:
+    if os.geteuid() != 0:
+        raise RuntimeError("run this command as root on do3")
+    if source.is_symlink() or not source.is_dir() or source.parent.resolve() != output_root.resolve():
+        raise RuntimeError("existing backup must be a direct, real directory under the backup directory")
+    if not source.name.startswith("internal-coordinator-"):
+        raise RuntimeError("existing backup directory name is not recognized")
+    if source.stat().st_mode & 0o077:
+        raise RuntimeError("existing backup directory must not grant group or other permissions")
+    if output_root.stat().st_mode & 0o077:
+        raise RuntimeError("backup directory must not grant group or other permissions")
+    if not output_root.is_absolute() or output_root.resolve() != BACKUP_ROOT.resolve():
+        raise RuntimeError(f"backup destination must be {BACKUP_ROOT}")
+    if shutil.disk_usage(output_root).free < 512 * 1024 * 1024:
+        raise RuntimeError("less than 512 MiB is free on the backup filesystem")
+    require_tmpfs_staging()
+    recipient, recipient_digest = load_recipient(recipient_file)
+    age_version = validate_age_recipient(recipient)
+    verify_plain_backup(source)
+    lock = output_root / ".internal-coordinator-backup.lock"
+    lock_fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    os.close(lock_fd)
+    stage = None
+    try:
+        stage = Path(tempfile.mkdtemp(prefix=f".{source.name}.", suffix=".plaintext", dir=STAGING_ROOT))
+        os.chmod(stage, 0o700)
+        for item in sorted(source.rglob("*")):
+            if item.is_symlink():
+                raise RuntimeError(f"refusing symlink in existing backup: {item.name}")
+            relative = item.relative_to(source)
+            target = stage / relative
+            if item.is_dir():
+                target.mkdir(mode=0o700, parents=True, exist_ok=True)
+            elif item.is_file():
+                target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                shutil.copyfile(item, target)
+                os.chmod(target, 0o600)
+        manifest_path = stage / "manifest.json"
+        if manifest_path.is_file() and not manifest_path.is_symlink():
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["encryption"] = {
+                "format": "age",
+                "age_version": age_version,
+                "recipient_sha256": recipient_digest,
+            }
+            manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            os.chmod(manifest_path, 0o600)
+            write_checksums(stage)
+        return encrypt_directory(stage, output_root, source.name, recipient)
+    finally:
+        if stage is not None:
+            shutil.rmtree(stage, ignore_errors=True)
         lock.unlink(missing_ok=True)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=BACKUP_ROOT)
+    parser.add_argument("--recipient-file", type=Path, default=RECIPIENT_FILE)
+    parser.add_argument("--encrypt-existing", type=Path, help="make an encrypted copy of an existing plaintext backup directory")
     args = parser.parse_args()
     try:
-        result = create_backup(args.output_dir)
-    except (OSError, RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as exc:
+        if args.encrypt_existing:
+            result = encrypt_existing_backup(args.encrypt_existing, args.output_dir, args.recipient_file)
+        else:
+            result = create_backup(args.output_dir, args.recipient_file)
+    except (OSError, RuntimeError, UnicodeError, subprocess.CalledProcessError, json.JSONDecodeError) as exc:
         detail = exc.stderr.strip() if isinstance(exc, subprocess.CalledProcessError) and exc.stderr else str(exc)
         print(f"backup failed: {detail}", file=sys.stderr)
         return 1
-    print(f"backup created: {result}")
-    print(f"verify checksums: cd {result} && sha256sum --check SHA256SUMS")
+    print(f"encrypted backup created: {result}")
+    print("The archive is age-encrypted. Verify decryption on a device with the matching private age identity.")
     return 0
 
 

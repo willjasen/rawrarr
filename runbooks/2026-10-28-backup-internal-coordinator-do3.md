@@ -6,17 +6,23 @@ Create and verify a protected, recoverable disk backup of the internal coordinat
 
 ## Scope
 
-The backup script is [`scripts/backup_internal_coordinator_do3.py`](../scripts/backup_internal_coordinator_do3.py). Run it as root on do3. It writes a unique directory beneath `/opt/rawrarr-internal-do3/backups`, refuses a destination with group/other access, requires at least 512 MiB free, and creates files with mode `0600` under a `0700` directory.
+The backup script is [`scripts/backup_internal_coordinator_do3.py`](../scripts/backup_internal_coordinator_do3.py). Run it as root on do3. New snapshots are encrypted before a single `.tar.gz.age` file is published beneath `/opt/rawrarr-internal-do3/backups`. The script requires at least 512 MiB free on both the backup filesystem and `/run` tmpfs, and refuses paths that grant group/other access.
+
+## Personal age recipient
+
+The recipient must be Will's personal operator key, separate from any Rawrarr node or group recipient. The script does not read, accept, or copy a private identity. Derive the public `age1pq1…` recipient locally with `age-keygen -y /path/to/personal-age-identity`, then install only that one-line public recipient on do3 at `/opt/rawrarr-internal-do3/backup-age-recipient`, owned by root with mode `0600`. Do not use `/shared/age-recipient` or `/shared/group-age-recipient` for this purpose.
+
+The script validates the recipient, stages plaintext only under `/run` tmpfs, streams a compressed tar archive through the `age` binary bundled in the running internal roarlay image, and writes ciphertext atomically to disk. The manifest is inside the encrypted archive and records only a SHA-256 fingerprint of the public recipient. No plaintext snapshot directory or tar file is left on disk by a new run. Age v1.3.2 in the Rawrarr image supports the project's post-quantum recipients. The private identity never enters the server or container.
 
 Each backup contains:
 
 - A custom-format, transaction-consistent `pg_dump` for the Rawrarr `rawrarr` database and the Umami `umami` database. The script checks each archive with `pg_restore --list` and saves the catalog.
 - A compressed copy of the internal Tailscale state volume and the coordinator `/ui` volume. These are captured live; restore only with the related services stopped.
 - The internal project Compose files and internal analytics Caddyfile.
-- Every regular file in `/opt/rawrarr-internal-do3/secrets`, plus the mounted UI updater token from `/root/gh-token`, copied into the root-only backup directory.
+- Every regular file in `/opt/rawrarr-internal-do3/secrets`, plus the mounted UI updater token from `/root/gh-token`, staged in tmpfs and stored only inside the encrypted archive.
 - A Tailscale Serve status snapshot, container image IDs/tags/revision labels, service health metadata, and SHA-256 checksums.
 
-The script does not copy Docker images, PostgreSQL live data directories, the public project, public Caddy/Headscale/Stripe state, or subscriber `/shared`, `/media`, and `/data`. Rebuild/pull the recorded published Rawrarr revision and pinned third-party images during recovery. The backup remains on do3 and is not encrypted separately; root-only permissions protect it from other local accounts, but not from host/root compromise or disk loss. Keep a separately protected off-host copy if disaster recovery requires surviving do3 loss.
+The script does not copy Docker images, PostgreSQL live data directories, the public project, public Caddy/Headscale/Stripe state, or subscriber `/shared`, `/media`, and `/data`. Rebuild/pull the recorded published Rawrarr revision and pinned third-party images during recovery. The ciphertext remains on do3; copy it to a separately protected off-host destination if disaster recovery must survive do3 loss.
 
 ## Run and verify
 
@@ -27,19 +33,21 @@ tailscale ssh root@rawrarr-roarlay.risk-mermaid.ts.net 'docker context show; df 
 tailscale ssh root@rawrarr-roarlay.risk-mermaid.ts.net 'python3 -' < scripts/backup_internal_coordinator_do3.py
 ```
 
-Run both commands from the Rawrarr checkout containing the reviewed script. After creation, verify the reported backup directory and run on do3:
+Run both commands from the Rawrarr checkout containing the reviewed script. The backup command refuses to run until the personal recipient is installed. It prints only the encrypted archive path. Verify the ciphertext decryption and the inner `SHA256SUMS` on Will's personal device, where the matching private ID stays:
 
 ```sh
-cd /opt/rawrarr-internal-do3/backups/internal-coordinator-<UTC timestamp>
-sha256sum --check SHA256SUMS
-docker exec -i rawrarr-internal-do3-postgres pg_restore --list < coordinator.dump >/dev/null
-docker exec -i rawrarr-internal-do3-umami-postgres-1 pg_restore --list < analytics.dump >/dev/null
-tar -tzf tailscale-state.tar.gz >/dev/null
-tar -tzf coordinator-ui.tar.gz >/dev/null
-stat -c '%a %n' .. . secrets/* *.dump *.tar.gz
+age --decrypt --identity /path/to/personal-age-identity /path/to/internal-coordinator-<UTC timestamp>.tar.gz.age | tar -tzf - >/dev/null
 ```
 
-Record the backup directory, checksum result, file count/size, database catalog results, free space, and the internal HTTPS `/health` result in this runbook after execution. Never copy backup contents into the repository or print secret contents.
+For full content verification, decrypt into a `0700` directory on the personal device, run `sha256sum --check SHA256SUMS`, inspect both PostgreSQL archives with `pg_restore --list`, inspect both volume archives with `tar -tzf`, then remove the plaintext staging copy. Do not decrypt on do3. Never copy backup contents into the repository or print secret contents.
+
+For the already-created plaintext snapshot, first configure the personal public recipient file, then create an encrypted copy without modifying the original:
+
+```sh
+tailscale ssh root@rawrarr-roarlay.risk-mermaid.ts.net 'python3 - --encrypt-existing /opt/rawrarr-internal-do3/backups/internal-coordinator-20261028T104535Z' < scripts/backup_internal_coordinator_do3.py
+```
+
+Keep the original protected until Will verifies the encrypted copy on his personal device. Removing plaintext snapshots is a separate owner decision.
 
 ## Recovery
 
@@ -53,4 +61,4 @@ This is an operator backup procedure; it changes no database schema, synchronize
 
 ## Execution record
 
-Completed 2026-10-28. The complete backup is `/opt/rawrarr-internal-do3/backups/internal-coordinator-20261028T104535Z` (about 2.4 MiB). All 18 listed payload files passed `sha256sum --check`; both custom-format PostgreSQL archives passed `pg_restore --list` inside their respective PostgreSQL containers; both volume archives passed `tar -tzf`; required secrets including the mounted UI updater token are present; all files are mode `0600` and directories mode `0700`. The internal HTTPS health route returned the Roarlay health page. `tailscale serve status --json` confirmed `rawrarr.risk-mermaid.ts.net:443` proxies to `http://127.0.0.1:8081`. No containers were stopped or recreated. A first backup created at `10:45:03Z` is preserved but superseded because it predates inclusion of the mounted UI updater token; use the `10:45:35Z` backup for recovery.
+Completed 2026-10-28. The plaintext snapshot is `/opt/rawrarr-internal-do3/backups/internal-coordinator-20261028T104535Z` (about 2.4 MiB). All 18 listed payload files passed `sha256sum --check`; both custom-format PostgreSQL archives passed `pg_restore --list` inside their respective PostgreSQL containers; both volume archives passed `tar -tzf`; required secrets including the mounted UI updater token are present; all files are mode `0600` and directories mode `0700`. The internal HTTPS health route returned the Roarlay health page. `tailscale serve status --json` confirmed `rawrarr.risk-mermaid.ts.net:443` proxies to `http://127.0.0.1:8081`. No containers were stopped or recreated. A first backup created at `10:45:03Z` is preserved but superseded because it predates inclusion of the mounted UI updater token; use the `10:45:35Z` snapshot. Age-encrypted output is not yet created because the personal operator public recipient has not been supplied or installed; the node/group recipient is intentionally not substituted.

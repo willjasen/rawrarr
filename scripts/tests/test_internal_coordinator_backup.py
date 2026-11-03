@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,6 +14,57 @@ SPEC.loader.exec_module(backup)
 
 
 class InternalCoordinatorBackupTests(unittest.TestCase):
+    def test_loads_only_a_restricted_post_quantum_recipient(self):
+        with tempfile.TemporaryDirectory() as temp:
+            recipient_file = Path(temp) / "recipient"
+            recipient = "age1pq1" + "a" * 32
+            recipient_file.write_text(recipient + "\n")
+            recipient_file.chmod(0o600)
+            value, digest = backup.load_recipient(recipient_file)
+            self.assertEqual(value, recipient)
+            self.assertEqual(digest, hashlib.sha256(recipient.encode()).hexdigest())
+            recipient_file.write_text("AGE-SECRET-KEY-PQ-1private\n")
+            with self.assertRaisesRegex(RuntimeError, "post-quantum age recipient"):
+                backup.load_recipient(recipient_file)
+
+    def test_encrypts_a_tar_archive_to_age_file_without_leaving_plaintext_tar(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "source"
+            source.mkdir()
+            (source / "payload").write_text("sensitive")
+            backup_root = root / "backups"
+            backup_root.mkdir(mode=0o700)
+            staging = root / "tmpfs"
+            staging.mkdir()
+
+            def fake_run(args, *, stdout=None, stdin=None, check=True):
+                self.assertIn("age", args)
+                self.assertEqual(args[-1], "age1pq1" + "a" * 32)
+                self.assertTrue(stdin.read().startswith(b"\x1f\x8b"))
+                stdout.write(backup.AGE_HEADER + b"test-ciphertext")
+                return CompletedProcess(args, 0, None, b"")
+
+            with patch.object(backup, "STAGING_ROOT", staging), patch.object(backup, "run", side_effect=fake_run):
+                output = backup.encrypt_directory(source, backup_root, "backup-id", "age1pq1" + "a" * 32)
+            self.assertEqual(output.name, "backup-id.tar.gz.age")
+            self.assertEqual(output.read_bytes(), backup.AGE_HEADER + b"test-ciphertext")
+            self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(list(staging.iterdir()), [])
+
+    def test_recipient_preflight_runs_through_the_coordinator_age_binary(self):
+        with tempfile.TemporaryDirectory() as temp:
+            def fake_run(args, *, stdout=None, stdin=None, check=True):
+                if "--version" in args:
+                    return CompletedProcess(args, 0, "v1.3.2\n", "")
+                self.assertEqual(stdin.read(), b"Rawrarr backup recipient preflight\n")
+                stdout.write(backup.AGE_HEADER + b"preflight")
+                return CompletedProcess(args, 0, None, b"")
+
+            with patch.object(backup, "STAGING_ROOT", Path(temp)), patch.object(backup, "run", side_effect=fake_run):
+                version = backup.validate_age_recipient("age1pq1" + "a" * 32)
+            self.assertEqual(version, "v1.3.2")
+
     def test_container_metadata_requests_only_nonsecret_fields(self):
         with patch.object(
             backup,
@@ -86,6 +138,16 @@ class InternalCoordinatorBackupTests(unittest.TestCase):
             line = (root / "SHA256SUMS").read_text().strip()
             expected = backup.sha256(nested / "key")
             self.assertEqual(line, f"{expected}  secrets/key")
+
+    def test_existing_backup_must_match_its_checksum_inventory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "manifest.json").write_text("{}")
+            backup.write_checksums(root)
+            backup.verify_plain_backup(root)
+            (root / "unlisted-secret").write_text("unexpected")
+            with self.assertRaisesRegex(RuntimeError, "file set does not match"):
+                backup.verify_plain_backup(root)
 
 
 if __name__ == "__main__":
