@@ -121,7 +121,10 @@ const ageStorageStatus = document.getElementById('age-storage-status');
 const ageStorageMessage = document.getElementById('age-storage-message');
 const settingsAgeIdInput = document.getElementById('settings-age-id');
 const saveAgeIdButton = document.getElementById('save-age-id');
+const showAgeRecipientButton = document.getElementById('show-age-recipient');
 const removeAgeIdButton = document.getElementById('remove-age-id');
+const ageRecipientDisplay = document.getElementById('age-recipient-display');
+let ageRecipientVisible = false;
 const views = Object.fromEntries(['overview', 'roarlay', 'fossils', 'movies', 'series', 'assistant', 'configuration', 'settings', 'about'].map(name => [name, document.getElementById(`${name}-view`)]));
 const roarlayHealthState = document.getElementById('roarlay-health-state');
 const roarlayHealthLabel = document.getElementById('roarlay-health-label');
@@ -515,14 +518,56 @@ function updateAgeStorageSettings() {
   document.getElementById('settings-age-id-label').hidden = settingsAgeIdInput.hidden;
   saveAgeIdButton.textContent = 'Save age ID in this browser';
   saveAgeIdButton.hidden = Boolean(ageIdentityInMemory);
+  showAgeRecipientButton.hidden = !ageIdentityInMemory;
+  showAgeRecipientButton.textContent = ageRecipientVisible ? 'Hide age public ID' : 'Show age public ID';
   removeAgeIdButton.hidden = !ageIdentityInMemory;
   removeAgeIdButton.textContent = 'Clear saved age ID';
 }
+showAgeRecipientButton.addEventListener('click', async () => {
+  if (ageRecipientVisible) {
+    ageRecipientVisible = false;
+    ageRecipientDisplay.textContent = '';
+    ageRecipientDisplay.hidden = true;
+    showAgeRecipientButton.textContent = 'Show age public ID';
+    return;
+  }
+  const identity = ageIdentityInMemory;
+  if (!identity) return;
+  showAgeRecipientButton.disabled = true;
+  ageRecipientDisplay.hidden = false;
+  ageRecipientDisplay.textContent = 'Deriving age public ID in this browser…';
+  try {
+    await import('/assets/metadata-export.js');
+    const recipient = (await window.rawrarrMiniExport.deriveProfileRecipient(identity)).trim();
+    if (!/^age1pq1[a-z0-9]+$/.test(recipient)) throw new Error('The saved age ID did not produce a valid public ID.');
+    if (ageIdentityInMemory !== identity) {
+      ageRecipientVisible = false;
+      ageRecipientDisplay.textContent = '';
+      ageRecipientDisplay.hidden = true;
+      showAgeRecipientButton.textContent = 'Show age public ID';
+      return;
+    }
+    ageRecipientVisible = true;
+    ageRecipientDisplay.textContent = recipient;
+    showAgeRecipientButton.textContent = 'Hide age public ID';
+  } catch (error) {
+    ageRecipientDisplay.textContent = error instanceof Error ? error.message : 'Could not derive the age public ID.';
+  } finally {
+    showAgeRecipientButton.disabled = false;
+    if (!ageIdentityInMemory) {
+      ageRecipientDisplay.textContent = '';
+      ageRecipientDisplay.hidden = true;
+    }
+  }
+});
 function clearAgeIdentity() {
   aiMovies = null;
   aiSeries = null;
   ageIdentityInMemory = '';
   ageIdentityStored = false;
+  ageRecipientVisible = false;
+  ageRecipientDisplay.textContent = '';
+  ageRecipientDisplay.hidden = true;
   try { localStorage.removeItem(ageSessionKey); } catch { /* Keep the page usable when storage is disabled. */ }
   ageInput.value = '';
   updateAgeIdControls();
@@ -530,6 +575,9 @@ function clearAgeIdentity() {
 updateAgeIdControls();
 window.addEventListener('pagehide', () => {
   ageIdentityInMemory = '';
+  ageRecipientVisible = false;
+  ageRecipientDisplay.textContent = '';
+  ageRecipientDisplay.hidden = true;
   ageInput.value = '';
   settingsAgeIdInput.value = '';
   metadataExportInput.value = '';

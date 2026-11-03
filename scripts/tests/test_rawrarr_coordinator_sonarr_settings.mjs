@@ -368,6 +368,21 @@ test('Settings imports an age ID locally without an online node and clears it ma
   assert.equal(directAgeValidationRequests, 0);
   assert.equal(await page.locator('#settings-age-id').inputValue(), '');
   assert.equal(await page.locator('#remember-age-id').count(), 0);
+  assert.equal(await page.locator('#show-age-recipient').isVisible(), true);
+  assert.equal((await page.locator('body').innerText()).includes(identity), false, 'the private ID is not rendered');
+  await page.getByRole('button', { name: 'Show age public ID' }).click();
+  await page.locator('#age-recipient-display').getByText('age1pq1validrecipient').waitFor();
+  assert.equal(await page.locator('#age-recipient-display').isVisible(), true);
+  await page.getByRole('button', { name: 'Hide age public ID' }).click();
+  assert.equal(await page.locator('#age-recipient-display').isHidden(), true);
+  assert.equal(await page.locator('#age-recipient-display').textContent(), '');
+
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 375, height: 812 }]) {
+    await page.setViewportSize(viewport);
+    const geometry = await page.evaluate(() => ({ width: innerWidth, documentWidth: document.documentElement.scrollWidth }));
+    assert.ok(geometry.documentWidth <= geometry.width, `settings overflow at ${viewport.width}px`);
+    assert.equal(await page.locator('#show-age-recipient').isVisible(), true);
+  }
 
   await page.click('#remove-age-id');
   await page.getByText('Age private ID removed from this browser.').waitFor();
