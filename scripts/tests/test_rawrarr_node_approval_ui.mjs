@@ -61,13 +61,18 @@ test('the coordinator assigns enrollment to the signed-in account and filters ap
   assert.match(coordinator, /rawrarr_nodes\(id, role, token_sha256, origin, rp_id, user_id, signing_public_key, signing_fingerprint, signing_approval_payload, signing_approval_signature\)/);
 });
 
-test('reject removes only an owner-scoped pending request without approving it', () => {
+test('reject stores an owner-scoped root-signed revocation before removing the pending request', () => {
   assert.match(coordinator, /\.route\("\/api\/workspace\/reject", post\(reject_node\)\)/);
   assert.match(coordinator, /struct RejectRequest\s*\{\s*request_id: Uuid,/);
   assert.match(coordinator, /async fn reject_node\([\s\S]*?Json\(request\): Json<RejectRequest>/);
   assert.match(coordinator, /DELETE FROM rawrarr_node_enrollments WHERE request_id=\$1 AND user_id=\$2 AND approved_at IS NULL/);
   assert.match(coordinatorWorkspace, /reject\.textContent = 'Reject'/);
-  assert.match(coordinatorWorkspace, /jsonRequest\('\/api\/workspace\/reject', \{ method: 'POST'/);
+  assert.match(coordinatorWorkspace, /jsonRequest\(decision === 'reject' \? '\/api\/workspace\/reject' : '\/api\/workspace\/approve'/);
+  assert.match(coordinatorWorkspace, /signDeviceRejection/);
+  assert.match(coordinator, /INSERT INTO rawrarr_rejected_nodes/);
+  assert.match(coordinator, /rawrarr-device-rejection-v1/);
+  assert.match(coordinator, /signing_fingerprint=\$2/);
+  assert.match(coordinator, /Serialize every enrollment identity check and upsert against approval/);
   assert.match(coordinatorWorkspace, /pending-actions/);
 });
 
