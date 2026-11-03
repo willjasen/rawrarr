@@ -224,7 +224,7 @@
     .stub { padding:24px; border:1px solid var(--line); border-radius:12px; background:var(--panel); color:var(--muted) }
     .profile-card { display:flex; align-items:center; gap:20px; max-width:620px; padding:22px; border:1px solid var(--line); border-radius:12px; background:var(--panel) }
     .settings-identity { display:grid; grid-template-columns:minmax(380px, 1.2fr) minmax(0, .8fr); align-items:stretch; gap:18px; max-width:1320px }
-    .settings-identity .profile-card,.settings-identity .age-storage-card { box-sizing:border-box; width:100%; max-width:none; min-width:0; margin:0 }
+    .settings-identity .profile-card,.settings-identity .settings-crypto-card,.settings-identity .age-storage-card { box-sizing:border-box; width:100%; max-width:none; min-width:0; margin:0 }
     @media(max-width:900px) { .settings-identity { grid-template-columns:1fr } }
     .profile-avatar { display:block; overflow:hidden; width:124px; height:124px; border:1px solid #ffffff18; border-radius:50%; background:#202821; flex:none; box-shadow:0 10px 30px #0005 }
     .profile-avatar img { display:block; width:100%; height:100%; border-radius:inherit; object-fit:cover }
@@ -458,7 +458,19 @@
     </section>
     <section id="settings-view" hidden><h1 class="page-title">Settings</h1>
       <div class="settings-identity">
-      <article class="profile-card"><picture class="profile-avatar"><source id="profile-picture-jxl" type="image/jxl"><img id="profile-picture" alt="Generated dinosaur profile picture"></picture><div class="profile-avatar-copy"><h2 class="profile-name" id="profile-name">Loading profile…</h2><p class="profile-avatar-status" id="profile-avatar-status" role="status" aria-live="polite">Preparing your profile picture…</p><p id="trial-status" class="profile-avatar-status" role="status" aria-live="polite" hidden></p><p id="crypto-access-status" class="profile-avatar-status" role="status" aria-live="polite">Loading account tier…</p><p id="crypto-wallet-status" class="profile-avatar-status" role="status" aria-live="polite">Checking linked ENS wallet…</p><form id="crypto-wallet-link-form"><label for="crypto-ens-name">Link an ENS wallet</label><input id="crypto-ens-name" type="text" autocomplete="username" spellcheck="false" placeholder="willjasen.eth"><button id="crypto-link-wallet" type="submit">Link wallet with signature</button><p id="crypto-link-message" role="status" aria-live="polite"></p></form><p><a href="/billing">Manage subscription</a></p></div></article>
+      <article class="profile-card"><picture class="profile-avatar"><source id="profile-picture-jxl" type="image/jxl"><img id="profile-picture" alt="Generated dinosaur profile picture"></picture><div class="profile-avatar-copy"><h2 class="profile-name" id="profile-name">Loading profile…</h2><p class="profile-avatar-status" id="profile-avatar-status" role="status" aria-live="polite">Preparing your profile picture…</p><p id="trial-status" class="profile-avatar-status" role="status" aria-live="polite" hidden></p></div></article>
+      <article class="settings-crypto-card connection-card" aria-labelledby="settings-crypto-title">
+        <h2 id="settings-crypto-title">Ethereum &amp; ENS</h2>
+        <p id="crypto-access-status" class="profile-avatar-status" role="status" aria-live="polite">Loading account tier…</p>
+        <p id="crypto-wallet-status" class="profile-avatar-status" role="status" aria-live="polite">Checking linked ENS wallet…</p>
+        <form id="crypto-wallet-link-form" class="connection-form">
+          <label for="crypto-ens-name">Link an ENS wallet</label>
+          <input id="crypto-ens-name" type="text" autocomplete="username" spellcheck="false" placeholder="willjasen.eth">
+          <button id="crypto-link-wallet" type="submit">Link wallet with signature</button>
+          <p id="crypto-link-message" role="status" aria-live="polite"></p>
+        </form>
+        <p><a href="/billing">Manage subscription</a></p>
+      </article>
       <article class="age-storage-card" aria-labelledby="age-storage-title">
         <h2 id="age-storage-title">Age private ID in this browser</h2>
         <p id="age-storage-status" class="age-storage-status" role="status" aria-live="polite">Checking browser storage…</p>
