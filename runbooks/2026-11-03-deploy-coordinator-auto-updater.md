@@ -17,6 +17,7 @@ Pull requests: [#350](https://github.com/willjasen/rawrarr/pull/350), [#353](htt
 
 - Both internal and public/live do3 coordinators are healthy on published revision `e10250a8ef8ff694b41c44609c2a4962d7d3c030`, image ID `sha256:c70678674ff0117b06914210fa47be5ec96a3ee23f421d943e422204d84ea952`, `linux/amd64`.
 - Both `/api/version` responses report that revision and deployment time `2026-11-03T05:21:10Z`; the signed-in coordinator workspace displays the timestamp in its sidebar.
+- The footer is visible at desktop and mobile sizes; `test_rawrarr_coordinator_build_info_playwright.mjs` passed at 1280×800 and 375×812 with no horizontal overflow.
 - Internal local/HTTPS health and the Tailscale Serve route passed verification.
 - Public container health plus its in-container `/health` and `/api/version` passed. Cloudflare returned HTTP 403 for `https://roarlay.rawrarr.net/health` from do3, so the public edge route remains unverified from that host. The auto-updater logs a warning for a non-200 edge response after local service health succeeds and leaves ingress policy unchanged.
 - The internal/public locks were released. Existing databases, Tailscale state, UI volumes, secrets, and unrelated services remain intact.
@@ -30,6 +31,8 @@ No persistent data, database schema, or protocol format changed, so no migration
 - `python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v` — 50 tests passed.
 - `python3 scripts/tests/test_do3_coordinator_auto_updater.py` — 6 tests passed.
 - `node --test scripts/tests/test_rawrarr_coordinator_build_info.mjs` — 2 tests passed.
+- `test_rawrarr_coordinator_build_info_playwright.mjs` — passed at desktop and mobile viewports.
+- Linked OrbStack regression runner — Rust passed (116 tests), Node and Playwright suites had unrelated existing failures (missing `/workspace/netlify-ignore-build.sh` in the clone and a Radarr/Sonarr settings timeout).
 - `python3 -m py_compile deploy/do3/auto_update_coordinators.py`, `bash -n deploy/do3/install-coordinator-auto-updater.sh`, and `git diff --check` — passed.
 - GitHub PR #354 `Basic script tests` check — passed.
 - `systemd-analyze verify` — both installed units passed.
