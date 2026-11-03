@@ -107,3 +107,55 @@ test('Movies picks up an age ID imported in another tab', async t => {
   assert.match(await noNodePage.locator('#content-status').textContent(), /Age private ID is saved in this browser/);
   assert.doesNotMatch(await noNodePage.locator('#content-status').textContent(), /Enter your age private ID/);
 });
+
+test('Settings-saved age ID is recognized when navigating to Movies in the same tab', async t => {
+  const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const context = await browser.newContext();
+  t.after(() => context.close());
+  const page = await context.newPage();
+  let unlocked = false;
+  let loadedMovies = false;
+
+  await context.route('http://rawrarr.test/**', async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === '/health') return route.fulfill({ status: 200, body: 'ok' });
+    if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
+    if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-availability.mjs') return route.fulfill({ body: availabilityModule, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-ai.mjs') return route.fulfill({ body: aiModule, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: "window.rawrarrMiniExport = { deriveProfileRecipient: async () => 'age1pq1testrecipient', prepareGroupIdentityForDevice: async () => false, encryptIdentityForDevice: async value => `age-ciphertext:${value}` };" });
+    if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
+    if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }] });
+    if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
+    if (url.pathname === '/api/workspace/direct-session') return route.fulfill({ status: 204, headers: { 'set-cookie': `rawrarr_direct_session=${'a'.repeat(64)}; Path=/direct-api/; SameSite=Strict` } });
+    if (url.pathname === '/direct-api/health') return route.fulfill({ status: 204 });
+    if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'POST') {
+      unlocked = true;
+      return route.fulfill({ json: { unlocked: true, encryptedConfigExists: true } });
+    }
+    if (url.pathname === '/direct-api/api/settings/age' && request.method() === 'GET') return route.fulfill({ json: { unlocked, encryptedConfigExists: true } });
+    if (url.pathname === '/direct-api/api/radarr/live-library') {
+      loadedMovies = true;
+      return route.fulfill({ json: [] });
+    }
+    if (url.pathname.startsWith('/direct-api/api/')) return route.fulfill({ json: {} });
+    if (url.pathname.startsWith('/api/workspace/')) return route.fulfill({ json: {} });
+    return route.fulfill({ status: 404, body: 'not found' });
+  });
+
+  await page.goto('http://rawrarr.test/#settings');
+  await page.locator('#settings-age-id').fill('AGE-SECRET-KEY-PQ-1same-tab-test-fixture');
+  await page.locator('#age-storage-form button[type="submit"]').click();
+  await page.waitForFunction(() => localStorage.getItem('rawrarr.browser.age-id')?.includes('same-tab-test-fixture'));
+  await page.locator('.nav-item[data-view="movies"]').click();
+  await page.waitForFunction(() => document.getElementById('age-id-entry').hidden);
+  await page.waitForFunction(() => document.querySelector('[data-node-id="metadata-one"]')?.dataset.selected === 'true');
+  await page.waitForFunction(() => document.getElementById('content-status').textContent.includes('Radarr library entries loaded'));
+  assert.equal(loadedMovies, true);
+  assert.equal((await page.locator('body').innerText()).includes('Enter your age private ID to unlock'), false);
+});

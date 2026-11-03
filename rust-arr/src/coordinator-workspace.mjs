@@ -154,6 +154,7 @@ function showView(name, updateHash = true) {
     updateAgeIdControls();
     if (selectedNode) renderCachedMovies(selectedNode);
     if (ageIdentityInMemory && selectedNode) void unlockMetadata();
+    else if (!ageIdentityInMemory) contentStatus.textContent = 'Enter your age private ID to unlock. It will be saved in this browser after validation.';
   }
   if (view === 'series' && updateHash) {
     const cachedSeries = ageIdentityInMemory ? readLibraryTextCache(selectedNode, 'tv') : null;
@@ -743,6 +744,7 @@ document.getElementById('age-storage-form').addEventListener('submit', async eve
     settingsAgeIdInput.value = '';
     contentStatus.textContent = ageStorageMessage.textContent;
     updateAgeIdControls();
+    if (location.hash === '#movies' && selectedNode) void unlockMetadata();
   } catch (error) {
     ageStorageMessage.dataset.state = 'error';
     ageStorageMessage.textContent = error.message || 'Could not validate or save the age private ID.';
