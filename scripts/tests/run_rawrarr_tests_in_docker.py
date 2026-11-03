@@ -21,6 +21,10 @@ IMAGE = "rawrarr-testing-base:local"
 BASE36 = "0123456789abcdefghijklmnopqrstuvwxyz"
 CLEANUP_INTERVAL_SECONDS = 60 * 60
 CLEANUP_STATE = Path.home() / "Library" / "Application Support" / "Rawrarr" / ".test-container-cleanup-last-run"
+ROOT_FIXTURES = (
+    ".github", "admin", "deploy", "docs", "netlify-ignore-build.sh", "netlify.toml",
+    "storage-proxy.Caddyfile", "stripe-service", "website",
+)
 
 
 def timestamp_code() -> str:
@@ -54,7 +58,13 @@ def copy_project_into_container(context: str, name: str, destination: Path) -> N
     # Copy only the root-level fixtures needed by source-structure tests.
     for compose_file in sorted(ROOT.glob("docker-compose*.yml")):
         subprocess.run(["docker", "--context", context, "cp", str(compose_file), f"{name}:/workspace/{compose_file.name}"], check=True)
-    for fixture in (ROOT / ".github", ROOT / "admin", ROOT / "deploy", ROOT / "docs", ROOT / "stripe-service", ROOT / "website", ROOT / "netlify.toml", ROOT / "storage-proxy.Caddyfile"):
+    copy_root_fixtures(context, name)
+
+
+def copy_root_fixtures(context: str, name: str) -> None:
+    """Copy root-level files and directories used by source-structure tests."""
+    for relative_path in ROOT_FIXTURES:
+        fixture = ROOT / relative_path
         if not fixture.exists():
             continue
         subprocess.run(["docker", "--context", context, "cp", str(fixture), f"{name}:/workspace/"], check=True)
