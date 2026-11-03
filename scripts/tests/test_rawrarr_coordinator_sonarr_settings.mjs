@@ -103,7 +103,7 @@ test('coordinator saves Radarr and Sonarr settings over the direct metadata rout
   await page.locator('#radarr-node-note').getByText('Radarr is not configured on fossil.').waitFor();
   await page.click('[data-view="series"]');
   assert.equal(new URL(page.url()).hash, '#tv');
-  await page.locator('#sonarr-settings-message').getByText('Enter your Sonarr HTTPS URL and API key.').waitFor();
+  await page.locator('#sonarr-settings-message').getByText('Enter your Sonarr HTTPS URL or node-loopback HTTP URL and API key.').waitFor();
   await page.locator('#sonarr-node-note').getByText('Sonarr is not configured on fossil.').waitFor();
   await page.locator('#sonarr-url').fill('https://sonarr.example.test');
   await page.locator('#sonarr-key').fill('sonarr-secret-api-key');
@@ -144,7 +144,7 @@ test('coordinator saves Radarr and Sonarr settings over the direct metadata rout
   assert.ok(directRequests.some(request => request.path === '/direct-api/api/settings/sonarr' && request.method === 'DELETE'));
 
   await page.click('[data-view="movies"]');
-  await page.locator('#radarr-settings-message').getByText('Enter your Radarr HTTPS URL and API key.').waitFor();
+  await page.locator('#radarr-settings-message').getByText('Enter your Radarr HTTPS URL or node-loopback HTTP URL and API key.').waitFor();
   await page.locator('#radarr-url').fill('https://radarr.example.test');
   await page.locator('#radarr-key').fill('radarr-secret-api-key');
   await page.locator('#radarr-ui-username').fill('radarr-ui-user');

@@ -80,7 +80,7 @@ test('left navigation renders every visible option in lowercase', () => {
   assert.ok(sidebar, 'main navigation sidebar exists');
   assert.match(workspace, /\.nav-text\s*\{[^}]*text-transform:\s*lowercase/i);
   const labels = [...sidebar.matchAll(/<span class="nav-text">([^<]+)<\/span>/g)].map(([, label]) => label);
-  assert.deepEqual(labels.map(label => label.toLowerCase()), ['overview', 'subscription', 'roarlay', 'fossils', 'movies', 'tv', 'rawrs', 'configuration', 'settings', 'about']);
+  assert.deepEqual(labels.map(label => label.toLowerCase()), ['overview', 'subscription', 'roarlay', 'fossils', 'discover', 'movies', 'tv', 'rawrs', 'configuration', 'settings', 'about']);
   assert.match(sidebar, /<a class="nav-item" href="\/billing" aria-label="Subscription"[\s\S]*?<span class="nav-text">Subscription<\/span><\/a>/);
 });
 

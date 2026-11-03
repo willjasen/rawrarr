@@ -226,6 +226,12 @@ Radarr and Sonarr use one `libraryColumns` schema and `renderArrLibrary` rendere
 
 Sonarr uses the shared Arr HTTPS transport, validates service identity before saving, and stores its connection in the subscriber age-encrypted config. Locked read-modify-write operations preserve other app connections and the metadata filename key. Metadata nodes scrape uncached Sonarr series metadata and posters sequentially after connection, skip age-encrypted shared cache hits, and repeat after six hours. Metadata search and episode mutations remain planned.
 
+### Prowlarr discovery adapter
+
+Treat Prowlarr as a replaceable discovery adapter, not Rawrarr's library or fulfillment system of record. Reuse the shared Arr transport and coordinator service-settings flow. The selected metadata node owns the URL and API key in the age-encrypted config; remote instances require HTTPS, while HTTP is accepted only for node loopback. The coordinator browser sends settings directly to that node, and roarlay receives no Prowlarr credentials. Show normalized indexer status and owner-initiated, bounded search results with stable IDs and indexer provenance. Do not expose download URLs or add automatic downloads/fulfillment as part of discovery.
+
+Offer an owner-run Compose overlay instead of giving the node application Docker-socket access. The overlay shares the fossil's Tailscale namespace, stores Prowlarr configuration in a node-local Docker volume, and publishes the setup UI only on host loopback. Applying it can recreate the Tailscale sidecar and interrupt the node; explain that risk and require review, a maintenance window, and preservation of existing volumes. For adoption, keep the external instance untouched: export a native Prowlarr backup, restore it only into a fresh managed instance of a compatible version, compare configuration there, test the target connection before changing Rawrarr's saved connection, and retain the source URL/API key for rollback. Backup archives may contain credentials and must stay outside roarlay and synchronized data.
+
 The shared config uses the versioned [schema v1](shared-config-v1.schema.json). Store Radarr and Sonarr connections as typed entries in the `services` array; readers accept legacy flat Radarr/Sonarr fields and rewrite them as schema v1 on unlock. Keep service credentials inside age ciphertext and redact them in browser-rendered config.
 
 

@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod movie_snapshot;
+mod prowlarr;
 mod sonarr;
 
 pub mod auth;
@@ -290,6 +291,17 @@ impl std::error::Error for RadarrConfigError {}
 
 type RadarrClient = ArrClient;
 
+fn is_loopback_host(host: &str) -> bool {
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    host.strip_prefix('[')
+        .and_then(|host| host.strip_suffix(']'))
+        .unwrap_or(host)
+        .parse::<std::net::IpAddr>()
+        .is_ok_and(|address| address.is_loopback())
+}
+
 impl ArrClient {
     fn new(base_url: String, api_key: String) -> Result<Self, RadarrConfigError> {
         Self::new_with_ui_auth(base_url, Zeroizing::new(api_key), None, None)
@@ -306,7 +318,9 @@ impl ArrClient {
         }
         let parsed =
             reqwest::Url::parse(base_url.trim()).map_err(|_| RadarrConfigError::InvalidUrl)?;
-        if parsed.scheme() != "https"
+        let loopback_http = parsed.scheme() == "http"
+            && parsed.host_str().is_some_and(is_loopback_host);
+        if (parsed.scheme() != "https" && !loopback_http)
             || parsed.host_str().is_none()
             || !parsed.username().is_empty()
             || parsed.password().is_some()
@@ -2530,7 +2544,7 @@ async fn put_radarr_settings(
     )
     .map_err(|error| {
             let message = match error {
-                RadarrConfigError::InvalidUrl => "Enter a valid Radarr HTTPS URL",
+                RadarrConfigError::InvalidUrl => "Enter a valid Radarr HTTPS URL or node-loopback HTTP URL",
                 RadarrConfigError::InvalidApiKey => "Enter a valid Radarr API key",
                 RadarrConfigError::InvalidUiCredentials => "Enter valid Radarr UI credentials",
                 RadarrConfigError::InvalidCaCertificate => "The configured Arr CA certificate could not be loaded",
@@ -2636,7 +2650,7 @@ async fn test_radarr_settings(
         (
             StatusCode::BAD_REQUEST,
             Json(ApiError {
-                error: "Enter a valid Radarr HTTPS URL and credentials",
+                error: "Enter a valid Radarr HTTPS URL or node-loopback HTTP URL and credentials",
             }),
         )
     })?;
@@ -2965,6 +2979,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .post(sonarr::test_connection)
                 .delete(sonarr::clear),
         )
+        .route(
+            "/api/settings/prowlarr",
+            get(prowlarr::settings)
+                .put(prowlarr::save)
+                .post(prowlarr::test_connection)
+                .delete(prowlarr::clear),
+        )
+        .route("/api/prowlarr/indexers", get(prowlarr::indexers))
+        .route("/api/prowlarr/search", post(prowlarr::search))
         .route("/api/radarr/status", get(radarr_status))
         .route("/api/radarr/movies", get(radarr_movies))
         .route("/api/radarr/movies/snapshot", get(movie_snapshot::get))
@@ -3011,6 +3034,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .post(sonarr::test_connection)
                 .delete(sonarr::clear),
         )
+        .route(
+            "/api/settings/prowlarr",
+            get(prowlarr::settings)
+                .put(prowlarr::save)
+                .post(prowlarr::test_connection)
+                .delete(prowlarr::clear),
+        )
+        .route("/api/prowlarr/indexers", get(prowlarr::indexers))
+        .route("/api/prowlarr/search", post(prowlarr::search))
         .route("/api/sonarr/status", get(sonarr::status))
         .route("/api/sonarr/series", get(sonarr::series))
         .route("/api/sonarr/series/{tvdb_id}/poster", get(get_sonarr_poster))
@@ -3173,10 +3205,26 @@ mod metadata_image_tests {
     }
 
     #[test]
-    fn arr_connections_require_https() {
+    fn arr_connections_require_https_except_for_loopback_http() {
         assert!(ArrClient::new("https://radarr.example:7878".into(), "test-key".into()).is_ok());
         assert!(ArrClient::new("https://sonarr.example:8989".into(), "test-key".into()).is_ok());
-        for url in ["http://radarr.example:7878", "http://sonarr.example:8989", "ftp://arr.example"] {
+        for url in [
+            "http://localhost:9696",
+            "http://127.0.0.1:9696",
+            "http://127.42.0.2:9696",
+            "http://[::1]:9696",
+        ] {
+            assert!(
+                ArrClient::new(url.into(), "test-key".into()).is_ok(),
+                "rejected node-local URL {url}"
+            );
+        }
+        for url in [
+            "http://radarr.example:7878",
+            "http://192.168.1.10:9696",
+            "http://127.0.0.1.example:9696",
+            "ftp://arr.example",
+        ] {
             assert!(
                 ArrClient::new(url.into(), "test-key".into()).is_err(),
                 "accepted {url}"
