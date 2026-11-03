@@ -6,13 +6,15 @@ import { chromium } from '/usr/local/lib/node_modules/playwright-core/index.mjs'
 
 const root = new URL('../../website/', import.meta.url);
 const html = await readFile(new URL('index.html', root), 'utf8');
+const analytics = await readFile(new URL('analytics.js', root), 'utf8');
 const css = await readFile(new URL('styles.css', root), 'utf8');
 const logo = await readFile(new URL('assets/rawrarr-logo.png', root));
 const netlify = await readFile(new URL('../../netlify.toml', import.meta.url), 'utf8');
+const contentSecurityPolicy = netlify.match(/Content-Security-Policy\s*=\s*"([^"]+)"/)?.[1];
 
 test('public rawrarr.net landing page is static, accurate, and responsive', async t => {
   assert.match(netlify, /^\[build\][\s\S]*?publish\s*=\s*"website"/m);
-  assert.match(netlify, /Content-Security-Policy\s*=\s*"default-src 'self'/);
+  assert.match(netlify, /Content-Security-Policy\s*=\s*"default-src 'self';[\s\S]*?script-src 'self';[\s\S]*?connect-src 'self'"/);
   assert.match(netlify, /X-Content-Type-Options\s*=\s*"nosniff"/);
   assert.match(html, /<link rel="canonical" href="https:\/\/rawrarr\.net\/">/);
   assert.match(html, /<meta name="color-scheme" content="dark light">/);
@@ -20,13 +22,20 @@ test('public rawrarr.net landing page is static, accurate, and responsive', asyn
   assert.match(css, /@media \(prefers-color-scheme: light\)/);
   assert.match(html, /The coordinator can see account, device, routing, timing, and traffic-size information/);
   assert.match(html, /has not had an independent security audit/i);
-  assert.doesNotMatch(html, /href="\/auth"|<script\b/i, 'public page has no private sign-in link or executable script');
+  assert.match(html, /Anonymous site analytics/);
+  assert.doesNotMatch(html, /href="\/auth"/i, 'public page has no private sign-in link');
+  assert.doesNotMatch(html, /<script(?![^>]*\bsrc=)[^>]*>/i, 'public page has no inline scripts');
+  assert.match(analytics, /website, url: '\/website', title: 'Rawrarr website'/);
   assert.doesNotMatch(css, /@import\s/i, 'styles load only from the site itself');
 
+  const analyticsEvents = [];
   const server = createServer(async (request, response) => {
     const path = request.url?.split('?')[0];
     if (path === '/' || path === '/index.html') {
-      response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      response.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        'content-security-policy': contentSecurityPolicy,
+      });
       response.end(html);
       return;
     }
@@ -38,6 +47,24 @@ test('public rawrarr.net landing page is static, accurate, and responsive', asyn
     if (path === '/assets/rawrarr-logo.png') {
       response.writeHead(200, { 'content-type': 'image/png' });
       response.end(logo);
+      return;
+    }
+    if (path === '/analytics.js') {
+      response.writeHead(200, { 'content-type': 'application/javascript; charset=utf-8' });
+      response.end(analytics);
+      return;
+    }
+    if (path === '/analytics/script.js') {
+      response.writeHead(200, { 'content-type': 'application/javascript; charset=utf-8' });
+      response.end(`window.umami = { track: event => fetch('/analytics/api/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(event) }).then(response => { window.__analyticsSendStatus = response.status; }) };`);
+      return;
+    }
+    if (path === '/analytics/api/send' && request.method === 'POST') {
+      const chunks = [];
+      for await (const chunk of request) chunks.push(chunk);
+      analyticsEvents.push(JSON.parse(Buffer.concat(chunks).toString()));
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end('{"ok":true}');
       return;
     }
     response.writeHead(404);
@@ -54,6 +81,9 @@ test('public rawrarr.net landing page is static, accurate, and responsive', asyn
   page.on('request', request => {
     if (!request.url().startsWith(origin)) offsiteRequests.push(request.url());
   });
+  const analyticsScriptUrl = `${origin}/analytics/script.js`;
+  const analyticsEventUrl = `${origin}/analytics/api/send`;
+  const analyticsRequest = page.waitForRequest(request => request.url() === analyticsEventUrl && request.method() === 'POST', { timeout: 5000 });
   await page.goto(origin);
 
   await page.getByRole('heading', { name: 'Your library. Your devices.' }).waitFor();
@@ -62,9 +92,24 @@ test('public rawrarr.net landing page is static, accurate, and responsive', asyn
   assert.equal(await page.getByRole('link', { name: 'Open Rawrarr app' }).count(), 1);
   assert.equal(await page.getByRole('link', { name: 'Open app' }).getAttribute('href'), 'https://roarlay.rawrarr.net/');
   assert.equal(await page.getByRole('link', { name: 'Open Rawrarr app' }).getAttribute('href'), 'https://roarlay.rawrarr.net/');
-  assert.equal(await page.locator('script').count(), 0);
+  assert.equal(await page.locator('script').count(), 2);
+  assert.equal(await page.locator('script[data-auto-track="false"]').getAttribute('data-website-id'), '72da7a2e-fe1b-4058-b07b-912d526c939e');
+  const sentAnalyticsRequest = await analyticsRequest;
+  assert.equal(sentAnalyticsRequest.method(), 'POST');
+  assert.equal((await sentAnalyticsRequest.response()).status(), 200);
+  assert.deepEqual(JSON.parse(sentAnalyticsRequest.postData()), {
+    website: '72da7a2e-fe1b-4058-b07b-912d526c939e',
+    url: '/website',
+    title: 'Rawrarr website',
+  });
+  await page.waitForFunction(() => window.__analyticsSendStatus === 200);
+  assert.deepEqual(analyticsEvents, [{
+    website: '72da7a2e-fe1b-4058-b07b-912d526c939e',
+    url: '/website',
+    title: 'Rawrarr website',
+  }]);
   assert.equal(await page.locator('img').first().evaluate(image => image.complete && image.naturalWidth > 0), true);
-  assert.equal(offsiteRequests.length, 0, `all assets load locally: ${offsiteRequests.join(', ')}`);
+  assert.equal(offsiteRequests.length, 0, `all browser requests are same-origin: ${offsiteRequests.join(', ')}`);
 
   assert.match(css, /:root\s*\{\s*color-scheme:\s*dark;[\s\S]*?--paper:\s*#101611;/, 'dark is the stylesheet fallback before the light media override');
   assert.match(css, /@media \(prefers-color-scheme: light\)\s*\{\s*:root\s*\{\s*color-scheme:\s*light;/, 'explicit system light overrides the dark fallback');
