@@ -31,7 +31,7 @@
 
 
 - `test_internal_deploy_targets.py` — checks coordinator-only SQLx migrations and served signing assets, node-only, shared/unknown runtime, documentation-only, and mixed-change target classification. Run `python3 scripts/tests/test_internal_deploy_targets.py`.
-- `test_do3_support_image_updater.py` — checks repository-declared support-image coverage, active Compose project/service validation, per-service no-pull recreation, protected overrides, deployment-lock release, and public edge 403 handling. Run `python3 scripts/tests/test_do3_support_image_updater.py`.
+- `test_do3_support_image_updater.py` — checks repository-declared support-image coverage, active Compose project/service validation, internal image interpolation, per-service no-pull recreation, protected overrides, deployment-lock release, and public edge 403 handling. Run `python3 scripts/tests/test_do3_support_image_updater.py`.
 - `test_rawrarr_node_avatar.mjs` — verifies node-recipient validation, encoded relay route, no-store fetching, and deterministic SHA-256 avatar seed derivation; run with `node --test scripts/tests/test_rawrarr_node_avatar.mjs`.
 
 - `secure_config::tests::node_identity_is_created_once_and_existing_identity_is_reused` and `invalid_existing_node_identity_is_not_replaced` — Subscriber startup age identity generation, persistence/reuse, separation from the user identity, file permissions, and fail-closed invalid-file behavior; run with `cargo test --locked --manifest-path rust-arr/Cargo.toml node_identity` in the Rust test environment.
