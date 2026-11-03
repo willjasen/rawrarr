@@ -23,6 +23,24 @@ class SupportImageUpdaterTests(unittest.TestCase):
         projects = {target[0] for target in UPDATER.TARGETS}
         self.assertEqual(projects, set(UPDATER.PROJECTS))
         self.assertTrue(all(not target[3].startswith("rawrarr:") for target in UPDATER.TARGETS))
+        internal_containers = {
+            container for project, container, _service, _image in UPDATER.TARGETS
+            if project == "rawrarr-internal-do3"
+        }
+        self.assertEqual(internal_containers, {
+            "rawrarr-int-postgres",
+            "rawrarr-int-tailscale",
+            "rawrarr-int-caddy",
+            "rawrarr-int-umami-postgres",
+        })
+        self.assertEqual(
+            UPDATER.PROJECTS["rawrarr-internal-do3"]["health_container"],
+            "rawrarr-int-roarlay",
+        )
+        self.assertEqual(
+            UPDATER.PROJECTS["rawrarr-internal-do3"]["tailscale_container"],
+            "rawrarr-int-tailscale",
+        )
         for project, settings in UPDATER.PROJECTS.items():
             override = ROOT / "deploy" / "do3" / settings["compose"]
             self.assertTrue(override.is_file())
@@ -169,9 +187,9 @@ class SupportImageUpdaterTests(unittest.TestCase):
     def test_deployment_lock_is_released_after_guarded_work(self):
         with tempfile.TemporaryDirectory() as temporary:
             marker = Path(temporary) / ".container-rebuild-postgres.lock"
-            with UPDATER.deployment_lock(marker, "rawrarr-internal-do3-postgres"):
+            with UPDATER.deployment_lock(marker, "rawrarr-int-postgres"):
                 self.assertTrue(marker.exists())
-                self.assertIn("container=rawrarr-internal-do3-postgres", marker.read_text())
+                self.assertIn("container=rawrarr-int-postgres", marker.read_text())
             self.assertFalse(marker.exists())
 
     def test_internal_route_verifies_local_health_and_tailscale_serve(self):
@@ -193,7 +211,7 @@ class SupportImageUpdaterTests(unittest.TestCase):
         ) as command:
             UPDATER.verify_route("rawrarr-internal-do3")
         self.assertEqual(command.call_args_list[0].args[0][:4], [
-            "docker", "exec", "rawrarr-internal-do3-roarlay", "curl",
+            "docker", "exec", "rawrarr-int-roarlay", "curl",
         ])
         self.assertEqual(command.call_args_list[2].args[0][-1], UPDATER.PROJECTS["rawrarr-internal-do3"]["health_url"])
 

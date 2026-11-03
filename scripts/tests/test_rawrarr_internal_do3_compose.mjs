@@ -15,14 +15,14 @@ function serviceBlock(service) {
 
 test('do3 internal coordinator has separate PostgreSQL state and no public database port', () => {
   const postgres = serviceBlock('postgres');
-  assert.match(postgres, /container_name: rawrarr-internal-do3-postgres/);
+  assert.match(postgres, /container_name: rawrarr-int-postgres/);
   assert.match(postgres, /rawrarr-internal-do3-postgres-data/);
   assert.doesNotMatch(postgres, /^\s+ports\s*:/m);
 });
 
 test('do3 internal ingress uses the moved rawrarr Tailscale identity and loopback diagnostics', () => {
   const tailscale = serviceBlock('tailscale');
-  assert.match(tailscale, /container_name: rawrarr-internal-do3-tailscale/);
+  assert.match(tailscale, /container_name: rawrarr-int-tailscale/);
   assert.match(tailscale, /hostname: rawrarr/);
   assert.match(tailscale, /rawrarr-internal-do3-tailscale-state/);
   assert.match(tailscale, /127\.0\.0\.1:7299:8080/);
@@ -31,7 +31,7 @@ test('do3 internal ingress uses the moved rawrarr Tailscale identity and loopbac
 
 test('internal roarlay retains the passkey origin, internal billing audience, and Tailscale namespace', () => {
   const roarlay = serviceBlock('roarlay');
-  assert.match(roarlay, /container_name: rawrarr-internal-do3-roarlay/);
+  assert.match(roarlay, /container_name: rawrarr-int-roarlay/);
   assert.match(roarlay, /pull_policy: never/);
   assert.match(roarlay, /network_mode: service:tailscale/);
   assert.match(roarlay, /RAWARR_BILLING_AUDIENCE: internal/);
