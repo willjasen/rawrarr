@@ -1431,7 +1431,7 @@ async fn coordinator_home(
     let page = if crate::auth::is_authenticated(&state.coordinator_auth, &headers).await {
         crate::ui_assets::text("coordinator_workspace.html", include_str!("coordinator_workspace.html")).await
     } else {
-        crate::ui_assets::text("landing.html", include_str!("landing.html")).await
+        return axum::response::Redirect::to("/auth").into_response();
     };
     let mut response = axum::response::Html(with_analytics_tracker(page, &state.web_origin)).into_response();
     response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
