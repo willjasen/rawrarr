@@ -500,6 +500,7 @@ const metadataExportInput = document.getElementById('metadata-export-identity');
 const metadataExportDialogStatus = document.getElementById('metadata-export-dialog-status');
 const metadataExportCancel = document.getElementById('metadata-export-cancel');
 async function runMetadataExport(identity) {
+  const identityRevision = ageIdentityRevision;
   const node = selectedNodeDetails;
   if (!node || node.role !== 'metadata') {
     metadataExportStatus.textContent = 'Select a fossil node before exporting.';
@@ -510,7 +511,10 @@ async function runMetadataExport(identity) {
     await import('/assets/metadata-export.js');
     const route = selectedRoute?.nodeId === node.nodeId ? selectedRoute : await chooseNodeRoute(node, true);
     const count = await window.rawrarrMiniExport.runMiniExport(identity, message => { metadataExportStatus.textContent = message; }, route.base);
-    rememberAgeIdentity(identity);
+    if (identityRevision === ageIdentityRevision) {
+      rememberAgeIdentity(identity);
+      updateAgeIdControls();
+    }
     metadataExportStatus.textContent = `Downloaded ${count} movie metadata record(s) and matching available artwork.`;
   } catch (error) {
     metadataExportStatus.textContent = error instanceof Error ? error.message : 'Metadata export failed.';
@@ -548,6 +552,8 @@ metadataExportForm?.addEventListener('submit', async event => {
 // Keep the user's age identity on this browser until sign-out or manual clear.
 let ageIdentityInMemory = rememberedAgeIdentity;
 let ageIdentityStored = Boolean(rememberedAgeIdentity);
+// Invalidate pending consumers before clear, sign-out, or navigation can finish.
+let ageIdentityRevision = 0;
 ageInput.value = '';
 if (location.hash === '#movies' && ageIdentityInMemory && selectedNode && readLibraryTextCache(selectedNode, 'movies')) {
   contentPanel.hidden = false;
@@ -577,12 +583,13 @@ function rememberAgeIdentity(identity) {
   }
 }
 window.addEventListener('storage', event => {
-  if (event.key !== ageSessionKey) return;
+  if (event.storageArea !== localStorage || (event.key !== ageSessionKey && event.key !== null)) return;
   const nextIdentity = event.newValue || '';
   const identityChanged = ageIdentityInMemory !== nextIdentity;
   ageIdentityInMemory = nextIdentity;
   ageIdentityStored = Boolean(event.newValue);
   if (identityChanged) {
+    ageIdentityRevision += 1;
     ageRecipientVisible = false;
     agePublicRecipient = '';
     ageRecipientShort.textContent = '';
@@ -595,10 +602,12 @@ window.addEventListener('storage', event => {
   if (!nextIdentity) {
     aiMovies = null;
     aiSeries = null;
+    moviesPanel.replaceChildren();
+    document.getElementById('sonarr-series').replaceChildren();
+    resetArrSummary('radarr');
+    resetArrSummary('sonarr');
     if (identityChanged) ageInput.value = '';
     if (location.hash === '#movies') {
-      moviesPanel.replaceChildren();
-      resetArrSummary('radarr');
       contentStatus.textContent = 'Age private ID removed from this browser; metadata is locked.';
     }
   }
@@ -701,6 +710,16 @@ copyAgeRecipientButton.addEventListener('click', async () => {
   }
 });
 function clearAgeIdentity() {
+  try {
+    localStorage.removeItem(ageSessionKey);
+  } catch {
+    ageStorageMessage.dataset.state = 'error';
+    ageStorageMessage.textContent = "Could not remove the saved age ID. Allow browser storage access and try again, or clear this site's browser data before signing out.";
+    contentStatus.textContent = ageStorageMessage.textContent;
+    showView('settings');
+    return false;
+  }
+  ageIdentityRevision += 1;
   aiMovies = null;
   aiSeries = null;
   ageIdentityInMemory = '';
@@ -712,12 +731,19 @@ function clearAgeIdentity() {
   ageRecipientMessage.textContent = '';
   ageRecipientMessage.hidden = true;
   ageRecipientMessage.dataset.state = '';
-  try { localStorage.removeItem(ageSessionKey); } catch { /* Keep the page usable when storage is disabled. */ }
   ageInput.value = '';
+  settingsAgeIdInput.value = '';
+  metadataExportInput.value = '';
+  moviesPanel.replaceChildren();
+  document.getElementById('sonarr-series').replaceChildren();
+  resetArrSummary('radarr');
+  resetArrSummary('sonarr');
   updateAgeIdControls();
+  return true;
 }
 updateAgeIdControls();
 window.addEventListener('pagehide', () => {
+  ageIdentityRevision += 1;
   ageIdentityInMemory = '';
   ageRecipientVisible = false;
   agePublicRecipient = '';
@@ -751,6 +777,7 @@ window.addEventListener('pageshow', event => {
 
 document.getElementById('age-storage-form').addEventListener('submit', async event => {
   event.preventDefault();
+  const identityRevision = ageIdentityRevision;
   const identity = ageIdentityInMemory || settingsAgeIdInput.value.trim();
   ageStorageMessage.dataset.state = '';
   if (!identity) {
@@ -764,6 +791,7 @@ document.getElementById('age-storage-form').addEventListener('submit', async eve
     await import('/assets/metadata-export.js');
     const recipient = (await window.rawrarrMiniExport.deriveProfileRecipient(identity)).trim();
     if (!/^age1pq1[a-z0-9]+$/.test(recipient)) throw new Error('The age private ID is invalid. Check it and try again.');
+    if (identityRevision !== ageIdentityRevision) return;
     if (!rememberAgeIdentity(identity)) {
       ageStorageMessage.textContent = 'Age private ID is valid for this page, but this browser could not save it. Keep this page open or enter it again after refreshing.';
     } else {
@@ -782,9 +810,7 @@ document.getElementById('age-storage-form').addEventListener('submit', async eve
   }
 });
 removeAgeIdButton.addEventListener('click', () => {
-  clearAgeIdentity();
-  moviesPanel.replaceChildren();
-  resetArrSummary('radarr');
+  if (!clearAgeIdentity()) return;
   contentStatus.textContent = 'Age private ID removed from this browser; metadata is locked.';
   ageStorageMessage.dataset.state = '';
   ageStorageMessage.textContent = 'Age private ID removed from this browser.';
@@ -1630,6 +1656,7 @@ async function loadOverviewMetadata() {
 
 let sonarrLoadGeneration = 0;
 async function loadSonarrSeries() {
+  const identityRevision = ageIdentityRevision;
   if (!ageIdentityInMemory) {
     const message = document.getElementById('series-message');
     message.hidden = false;
@@ -1654,12 +1681,12 @@ async function loadSonarrSeries() {
   try {
     await unlockMetadataVaultForSettings();
     const series = await arrDirectRequest('/sonarr/series');
-    if (generation !== sonarrLoadGeneration || selectedNode !== nodeId) return;
+    if (generation !== sonarrLoadGeneration || selectedNode !== nodeId || identityRevision !== ageIdentityRevision) return;
     writeLibraryTextCache(nodeId, 'tv', series);
     renderSonarrSeries(series, `Loaded ${series.length} series from Sonarr.`);
     void attachSonarrPosters(rows);
   } catch (error) {
-    if (generation !== sonarrLoadGeneration || selectedNode !== nodeId) return;
+    if (generation !== sonarrLoadGeneration || selectedNode !== nodeId || identityRevision !== ageIdentityRevision) return;
     message.hidden = false;
     message.dataset.state = 'error';
     message.textContent = error.message || 'Could not load the Sonarr series library.';
@@ -1822,6 +1849,7 @@ async function loadMetadataSizes() {
 }
 
 async function unlockMetadata() {
+  const identityRevision = ageIdentityRevision;
   const suppliedIdentity = ageInput.value.trim();
   const identity = suppliedIdentity || ageIdentityInMemory;
   if (!selectedNode || !identity) return;
@@ -1839,12 +1867,13 @@ async function unlockMetadata() {
     await import('/assets/metadata-export.js');
     const recipient = (await window.rawrarrMiniExport.deriveProfileRecipient(identity)).trim();
     if (!/^age1pq1[a-z0-9]+$/.test(recipient)) throw new Error('The age private ID is invalid. Check it and try again.');
+    if (identityRevision !== ageIdentityRevision) return;
     const persisted = rememberAgeIdentity(identity);
     updateAgeIdControls();
     if (!persisted) contentStatus.textContent = 'Age ID validated. This browser could not save it, so keep this page open or enter it again after refreshing.';
     await unlockMetadataVaultForSettings();
     const liveMovies = await arrDirectRequest('/radarr/live-library');
-    if (selectedNode !== nodeId) return;
+    if (selectedNode !== nodeId || identityRevision !== ageIdentityRevision) return;
     const movies = liveMovies.map(movie => ({
       ...movie,
       qualityProfile: movie.qualityProfile || '—',
@@ -1857,7 +1886,7 @@ async function unlockMetadata() {
     void attachMoviePosters(movies, nodeId);
     contentStatus.textContent = `${movies.length} Radarr library entries loaded directly from the node.${persisted ? '' : ' This browser could not save the age ID, so enter it again after refreshing.'}`;
   } catch (error) {
-    if (selectedNode !== nodeId) return;
+    if (selectedNode !== nodeId || identityRevision !== ageIdentityRevision) return;
     if (!hasCachedMovies) moviesPanel.replaceChildren();
     updateAgeIdControls();
     contentStatus.textContent = error.message || 'Could not decrypt metadata in this browser.';
@@ -1897,9 +1926,7 @@ document.getElementById('refresh-movies').addEventListener('click', async event 
 });
 ageInput.addEventListener('change', () => { if (selectedNode) void unlockMetadata(); });
 clearKeyButton.addEventListener('click', () => {
-  clearAgeIdentity(); moviesPanel.replaceChildren();
-  updateAgeIdControls();
-  resetArrSummary('radarr');
+  if (!clearAgeIdentity()) return;
   contentStatus.textContent = 'Private ID cleared from this browser.';
 });
 
@@ -2547,7 +2574,7 @@ approveNodeForm.addEventListener('submit', async event => {
 });
 
 document.getElementById('sign-out').addEventListener('click', async () => {
-  clearAgeIdentity();
+  if (!clearAgeIdentity()) return;
   try { await jsonRequest('/api/auth/logout', { method: 'POST' }); } catch (_) {}
   window.location.replace('/auth');
 });

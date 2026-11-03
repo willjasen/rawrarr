@@ -11,6 +11,7 @@ const recipient = 'age1pq1browser-test-recipient';
 const themeSeed = '0123456789abcdef'.repeat(4);
 let unlockRequests = 0;
 let generateRequests = 0;
+const unlockBodies = [];
 
 const server = createServer((request, response) => {
   if (request.method === 'GET' && (request.url === '/age-setup' || request.url === '/')) {
@@ -31,6 +32,9 @@ const server = createServer((request, response) => {
     response.end(JSON.stringify({ identity: `# public key: ${recipient}\n${privateKey}`, recipient, themeSeed }));
   } else if (request.url === '/api/settings/age' && request.method === 'POST') {
     unlockRequests += 1;
+    let body = '';
+    request.on('data', chunk => { body += chunk; });
+    request.on('end', () => { unlockBodies.push(JSON.parse(body)); });
     response.end(JSON.stringify({ unlocked: true, themeSeed }));
   } else {
     response.statusCode = 404;
@@ -49,6 +53,15 @@ test('age identity creation and backup acknowledgement work in a real browser', 
   const page = await context.newPage();
   const address = server.address();
   await page.goto(`http://127.0.0.1:${address.port}/age-setup`);
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 375, height: 812 }]) {
+    await page.setViewportSize(viewport);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'setup privacy text fits the viewport');
+    for (const selector of ['.privacy-note', '#remember-on-device', '#generate', '#import-id']) {
+      await page.locator(selector).scrollIntoViewIfNeeded();
+      const rect = await page.locator(selector).boundingBox();
+      assert.ok(rect && rect.width > 0 && rect.x >= 0 && rect.x + rect.width <= viewport.width, `${selector} fits at ${viewport.width}px`);
+    }
+  }
 
   await page.getByRole('button', { name: 'Create ID' }).click();
   await page.getByRole('dialog').waitFor({ state: 'visible' });
@@ -74,5 +87,17 @@ test('age identity creation and backup acknowledgement work in a real browser', 
   await continueButton.click();
   await page.waitForURL(url => url.pathname === '/', { timeout: 5000 });
   assert.equal(unlockRequests, 1, 'Continue submits the identity after backup acknowledgement');
+  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), `# public key: ${recipient}\n${privateKey}`);
+  assert.equal(unlockBodies[0].rememberOnDevice, false, 'browser persistence does not require the separate node-local opt-in');
+  await page.reload();
+  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), `# public key: ${recipient}\n${privateKey}`, 'setup ID survives reload');
+
+  await page.goto(`http://127.0.0.1:${address.port}/age-setup`);
+  await page.getByRole('button', { name: 'Import ID', exact: true }).click();
+  await page.locator('#identity').fill(privateKey);
+  await page.locator('#import-submit').click();
+  await page.waitForURL(url => url.pathname === '/', { timeout: 5000 });
+  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), privateKey);
+  assert.equal(unlockBodies[1].rememberOnDevice, false);
   await context.close();
 });
