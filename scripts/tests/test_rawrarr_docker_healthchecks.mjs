@@ -54,11 +54,12 @@ test('Docker test containers have unique names in the rawrarr-test-regression gr
   assert.match(cloneEntrypoint, /rawrarr-test-ready/);
   assert.match(testRunner, /shutil\.copytree/);
   assert.doesNotMatch(testRunner, /copytree\([^\n]*web-export/);
-  assert.match(testRunner, /ROOT \/ "docs"/);
-  assert.match(testRunner, /ROOT \/ "\.github"/);
-  assert.match(testRunner, /ROOT \/ "deploy"/);
-  assert.match(testRunner, /ROOT \/ "stripe-service"/);
+  assert.match(testRunner, /ROOT_FIXTURES = \([\s\S]*"\.github"[\s\S]*"admin"[\s\S]*"deploy"[\s\S]*"docs"[\s\S]*"stripe-service"/);
   assert.match(testEntrypoint, /grep -Eq.*playwright-core/);
+  assert.match(testEntrypoint, /playwright_core=\/usr\/local\/lib\/node_modules\/playwright-core/);
+  assert.match(testEntrypoint, /playwright_alias=\/workspace\/scripts\/tests\/node_modules\/playwright/);
+  assert.match(testEntrypoint, /ln -s "\$playwright_core" "\$playwright_alias"/);
+  assert.match(testEntrypoint, /readlink "\$playwright_alias"/);
   assert.match(testEntrypoint, /chromium.*launch/);
   assert.match(testEntrypoint, /puppeteer/);
   assert.match(testRunner, /f"\{rust_source\}\/\."/);
