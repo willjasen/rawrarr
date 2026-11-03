@@ -19,12 +19,16 @@ PROJECTS = {
         "directory": Path("/opt/rawrarr-internal-do3"),
         "compose": "docker-compose.internal-support-images.yml",
         "health_url": "https://rawrarr.risk-mermaid.ts.net/health",
+        "health_container": "rawrarr-internal-do3-roarlay",
+        "local_health_url": "http://127.0.0.1:8080/health",
         "tailscale_container": "rawrarr-internal-do3-tailscale",
     },
     "rawrarr-roarlay-prod": {
         "directory": Path("/opt/rawrarr-roarlay-prod"),
         "compose": "docker-compose.public-support-images.yml",
         "health_url": "https://roarlay.rawrarr.net/health",
+        "health_container": "rawrarr-roarlay-prod-roarlay",
+        "local_health_url": "http://127.0.0.1:8080/health",
         "tailscale_container": "rawrarr-roarlay-prod-tailscale",
     },
 }
@@ -146,6 +150,10 @@ def verify_route(project: str) -> None:
     last_error: Exception | None = None
     while time.monotonic() < deadline:
         try:
+            command([
+                "docker", "exec", settings["health_container"], "curl", "--fail", "--silent",
+                "--show-error", settings["local_health_url"],
+            ])
             if project == "rawrarr-internal-do3":
                 status = command([
                     "docker", "exec", settings["tailscale_container"],
@@ -157,13 +165,26 @@ def verify_route(project: str) -> None:
                     raise RuntimeError(
                         "Internal Tailscale Serve route no longer targets coordinator port 8080"
                     )
-            command(["curl", "--fail", "--silent", "--show-error", "--output", "/dev/null",
-                     settings["health_url"]])
+                command(["curl", "--fail", "--silent", "--show-error", "--output", "/dev/null",
+                         settings["health_url"]])
             return
         except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, RuntimeError) as error:
             last_error = error
             time.sleep(3)
     raise RuntimeError(f"{project} route verification timed out: {last_error}")
+
+
+def verify_public_edge() -> None:
+    edge = command([
+        "curl", "--silent", "--show-error", "--output", "/dev/null", "--write-out",
+        "%{http_code}", PROJECTS["rawrarr-roarlay-prod"]["health_url"],
+    ], check=False)
+    if edge.returncode or edge.stdout.strip() != "200":
+        print(
+            "warning: public edge health check returned "
+            f"{edge.stdout.strip() or 'no response'}; local service is healthy",
+            flush=True,
+        )
 
 
 def refresh_one(source_root: Path, target: tuple[str, str, str, str]) -> bool:
@@ -239,8 +260,12 @@ def run(source_root: Path, selected_projects: set[str]) -> int:
         raise RuntimeError("No support image targets were selected")
     for target in targets:
         refresh_one(source_root, target)
-    for project in selected_projects:
+    for project in PROJECTS:
+        if project not in selected_projects:
+            continue
         verify_route(project)
+    if "rawrarr-roarlay-prod" in selected_projects:
+        verify_public_edge()
     return 0
 
 

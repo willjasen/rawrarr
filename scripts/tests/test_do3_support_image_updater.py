@@ -2,7 +2,9 @@
 """Regression checks for the do3 support-image updater."""
 
 import importlib.util
+import json
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -83,6 +85,53 @@ class SupportImageUpdaterTests(unittest.TestCase):
                 self.assertTrue(marker.exists())
                 self.assertIn("container=rawrarr-internal-do3-postgres", marker.read_text())
             self.assertFalse(marker.exists())
+
+    def test_internal_route_verifies_local_health_and_tailscale_serve(self):
+        serve = {
+            "Web": {
+                "rawrarr.risk-mermaid.ts.net:443": {
+                    "Handlers": {"/": {"Proxy": "http://127.0.0.1:8080"}}
+                }
+            }
+        }
+        with patch.object(
+            UPDATER,
+            "command",
+            side_effect=[
+                subprocess.CompletedProcess([], 0, "", ""),
+                subprocess.CompletedProcess([], 0, json.dumps(serve), ""),
+                subprocess.CompletedProcess([], 0, "", ""),
+            ],
+        ) as command:
+            UPDATER.verify_route("rawrarr-internal-do3")
+        self.assertEqual(command.call_args_list[0].args[0][:4], [
+            "docker", "exec", "rawrarr-internal-do3-roarlay", "curl",
+        ])
+        self.assertEqual(command.call_args_list[2].args[0][-1], UPDATER.PROJECTS["rawrarr-internal-do3"]["health_url"])
+
+    def test_public_route_requires_local_health_not_cloudflare_edge(self):
+        with patch.object(
+            UPDATER,
+            "command",
+            return_value=subprocess.CompletedProcess([], 0, "", ""),
+        ) as command:
+            UPDATER.verify_route("rawrarr-roarlay-prod")
+        self.assertEqual(command.call_count, 1)
+        self.assertIn(
+            "rawrarr-roarlay-prod-roarlay",
+            command.call_args.args[0],
+        )
+        self.assertNotEqual(command.call_args.args[0][0], "curl")
+
+    def test_public_edge_403_is_a_warning_after_local_health(self):
+        with patch.object(
+            UPDATER,
+            "command",
+            return_value=subprocess.CompletedProcess([], 0, "403", ""),
+        ), patch("builtins.print") as print_warning:
+            UPDATER.verify_public_edge()
+        print_warning.assert_called_once()
+        self.assertIn("403", print_warning.call_args.args[0])
 
 
 if __name__ == "__main__":
