@@ -4,7 +4,6 @@
 		api_url http://crowdsec:8080
 		api_key {$CROWDSEC_BOUNCER_KEY}
 		ticker_interval 15s
-		lapi_timeout 10s
 	}
 }
 
