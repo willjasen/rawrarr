@@ -8,7 +8,7 @@ from classify_internal_deploy_targets import classify_paths
 
 class InternalDeployTargetTests(unittest.TestCase):
     def test_coordinator_only_changes_select_coordinator(self):
-        result = classify_paths(["rust-arr/src/coordinator.rs", "rust-arr/src/coordinator-passkey.mjs", "docker-compose.internal-mini.yml"])
+        result = classify_paths(["rust-arr/src/coordinator.rs", "rust-arr/src/coordinator-passkey.mjs"])
         self.assertEqual(result["targets"], ["coordinator"])
 
     def test_ui_updater_changes_select_coordinator_only(self):
@@ -49,6 +49,11 @@ class InternalDeployTargetTests(unittest.TestCase):
             "deploy/testing/headscale/config.yaml",
         ])
         self.assertEqual(result["targets"], [])
+
+    def test_retired_mac_coordinator_files_do_not_trigger_live_deploys(self):
+        for path in ("docker-compose.internal-mini.yml", "docker-compose.tailscale-serve.yml"):
+            with self.subTest(path=path):
+                self.assertEqual(classify_paths([path])["targets"], [])
 
 
 if __name__ == "__main__":

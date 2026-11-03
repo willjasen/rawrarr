@@ -1,5 +1,10 @@
 # Remove the Syncthing TCP proxy
 
+> Historical record. The resulting empty `docker-compose.tailscale-serve.yml`
+> overlay was retired on 2026-11-03; omit that file from new Compose commands.
+> No live Serve handler was changed by its retirement. See the
+> [retirement record](2026-11-03-retire-legacy-coordinator-compose.md).
+
 ## Objective
 
 Remove the unused `syncthing-proxy` container because live Tailscale Serve forwards TCP 22000 directly to the Syncthing container.

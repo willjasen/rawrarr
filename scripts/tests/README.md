@@ -40,7 +40,9 @@
   build-script fixtures.
 - Compose relocation checks in `test_internal_deploy_targets.py` and
   `test_do3_coordinator_auto_updater.py` ensure the old/new test paths do not
-  select live deployments or coordinator rebuilds.
+  select live deployments or coordinator rebuilds. They also cover retired
+  Mini coordinator/empty Serve filenames; `test_compose_layout.py` guards their
+  retirement while retaining the supported generic and do3 definitions.
 
 - `test_rawrarr_movie_artwork_stability.mjs` — Chromium checks loaded and in-flight movie posters survive cached-to-live library updates and filtering without duplicate requests, while metadata, explicit artwork changes, additions, and removals still update; verifies the shared Movies/TV poster grid shows six desktop columns and two mobile columns without horizontal overflow. Run through `python3 scripts/tests/run_rawrarr_tests_in_docker.py`.
 

@@ -24,7 +24,6 @@ COORDINATOR_FILES = {
     # UI release updates run only in the coordinator container, gated by
     # RAWARR_ROLE=coordinator in rust-arr/container-entrypoint.sh.
     "rust-arr/update_ui_bundle.py",
-    "docker-compose.internal-mini.yml",
     "docker-compose.coordinator.yml",
 }
 
@@ -75,6 +74,8 @@ NON_RUNTIME_PREFIXES = (
 NON_RUNTIME_FILES = {
     "AGENTS.md", "README.md", "ROADMAP.md", "TESTING.md",
     "docker-compose.orbstack-test.yml",
+    "docker-compose.internal-mini.yml",
+    "docker-compose.tailscale-serve.yml",
 }
 
 

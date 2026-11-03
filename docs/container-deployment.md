@@ -101,7 +101,15 @@ Before updating the persistent project, read each running service's `com.docker.
 
 ## Prepare the Mac mini
 
-For the internal-use coordinator topology, [`docker-compose.internal-mini.yml`](../docker-compose.internal-mini.yml) runs an isolated coordinator project on the Mac mini behind its own userspace Tailscale container, hostname `rawrarr`. Only roarlay shares that container's network namespace; coordinator diagnostics bind to host loopback port 7298. Tailscale Serve publishes `https://rawrarr.risk-mermaid.ts.net/` directly to roarlay on port 8080. Subscriber installers must use that HTTPS tailnet URL and join the same owner-controlled tailnet. This is distinct from the current boneyard-on-mini instructions below: the existing storage deployment is not automatically converted, and the switch does not migrate PostgreSQL, node registrations, passkeys, or existing persistent data. Follow the [deployment runbook](../runbooks/2026-10-22-deploy-internal-mini-coordinator.md); preserve the existing project and state.
+The internal coordinator moved from the Mac mini to do3 on 2026-10-27.
+Its definition is
+[`deploy/do3/docker-compose.internal-coordinator.yml`](../deploy/do3/docker-compose.internal-coordinator.yml);
+the former `docker-compose.internal-mini.yml` has been retired. Do not start a
+second coordinator on a Mac from historical runbook commands. The internal
+coordinator remains at `https://rawrarr.risk-mermaid.ts.net/`; the Macs remain
+subscriber hosts. See the [migration record](../runbooks/2026-10-27-move-internal-coordinator-to-do3.md)
+and [retirement/adoption guidance](compose-layout.md#retired-mac-coordinator-definitions).
+The standalone storage example below is not the current internal Mac deployment.
 
 The Mini runs `docker-compose.storage.yml`, with no PostgreSQL or roarlay container. It does not create an account or require the node to know a username: the healthy coordinator maps it to its existing owner and exposes it for approval.
 

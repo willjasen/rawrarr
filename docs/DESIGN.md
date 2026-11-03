@@ -20,7 +20,9 @@ Keep generated subscriber installations, operator deployments, and isolated test
 distinct. Compose cleanup proceeds in caller-traced groups, preserving explicit
 project/resource names and data-domain boundaries rather than hiding incompatible
 topologies behind one universal stack. The first implemented group lives under
-`deploy/testing/`; role-base consolidation remains planned under
+`deploy/testing/`; the former Mini coordinator and empty Serve definitions are
+retired, with current regression coverage pointed at do3. Other role-base
+consolidation remains planned under
 [#154](https://github.com/willjasen/rawrarr/issues/154). See the
 [Compose inventory and adoption guidance](compose-layout.md).
 

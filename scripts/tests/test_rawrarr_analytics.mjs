@@ -4,12 +4,11 @@ import { readFile } from 'node:fs/promises';
 
 const root = new URL('../../', import.meta.url);
 const read = path => readFile(new URL(path, root), 'utf8');
-const [coordinator, analyticsCompose, analyticsServicesCompose, publicCompose, miniCompose, do3Compose, internalDashboardCompose, internalDashboardCaddy, publicWebsite, websiteAnalytics, netlify] = await Promise.all([
+const [coordinator, analyticsCompose, analyticsServicesCompose, publicCompose, do3Compose, internalDashboardCompose, internalDashboardCaddy, publicWebsite, websiteAnalytics, netlify] = await Promise.all([
   read('rust-arr/src/coordinator.rs'),
   read('docker-compose.analytics.yml'),
   read('docker-compose.analytics-services.yml'),
   read('docker-compose.coordinator.yml'),
-  read('docker-compose.internal-mini.yml'),
   read('deploy/do3/docker-compose.internal-coordinator.yml'),
   read('deploy/do3/docker-compose.analytics-dashboard-internal.yml'),
   read('deploy/do3/analytics-dashboard-internal.Caddyfile'),
@@ -55,7 +54,6 @@ test('coordinator overlay leaves analytics upstream opt-in across deployment var
   assert.match(analyticsCompose, /RAWARR_ANALYTICS_SITE_ID: \$\{RAWARR_ANALYTICS_SITE_ID:-\}/);
   assert.match(do3Compose, /RAWARR_ROLE: coordinator/);
   assert.match(publicCompose, /RAWARR_ROLE: coordinator/);
-  assert.match(miniCompose, /RAWARR_ROLE: coordinator/);
 });
 
 test('internal dashboard Caddy route stays in the Tailscale namespace and separates dashboard from coordinator', () => {

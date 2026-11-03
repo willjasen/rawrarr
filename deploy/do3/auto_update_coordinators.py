@@ -51,6 +51,8 @@ NON_RUNTIME_FILES = {
     "ROADMAP.md",
     "TESTING.md",
     "docker-compose.orbstack-test.yml",
+    "docker-compose.internal-mini.yml",
+    "docker-compose.tailscale-serve.yml",
     "deploy/do3/docker-compose.internal-coordinator.yml",
     "deploy/do3/docker-compose.analytics-dashboard-internal.yml",
     "deploy/do3/docker-compose.production-container-names.yml",

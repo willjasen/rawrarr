@@ -1,5 +1,11 @@
 # Deploy internal Mac mini coordinator
 
+> Historical deployment, not a current installation procedure. The coordinator
+> moved to do3 on 2026-10-27 and `docker-compose.internal-mini.yml` was retired
+> on 2026-11-03 with operator confirmation. See the
+> [retirement record](2026-11-03-retire-legacy-coordinator-compose.md) before
+> considering any command from this record.
+
 ## Objective and starting state
 
 Deploy a private Rawrarr coordinator on the Mac mini, reachable by nodes on the owner's Tailscale tailnet. The mini already runs a separate Rawrarr metadata subscriber and has a native Tailscale identity with HTTPS Serve handlers on ports 3875, 8096, and 8384. Port 7297 is owned by the existing subscriber sidecar. Its separate Rawrarr Tailscale sidecar is registered to an offline Headscale control server. Preserve that project, its volumes, and all existing Serve handlers.

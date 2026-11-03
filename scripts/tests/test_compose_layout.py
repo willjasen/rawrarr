@@ -9,6 +9,21 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ComposeLayoutTests(unittest.TestCase):
+    def test_retired_mac_coordinator_definitions_are_not_installation_inputs(self):
+        for name in ("docker-compose.internal-mini.yml", "docker-compose.tailscale-serve.yml"):
+            with self.subTest(name=name):
+                self.assertFalse((ROOT / name).exists())
+        for name in (
+            "docker-compose.yml",
+            "docker-compose.coordinator.yml",
+            "docker-compose.metadata.yml",
+            "docker-compose.storage.yml",
+            "docker-compose.tailscale-macbook.yml",
+            "deploy/do3/docker-compose.internal-coordinator.yml",
+        ):
+            with self.subTest(name=name):
+                self.assertTrue((ROOT / name).is_file())
+
     def test_every_root_compose_file_has_an_inventory_entry(self):
         inventory = (ROOT / "docs" / "compose-layout.md").read_text(encoding="utf-8")
         for path in ROOT.glob("docker-compose*.yml"):

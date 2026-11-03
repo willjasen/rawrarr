@@ -50,6 +50,11 @@ class CoordinatorAutoUpdaterTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertFalse(UPDATER.affects_coordinator([path]))
 
+    def test_retired_mac_coordinator_files_do_not_rebuild_coordinators(self):
+        for path in ("docker-compose.internal-mini.yml", "docker-compose.tailscale-serve.yml"):
+            with self.subTest(path=path):
+                self.assertFalse(UPDATER.affects_coordinator([path]))
+
     def test_override_pins_local_image_and_records_deployment_time(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "deployment-info.override.yml"
