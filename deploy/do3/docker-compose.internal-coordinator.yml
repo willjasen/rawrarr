@@ -2,7 +2,7 @@
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: rawrarr-internal-do3-postgres
+    container_name: rawrarr-int-postgres
     environment:
       POSTGRES_DB: rawrarr
       POSTGRES_USER: rawrarr
@@ -22,7 +22,7 @@ services:
 
   tailscale:
     image: tailscale/tailscale:stable
-    container_name: rawrarr-internal-do3-tailscale
+    container_name: rawrarr-int-tailscale
     hostname: rawrarr
     environment:
       TS_HOSTNAME: rawrarr
@@ -39,7 +39,7 @@ services:
 
   roarlay:
     image: ${RAWARR_INTERNAL_IMAGE:?Set RAWARR_INTERNAL_IMAGE to a verified immutable image tag}
-    container_name: rawrarr-internal-do3-roarlay
+    container_name: rawrarr-int-roarlay
     pull_policy: never
     environment:
       RAWARR_ROLE: coordinator

@@ -4,11 +4,13 @@
 
 This guide covers features available in the current Docker prototype. For completed and outstanding project work, see the [roadmap](../ROADMAP.md); for data and security constraints, see [technical status](technical-status.md).
 
-## Start Rawrarr with Docker Compose
+## Start Rawrarr locally (generic/legacy Compose example)
 
 Requirements: Docker Compose, a local PostgreSQL password file, and a browser with passkey support. OrbStack provides Docker on macOS.
 
-For the existing persistent deployment, reuse Compose project `rawrarr-local` and its protected password file. Do not generate a replacement password for its existing database. Before starting or rebuilding, inspect ownership of port 7297:
+> **Generic/legacy local setup:** The `rawrarr-local` examples in this guide describe an existing user-owned local Compose installation. They are not instructions for current internal Rawrarr deployments. Internal operators should use the current environment names and deployment guidance in [AGENTS.md](../AGENTS.md).
+
+For an existing user-owned local installation, reuse Compose project `rawrarr-local` and its protected password file. Do not generate a replacement password for its existing database. Before starting or rebuilding, inspect ownership of port 7297:
 
 ```sh
 lsof -nP -iTCP:7297 -sTCP:LISTEN
@@ -149,7 +151,7 @@ Review the file count and byte total, then add `--apply` to copy. The tool refus
 
 ### Replicate a boneyard node's media folder
 
-The existing music replication setup uses an explicit, separate Syncthing share between two approved boneyard nodes. Mount the verified source media directory into its Syncthing companion at `/media` read-only, and mount an empty destination directory into the second companion at `/media` writable. `docker-compose.syncthing-media.yml` adds this bind to each host's existing Syncthing service; use that host's existing Compose file, `-p rawrarr-local`, and its verified `RAWARR_HOST_MEDIA_PATH`. The Rawrarr storage worker itself keeps `/media` read-only. For new collections, use the `/shared/out` publishing flow above when the intended peers already share the Rawrarr `/shared` folder. Never mount media into roarlay.
+The existing music replication setup uses an explicit, separate Syncthing share between two approved boneyard nodes. Mount the verified source media directory into its Syncthing companion at `/media` read-only, and mount an empty destination directory into the second companion at `/media` writable. `docker-compose.syncthing-media.yml` adds this bind to each host's existing Syncthing service; for a generic local Compose installation, use that host's existing Compose file, the example project name `-p rawrarr-local`, and its verified `RAWARR_HOST_MEDIA_PATH`. For current internal deployments, use the environment and stack names in [AGENTS.md](../AGENTS.md), not this local example. The Rawrarr storage worker itself keeps `/media` read-only. For new collections, use the `/shared/out` publishing flow above when the intended peers already share the Rawrarr `/shared` folder. Never mount media into roarlay.
 
 Choose a source directory whose contents fit on the destination and verify the two Syncthing device IDs with `scripts/share_storage_media.py --docker-container CONTAINER --show-id` on each host. For the current music share, mount the Mini's music directory and the MacBook's `media.ev/music` directory as `/media`. Install the same `.stignore` at each mount root before pairing: `!/[Aa]*`, `!/[Aa]*/**`, then `*`, one pattern per line. This limits the current music tree to its A/a top-level entries; inspect those entries and confirm they are directories before enabling the share. The Mini's read-only bind also needs an existing `.stfolder` directory at its root. Use one matching folder ID, `rawrarr-media`, and `--path /media --include-a-folders` on each host. Run the default dry-run first, then `--apply` on the Mini with `--role source` and `--apply --confirm-empty-destination` on a new MacBook destination with `--role destination`. The source is send-only and the destination receive-only. Existing app-data peer and folder configuration is preserved. The script refuses an existing or overlapping media folder.
 

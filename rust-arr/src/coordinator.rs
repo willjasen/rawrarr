@@ -1447,9 +1447,16 @@ async fn coordinator_version() -> Json<CoordinatorVersion> {
 }
 
 async fn coordinator_billing_page() -> Response {
+    if !public_billing_audience() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
     let mut response = axum::response::Html(crate::ui_assets::text("coordinator_billing.html", include_str!("coordinator_billing.html")).await).into_response();
     response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
+}
+
+fn public_billing_audience() -> bool {
+    env::var("RAWARR_BILLING_AUDIENCE").is_ok_and(|value| value == "public")
 }
 
 async fn coordinator_billing_script() -> Response {
@@ -1468,9 +1475,36 @@ async fn coordinator_home(
     } else {
         return axum::response::Redirect::to("/auth").into_response();
     };
+    let page = if public_billing_audience() {
+        page
+    } else {
+        hide_billing_navigation(page)
+    };
     let mut response = axum::response::Html(with_analytics_tracker(page, &state.web_origin)).into_response();
     response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
+}
+
+fn hide_billing_navigation(mut page: String) -> String {
+    page = page.replace(
+        r#"<a class="nav-item" href="/billing" aria-label="Subscription"><span class="nav-icon" aria-hidden="true">$</span><span class="nav-text">Subscription</span></a>"#,
+        "",
+    );
+    page.replace(r#"<p><a href="/billing">Manage subscription</a></p>"#, "")
+}
+
+#[cfg(test)]
+mod billing_navigation_tests {
+    use super::hide_billing_navigation;
+
+    #[test]
+    fn internal_workspace_omits_both_subscription_links() {
+        let page = concat!(
+            r#"<a class="nav-item" href="/billing" aria-label="Subscription"><span class="nav-icon" aria-hidden="true">$</span><span class="nav-text">Subscription</span></a>"#,
+            r#"<p><a href="/billing">Manage subscription</a></p>"#,
+        );
+        assert_eq!(hide_billing_navigation(page.to_owned()), "");
+    }
 }
 
 /// Add the optional, deployment-configured Umami tracker to coordinator pages.

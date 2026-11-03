@@ -1,0 +1,13 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    pull_policy: always
+  umami-postgres:
+    image: postgres:17-alpine
+    pull_policy: always
+  tailscale:
+    image: tailscale/tailscale:stable
+    pull_policy: always
+  analytics-caddy:
+    image: caddy:2-alpine
+    pull_policy: always

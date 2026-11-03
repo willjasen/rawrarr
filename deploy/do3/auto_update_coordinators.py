@@ -21,7 +21,7 @@ from typing import Iterator
 
 REPOSITORY = "willjasen/rawrarr"
 INTERNAL = {
-    "container": "rawrarr-internal-do3-roarlay",
+    "container": "rawrarr-int-roarlay",
     "lock": Path("/opt/rawrarr-internal-do3/.container-rebuild-roarlay.lock"),
     "project_dir": Path("/opt/rawrarr-internal-do3"),
     "health_url": "http://127.0.0.1:8080/health",
@@ -30,7 +30,7 @@ INTERNAL = {
     "image_base": "rawrarr:internal-base-amd64",
 }
 PUBLIC = {
-    "container": "rawrarr-roarlay-prod-roarlay",
+    "container": "rawrarr-prod-roarlay",
     "lock": Path("/opt/rawrarr-roarlay-prod/.container-rebuild-roarlay.lock"),
     "project_dir": Path("/opt/rawrarr-roarlay-prod"),
     "version_url": "http://127.0.0.1:8080/api/version",
@@ -38,14 +38,22 @@ PUBLIC = {
     "image_env": None,
     "image_base": None,
 }
-INTERNAL_TAILSCALE_CONTAINER = "rawrarr-internal-do3-tailscale"
+INTERNAL_TAILSCALE_CONTAINER = "rawrarr-int-tailscale"
 INTERNAL_HEALTH_URL_PUBLIC = "https://rawrarr.risk-mermaid.ts.net/health"
 PUBLIC_HEALTH_URL = "https://roarlay.rawrarr.net/health"
 MIN_FREE_BYTES = 5 * 1024**3
 HEALTH_TIMEOUT_SECONDS = 150
 
 NON_RUNTIME_PREFIXES = ("docs/", "runbooks/", "scripts/", ".github/", "website/")
-NON_RUNTIME_FILES = {"AGENTS.md", "README.md", "ROADMAP.md", "TESTING.md"}
+NON_RUNTIME_FILES = {
+    "AGENTS.md",
+    "README.md",
+    "ROADMAP.md",
+    "TESTING.md",
+    "deploy/do3/docker-compose.internal-coordinator.yml",
+    "deploy/do3/docker-compose.analytics-dashboard-internal.yml",
+    "deploy/do3/docker-compose.production-container-names.yml",
+}
 
 
 def command(args: list[str], *, cwd: Path | None = None, env: dict[str, str] | None = None,
@@ -154,7 +162,13 @@ def compose_files(container: str, override: Path) -> tuple[str, Path, str, list[
 
 
 def compose_command(project: str, project_dir: Path, files: list[Path], service: str) -> list[str]:
-    args = ["docker", "compose", "--project-directory", str(project_dir), "-p", project]
+    env_file = project_dir / "secrets" / "analytics.env"
+    if not env_file.is_file():
+        raise RuntimeError(f"Coordinator Compose env file is missing: {env_file}")
+    args = [
+        "docker", "compose", "--project-directory", str(project_dir),
+        "--env-file", str(env_file), "-p", project,
+    ]
     for compose_file in files:
         args.extend(("-f", str(compose_file)))
     args.extend(("up", "-d", "--no-deps", "--pull", "never", service))

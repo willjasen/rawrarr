@@ -4,10 +4,14 @@ services:
   umami:
     image: rawrarr-umami:559e3c607c23-basepath-analytics
     pull_policy: never
+    container_name: rawrarr-int-umami
+
+  umami-postgres:
+    container_name: rawrarr-int-umami-postgres
 
   analytics-caddy:
     image: caddy:2-alpine
-    container_name: rawrarr-internal-do3-analytics-caddy
+    container_name: rawrarr-int-caddy
     command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
     volumes:
       - ./analytics-dashboard-internal.Caddyfile:/etc/caddy/Caddyfile:ro

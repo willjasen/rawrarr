@@ -202,7 +202,7 @@
     .library-search { flex:1 1 240px; min-width:180px; min-height:40px; padding:8px 12px; border:1px solid #46574a; border-radius:8px; color:var(--text); background:#101411; font:inherit }
     .library-filter { min-height:40px }
     .library-count { color:var(--muted); font-size:12px; margin-left:auto }
-    .library-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(174px,1fr)); gap:14px; margin-top:14px }
+    .library-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:14px; margin-top:14px }
     .library-card { min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:10px; background:#101411; transition:border-color .15s,transform .15s }
     .library-card:hover { border-color:#536756; transform:translateY(-2px) }
     .library-art { position:relative; display:block; aspect-ratio:2/3; overflow:hidden; background:linear-gradient(145deg,#26352a,#151b17 72%) }
@@ -512,6 +512,7 @@
       </article>
       <article class="age-storage-card" aria-labelledby="age-storage-title">
         <h2 id="age-storage-title">Age private ID in this browser</h2>
+        <p class="age-security-warning">Saved in this site's browser storage across reloads and navigation until you clear it, sign out, or clear site data. Anyone with access to this browser profile can access it. This is separate from the opt-in copy in a subscriber node's private local data; clearing the browser copy does not remove that node copy.</p>
         <p id="age-storage-status" class="age-storage-status" role="status" aria-live="polite">Checking browser storage…</p>
         <form id="age-storage-form" class="age-storage-form">
           <label id="settings-age-id-label" for="settings-age-id">Age private ID</label>

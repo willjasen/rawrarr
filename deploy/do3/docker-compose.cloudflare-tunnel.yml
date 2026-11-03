@@ -1,7 +1,7 @@
 services:
   cloudflared:
     image: cloudflare/cloudflared@sha256:faa8e0a1475f137c910be6025f43c8e4092fdd35461b31e19fd1390657a1ff39
-    container_name: rawrarr-roarlay-prod-cloudflared
+    container_name: rawrarr-prod-cloudflared
     pull_policy: never
     user: "0:0"
     restart: unless-stopped
