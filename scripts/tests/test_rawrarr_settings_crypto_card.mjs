@@ -35,6 +35,8 @@ test('Settings separates profile and Ethereum/ENS cards responsively', async () 
       assert.equal(await crypto.locator('#crypto-access-status').count(), 1);
       assert.equal(await crypto.locator('#crypto-wallet-status').count(), 1);
       assert.equal(await crypto.locator('#crypto-wallet-link-form').count(), 1);
+      assert.equal(await crypto.locator('#crypto-ens-name').inputValue(), '');
+      assert.equal(await crypto.locator('#crypto-ens-name').getAttribute('placeholder'), null);
       assert.equal(await crypto.getByRole('link', { name: 'Manage subscription' }).getAttribute('href'), '/billing');
 
       const geometry = await page.evaluate(() => {
