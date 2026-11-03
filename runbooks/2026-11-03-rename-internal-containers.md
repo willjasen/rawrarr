@@ -31,4 +31,10 @@ If any verification fails, stop further changes. Restore the saved internal Comp
 
 ## Execution record
 
-To be completed after deployment from the merged, published `main` revision with the source SHA/archive digest, affected services, preserved image/volume IDs, verification results, and rollback state.
+Deployed from published `main` at `ecafe9d1542c656bb6b77c19ca379e062e3fd10e`. The authenticated source archive SHA-256 was `433dee92cade5f359163c5b6e7287a69617c0e281d92c4905491917d4377c63e`. The change did not affect app/runtime code, so no image was built: `rawrarr:e1ff1038a9c656a8d2e2517e650086abcdbd4f38-amd64` remained in use with image ID `sha256:e170627ecedd5b7cf321fc2318a134cf7373d167591227ab007160aab600bb66`, revision `e1ff1038a9c656a8d2e2517e650086abcdbd4f38`, architecture `linux/amd64`.
+
+Recreated the six already-active internal services only: `postgres`, `umami-postgres`, `umami`, `tailscale`, `roarlay`, and `analytics-caddy`. Their resulting container names are the six `rawrarr-int-*` names listed above. The existing volumes remained mounted: `rawrarr-internal-do3-postgres-data`, `rawrarr-internal-do3-tailscale-state`, `rawrarr-internal-do3-ui`, and `rawrarr-internal-do3_umami-postgres-data`. The `rawrarr-internal-do3` Compose project, service names, secrets, and Tailscale identity were unchanged. No public or subscriber services were touched.
+
+Verification passed: PostgreSQL and Umami PostgreSQL reported healthy; roarlay reported healthy; Umami, Caddy, and Tailscale were running. Tailscale Serve retained `/` → `http://127.0.0.1:8080` and `/analytics` → `http://127.0.0.1:8081/analytics`. The internal HTTPS `/health` endpoint returned HTTP 200 and identified the responding Roarlay web service; `/analytics` returned HTTP 200. The auto-update timer was restarted and is active. Its first run succeeded and reported that `ecafe9d1542c656bb6b77c19ca379e062e3fd10e` contains no coordinator runtime changes since the deployed app revision. All six deployment locks were released after verification.
+
+No rollback was required. The pre-deployment Compose and updater backups remain under `/opt/rawrarr-internal-do3/builds/container-rename-ecafe9d/rollback/`; all original volumes and the deployed app image remain intact.
