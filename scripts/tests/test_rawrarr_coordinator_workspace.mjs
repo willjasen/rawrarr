@@ -116,6 +116,12 @@ test('Fossils shows a network diagram with one link for each node pair', () => {
   assert.match(workspace, /<section id="fossils-view"[^>]*><div class="devices-page-heading"><h1 class="page-title">Fossils<\/h1><a class="button-link" href="\/setup\/node">Add a fossil<\/a><\/div>/);
   assert.match(workspace, /<section id="device-topology" class="topology-section" aria-labelledby="device-topology-title" hidden>[\s\S]*?<h2 id="device-topology-title">Topology<\/h2>/);
   assert.match(workspace, /<div id="device-topology-content"><\/div>/);
+  assert.match(workspace, /id="signing-topology-title">Signing key topology<\/h3>/);
+  assert.match(workspace, /You are the authority for this instance/);
+  assert.match(workspaceScript, /function renderSigningKeyTopology\(nodes\)/);
+  assert.match(workspaceScript, /You · instance signing root/);
+  assert.match(workspaceScript, /legacy · no root-signed key/);
+  assert.match(coordinator, /signing_root_fingerprint: Option<String>/);
   assert.match(workspaceScript, /function renderDeviceTopology\(nodes, observedPeers, deviceNames, peerStatuses\)/);
   assert.match(workspaceScript, /deviceNames\[node\.nodeId\] \|\| \(node\.displayName && node\.displayName !== node\.nodeId \? node\.displayName : roleLabel\(node\.role\)\)/);
   assert.match(workspaceScript, /deviceNameTokens\(node\.displayName\)/);
@@ -258,6 +264,9 @@ test('device approvals use a volatile browser form and root-signed exact node re
   assert.match(workspaceScript, /signedPayload: approval\.signedPayload/);
   assert.match(workspaceScript, /approveNodeDialog\.addEventListener\('close'/);
   assert.match(workspaceScript, /approveNodeDialog\.close\(\)/);
+  assert.match(workspace, /id="approve-node-attestation"/);
+  assert.match(workspaceScript, /You are signing off on this device/);
+  assert.match(workspaceScript, /Your root signature authorizes the exact device key and role below/);
   assert.match(signingClient, /secretKey\?\.fill\(0\)/);
   assert.match(onboarding, /id="root-fingerprint-confirm"/);
   assert.match(onboarding, /Re-enter the root fingerprint you saved separately/);
