@@ -27,7 +27,7 @@
 - `test_rawrarr_signing_topology_browser.mjs` — Chromium checks that the user-root signing hierarchy and long device labels fit at desktop (1280×800) and narrow mobile (375×812) without horizontal overflow. Run in the isolated Playwright test image.
 
 
-- `test_internal_deploy_targets.py` — checks coordinator-only, node-only, shared/unknown runtime, documentation-only, and mixed-change target classification. Run `python3 scripts/tests/test_internal_deploy_targets.py`.
+- `test_internal_deploy_targets.py` — checks coordinator-only SQLx migrations and served signing assets, node-only, shared/unknown runtime, documentation-only, and mixed-change target classification. Run `python3 scripts/tests/test_internal_deploy_targets.py`.
 - `test_rawrarr_node_avatar.mjs` — verifies node-recipient validation, encoded relay route, no-store fetching, and deterministic SHA-256 avatar seed derivation; run with `node --test scripts/tests/test_rawrarr_node_avatar.mjs`.
 
 - `secure_config::tests::node_identity_is_created_once_and_existing_identity_is_reused` and `invalid_existing_node_identity_is_not_replaced` — Subscriber startup age identity generation, persistence/reuse, separation from the user identity, file permissions, and fail-closed invalid-file behavior; run with `cargo test --locked --manifest-path rust-arr/Cargo.toml node_identity` in the Rust test environment.
