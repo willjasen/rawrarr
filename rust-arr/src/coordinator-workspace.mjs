@@ -329,6 +329,12 @@ let selectedRoutePromiseNode = null;
 let deviceNames = {};
 let savingDeviceName = false;
 let workspaceNodes = [];
+fetch('/api/version', { cache: 'no-store' }).then(response => response.ok ? response.json() : null).then(version => {
+  if (!version?.deployedAt) return;
+  const updated = new Date(version.deployedAt);
+  const label = document.getElementById('coordinator-last-updated');
+  if (label && !Number.isNaN(updated.valueOf())) label.textContent = `Last updated on ${updated.toLocaleString()}`;
+}).catch(() => {});
 const storageScanStatusByNode = new Map();
 const storageScansActive = new Set();
 const storageScheduleDrafts = new Map();

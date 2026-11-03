@@ -280,6 +280,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/auth", get(coordinator_auth_page))
         .route("/billing", get(coordinator_billing_page))
         .route("/health", get(coordinator_health))
+        .route("/api/version", get(coordinator_version))
         .route("/assets/rawrarr-logo.png", get(coordinator_rawrarr_logo))
         .route("/assets/rawrarr-logo.jxl", get(coordinator_rawrarr_logo_jxl))
         .route("/assets/coordinator-workspace.mjs", get(coordinator_workspace_script))
@@ -1424,6 +1425,25 @@ mod tests;
 
 async fn coordinator_health() -> axum::response::Html<String> {
     axum::response::Html(crate::ui_assets::text("coordinator_health.html", include_str!("coordinator_health.html")).await)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CoordinatorVersion {
+    revision: String,
+    deployed_at: Option<String>,
+}
+
+async fn coordinator_version() -> Json<CoordinatorVersion> {
+    let revision = env::var("RAWARR_BUILD_REVISION")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .or_else(|| std::fs::read_to_string("/usr/share/rawrarr/build-revision").ok())
+        .unwrap_or_else(|| "unknown".to_owned());
+    Json(CoordinatorVersion {
+        revision: revision.trim().to_owned(),
+        deployed_at: env::var("RAWARR_DEPLOYED_AT").ok().filter(|value| !value.is_empty()),
+    })
 }
 
 async fn coordinator_billing_page() -> Response {
