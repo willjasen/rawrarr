@@ -112,6 +112,10 @@ struct ApproveRequest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct RejectRequest {
     request_id: Uuid,
+    root_public_key: String,
+    root_fingerprint: String,
+    signature: String,
+    signed_payload: serde_json::Value,
 }
 
 #[derive(Serialize)]
@@ -536,12 +540,14 @@ async fn request_enrollment(
         Ok(id) => id,
         Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
+    // Serialize every enrollment identity check and upsert against approval
+    // and rejection, including storage nodes without tier enforcement.
+    if sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
+        .bind(owner_user_id).execute(&mut *tx).await.is_err()
+    {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    }
     if request.role == NodeRole::Metadata {
-        if sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
-            .bind(owner_user_id).execute(&mut *tx).await.is_err()
-        {
-            return StatusCode::SERVICE_UNAVAILABLE.into_response();
-        }
         match crate::coordinator_crypto::free_tier_denies_fossil_node(&state.pool, owner_user_id, Some(&request.node_id)).await {
             Ok(true) => return (StatusCode::PAYMENT_REQUIRED, Json(serde_json::json!({"error":"The free tier includes one fossil node. Upgrade to add another."}))).into_response(),
             Ok(false) => {},
@@ -559,6 +565,9 @@ async fn request_enrollment(
     if approved {
         return StatusCode::CONFLICT.into_response();
     }
+    let rejected = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM rawrarr_rejected_nodes WHERE node_id=$1 OR signing_fingerprint=$2)")
+        .bind(&request.node_id).bind(crate::device_signing::node_fingerprint(&signing_public_key)).fetch_one(&mut *tx).await.unwrap_or(true);
+    if rejected { return StatusCode::GONE.into_response(); }
     let _ = sqlx::query(
         "DELETE FROM rawrarr_node_enrollments WHERE expires_at <= now() AND approved_at IS NULL",
     )
@@ -912,11 +921,136 @@ async fn reject_node(
     let Some(owner_user_id) = crate::auth::authenticated_user_id(&auth, &headers).await else {
         return StatusCode::UNAUTHORIZED;
     };
-    match sqlx::query("DELETE FROM rawrarr_node_enrollments WHERE request_id=$1 AND user_id=$2 AND approved_at IS NULL")
-        .bind(request.request_id).bind(owner_user_id).execute(&state.pool).await
+    let mut tx = match state.pool.begin().await {
+        Ok(tx) => tx,
+        Err(_) => return StatusCode::SERVICE_UNAVAILABLE,
+    };
+    if sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
+        .bind(owner_user_id)
+        .execute(&mut *tx)
+        .await
+        .is_err()
     {
-        Ok(result) if result.rows_affected() == 1 => StatusCode::NO_CONTENT,
-        Ok(_) => StatusCode::NOT_FOUND,
+        return StatusCode::SERVICE_UNAVAILABLE;
+    }
+    let row = match sqlx::query("SELECT node_id, role, display_name, signing_public_key FROM rawrarr_node_enrollments WHERE request_id=$1 AND user_id=$2 AND approved_at IS NULL AND expires_at > now() FOR UPDATE")
+        .bind(request.request_id)
+        .bind(owner_user_id)
+        .fetch_optional(&mut *tx)
+        .await
+    {
+        Ok(Some(row)) => row,
+        Ok(None) => return StatusCode::NOT_FOUND,
+        Err(_) => return StatusCode::SERVICE_UNAVAILABLE,
+    };
+    let (node_id, role_text, display_name, public_key): (String, String, String, Vec<u8>) =
+        match (
+            row.try_get("node_id"),
+            row.try_get("role"),
+            row.try_get("display_name"),
+            row.try_get("signing_public_key"),
+        ) {
+            (Ok(node_id), Ok(role), Ok(display_name), Ok(public_key)) => {
+                (node_id, role, display_name, public_key)
+            }
+            _ => return StatusCode::INTERNAL_SERVER_ERROR,
+        };
+    let Ok(role) = NodeRole::parse(&role_text) else {
+        return StatusCode::BAD_REQUEST;
+    };
+    if public_key.len() != 1952 { return StatusCode::UNAUTHORIZED; }
+    let expected_payload = serde_json::json!({
+        "domain":"rawrarr-device-rejection-v1", "requestId":request.request_id.to_string(),
+        "nodeId":node_id, "role":role_name(role), "displayName":display_name,
+        "publicKeyHex":encode_hex(&public_key),
+    });
+    if request.signed_payload != expected_payload { return StatusCode::BAD_REQUEST; }
+    let (Ok(root_public_key), Ok(signature)) = (
+        BASE64.decode(&request.root_public_key),
+        BASE64.decode(&request.signature),
+    ) else {
+        return StatusCode::BAD_REQUEST;
+    };
+    if root_public_key.len() != 1952 || crate::device_signing::fingerprint(&root_public_key) != request.root_fingerprint { return StatusCode::BAD_REQUEST; }
+    let Ok(message) = crate::device_signing::canonical_json(&request.signed_payload) else { return StatusCode::BAD_REQUEST };
+    if !crate::device_signing::verify(&root_public_key, &signature, &message) { return StatusCode::UNAUTHORIZED; }
+    let root = match sqlx::query("SELECT public_key, fingerprint, owner_user_id FROM rawrarr_instance_signing_root WHERE singleton=TRUE FOR UPDATE")
+        .fetch_optional(&mut *tx)
+        .await
+    {
+        Ok(value) => value,
+        Err(_) => return StatusCode::SERVICE_UNAVAILABLE,
+    };
+    if let Some(root) = root {
+        let (Ok(key), Ok(fingerprint), Ok(owner)) = (
+            root.try_get::<Vec<u8>, _>("public_key"),
+            root.try_get::<String, _>("fingerprint"),
+            root.try_get::<Uuid, _>("owner_user_id"),
+        ) else {
+            return StatusCode::INTERNAL_SERVER_ERROR;
+        };
+        if key != root_public_key
+            || fingerprint != request.root_fingerprint
+            || owner != owner_user_id
+        {
+            return StatusCode::FORBIDDEN;
+        }
+    } else if sqlx::query("INSERT INTO rawrarr_instance_signing_root(singleton, algorithm, public_key, fingerprint, owner_user_id) VALUES (TRUE, 'ML-DSA-65', $1, $2, $3) ON CONFLICT(singleton) DO NOTHING")
+        .bind(&root_public_key)
+        .bind(&request.root_fingerprint)
+        .bind(owner_user_id)
+        .execute(&mut *tx)
+        .await
+        .is_err()
+    {
+        return StatusCode::SERVICE_UNAVAILABLE;
+    }
+    let pinned = match sqlx::query("SELECT public_key, fingerprint, owner_user_id FROM rawrarr_instance_signing_root WHERE singleton=TRUE FOR UPDATE")
+        .fetch_optional(&mut *tx)
+        .await
+    {
+        Ok(Some(row)) => row,
+        _ => return StatusCode::SERVICE_UNAVAILABLE,
+    };
+    let (Ok(pinned_key), Ok(pinned_fingerprint), Ok(pinned_owner)) = (
+        pinned.try_get::<Vec<u8>, _>("public_key"),
+        pinned.try_get::<String, _>("fingerprint"),
+        pinned.try_get::<Uuid, _>("owner_user_id"),
+    ) else {
+        return StatusCode::INTERNAL_SERVER_ERROR;
+    };
+    if pinned_key != root_public_key
+        || pinned_fingerprint != request.root_fingerprint
+        || pinned_owner != owner_user_id
+    {
+        return StatusCode::FORBIDDEN;
+    }
+    let inserted = sqlx::query("INSERT INTO rawrarr_rejected_nodes(node_id,user_id,request_id,role,signing_public_key,signing_fingerprint,root_fingerprint,signed_payload,signature) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(node_id) DO NOTHING")
+        .bind(&node_id)
+        .bind(owner_user_id)
+        .bind(request.request_id)
+        .bind(role_name(role))
+        .bind(&public_key)
+        .bind(crate::device_signing::node_fingerprint(&public_key))
+        .bind(&request.root_fingerprint)
+        .bind(&request.signed_payload)
+        .bind(&signature)
+        .execute(&mut *tx)
+        .await;
+    if !matches!(inserted, Ok(ref result) if result.rows_affected() == 1) {
+        return StatusCode::CONFLICT;
+    }
+    if sqlx::query("DELETE FROM rawrarr_node_enrollments WHERE request_id=$1 AND user_id=$2 AND approved_at IS NULL")
+        .bind(request.request_id)
+        .bind(owner_user_id)
+        .execute(&mut *tx)
+        .await
+        .is_err()
+    {
+        return StatusCode::SERVICE_UNAVAILABLE;
+    }
+    match tx.commit().await {
+        Ok(()) => StatusCode::NO_CONTENT,
         Err(_) => StatusCode::SERVICE_UNAVAILABLE,
     }
 }

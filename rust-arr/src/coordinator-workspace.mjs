@@ -23,6 +23,7 @@ const approveNodeFingerprint = document.getElementById('approve-node-root-finger
 const approveNodeStatus = document.getElementById('approve-node-status');
 const approveNodeCancel = document.getElementById('approve-node-cancel');
 let pendingNodeToApprove = null;
+let pendingNodeDecision = 'approve';
 const contentPanel = document.getElementById('content');
 const contentStatus = document.getElementById('content-status');
 const moviesPanel = document.getElementById('movies');
@@ -2291,6 +2292,7 @@ async function loadPending() {
       approve.textContent = 'Approve';
       approve.addEventListener('click', () => {
         pendingNodeToApprove = node;
+        pendingNodeDecision = 'approve';
         approveNodeIdentity.value = '';
         approveNodeBackup.value = '';
         approveNodeFingerprint.value = '';
@@ -2304,16 +2306,18 @@ async function loadPending() {
       reject.className = 'reject-button';
       reject.textContent = 'Reject';
       reject.addEventListener('click', async () => {
-        approve.disabled = true;
-        reject.disabled = true;
-        try {
-          await jsonRequest('/api/workspace/reject', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: node.requestId }) });
-          await loadPending();
-        } catch (error) {
-          approve.disabled = false;
-          reject.disabled = false;
-          status.textContent = error.message || 'Could not reject this node request.';
-        }
+        pendingNodeToApprove = node;
+        pendingNodeDecision = 'reject';
+        approveNodeIdentity.value = '';
+        approveNodeBackup.value = '';
+        approveNodeFingerprint.value = '';
+        approveNodeStatus.textContent = `${node.displayName} · ${roleLabel(node.role)} · ${node.nodeId}`;
+        document.getElementById('approve-node-attestation').replaceChildren();
+        const title = approveNodeForm.querySelector('h2');
+        title.textContent = 'Reject and sign device revocation';
+        approveNodeForm.querySelector('[type="submit"]').textContent = 'Sign revocation';
+        approveNodeDialog.showModal();
+        approveNodeIdentity.focus();
       });
       const actions = document.createElement('div');
       actions.className = 'pending-actions';
@@ -2333,6 +2337,9 @@ approveNodeDialog.addEventListener('close', () => {
   approveNodeFingerprint.value = '';
   document.getElementById('approve-node-attestation').replaceChildren();
   pendingNodeToApprove = null;
+  pendingNodeDecision = 'approve';
+  approveNodeForm.querySelector('h2').textContent = 'Approve with the instance root key';
+  approveNodeForm.querySelector('[type="submit"]').textContent = 'Sign and approve';
 });
 approveNodeForm.addEventListener('submit', async event => {
   event.preventDefault();
@@ -2340,33 +2347,39 @@ approveNodeForm.addEventListener('submit', async event => {
   if (!node) return;
   const submit = approveNodeForm.querySelector('[type="submit"]');
   submit.disabled = true;
-  approveNodeStatus.textContent = 'Unlocking the encrypted root backup and signing this exact node request in this tab…';
+  approveNodeStatus.textContent = pendingNodeDecision === 'reject'
+    ? 'Unlocking the encrypted root backup and signing this rejection in this tab…'
+    : 'Unlocking the encrypted root backup and signing this exact node request in this tab…';
   try {
     const ageIdentity = approveNodeIdentity.value.trim();
     const encryptedBackup = approveNodeBackup.value.trim();
     const savedFingerprint = approveNodeFingerprint.value.trim().toLowerCase();
-    const { inspectEncryptedRootBackup, signDeviceApproval } = await import('/assets/device-signing-client.js');
+    const { inspectEncryptedRootBackup, signDeviceApproval, signDeviceRejection } = await import('/assets/device-signing-client.js');
     const root = await inspectEncryptedRootBackup(encryptedBackup, ageIdentity);
     if (root.fingerprint !== savedFingerprint) throw new Error('The backup fingerprint does not match the fingerprint you saved independently.');
+    const decision = pendingNodeDecision;
     const attestation = document.getElementById('approve-node-attestation');
     attestation.replaceChildren();
     const heading = document.createElement('strong');
-    heading.textContent = 'You are signing off on this device';
+    heading.textContent = decision === 'reject' ? 'You are permanently rejecting this device identity' : 'You are signing off on this device';
     const description = document.createElement('p');
-    description.textContent = 'Your root signature authorizes the exact device key and role below. Only continue if you initiated this setup and recognize this device.';
+    description.textContent = decision === 'reject'
+      ? 'Your root signature records this device key as rejected. The coordinator will retain the revocation and refuse future enrollment requests for this device identity.'
+      : 'Your root signature authorizes the exact device key and role below. Only continue if you initiated this setup and recognize this device.';
     const request = document.createElement('p');
     request.textContent = `${node.displayName} · ${roleLabel(node.role)} · ${node.nodeId}`;
     const key = document.createElement('p');
     key.textContent = `Device signing key · ${node.signingFingerprint || 'fingerprint unavailable'}`;
     attestation.append(heading, description, request, key);
-    const approval = await signDeviceApproval(encryptedBackup, ageIdentity, savedFingerprint, {
+    const sign = decision === 'reject' ? signDeviceRejection : signDeviceApproval;
+    const approval = await sign(encryptedBackup, ageIdentity, savedFingerprint, {
       requestId: node.requestId,
-      nodeId: node.nodeId,
+      nodeId: decision === 'reject' ? (node.requestedNodeId || node.nodeId) : node.nodeId,
       role: node.role,
       displayName: node.displayName,
       publicKeyHex: node.signingPublicKeyHex,
     });
-    await jsonRequest('/api/workspace/approve', {
+    await jsonRequest(decision === 'reject' ? '/api/workspace/reject' : '/api/workspace/approve', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         requestId: node.requestId,
@@ -2378,7 +2391,7 @@ approveNodeForm.addEventListener('submit', async event => {
     });
     approveNodeDialog.close();
     await loadPending();
-    await loadNodes();
+    if (decision === 'approve') await loadNodes();
   } catch (error) {
     approveNodeStatus.textContent = error.message || 'Could not approve this node.';
   } finally {
