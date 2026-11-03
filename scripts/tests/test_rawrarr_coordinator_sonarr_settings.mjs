@@ -324,8 +324,13 @@ test('Settings imports an age ID locally without an online node and clears it ma
   t.after(() => browser.close());
   const page = await browser.newPage();
   const identity = 'AGE-SECRET-KEY-PQ-1settings-test-fixture';
+  const publicRecipient = `age1pq1${'a'.repeat(40)}12345678`;
   let unlocked = false;
   let directAgeValidationRequests = 0;
+  await page.addInitScript(() => {
+    window.copiedAgeRecipients = [];
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async value => { window.copiedAgeRecipients.push(value); } } });
+  });
   await page.route('http://rawrarr.test/**', async route => {
     const request = route.request();
     const url = new URL(request.url());
@@ -337,7 +342,7 @@ test('Settings imports an age ID locally without an online node and clears it ma
     if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
     if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-ai.mjs') return route.fulfill({ body: aiModule, contentType: 'text/javascript' });
-    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: "window.rawrarrMiniExport = { loadRadarrLibrary: async () => [], prepareGroupIdentityForDevice: async () => false, encryptIdentityForDevice: async identity => `age-ciphertext:${identity}`, deriveProfileRecipient: async identity => { if (!identity.startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('invalid identity'); return 'age1pq1validrecipient'; } };" });
+    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: `window.rawrarrMiniExport = { loadRadarrLibrary: async () => [], prepareGroupIdentityForDevice: async () => false, encryptIdentityForDevice: async identity => 'age-ciphertext:' + identity, deriveProfileRecipient: async identity => { if (!identity.startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('invalid identity'); return '${publicRecipient}'; } };` });
     if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
     if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [] });
     if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
@@ -371,18 +376,27 @@ test('Settings imports an age ID locally without an online node and clears it ma
   assert.equal(await page.locator('#show-age-recipient').isVisible(), true);
   assert.equal((await page.locator('body').innerText()).includes(identity), false, 'the private ID is not rendered');
   await page.getByRole('button', { name: 'Show age public ID' }).click();
-  await page.locator('#age-recipient-display').getByText('age1pq1validrecipient').waitFor();
+  const shortenedRecipient = `${publicRecipient.slice(0, 12)}…${publicRecipient.slice(-8)}`;
+  await page.locator('#age-recipient-short').getByText(shortenedRecipient).waitFor();
   assert.equal(await page.locator('#age-recipient-display').isVisible(), true);
-  await page.getByRole('button', { name: 'Hide age public ID' }).click();
-  assert.equal(await page.locator('#age-recipient-display').isHidden(), true);
-  assert.equal(await page.locator('#age-recipient-display').textContent(), '');
+  assert.equal(await page.getByRole('button', { name: 'Copy age public ID' }).isVisible(), true);
+  assert.equal((await page.locator('body').innerText()).includes(publicRecipient), false, 'the complete public ID is not rendered');
+  await page.getByRole('button', { name: 'Copy age public ID' }).click();
+  await page.getByText('Age public ID copied.').waitFor();
+  assert.deepEqual(await page.evaluate(() => window.copiedAgeRecipients), [publicRecipient]);
+  assert.equal((await page.locator('body').innerText()).includes(publicRecipient), false, 'copying does not reveal the complete value in the page');
 
   for (const viewport of [{ width: 1280, height: 800 }, { width: 375, height: 812 }]) {
     await page.setViewportSize(viewport);
-    const geometry = await page.evaluate(() => ({ width: innerWidth, documentWidth: document.documentElement.scrollWidth }));
+    const geometry = await page.evaluate(() => ({ width: innerWidth, documentWidth: document.documentElement.scrollWidth, copy: document.querySelector('#copy-age-recipient').getBoundingClientRect().toJSON() }));
     assert.ok(geometry.documentWidth <= geometry.width, `settings overflow at ${viewport.width}px`);
-    assert.equal(await page.locator('#show-age-recipient').isVisible(), true);
+    assert.ok(geometry.copy.width > 0 && geometry.copy.left >= 0 && geometry.copy.right <= viewport.width, `copy button fits at ${viewport.width}px`);
   }
+  await page.getByRole('button', { name: 'Hide age public ID' }).click();
+  assert.equal(await page.locator('#age-recipient-display').isHidden(), true);
+  assert.equal(await page.locator('#age-recipient-short').textContent(), '');
+  assert.equal(await page.getByRole('button', { name: 'Copy age public ID' }).isHidden(), true);
+  assert.equal(await page.locator('#age-recipient-message').isHidden(), true);
 
   await page.click('#remove-age-id');
   await page.getByText('Age private ID removed from this browser.').waitFor();

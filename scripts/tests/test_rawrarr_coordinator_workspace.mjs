@@ -227,7 +227,8 @@ test('coordinator root selects passkey sign-in or an owner workspace while healt
   assert.match(workspace, /id="save-age-id"/);
   assert.match(workspace, /id="remove-age-id"/);
   assert.match(workspace, /id="show-age-recipient" type="button" hidden>Show age public ID<\/button>/);
-  assert.match(workspace, /id="age-recipient-display" class="age-storage-status" hidden aria-live="polite"/);
+  assert.match(workspace, /id="age-recipient-display" class="age-recipient-display" hidden/);
+  assert.match(workspace, /id="copy-age-recipient" type="button">Copy age public ID/);
   assert.match(workspace, /User signing keys are never saved in browser storage/);
   assert.match(workspace, /id="clear-key" type="button" hidden/);
   assert.match(workspace, /<title>rawrarr<\/title>/);
@@ -242,9 +243,11 @@ test('coordinator root selects passkey sign-in or an owner workspace while healt
   assert.match(workspaceScript, /this browser could not save it/);
   assert.match(workspaceScript, /localStorage\.removeItem\(ageSessionKey\)/);
   assert.match(workspaceScript, /showAgeRecipientButton\.addEventListener\('click', async \(\) =>/);
-  assert.match(workspaceScript, /deriveProfileRecipient\(identity\)[\s\S]*?ageRecipientDisplay\.textContent = recipient/);
-  assert.match(workspaceScript, /ageRecipientVisible = false;\s*ageRecipientDisplay\.textContent = '';/);
-  assert.match(workspaceScript, /ageRecipientDisplay\.textContent = '';\s*ageRecipientDisplay\.hidden = true;/);
+  assert.match(workspaceScript, /deriveProfileRecipient\(identity\)[\s\S]*?agePublicRecipient = recipient;[\s\S]*?ageRecipientShort\.textContent = recipient\.length/);
+  assert.match(workspaceScript, /copyAgeRecipientButton\.addEventListener\('click', async \(\) =>/);
+  assert.match(workspaceScript, /navigator\.clipboard\.writeText\(recipient\)/);
+  assert.match(workspaceScript, /Age public ID copied\./);
+  assert.match(workspaceScript, /agePublicRecipient = '';\s*ageRecipientShort\.textContent = '';/);
   assert.match(workspaceScript, /arrDirectRequest\('\/settings\/age'/);
   assert.doesNotMatch(workspaceScript, /localStorage\.(?:getItem|setItem)\([^)]*(?:root|signing)/i);
   assert.match(workspaceScript, /document\.getElementById\('sign-out'\)\.addEventListener[\s\S]*?clearAgeIdentity\(\)/);
