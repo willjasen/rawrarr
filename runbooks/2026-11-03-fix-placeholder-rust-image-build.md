@@ -16,9 +16,11 @@ This changes only build behavior. It does not affect persistent data, schemas, o
 
 - `node --test scripts/tests/test_rawrarr_docker_healthchecks.mjs` — 6 tests passed.
 - Native AMD64 Docker build using the patched local tree — succeeded. Final image `rawrarr:codex-placeholder-fix-test` is `linux/amd64` and contains a 24,079,224-byte `rust-arr` executable.
-- Executing that binary without `RAWARR_ROLE` returned the application's expected `Set RAWARR_ROLE explicitly` error (exit 1), confirming the executable is the application rather than the no-op placeholder.
+- Native ARM64 Docker build on the Mac mini using the committed patched source archive — succeeded. Final image `rawrarr:codex-9451206-arm64-test` is `linux/arm64` and contains a 22,923,400-byte `rust-arr` executable.
+- Executing each architecture's binary without `RAWARR_ROLE` returned the application's expected `Set RAWARR_ROLE explicitly` error (exit 1), confirming the executable is the application rather than the no-op placeholder.
 - `git diff --check` — passed.
-- ARM64 corrected build and published multi-architecture deployment remain pending.
+- A metadata-role startup probe with isolated temporary storage exited on missing node setup (`NotPresent`/`StorageFailed`), so a service health endpoint was not established in the standalone probe. No production volume or credential was used.
+- Published multi-architecture build and deployment remain pending.
 
 ## Recovery and final state
 
