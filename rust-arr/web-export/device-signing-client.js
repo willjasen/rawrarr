@@ -7,6 +7,7 @@ const decoder = new TextDecoder('utf-8', { fatal: true });
 const ROOT_BACKUP_VERSION = 1;
 const ROOT_DOMAIN = encoder.encode('rawrarr-instance-root-v1\0');
 const APPROVAL_DOMAIN = 'rawrarr-device-approval-v1';
+const REVOCATION_DOMAIN = 'rawrarr-device-rejection-v1';
 
 function toBase64(bytes) {
   let binary = '';
@@ -123,7 +124,7 @@ export async function inspectEncryptedRootBackup(encryptedBackup, ageIdentity) {
   }
 }
 
-export async function signDeviceApproval(encryptedBackup, ageIdentity, pinnedFingerprint, approval) {
+async function signDevicePayload(encryptedBackup, ageIdentity, pinnedFingerprint, domain, payload) {
   if (typeof encryptedBackup !== 'string' || !encryptedBackup.startsWith('-----BEGIN AGE ENCRYPTED FILE-----')) throw new Error('Paste the saved encrypted root-key backup.');
   if (typeof ageIdentity !== 'string' || !ageIdentity.trim().startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('Unlock the instance age identity first.');
   if (!/^[0-9a-f]{64}$/.test(pinnedFingerprint || '')) throw new Error('The instance signing root is not initialized.');
@@ -145,7 +146,7 @@ export async function signDeviceApproval(encryptedBackup, ageIdentity, pinnedFin
     if (!ml_dsa65.getPublicKey(secretKey).every((byte, index) => byte === publicKey[index])) throw new Error('The encrypted root backup contains mismatched keys.');
     const actualFingerprint = await publicKeyFingerprint(publicKey);
     if (actualFingerprint !== pinnedFingerprint) throw new Error('This backup does not match the instance signing root.');
-    const signedPayload = { domain: APPROVAL_DOMAIN, ...approval };
+    const signedPayload = { domain, ...payload };
     message = encoder.encode(canonicalJson(signedPayload));
     const signature = ml_dsa65.sign(message, secretKey);
     return { algorithm: 'ML-DSA-65', rootFingerprint: actualFingerprint, signature: toBase64(signature), signedPayload };
@@ -160,6 +161,21 @@ export async function signDeviceApproval(encryptedBackup, ageIdentity, pinnedFin
     message?.fill(0);
     if (root && typeof root.secretKey === 'string') root.secretKey = '';
   }
+}
+
+export function signDeviceApproval(encryptedBackup, ageIdentity, pinnedFingerprint, approval) {
+  return signDevicePayload(encryptedBackup, ageIdentity, pinnedFingerprint, APPROVAL_DOMAIN, approval);
+}
+
+export async function signDeviceRejection(encryptedBackup, ageIdentity, pinnedFingerprint, rejection) {
+  if (!rejection || typeof rejection !== 'object') throw new Error('Invalid device rejection details.');
+  return signDevicePayload(encryptedBackup, ageIdentity, pinnedFingerprint, REVOCATION_DOMAIN, {
+    requestId: rejection.requestId,
+    nodeId: rejection.nodeId,
+    role: rejection.role,
+    displayName: rejection.displayName,
+    publicKeyHex: rejection.publicKeyHex,
+  });
 }
 
 export function verifyDeviceApproval(signatureBase64, publicKeyBase64, signedPayload) {

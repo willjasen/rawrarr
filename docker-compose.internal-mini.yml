@@ -40,6 +40,7 @@ services:
     image: rawrarr:internal-mini
     environment:
       RAWARR_ROLE: coordinator
+      RAWARR_BILLING_AUDIENCE: internal
       RAWARR_UI_GITHUB_REPO: willjasen/rawrarr
       RAWARR_UI_GITHUB_TOKEN_FILE: /run/secrets/rawrarr_ui_github_token
       RUST_ARR_LISTEN_ADDR: 0.0.0.0:8080
@@ -51,8 +52,8 @@ services:
       RAWARR_APPROVED_NODES_FILE: /run/secrets/rawrarr_approved_nodes
       RAWARR_COORDINATOR_WEB_RP_ID: ${RAWARR_COORDINATOR_WEB_RP_ID:-risk-mermaid.ts.net}
       RAWARR_COORDINATOR_WEB_ORIGIN: ${RAWARR_COORDINATOR_WEB_ORIGIN:-https://rawrarr.risk-mermaid.ts.net}
-      RAWARR_NODE_RELAY_TARGETS: '{"device-9288eb3b039608d16a9102a5":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/","device-d3ee53b1d561fb349955b199":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/"}'
-      RAWARR_NODE_DIRECT_TARGETS: '{"device-9288eb3b039608d16a9102a5":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/direct-api/","device-d3ee53b1d561fb349955b199":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/direct-api/"}'
+      RAWARR_NODE_RELAY_TARGETS: '{"device-9288eb3b039608d16a9102a5":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/","device-d3ee53b1d561fb349955b199":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/","device-398f0ce833b6d7e2b9e8f760":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/","device-8de78fadda6400a45ca1a30b":"https://rawrarr-mac-mini.risk-mermaid.ts.net/"}'
+      RAWARR_NODE_DIRECT_TARGETS: '{"device-9288eb3b039608d16a9102a5":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/direct-api/","device-d3ee53b1d561fb349955b199":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/direct-api/","device-398f0ce833b6d7e2b9e8f760":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/direct-api/","device-8de78fadda6400a45ca1a30b":"https://rawrarr-mac-mini.risk-mermaid.ts.net/direct-api/"}'
     secrets:
       - rawrarr_postgres_password
       - rawrarr_approved_nodes

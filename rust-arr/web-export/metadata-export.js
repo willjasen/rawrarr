@@ -3,6 +3,7 @@ import { zipSync } from 'fflate';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+let legacyUserIdentity = '';
 
 function hex(bytes) {
   return [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('');
@@ -16,19 +17,122 @@ async function movieFilename(key, kind, tmdbId, suffix) {
 }
 
 async function decrypt(identity, ciphertext, type = 'uint8array') {
-  try {
-    const decrypter = new age.Decrypter();
-    decrypter.addIdentity(identity.trim());
-    return new Uint8Array(await decrypter.decrypt(ciphertext, type));
-  } catch (_) {
-    throw new Error('Could not decrypt this age file. Check the private ID and selected metadata.');
+  const candidates = [identity.trim()];
+  if (legacyUserIdentity && legacyUserIdentity !== candidates[0]) candidates.push(legacyUserIdentity);
+  for (const candidate of candidates) {
+    try {
+      const decrypter = new age.Decrypter();
+      decrypter.addIdentity(candidate);
+      return new Uint8Array(await decrypter.decrypt(ciphertext, type));
+    } catch (_) { /* Try legacy user-recipient ciphertext while migrating older shared files. */ }
   }
+  throw new Error('Could not decrypt this age file. Check the private ID and selected metadata.');
 }
 
-async function fetchBytes(url) {
-  const response = await fetch(url, { cache: 'no-store', credentials: 'include', headers: { Accept: 'application/octet-stream' } });
+function normalizePostQuantumIdentity(value) {
+  const lines = String(value).split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const identities = lines.filter(line => line.startsWith('AGE-SECRET-KEY-PQ-1'));
+  if (identities.length !== 1 || lines.some(line => line !== identities[0] && !line.startsWith('#'))) {
+    throw new Error('The group identity envelope is invalid.');
+  }
+  return identities[0];
+}
+
+async function fetchBytes(url, { signal } = {}) {
+  const response = await fetch(url, { signal, cache: 'no-store', credentials: 'include', headers: { Accept: 'application/octet-stream' } });
   if (!response.ok) throw new Error(`Could not fetch encrypted metadata (${response.status})`);
   return new Uint8Array(await response.arrayBuffer());
+}
+
+async function resolveGroupIdentity(userIdentity, base, { signal } = {}) {
+  const prefix = base.endsWith('/') ? base : `${base}/`;
+  const response = await fetch(`${prefix}api/metadata/export/group-user-envelope`, {
+    signal, cache: 'no-store', credentials: 'include', headers: { Accept: 'application/octet-stream' },
+  });
+  legacyUserIdentity = userIdentity.trim();
+  if (response.status === 404) return userIdentity;
+  if (!response.ok) throw new Error('Could not read the group identity envelope for this user.');
+  const ciphertext = new Uint8Array(await response.arrayBuffer());
+  let plaintext;
+  try { plaintext = await decrypt(userIdentity, ciphertext); }
+  finally { ciphertext.fill(0); }
+  let groupIdentity;
+  try { groupIdentity = normalizePostQuantumIdentity(decoder.decode(plaintext)); }
+  finally { plaintext.fill(0); }
+  let groupRecipient;
+  try { groupRecipient = await age.identityToRecipient(groupIdentity); }
+  catch { throw new Error('The group identity envelope is invalid.'); }
+  const recipientResponse = await fetch(`${prefix}api/metadata/export/recipient`, {
+    signal, cache: 'no-store', credentials: 'include', headers: { Accept: 'text/plain' },
+  });
+  if (!recipientResponse.ok) throw new Error('Could not read the shared group recipient.');
+  const publishedRecipient = (await recipientResponse.text()).trim();
+  if (groupRecipient !== publishedRecipient) {
+    throw new Error('The group identity envelope does not match the shared group recipient.');
+  }
+  return groupIdentity;
+}
+
+async function encryptIdentityForDevice(identity, apiBase = '/api') {
+  if (typeof identity !== 'string' || !identity.trim().startsWith('AGE-SECRET-KEY-PQ-1')) {
+    throw new Error('Paste a post-quantum age private ID.');
+  }
+  const prefix = apiBase.replace(/\/$/, '');
+  const response = await fetch(`${prefix}/metadata/export/node-recipient`, {
+    cache: 'no-store', credentials: 'include', headers: { Accept: 'text/plain' },
+  });
+  if (!response.ok) throw new Error('Could not read this device’s public age recipient.');
+  const recipient = (await response.text()).trim();
+  const encrypter = new age.Encrypter();
+  encrypter.addRecipient(recipient);
+  const plaintext = encoder.encode(identity.trim());
+  try {
+    const ciphertext = new Uint8Array(await encrypter.encrypt(plaintext));
+    let binary = '';
+    for (let offset = 0; offset < ciphertext.length; offset += 0x8000) {
+      binary += String.fromCharCode(...ciphertext.subarray(offset, offset + 0x8000));
+    }
+    ciphertext.fill(0);
+    return btoa(binary);
+  } finally { plaintext.fill(0); }
+}
+
+async function prepareGroupIdentityForDevice(userIdentity, apiBase = '/api') {
+  legacyUserIdentity = userIdentity.trim();
+  const prefix = apiBase.replace(/\/$/, '');
+  const envelopeResponse = await fetch(`${prefix}/metadata/export/group-user-envelope`, {
+    cache: 'no-store', credentials: 'include', headers: { Accept: 'application/octet-stream' },
+  });
+  if (envelopeResponse.status === 404) return false;
+  if (!envelopeResponse.ok) throw new Error('Could not read the group identity envelope for this user.');
+  const userEnvelope = new Uint8Array(await envelopeResponse.arrayBuffer());
+  const groupIdentityBytes = new Uint8Array(await decrypt(userIdentity, userEnvelope));
+  userEnvelope.fill(0);
+  let groupIdentity;
+  try { groupIdentity = normalizePostQuantumIdentity(decoder.decode(groupIdentityBytes)); }
+  catch (error) {
+    groupIdentityBytes.fill(0);
+    throw error;
+  }
+  groupIdentityBytes.fill(0);
+  const normalizedGroupIdentityBytes = encoder.encode(groupIdentity);
+  try {
+    const recipientResponse = await fetch(`${prefix}/metadata/export/node-recipient`, {
+      cache: 'no-store', credentials: 'include', headers: { Accept: 'text/plain' },
+    });
+    if (!recipientResponse.ok) throw new Error('Could not read this device’s public age recipient.');
+    const encrypter = new age.Encrypter();
+    encrypter.addRecipient((await recipientResponse.text()).trim());
+    const ciphertext = new Uint8Array(await encrypter.encrypt(normalizedGroupIdentityBytes));
+    try {
+      const installed = await fetch(`${prefix}/settings/age/group-identity`, {
+        method: 'PUT', cache: 'no-store', credentials: 'include',
+        headers: { 'Content-Type': 'application/octet-stream' }, body: ciphertext,
+      });
+      if (!installed.ok) throw new Error(`Could not install the group identity on this device (${installed.status}).`);
+    } finally { ciphertext.fill(0); }
+  } finally { normalizedGroupIdentityBytes.fill(0); }
+  return true;
 }
 
 function normalizeConfigShape(config) {
@@ -81,6 +185,7 @@ function clearConfigStrings(value) {
 export async function saveDeviceName(identity, base, nodeId, name) {
   if (!identity.trim().startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('Paste a post-quantum age private ID.');
   const prefix = base.endsWith('/') ? base : `${base}/`;
+  identity = await resolveGroupIdentity(identity, base);
   const encrypted = await fetchBytes(`${prefix}api/metadata/export/config`);
   const plaintext = await decrypt(identity, encrypted);
   encrypted.fill(0);
@@ -112,9 +217,10 @@ export async function saveDeviceName(identity, base, nodeId, name) {
   }
 }
 
-export async function loadDeviceNames(identity, base) {
+export async function loadDeviceNames(identity, base, { signal } = {}) {
   const prefix = base.endsWith('/') ? base : `${base}/`;
-  const encrypted = await fetchBytes(`${prefix}api/metadata/export/config`);
+  identity = await resolveGroupIdentity(identity, base, { signal });
+  const encrypted = await fetchBytes(`${prefix}api/metadata/export/config`, { signal });
   const plaintext = await decrypt(identity, encrypted);
   encrypted.fill(0);
   let config;
@@ -129,7 +235,9 @@ export async function loadDeviceNames(identity, base) {
 
 export async function loadSharedConfig(identity, base) {
   if (!identity.trim().startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('Paste a post-quantum age private ID.');
+  if (typeof base !== 'string' || !base.trim()) throw new Error('No usable route is available to read the shared configuration.');
   const prefix = base.endsWith('/') ? base : `${base}/`;
+  identity = await resolveGroupIdentity(identity, base);
   const encrypted = await fetchBytes(`${prefix}api/metadata/export/config`);
   const plaintext = await decrypt(identity, encrypted);
   encrypted.fill(0);
@@ -146,6 +254,7 @@ export async function loadSharedConfig(identity, base) {
 export async function runMiniExport(identity, onProgress = () => {}, base = '') {
   const endpointUrl = path => `${base}${path}`;
   if (!identity.trim().startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('Paste a post-quantum age private ID.');
+  identity = await resolveGroupIdentity(identity, base);
   onProgress('Reading encrypted metadata index…');
   const indexResponse = await fetch(endpointUrl('/api/metadata/export/mini'), { cache: 'no-store' });
   if (!indexResponse.ok) throw new Error(indexResponse.status === 404 ? 'No encrypted movie metadata is available yet.' : 'Could not read the metadata export index.');
@@ -240,6 +349,7 @@ export async function runMiniExport(identity, onProgress = () => {}, base = '') 
 
 export async function loadMiniMetadata(identity, base = '', onProgress = () => {}) {
   if (!identity.trim().startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('Paste a post-quantum age private ID.');
+  identity = await resolveGroupIdentity(identity, base);
   const url = path => `${base}${path}`;
   onProgress('Reading encrypted metadata index…');
   const response = await fetch(url('/api/metadata/export/mini'), { cache: 'no-store' });
@@ -288,6 +398,7 @@ export async function loadMiniMetadata(identity, base = '', onProgress = () => {
 
 export async function loadRadarrLibrary(identity, base = '', onProgress = () => {}) {
   if (!identity.trim().startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('Paste a post-quantum age private ID.');
+  identity = await resolveGroupIdentity(identity, base);
   const url = path => `${base}${path}`;
   onProgress('Fetching encrypted Radarr library…');
   const keyPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
@@ -391,4 +502,4 @@ async function deriveProfileRecipient(identity) {
   return age.identityToRecipient(identity.trim());
 }
 
-window.rawrarrMiniExport = { runMiniExport, loadMiniMetadata, loadRadarrLibrary, saveDeviceName, loadDeviceNames, loadSharedConfig, deriveProfileRecipient };
+window.rawrarrMiniExport = { runMiniExport, loadMiniMetadata, loadRadarrLibrary, saveDeviceName, loadDeviceNames, loadSharedConfig, deriveProfileRecipient, encryptIdentityForDevice, prepareGroupIdentityForDevice };

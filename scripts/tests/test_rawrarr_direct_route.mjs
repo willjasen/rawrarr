@@ -33,8 +33,9 @@ test('coordinator advertises configured coordinator or tailnet direct routes to 
 test('metadata and storage direct listeners expose health and session-protected routes only', () => {
   assert.match(main, /RUST_ARR_DIRECT_LISTEN_ADDR/);
   assert.match(main, /direct API listener is available only for metadata or storage nodes/);
-  assert.match(main, /api\/direct\/health/);
-  assert.match(main, /api\/direct\/session/);
+  assert.match(main, /\.route\("\/health", get\(direct_health\)\)/);
+  assert.match(main, /\.route\("\/session", post\(direct_session_cookie\)\)/);
+  assert.doesNotMatch(main, /api\/direct\/(?:health|session)/);
   assert.match(main, /RAWARR_DIRECT_ALLOWED_ORIGIN/);
   assert.match(main, /access-control-allow-origin/);
   assert.match(main, /Access-Control-Allow-Headers|access-control-allow-headers/);
@@ -56,12 +57,12 @@ test('workspace automatically selects direct Tailscale access, visibly reports i
   assert.match(script, /aria-label', route\?\.status === 'direct' && latencyLabel/);
   assert.match(routes, /export async function checkDeviceRoutes\(devices/);
   assert.match(routes, /status, directRoute/);
-  assert.match(routes, /api\/direct\/health/);
+  assert.match(routes, /\$\{directBase\}health/);
   assert.match(routes, /credentials: 'omit'/);
   assert.match(routes, /mode: 'cors'/);
   assert.match(coordinator, /assets\/coordinator-device-routes\.mjs/);
   assert.match(script, /api\/workspace\/direct-session/);
-  assert.match(script, /api\/direct\/session/);
+  assert.match(script, /\$\{route\.base\}\/session/);
   assert.match(script, /credentials: 'include'/);
   assert.match(script, /if \(view === 'series' && updateHash\)[\s\S]*?chooseNodeRoute\(selectedNodeDetails, true\)/);
   assert.match(script, /if \(deviceRoute\?\.status === 'direct'\) return chooseDirectRoute\(node, deviceRoute\.directRoute\)/);

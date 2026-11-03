@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Decrypter, armor, generateHybridIdentity, identityToRecipient } from '../../rust-arr/web-export/node_modules/age-encryption/dist/index.js';
-import { createEncryptedRootBackup, inspectEncryptedRootBackup, publicKeyFingerprint, signDeviceApproval, verifyDeviceApproval } from '../../rust-arr/web-export/device-signing-client.js';
+import { createEncryptedRootBackup, inspectEncryptedRootBackup, publicKeyFingerprint, signDeviceApproval, signDeviceRejection, verifyDeviceApproval } from '../../rust-arr/web-export/device-signing-client.js';
 
 function decodeBase64(value) {
   return Uint8Array.from(atob(value), character => character.charCodeAt(0));
@@ -34,6 +34,10 @@ test('age-encrypted ML-DSA root backup signs and verifies a device approval', as
   assert.equal(approval.rootFingerprint, root.fingerprint);
   assert.equal(verifyDeviceApproval(approval.signature, root.publicKey, approval.signedPayload), true);
   assert.equal(verifyDeviceApproval(approval.signature, root.publicKey, { ...approval.signedPayload, role: 'metadata' }), false);
+  const rejection = await signDeviceRejection(foldedBackup, ageIdentity, root.fingerprint, request);
+  assert.equal(rejection.signedPayload.domain, 'rawrarr-device-rejection-v1');
+  assert.equal(verifyDeviceApproval(rejection.signature, root.publicKey, rejection.signedPayload), true);
+  assert.equal(verifyDeviceApproval(approval.signature, root.publicKey, rejection.signedPayload), false);
   await assert.rejects(
     signDeviceApproval(root.encryptedBackup, ageIdentity, '0'.repeat(64), request),
     /does not match the instance signing root/,

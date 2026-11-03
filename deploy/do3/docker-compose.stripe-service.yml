@@ -1,0 +1,40 @@
+services:
+  stripe-service:
+    image: rawrarr-stripe-service:do3
+    container_name: rawrarr-roarlay-prod-stripe-service
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 64
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    environment:
+      BILLING_DATABASE_URL: postgres://rawrarr_stripe@postgres:5432/rawrarr
+      BILLING_DATABASE_PASSWORD_FILE: /run/secrets/stripe-db-password
+      STRIPE_WEBHOOK_SECRET_FILE: /run/secrets/stripe-webhook-secret
+      BILLING_LISTEN_ADDR: 0.0.0.0:8090
+    secrets:
+      - stripe-db-password
+      - stripe-webhook-secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      control:
+        aliases:
+          - stripe-service
+
+secrets:
+  stripe-db-password:
+    file: /opt/rawrarr-roarlay-prod/secrets/stripe-db-password
+  stripe-webhook-secret:
+    file: /opt/rawrarr-roarlay-prod/secrets/stripe-webhook-secret
+
+networks:
+  control:
+    external: true
+    name: rawrarr-roarlay-prod-control

@@ -25,27 +25,26 @@ test('device names are persisted as a backward-compatible age config field', () 
   assert.match(browser, /new age\.Encrypter\(\)/);
 });
 
-test('Overview and device management stay separate, with age-encrypted name editing', () => {
-  assert.match(html, /data-view="devices"[^>]*>[\s\S]*?Devices/);
+test('Overview and device management stay separate, with age-encrypted name editing in a dialog', () => {
+  assert.match(html, /data-view="fossils"[^>]*>[\s\S]*?Fossils/);
   assert.match(html, /id="overview-view"><h1 class="page-title">Overview<\/h1>/);
-  assert.match(html, /id="devices-view"[\s\S]*?id="pending"[\s\S]*?id="nodes"/);
-  assert.match(workspace, /'overview', 'devices', 'movies'/);
-  assert.match(workspace, /className = 'device-name-input'/);
-  assert.match(workspace, /nameInput\.addEventListener\('change'/);
-  assert.match(workspace, /event\.key === 'Enter'/);
+  assert.match(html, /id="fossils-view"[\s\S]*?id="pending"[\s\S]*?id="nodes"/);
+  assert.match(workspace, /'overview', 'roarlay', 'fossils', 'movies'/);
+  assert.match(workspace, /nameLabel\.className = 'device-name'/);
+  assert.match(workspace, /deviceEditForm\.addEventListener\('submit'/);
+  assert.match(workspace, /deviceEditDialog\.showModal\(\)/);
   assert.match(workspace, /card\.addEventListener\('click', event =>/);
   assert.match(workspace, /card\.append\(identityRow, detail\)/);
   assert.doesNotMatch(workspace, /textContent = 'Open node'/);
-  assert.match(workspace, /document\.activeElement\?\.classList\.contains\('device-name-input'\)/);
-  assert.match(workspace, /editNameButton\.textContent = 'Edit'/);
-  assert.match(workspace, /nameGroup\.append\(nameInput, editNameButton\)/);
+  assert.match(workspace, /editButton\.textContent = 'Edit'/);
+  assert.match(workspace, /nameGroup\.append\(nameLabel\)/);
   assert.match(html, /\.device-name-group \{ display:flex/);
 });
 
 test('coordinator UI decrypts names in the browser and only relays age ciphertext for writes', () => {
   assert.match(workspace, /loadDeviceNames\(ageIdentity/);
   assert.match(workspace, /saveDeviceName\(ageIdentity/);
-  assert.match(browser, /decrypter\.addIdentity\(identity\.trim\(\)\)/);
+  assert.match(browser, /decrypter\.addIdentity\(candidate\)/);
   assert.match(browser, /method: 'PUT'[\s\S]*body: ciphertext/);
   assert.match(coordinator, /request_body\.starts_with\(b"age-encryption\.org\/v1\\n"\)/);
   assert.match(coordinator, /api\/metadata\/export\/recipient/);

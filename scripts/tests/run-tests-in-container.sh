@@ -4,6 +4,11 @@ set +e
 echo "rawrarr isolated test runner"
 echo "Rust: $(rustc --version)"
 echo "Node: $(node --version)"
+node_major=$(node --version | sed -E 's/^v([0-9]+).*/\1/')
+if [ "$node_major" != 26 ]; then
+    echo "ERROR: regression suites require Node.js 26; found $(node --version)." >&2
+    exit 1
+fi
 test_started_epoch=$(date +%s)
 test_started_at=$(date '+%Y-%m-%d %H:%M:%S %z')
 
@@ -17,10 +22,23 @@ if [ ! -e "$web_export_modules" ]; then
     ln -s /opt/rawrarr-web-export/node_modules "$web_export_modules"
 fi
 
+playwright_core=/usr/local/lib/node_modules/playwright-core
+playwright_alias=/workspace/scripts/tests/node_modules/playwright
+if [ ! -f "$playwright_core/index.mjs" ]; then
+    echo "ERROR: Playwright Core is missing from the test image."
+    exit 1
+fi
+mkdir -p /workspace/scripts/tests/node_modules
+if [ ! -e "$playwright_alias" ] && [ ! -L "$playwright_alias" ]; then
+    ln -s "$playwright_core" "$playwright_alias"
+elif [ "$(readlink "$playwright_alias" 2>/dev/null)" != "$playwright_core" ]; then
+    echo "ERROR: the test workspace Playwright alias conflicts with the installed Playwright Core package."
+    exit 1
+fi
+
 node_log="/tmp/rawrarr-node-tests.$$.log"
 playwright_log="/tmp/rawrarr-playwright-tests.$$.log"
 rust_log="/tmp/rawrarr-rust-tests.$$.log"
-browser_test=/workspace/scripts/tests/test_rawrarr_age_setup_browser.mjs
 trap 'rm -f "$node_log" "$playwright_log" "$rust_log"' EXIT
 
 section_start() {
@@ -34,7 +52,7 @@ section_end() {
 section_start "NODE.JS TESTS"
 node_files=""
 for test_file in /workspace/scripts/tests/*.mjs; do
-    if [ "$test_file" = "$browser_test" ]; then
+    if grep -Eq 'playwright-core|chromium\.launch|puppeteer' "$test_file"; then
         continue
     fi
     node_files="$node_files $test_file"
@@ -44,11 +62,21 @@ node_status=$?
 cat "$node_log"
 section_end "NODE.JS TESTS" "$node_status"
 
-section_start "PLAYWRIGHT BROWSER TEST"
-node --experimental-global-webcrypto --test "$browser_test" >"$playwright_log" 2>&1
-playwright_status=$?
+section_start "PLAYWRIGHT BROWSER TESTS"
+playwright_status=0
+for browser_test in /workspace/scripts/tests/*.mjs; do
+    if ! grep -Eq 'playwright-core|chromium\.launch|puppeteer' "$browser_test"; then
+        continue
+    fi
+    printf '\n--- %s ---\n' "${browser_test##*/}" >>"$playwright_log"
+    node --experimental-global-webcrypto --test "$browser_test" >>"$playwright_log" 2>&1
+    browser_test_status=$?
+    if [ "$browser_test_status" -ne 0 ]; then
+        playwright_status=1
+    fi
+done
 cat "$playwright_log"
-section_end "PLAYWRIGHT BROWSER TEST" "$playwright_status"
+section_end "PLAYWRIGHT BROWSER TESTS" "$playwright_status"
 
 section_start "RUST UNIT TESTS"
 cargo clean --manifest-path /workspace/rust-arr/Cargo.toml -p rust-arr
