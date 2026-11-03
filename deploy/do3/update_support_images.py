@@ -7,6 +7,7 @@ import argparse
 import contextlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -22,6 +23,7 @@ PROJECTS = {
         "health_container": "rawrarr-internal-do3-roarlay",
         "local_health_url": "http://127.0.0.1:8080/health",
         "tailscale_container": "rawrarr-internal-do3-tailscale",
+        "environment_file": Path("secrets/analytics.env"),
     },
     "rawrarr-roarlay-prod": {
         "directory": Path("/opt/rawrarr-roarlay-prod"),
@@ -30,6 +32,7 @@ PROJECTS = {
         "health_container": "rawrarr-roarlay-prod-roarlay",
         "local_health_url": "http://127.0.0.1:8080/health",
         "tailscale_container": "rawrarr-roarlay-prod-tailscale",
+        "environment_file": Path("secrets/analytics.env"),
     },
 }
 
@@ -55,9 +58,9 @@ LOCK_RETRY_SECONDS = 60
 
 
 def command(args: list[str], *, cwd: Path | None = None, capture: bool = True,
-            env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
+            env: dict[str, str] | None = None, check: bool = True) -> subprocess.CompletedProcess:
     return subprocess.run(
-        args, cwd=cwd, env=env, check=True, text=True,
+        args, cwd=cwd, env=env, check=check, text=True,
         stdout=subprocess.PIPE if capture else None,
         stderr=subprocess.PIPE if capture else None,
     )
@@ -92,15 +95,36 @@ def compose_context(project: str, container: str, service: str, override: Path) 
     return project_dir, files
 
 
-def compose_args(project: str, project_dir: Path, files: list[Path], action: list[str]) -> list[str]:
+def compose_environment_file(project: str, project_dir: Path) -> Path | None:
+    relative_path = PROJECTS[project].get("environment_file")
+    if relative_path is None:
+        return None
+    environment_file = project_dir / relative_path
+    if not environment_file.exists():
+        return None
+    if not environment_file.is_file() or not environment_file.resolve().is_relative_to(project_dir.resolve()):
+        raise RuntimeError(f"Invalid protected Compose environment file: {environment_file}")
+    return environment_file
+
+
+def compose_args(
+    project: str,
+    project_dir: Path,
+    files: list[Path],
+    action: list[str],
+    *,
+    env_file: Path | None = None,
+) -> list[str]:
     args = ["docker", "compose", "--project-directory", str(project_dir), "-p", project]
+    if env_file is not None:
+        args.extend(("--env-file", str(env_file)))
     for compose_file in files:
         args.extend(("-f", str(compose_file)))
     args.extend(action)
     return args
 
 
-def compose_environment(project: str) -> dict[str, str]:
+def compose_environment(project: str, project_dir: Path, files: list[Path]) -> dict[str, str]:
     environment = os.environ.copy()
     if project == "rawrarr-internal-do3":
         app = docker_container(PROJECTS[project]["health_container"])
@@ -108,6 +132,27 @@ def compose_environment(project: str) -> dict[str, str]:
         if not image.startswith("rawrarr:"):
             raise RuntimeError("Cannot determine the active internal coordinator image")
         environment["RAWARR_INTERNAL_IMAGE"] = image
+    crowdsec_compose = next(
+        (path for path in files if path.parts[-4:] == ("deploy", "do3", "crowdsec", "compose.yml")),
+        None,
+    )
+    if crowdsec_compose is not None:
+        source_root = crowdsec_compose.parents[3]
+        if not (source_root / "deploy" / "do3" / "crowdsec" / "compose.yml").is_file():
+            raise RuntimeError("Cannot resolve the active published CrowdSec source directory")
+        revision_files = [
+            re.fullmatch(r"docker-compose\.rawrarr-main-([0-9a-f]{40})\.yml", path.name)
+            for path in files
+        ]
+        revisions = [match.group(1) for match in revision_files if match is not None]
+        if len(revisions) != 1:
+            raise RuntimeError("Cannot determine the active Rawrarr source SHA for CrowdSec Compose")
+        secret_file = project_dir / "secrets" / "caddy-crowdsec-bouncer"
+        if not secret_file.is_file() or not secret_file.resolve().is_relative_to(project_dir.resolve()):
+            raise RuntimeError("The protected CrowdSec bouncer secret file is missing or outside the project")
+        environment["CROWDSEC_SOURCE_ROOT"] = str(source_root)
+        environment["RAWRARR_SOURCE_SHA"] = revisions[0]
+        environment["CROWDSEC_BOUNCER_SECRET_FILE"] = str(secret_file)
     return environment
 
 
@@ -208,8 +253,11 @@ def refresh_one(source_root: Path, target: tuple[str, str, str, str]) -> bool:
 
     with deployment_lock(lock, container):
         project_dir, files = compose_context(project, container, service, override)
-        environment = compose_environment(project)
-        config = compose_args(project, project_dir, files, ["config", "--format", "json"])
+        environment = compose_environment(project, project_dir, files)
+        env_file = compose_environment_file(project, project_dir)
+        config = compose_args(
+            project, project_dir, files, ["config", "--format", "json"], env_file=env_file,
+        )
         configured = json.loads(command(config, cwd=project_dir, env=environment).stdout)
         service_config = configured.get("services", {}).get(service, {})
         configured_image = service_config.get("image")
@@ -217,7 +265,7 @@ def refresh_one(source_root: Path, target: tuple[str, str, str, str]) -> bool:
             raise RuntimeError(f"{project}/{service} resolves to unexpected image {configured_image!r}")
         if service_config.get("pull_policy") != "always":
             raise RuntimeError(f"{project}/{service} support overlay does not allow the requested pull")
-        command(compose_args(project, project_dir, files, ["pull", service]),
+        command(compose_args(project, project_dir, files, ["pull", service], env_file=env_file),
                 cwd=project_dir, capture=False, env=environment)
         pulled_id = image_id(image)
         running_id = docker_container(container).get("Image")
@@ -236,7 +284,7 @@ def refresh_one(source_root: Path, target: tuple[str, str, str, str]) -> bool:
         write_override(temporary_override, service, image)
         update_files = [path for path in files if path != override] + [temporary_override]
         up = compose_args(project, project_dir, update_files,
-                          ["up", "-d", "--no-deps", "--pull", "never", service])
+                          ["up", "-d", "--no-deps", "--pull", "never", service], env_file=env_file)
         try:
             command(up, cwd=project_dir, capture=False, env=environment)
             wait_running(container)
@@ -251,6 +299,7 @@ def refresh_one(source_root: Path, target: tuple[str, str, str, str]) -> bool:
             command(compose_args(
                 project, project_dir, rollback_files,
                 ["up", "-d", "--no-deps", "--pull", "never", service],
+                env_file=env_file,
             ), cwd=project_dir, capture=False, env=environment)
             wait_running(container)
             if docker_container(container).get("Image") != running_id:
