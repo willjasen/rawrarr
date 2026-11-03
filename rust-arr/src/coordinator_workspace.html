@@ -276,6 +276,7 @@
     .age-storage-card { max-width:780px; margin:18px 0; padding:20px; border:1px solid var(--line); border-radius:12px; background:linear-gradient(135deg,#18211a,#131915 72%) }
     .age-storage-card h2 { margin:0; font-size:18px }
     .age-storage-status { margin:8px 0; color:var(--muted); font-size:13px }
+    #age-recipient-display { overflow-wrap:anywhere; user-select:all }
     .age-storage-status[data-state="stored"] { color:#b8efc2 }
     .age-storage-status[data-state="error"] { color:#ffb0a8 }
     .age-storage-form { display:grid; gap:8px; max-width:560px }
@@ -460,7 +461,8 @@
         <form id="age-storage-form" class="age-storage-form">
           <label id="settings-age-id-label" for="settings-age-id">Age private ID</label>
           <input id="settings-age-id" type="password" autocomplete="off" spellcheck="false" placeholder="AGE-SECRET-KEY-PQ-1…">
-          <div class="connection-actions"><button id="save-age-id" type="submit">Save age ID in this browser</button><button id="remove-age-id" type="button" hidden>Clear saved age ID</button></div>
+          <div class="connection-actions"><button id="save-age-id" type="submit">Save age ID in this browser</button><button id="show-age-recipient" type="button" hidden>Show age public ID</button><button id="remove-age-id" type="button" hidden>Clear saved age ID</button></div>
+          <p id="age-recipient-display" class="age-storage-status" hidden aria-live="polite"></p>
           <p id="age-storage-message" class="connection-message" role="status" aria-live="polite"></p>
         </form>
       </article>
