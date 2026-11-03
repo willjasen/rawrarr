@@ -27,6 +27,8 @@ function shouldIgnore(cwd, cachedCommit, commit) {
 test('Netlify ignores unrelated Git changes and builds for landing-page or config changes', async t => {
   const netlify = await readFile(join(projectRoot, 'netlify.toml'), 'utf8');
   assert.match(netlify, /ignore\s*=\s*"\.\/netlify-ignore-build\.sh"/);
+  assert.match(netlify, /from\s*=\s*"http:\/\/rawrarr\.net\/"[\s\S]*?to\s*=\s*"https:\/\/rawrarr\.net\/"[\s\S]*?status\s*=\s*301[\s\S]*?force\s*=\s*true/);
+  assert.match(netlify, /from\s*=\s*"http:\/\/rawrarr\.net\/\*"[\s\S]*?to\s*=\s*"https:\/\/rawrarr\.net\/:splat"[\s\S]*?status\s*=\s*301[\s\S]*?force\s*=\s*true/);
 
   const temp = await mkdtemp(join(tmpdir(), 'rawrarr-netlify-ignore-'));
   t.after(() => rm(temp, { recursive: true, force: true }));

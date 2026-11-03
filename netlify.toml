@@ -2,6 +2,18 @@
 publish = "website"
 ignore = "./netlify-ignore-build.sh"
 
+[[redirects]]
+from = "http://rawrarr.net/"
+to = "https://rawrarr.net/"
+status = 301
+force = true
+
+[[redirects]]
+from = "http://rawrarr.net/*"
+to = "https://rawrarr.net/:splat"
+status = 301
+force = true
+
 [[headers]]
 for = "/*"
 
