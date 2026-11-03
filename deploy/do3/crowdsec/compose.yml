@@ -2,6 +2,8 @@ services:
   caddy:
     image: rawrarr-roarlay-prod-caddy-crowdsec:${RAWRARR_SOURCE_SHA:?RAWRARR_SOURCE_SHA must be the published GitHub main commit SHA}
     pull_policy: never
+    ports: !override
+      - "104.248.184.91:443:443"
     build:
       context: ${CROWDSEC_SOURCE_ROOT:?CROWDSEC_SOURCE_ROOT must point to the extracted published source}/deploy/do3/crowdsec
       dockerfile: Dockerfile.caddy
@@ -10,9 +12,10 @@ services:
       args:
         CADDY_VERSION: "2.11.7"
     entrypoint: ["/bin/sh", "-ec"]
-    command: >-
-      export CROWDSEC_BOUNCER_KEY="$$(cat /run/secrets/caddy_crowdsec_bouncer)";
-      exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+    command:
+      - >-
+        export CROWDSEC_BOUNCER_KEY="$$(cat /run/secrets/caddy_crowdsec_bouncer)";
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
     volumes:
       - ${CROWDSEC_SOURCE_ROOT}/deploy/do3/crowdsec/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_access_logs:/var/log/caddy
