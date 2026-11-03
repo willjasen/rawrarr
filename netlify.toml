@@ -1,5 +1,6 @@
 [build]
 publish = "website"
+ignore = "./netlify-ignore-build.sh"
 
 [[headers]]
 for = "/*"
