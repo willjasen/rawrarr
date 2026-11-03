@@ -551,6 +551,35 @@ function rememberAgeIdentity(identity) {
     return false;
   }
 }
+window.addEventListener('storage', event => {
+  if (event.key !== ageSessionKey) return;
+  const nextIdentity = event.newValue || '';
+  const identityChanged = ageIdentityInMemory !== nextIdentity;
+  ageIdentityInMemory = nextIdentity;
+  ageIdentityStored = Boolean(event.newValue);
+  if (identityChanged) {
+    ageRecipientVisible = false;
+    agePublicRecipient = '';
+    ageRecipientShort.textContent = '';
+    ageRecipientDisplay.hidden = true;
+    ageRecipientMessage.textContent = '';
+    ageRecipientMessage.hidden = true;
+    ageRecipientMessage.dataset.state = '';
+    showAgeRecipientButton.textContent = 'Show age public ID';
+  }
+  if (!nextIdentity) {
+    aiMovies = null;
+    aiSeries = null;
+    if (identityChanged) ageInput.value = '';
+    if (location.hash === '#movies') {
+      moviesPanel.replaceChildren();
+      resetArrSummary('radarr');
+      contentStatus.textContent = 'Age private ID removed from this browser; metadata is locked.';
+    }
+  }
+  updateAgeIdControls();
+  if (ageIdentityInMemory && location.hash === '#movies' && selectedNode) void unlockMetadata();
+});
 function updateAgeStorageSettings() {
   ageStorageStatus.dataset.state = '';
   ageStorageStatus.textContent = ageIdentityInMemory
