@@ -36,6 +36,8 @@ test('Settings places profile, Ethereum/ENS, and age-ID cards responsively', asy
       assert.equal(await crypto.locator('#crypto-access-status').count(), 1);
       assert.equal(await crypto.locator('#crypto-wallet-status').count(), 1);
       assert.equal(await crypto.locator('#crypto-wallet-link-form').count(), 1);
+      assert.equal(await crypto.locator('#crypto-ens-name').inputValue(), '');
+      assert.equal(await crypto.locator('#crypto-ens-name').getAttribute('placeholder'), null);
       assert.equal(await crypto.getByRole('link', { name: 'Manage subscription' }).getAttribute('href'), '/billing');
       assert.equal(await age.getByRole('heading', { name: 'Age private ID in this browser' }).count(), 1);
       assert.equal(await age.locator('#age-storage-form').count(), 1);
