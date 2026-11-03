@@ -57,7 +57,9 @@ test('coordinator overlay leaves analytics upstream opt-in across deployment var
 
 test('internal dashboard Caddy route stays in the Tailscale namespace and separates dashboard from coordinator', () => {
   assert.match(internalDashboardCompose, /network_mode: service:tailscale/);
-  assert.match(internalDashboardCompose, /rawrarr-internal-do3-analytics-caddy/);
+  assert.match(internalDashboardCompose, /container_name: rawrarr-int-caddy/);
+  assert.match(internalDashboardCompose, /container_name: rawrarr-int-umami/);
+  assert.match(internalDashboardCompose, /container_name: rawrarr-int-umami-postgres/);
   assert.match(internalDashboardCompose, /image: rawrarr-umami:559e3c607c23-basepath-analytics/);
   assert.match(internalDashboardCaddy, /handle \/analytics\* \{[\s\S]*reverse_proxy umami:3000/);
   assert.match(internalDashboardCaddy, /handle \{[\s\S]*reverse_proxy 127\.0\.0\.1:8080/);

@@ -17,10 +17,17 @@ SPEC.loader.exec_module(UPDATER)
 
 
 class CoordinatorAutoUpdaterTests(unittest.TestCase):
+    def test_internal_container_references_use_the_stable_int_prefix(self):
+        self.assertEqual(UPDATER.INTERNAL["container"], "rawrarr-int-roarlay")
+        self.assertEqual(UPDATER.INTERNAL_TAILSCALE_CONTAINER, "rawrarr-int-tailscale")
+
     def test_runtime_paths_select_coordinator_updates(self):
         self.assertTrue(UPDATER.affects_coordinator(["rust-arr/src/coordinator.rs"]))
         self.assertTrue(UPDATER.affects_coordinator(["rust-arr/src/node_role.rs"]))
-        self.assertTrue(UPDATER.affects_coordinator(["deploy/do3/docker-compose.internal-coordinator.yml"]))
+        self.assertFalse(UPDATER.affects_coordinator([
+            "deploy/do3/docker-compose.internal-coordinator.yml",
+            "deploy/do3/docker-compose.analytics-dashboard-internal.yml",
+        ]))
         self.assertFalse(UPDATER.affects_coordinator(["deploy/do3/auto_update_coordinators.py"]))
 
     def test_documentation_tests_and_landing_page_changes_are_skipped(self):

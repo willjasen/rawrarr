@@ -20,9 +20,9 @@ PROJECTS = {
         "directory": Path("/opt/rawrarr-internal-do3"),
         "compose": "docker-compose.internal-support-images.yml",
         "health_url": "https://rawrarr.risk-mermaid.ts.net/health",
-        "health_container": "rawrarr-internal-do3-roarlay",
+        "health_container": "rawrarr-int-roarlay",
         "local_health_url": "http://127.0.0.1:8080/health",
-        "tailscale_container": "rawrarr-internal-do3-tailscale",
+        "tailscale_container": "rawrarr-int-tailscale",
         "environment_file": Path("secrets/analytics.env"),
     },
     "rawrarr-roarlay-prod": {
@@ -37,10 +37,10 @@ PROJECTS = {
 }
 
 TARGETS = (
-    ("rawrarr-internal-do3", "rawrarr-internal-do3-postgres", "postgres", "postgres:17-alpine"),
-    ("rawrarr-internal-do3", "rawrarr-internal-do3-tailscale", "tailscale", "tailscale/tailscale:stable"),
-    ("rawrarr-internal-do3", "rawrarr-internal-do3-analytics-caddy", "analytics-caddy", "caddy:2-alpine"),
-    ("rawrarr-internal-do3", "rawrarr-internal-do3-umami-postgres-1", "umami-postgres", "postgres:17-alpine"),
+    ("rawrarr-internal-do3", "rawrarr-int-postgres", "postgres", "postgres:17-alpine"),
+    ("rawrarr-internal-do3", "rawrarr-int-tailscale", "tailscale", "tailscale/tailscale:stable"),
+    ("rawrarr-internal-do3", "rawrarr-int-caddy", "analytics-caddy", "caddy:2-alpine"),
+    ("rawrarr-internal-do3", "rawrarr-int-umami-postgres", "umami-postgres", "postgres:17-alpine"),
     ("rawrarr-roarlay-prod", "rawrarr-roarlay-prod-postgres", "postgres", "postgres:17-alpine"),
     ("rawrarr-roarlay-prod", "rawrarr-roarlay-prod-tailscale", "tailscale", "tailscale/tailscale:stable"),
     ("rawrarr-roarlay-prod", "rawrarr-roarlay-prod-caddy", "caddy", "caddy:2-alpine"),

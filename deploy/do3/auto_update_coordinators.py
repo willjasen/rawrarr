@@ -21,7 +21,7 @@ from typing import Iterator
 
 REPOSITORY = "willjasen/rawrarr"
 INTERNAL = {
-    "container": "rawrarr-internal-do3-roarlay",
+    "container": "rawrarr-int-roarlay",
     "lock": Path("/opt/rawrarr-internal-do3/.container-rebuild-roarlay.lock"),
     "project_dir": Path("/opt/rawrarr-internal-do3"),
     "health_url": "http://127.0.0.1:8080/health",
@@ -38,14 +38,21 @@ PUBLIC = {
     "image_env": None,
     "image_base": None,
 }
-INTERNAL_TAILSCALE_CONTAINER = "rawrarr-internal-do3-tailscale"
+INTERNAL_TAILSCALE_CONTAINER = "rawrarr-int-tailscale"
 INTERNAL_HEALTH_URL_PUBLIC = "https://rawrarr.risk-mermaid.ts.net/health"
 PUBLIC_HEALTH_URL = "https://roarlay.rawrarr.net/health"
 MIN_FREE_BYTES = 5 * 1024**3
 HEALTH_TIMEOUT_SECONDS = 150
 
 NON_RUNTIME_PREFIXES = ("docs/", "runbooks/", "scripts/", ".github/", "website/")
-NON_RUNTIME_FILES = {"AGENTS.md", "README.md", "ROADMAP.md", "TESTING.md"}
+NON_RUNTIME_FILES = {
+    "AGENTS.md",
+    "README.md",
+    "ROADMAP.md",
+    "TESTING.md",
+    "deploy/do3/docker-compose.internal-coordinator.yml",
+    "deploy/do3/docker-compose.analytics-dashboard-internal.yml",
+}
 
 
 def command(args: list[str], *, cwd: Path | None = None, env: dict[str, str] | None = None,
