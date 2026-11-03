@@ -100,6 +100,8 @@ The command requires the exact `RESTORE` confirmation and prompts for the new Ra
 
 The Movies and TV pages each show four service-specific summary cards using the same layout. Their counts and disk usage come from Radarr or Sonarr. The metadata-size card shows the encrypted metadata stored for that service's media type—Movies for Radarr and TV for Sonarr—and “All metadata” shows the full shared metadata tree. The total is expected to be the same on both pages; each service-specific subtotal can differ. Sizes count stored files and use binary units (1 GB is 1,024 MB).
 
+These sizes describe Rawrarr's encrypted cache, not Radarr's or Sonarr's own metadata. A missing cache directory counts as empty; storage-read failures make the sizes unavailable rather than displaying 0 B. Subscriber startup initializes the shared metadata directory on fresh volumes. Unlocking the node's age vault wakes its metadata workers; the Movies rescan action requests a Rawrarr cache refresh, not a Radarr library or disk scan.
+
 On TV, the Sonarr artwork progress message and successful series-load message disappear after every eligible poster has been saved. The metadata worker may continue checking for newly added series without showing a completed-cache message. If posters are still missing, progress remains visible while work continues.
 
 The local plaintext copy stays in node-local `/data`; it is never synchronized. Production deployments must set `RAWARR_LOCAL_PLAINTEXT_CONFIG=false` (the application default) so the configuration exists only as age ciphertext in `/shared/config.aged`. Treat the Radarr key as a secret and do not paste it into logs or documentation.

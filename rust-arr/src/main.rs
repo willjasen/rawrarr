@@ -1420,36 +1420,43 @@ struct MetadataStorageStatus {
     tv_bytes: u64,
 }
 
-async fn metadata_storage_status() -> Json<MetadataStorageStatus> {
+fn directory_size(path: &std::path::Path) -> std::io::Result<u64> {
+    let mut entries = match std::fs::read_dir(path) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(error) => return Err(error),
+    };
+    entries.try_fold(0_u64, |total, entry| {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let bytes = if file_type.is_dir() {
+            directory_size(&entry.path())?
+        } else if file_type.is_file() {
+            entry.metadata()?.len()
+        } else {
+            0
+        };
+        total.checked_add(bytes).ok_or_else(|| std::io::Error::other("Metadata size overflow"))
+    })
+}
+
+async fn metadata_storage_status() -> Result<Json<MetadataStorageStatus>, (StatusCode, Json<ApiError>)> {
     let metadata_dir = secure_config::AgeVault::metadata_dir();
     let bytes = tokio::task::spawn_blocking(move || {
-        fn directory_size(path: &std::path::Path) -> u64 {
-            let Ok(entries) = std::fs::read_dir(path) else {
-                return 0;
-            };
-            entries
-                .filter_map(Result::ok)
-                .map(|entry| {
-                    let Ok(file_type) = entry.file_type() else {
-                        return 0;
-                    };
-                    if file_type.is_dir() {
-                        directory_size(&entry.path())
-                    } else if file_type.is_file() {
-                        entry.metadata().map(|metadata| metadata.len()).unwrap_or(0)
-                    } else {
-                        0
-                    }
-                })
-                .sum()
-        }
-        let movies_bytes = directory_size(&metadata_dir.join("movies"));
-        let tv_bytes = directory_size(&metadata_dir.join("tv"));
-        (directory_size(&metadata_dir), movies_bytes, tv_bytes)
+        let movies_bytes = directory_size(&metadata_dir.join("movies"))?;
+        let tv_bytes = directory_size(&metadata_dir.join("tv"))?;
+        Ok::<_, std::io::Error>((directory_size(&metadata_dir)?, movies_bytes, tv_bytes))
     })
     .await
-    .unwrap_or((0, 0, 0));
-    Json(MetadataStorageStatus { bytes: bytes.0, movies_bytes: bytes.1, tv_bytes: bytes.2 })
+    .map_err(|error| {
+        eprintln!("rawrarr metadata storage task failed: {error}");
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError { error: "Could not read encrypted metadata storage" }))
+    })?
+    .map_err(|error| {
+        eprintln!("rawrarr metadata storage read failed: {error}");
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError { error: "Could not read encrypted metadata storage" }))
+    })?;
+    Ok(Json(MetadataStorageStatus { bytes: bytes.0, movies_bytes: bytes.1, tv_bytes: bytes.2 }))
 }
 
 async fn run_metadata_artwork_backfill(state: Arc<AppState>) {
@@ -2425,6 +2432,8 @@ async fn unlock_age_settings(
     let exists = vault.config_exists();
     let theme_seed = age_theme_seed(vault.user_recipient());
     *state.vault.write().await = Some(vault);
+    state.artwork_scrape_notify.notify_one();
+    state.sonarr_scrape_notify.notify_one();
     state.radarr_backup_notify.notify_one();
     Ok(Json(AgeSettingsInfo {
         unlocked: true,
@@ -2682,6 +2691,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         axum::serve(listener, app).await?;
         return Ok(());
     }
+    secure_config::AgeVault::initialize_metadata_storage()?;
     secure_config::AgeVault::ensure_node_identity()?;
     secure_config::AgeVault::ensure_node_signing_key()?;
     let device_id = devices::load_or_create_device_id()?;

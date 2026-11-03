@@ -262,6 +262,10 @@ impl AgeVault {
         )
     }
 
+    pub fn initialize_metadata_storage() -> Result<(), VaultError> {
+        migrate_legacy_metadata(&Self::shared_dir())
+    }
+
     pub fn config_path() -> PathBuf {
         Self::shared_dir().join("config.aged")
     }
@@ -1577,17 +1581,25 @@ fn shared_out_dir_for(shared_dir: &Path) -> PathBuf {
 fn migrate_legacy_metadata(shared_dir: &Path) -> Result<(), VaultError> {
     let legacy = shared_dir.join("metadata");
     let incoming = shared_in_dir_for(shared_dir);
+    // Mounted shared volumes hide the image's directories. Create the alias
+    // target even when there is no legacy tree to copy.
+    for directory in [&incoming, &incoming.join("metadata")] {
+        match fs::symlink_metadata(directory) {
+            Ok(metadata) if !metadata.is_dir() => return Err(VaultError::StorageFailed),
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                fs::create_dir_all(directory).map_err(|_| VaultError::StorageFailed)?;
+            }
+            Err(_) => return Err(VaultError::StorageFailed),
+        }
+        set_shared_directory_permissions(directory)?;
+    }
     if !legacy.exists() {
         return Ok(());
     }
     let legacy_type = fs::symlink_metadata(&legacy).map_err(|_| VaultError::StorageFailed)?;
     if !legacy_type.is_dir() {
         return Err(VaultError::StorageFailed);
-    }
-    if let Ok(incoming_type) = fs::symlink_metadata(&incoming) {
-        if incoming_type.file_type().is_symlink() || !incoming_type.is_dir() {
-            return Err(VaultError::StorageFailed);
-        }
     }
     copy_missing_shared_tree(&legacy, &incoming.join("metadata"))
 }
@@ -2630,6 +2642,10 @@ mod tests {
         fs::remove_dir_all(shared_dir).expect("remove test data");
     }
 }
+
+#[cfg(test)]
+#[path = "../../scripts/tests/test_rawrarr_metadata_storage.rs"]
+mod metadata_storage_tests;
 
 #[cfg(test)]
 #[path = "../../scripts/tests/test_rawrarr_filename_secret.rs"]
