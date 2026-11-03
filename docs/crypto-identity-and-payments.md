@@ -26,7 +26,7 @@ The coordinator database stores linked public addresses and ENS names, short-liv
 
 ## Configuration
 
-- `RAWARR_BILLING_AUDIENCE=public` enables public-account trial, free-tier enforcement, wallet auth, and ETH payment routes. Internal deployments keep `internal`.
+- `RAWARR_BILLING_AUDIENCE=public` enables public-account trial, free-tier enforcement, wallet auth, and ETH payment routes. Internal deployments keep `internal`; their `/billing` route returns 404 and the coordinator workspace omits subscription links.
 - `RAWARR_ETH_TREASURY_ADDRESS` enables donations; an unset recipient leaves donation controls disabled.
 - `RAWARR_ETH_MONTHLY_PRICE_WEI` and `RAWARR_ETH_ANNUAL_PRICE_WEI` configure the optional exact amounts. Either may be omitted.
 - `RAWARR_ETH_RPC_URL` optionally selects the HTTPS mainnet RPC URL. Credentials, query strings, and fragments are rejected; HTTP loopback is allowed for local tests.

@@ -36,6 +36,14 @@ test('authenticated billing routes derive ownership from the session and protect
   assert.match(billing, /rawrarr_stripe_subscriptions/);
 });
 
+test('subscription page is only served and linked on public billing deployments', () => {
+  assert.match(coordinator, /async fn coordinator_billing_page\(\) -> Response \{\s*if !public_billing_audience\(\) \{\s*return StatusCode::NOT_FOUND\.into_response\(\);\s*\}/);
+  assert.match(coordinator, /fn public_billing_audience\(\) -> bool \{\s*env::var\("RAWARR_BILLING_AUDIENCE"\)\.is_ok_and\(\|value\| value == "public"\)\s*\}/);
+  assert.match(coordinator, /let page = if public_billing_audience\(\) \{\s*page\s*\} else \{\s*hide_billing_navigation\(page\)\s*\}/);
+  assert.match(coordinator, /fn hide_billing_navigation\(mut page: String\) -> String/);
+  assert.match(coordinator, /page\.replace\(r#"<p><a href="\/billing">Manage subscription<\/a><\/p>"#,\s*""\)/);
+});
+
 test('do3 config mounts test billing credentials from host files and UI discloses no entitlement effect', () => {
   assert.match(compose, /STRIPE_TEST_SECRET_KEY_FILE: \/run\/secrets\/stripe-test-secret-key/);
   assert.match(compose, /STRIPE_TEST_PRICE_ID_FILE: \/run\/secrets\/stripe-test-price-id/);
