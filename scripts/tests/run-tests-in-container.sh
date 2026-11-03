@@ -4,6 +4,11 @@ set +e
 echo "rawrarr isolated test runner"
 echo "Rust: $(rustc --version)"
 echo "Node: $(node --version)"
+node_major=$(node --version | sed -E 's/^v([0-9]+).*/\1/')
+if [ "$node_major" != 26 ]; then
+    echo "ERROR: regression suites require Node.js 26; found $(node --version)." >&2
+    exit 1
+fi
 test_started_epoch=$(date +%s)
 test_started_at=$(date '+%Y-%m-%d %H:%M:%S %z')
 

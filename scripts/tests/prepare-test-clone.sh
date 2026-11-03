@@ -8,7 +8,7 @@ if [ ! -d /workspace/rust-arr ] || [ ! -d /workspace/scripts/tests ]; then
 fi
 
 missing_packages=""
-for pair in "curl:curl" "node:nodejs" "npm:npm" "chromium:chromium" "cjxl:libjxl-tools" "rsvg-convert:librsvg2-bin"; do
+for pair in "curl:curl" "gnupg:gpg" "chromium:chromium" "cjxl:libjxl-tools" "rsvg-convert:librsvg2-bin"; do
     command_name=${pair%%:*}
     package_name=${pair#*:}
     if ! command -v "$command_name" >/dev/null 2>&1; then
@@ -23,6 +23,25 @@ if [ -n "$missing_packages" ]; then
     # De-duplicate package names while preserving a shell-safe argument list.
     apt-get install -y --no-install-recommends $(printf '%s\n' $missing_packages | sort -u)
     rm -rf /var/lib/apt/lists/*
+fi
+
+node_major=26
+current_node_major=$(node --version 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/' || true)
+if [ "$current_node_major" != "$node_major" ]; then
+    install -d -m 0755 /usr/share/keyrings
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor --batch --yes -o /usr/share/keyrings/nodesource.gpg
+    printf 'deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_%s.x nodistro main\n' "$node_major" > /etc/apt/sources.list.d/nodesource.list
+    apt-get update
+    apt-get install -y --no-install-recommends nodejs
+    rm -rf /var/lib/apt/lists/*
+fi
+if [ "$(node --version | sed -E 's/^v([0-9]+).*/\1/')" != "$node_major" ]; then
+    echo "ERROR: expected Node.js major $node_major; found $(node --version)." >&2
+    exit 1
+fi
+if ! command -v npm >/dev/null 2>&1; then
+    echo "ERROR: npm is missing after installing Node.js $node_major." >&2
+    exit 1
 fi
 
 case "$(dpkg --print-architecture)" in
