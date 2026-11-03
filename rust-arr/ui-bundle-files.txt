@@ -14,6 +14,7 @@ coordinator-device-routes.mjs
 coordinator-passkey.mjs
 profile-color.mjs
 assets/rawrarr-favicon.svg
+assets/rawrarr-favicon.ico
 assets/rawrarr-logo.png
 assets/rawrarr-logo.jxl
 assets/metadata-export.js
