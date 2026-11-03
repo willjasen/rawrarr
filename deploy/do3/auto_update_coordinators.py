@@ -193,19 +193,23 @@ def wait_healthy(container: str) -> None:
     raise RuntimeError(f"{container} did not become healthy within {HEALTH_TIMEOUT_SECONDS}s")
 
 
-def preserve_image(container: str, role: str, revision: str) -> str:
+def preserve_image(container: str, role: str, revision: str) -> tuple[str, str]:
     image_id = docker_container(container).get("Image", "")
     if not image_id:
         raise RuntimeError(f"Could not read current image ID for {container}")
-    tag = f"rawrarr:rollback-{role}-before-{revision[:7]}-amd64"
-    existing = command(["docker", "image", "inspect", tag], check=False)
+    stable_tag = f"rawrarr:rollback-{role}-before-{revision[:7]}-amd64"
+    existing = command(["docker", "image", "inspect", stable_tag], check=False)
     if existing.returncode:
-        command(["docker", "tag", image_id, tag])
-    else:
-        saved_id = json.loads(existing.stdout)[0]["Id"]
-        if saved_id != image_id:
-            raise RuntimeError(f"Rollback tag already points to an unexpected image: {tag}")
-    return image_id
+        command(["docker", "tag", image_id, stable_tag])
+    # Preserve a stable first-before tag across retries and a separate exact
+    # rollback point for the image that is running on this specific attempt.
+    attempt_tag = f"rawrarr:rollback-{role}-attempt-{revision[:7]}-{image_id.removeprefix('sha256:')[:12]}-amd64"
+    attempt = command(["docker", "image", "inspect", attempt_tag], check=False)
+    if attempt.returncode:
+        command(["docker", "tag", image_id, attempt_tag])
+    elif json.loads(attempt.stdout)[0]["Id"] != image_id:
+        raise RuntimeError(f"Attempt rollback tag already points to an unexpected image: {attempt_tag}")
+    return image_id, attempt_tag
 
 
 def preserve_tag(source: str, target: str) -> str:
@@ -214,8 +218,10 @@ def preserve_tag(source: str, target: str) -> str:
     existing = command(["docker", "image", "inspect", target], check=False)
     if existing.returncode:
         command(["docker", "tag", image_id, target])
-    elif json.loads(existing.stdout)[0]["Id"] != image_id:
-        raise RuntimeError(f"Rollback tag already points to an unexpected image: {target}")
+    else:
+        # This tag is intentionally immutable: a retry keeps the original
+        # pre-deployment base image rather than replacing it with the new base.
+        return json.loads(existing.stdout)[0]["Id"]
     return image_id
 
 
@@ -239,14 +245,13 @@ def verify_service(container: str, image_id: str, revision: str, version_url: st
 
 def deploy_role(role: str, target: dict, image: str, image_id: str, revision: str) -> None:
     container = target["container"]
-    old_image = preserve_image(container, f"{role}-roarlay", revision)
+    old_image, old_rollback_tag = preserve_image(container, f"{role}-roarlay", revision)
     build_dir = target["project_dir"] / "builds" / f"github-main-{revision[:7]}-auto"
     override = build_dir / "deployment-info.override.yml"
     timestamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     write_override(override, image, timestamp)
     project, project_dir, service, files = compose_files(container, override)
     env = os.environ.copy()
-    env["GH_TOKEN"] = token
     if target["image_env"]:
         env[target["image_env"]] = target["image_base"]
     compose = compose_command(project, project_dir, files, service)
@@ -274,8 +279,7 @@ def deploy_role(role: str, target: dict, image: str, image_id: str, revision: st
         except Exception:
             print(f"verification failed for {role}; restoring the saved image", file=sys.stderr, flush=True)
             rollback = build_dir / "rollback.override.yml"
-            old_tag = f"rawrarr:rollback-{role}-roarlay-before-{revision[:7]}-amd64"
-            write_override(rollback, old_tag, timestamp)
+            write_override(rollback, old_rollback_tag, timestamp)
             rollback_files = [path for path in files if path != override] + [rollback]
             rollback_command = compose_command(project, project_dir, rollback_files, service)
             command(rollback_command, cwd=project_dir, env=env, capture=False)
