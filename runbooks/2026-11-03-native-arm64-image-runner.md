@@ -15,14 +15,16 @@ Replace QEMU emulation for the ARM64 image build with GitHub Actions' `ubuntu-24
 
 ## Verification
 
-- Pending: `python3 scripts/tests/test_publish_container_workflow.py`.
-- Pending: GitHub Actions workflow for both architecture builds and manifest publication after merge.
-- The workflow's use of the GitHub-hosted ARM64 runner is supported by current GitHub-hosted runner documentation. Private-repository compute usage/rates depend on the account's plan.
+- `python3 scripts/tests/test_publish_container_workflow.py` — 3 tests passed.
+- PR #432's Basic script tests passed; its private UI bundle job was skipped.
+- GitHub Actions publish run [41729388514](https://github.com/willjasen/rawrarr/actions/runs/41729388514) succeeded: AMD64 and ARM64 images built and published, then the multi-architecture `main` and commit tags were assembled.
+- The ARM64 runner architecture check passed; the image build step took 5m49s and the full ARM64 job took 6m12s. The prior QEMU ARM64 image build step took 2h28m58s. That's an observed roughly 25x reduction, though not a controlled single-variable benchmark because the Rust dependency-layer change also landed between the two runs.
+- GitHub's hosted-runner reference lists `ubuntu-24.04-arm` for private repositories. Private-repository compute usage/rates depend on the account's plan.
 
 ## Current image run
 
-The earlier publish run `41723284489` was canceled at Will's request while ARM64 was still compiling. Its AMD64 build had succeeded. No multi-architecture manifest was published by that canceled run.
+The earlier publish run `41723284489` was canceled at Will's request while ARM64 was still compiling. Its AMD64 build had succeeded. No multi-architecture manifest was published by that canceled run; the successful replacement run is `41729388514`.
 
 ## Final state
 
-Implementation is in progress on `codex/native-arm64-image-runner`.
+Merged in PR [#432](https://github.com/willjasen/rawrarr/pull/432) as commit `381b775`. The successful image workflow completed from that commit.
