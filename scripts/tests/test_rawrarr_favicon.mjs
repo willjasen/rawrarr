@@ -7,9 +7,8 @@ import { chromium } from 'playwright';
 const root = new URL('../../', import.meta.url);
 const read = path => readFile(new URL(path, root));
 const readText = path => readFile(new URL(path, root), 'utf8');
-const [serverSource, bundleFiles, svg, ico, htmlPages, healthHtml] = await Promise.all([
+const [serverSource, svg, ico, htmlPages, healthHtml] = await Promise.all([
   readText('rust-arr/src/main.rs'),
-  readText('rust-arr/ui-bundle-files.txt'),
   readText('rust-arr/src/assets/rawrarr-favicon.svg'),
   read('rust-arr/src/assets/rawrarr-favicon.ico'),
   Promise.all([
@@ -30,8 +29,6 @@ test('all Rawrarr HTML entry pages advertise self-contained SVG and ICO favicons
 
   assert.match(svg, /viewBox="0 0 64 64"/);
   assert.doesNotMatch(svg, /<(?:image|use)\b|\b(?:href|xlink:href)=/i, 'SVG favicon has no external image dependencies');
-  assert.ok(bundleFiles.split(/\r?\n/).includes('assets/rawrarr-favicon.svg'));
-  assert.ok(bundleFiles.split(/\r?\n/).includes('assets/rawrarr-favicon.ico'));
 });
 
 test('SVG and /favicon.ico routes serve their matching formats with embedded fallback assets', () => {

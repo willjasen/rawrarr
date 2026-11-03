@@ -109,7 +109,7 @@
     <pre id="compose-preview" hidden></pre>
     <ol id="deploy-instructions" hidden>
       <li>Install Docker Desktop on macOS or Windows, or Docker Engine with the Compose plugin on Debian.</li>
-      <li>Subscriber nodes do not need a GitHub token. The coordinator retrieves and verifies publisher-signed UI releases.</li>
+      <li>UI assets are included in the application image and update with the published container revision.</li>
       <li>Make the <code>rawrarr:local</code> image available on this computer. Confirm with <code>docker image inspect rawrarr:local</code>.</li>
       <li id="auth-key-instruction">For internal Tailscale, Compose contains the auth key; restrict the file to your user (for example, <code>chmod 600 compose.yaml</code>) and remove the key after the node joins. Headscale mode uses a separate local secret file.</li>
       <li>Check the media path if you selected boneyard. Keep <code>/shared</code> on a separate Syncthing setup; it is not exposed as a Tailscale share.</li>

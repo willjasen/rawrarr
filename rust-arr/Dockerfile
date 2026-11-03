@@ -48,10 +48,8 @@ COPY --from=builder /rust-arr /usr/local/bin/rust-arr
 COPY --from=builder /rust-arr-build-revision /usr/share/rawrarr/build-revision
 COPY --from=builder /rust-arr-target-arch /usr/share/rawrarr/target-arch
 COPY --from=age-builder /go/bin/age /go/bin/age-keygen /usr/local/bin/
-COPY update_ui_bundle.py /usr/local/bin/rawrarr-update-ui
-COPY ui-publisher-public-key.pem /etc/rawrarr/ui-publisher-public-key.pem
 COPY container-entrypoint.sh /usr/local/bin/rawrarr-entrypoint
-RUN chmod 755 /usr/local/bin/rawrarr-entrypoint /usr/local/bin/rawrarr-update-ui
+RUN chmod 755 /usr/local/bin/rawrarr-entrypoint
 RUN test "$(cat /usr/share/rawrarr/target-arch)" = "$TARGETARCH"
 USER 10001:10001
 EXPOSE 8080

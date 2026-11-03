@@ -86,16 +86,14 @@ test('health polling checks on startup, network recovery, and visible-tab return
 });
 
 test('coordinator page includes the modal pending view and serves its monitor module', async () => {
-  const [workspace, script, routes, bundleFiles] = await Promise.all([
+  const [workspace, script, routes] = await Promise.all([
     read('rust-arr/src/coordinator_workspace.html'),
     read('rust-arr/src/coordinator-workspace.mjs'),
     read('rust-arr/src/coordinator.rs'),
-    read('rust-arr/ui-bundle-files.txt'),
   ]);
   assert.match(workspace, /<dialog id="coordinator-pending-dialog"[\s\S]*?Roarlay may be updating or restarting/);
   assert.match(script, /createCoordinatorAvailabilityMonitor/);
   assert.match(script, /coordinatorPendingDialog\.showModal\(\)/);
   assert.match(script, /refreshWorkspaceAfterCoordinatorReconnect/);
   assert.match(routes, /"\/assets\/coordinator-availability\.mjs", get\(coordinator_availability_script\)/);
-  assert.match(bundleFiles, /^coordinator-availability\.mjs$/m);
 });

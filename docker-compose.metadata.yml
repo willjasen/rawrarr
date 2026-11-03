@@ -19,8 +19,6 @@ services:
     image: rawrarr:local
     environment:
       RAWARR_ROLE: metadata
-      RAWARR_UI_GITHUB_REPO: willjasen/rawrarr
-      RAWARR_UI_GITHUB_TOKEN_FILE: /run/secrets/rawrarr_ui_github_token
       RUST_ARR_LISTEN_ADDR: 0.0.0.0:8080
       RAWARR_DATA_DIR: /data
       RAWARR_SHARED_DATA_DIR: /shared
@@ -49,8 +47,6 @@ services:
         bind:
           create_host_path: false
     restart: unless-stopped
-    secrets:
-      - rawrarr_ui_github_token
     networks:
       - default
       - metadata-private
@@ -64,6 +60,3 @@ networks:
 volumes:
   rawrarr-data:
   rawrarr-ui:
-secrets:
-  rawrarr_ui_github_token:
-    file: ${RAWARR_UI_GITHUB_TOKEN_PATH:?Set RAWARR_UI_GITHUB_TOKEN_PATH to a fine-grained read-only GitHub token file}
