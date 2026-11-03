@@ -202,7 +202,7 @@ test('Radarr and Sonarr settings use the configured user-node URL directly from 
 });
 
 test('encrypted metadata fetches include the direct node browser session cookie', () => {
-  assert.match(metadataExport, /async function fetchBytes\(url\)[\s\S]*?credentials: 'include'/);
+  assert.match(metadataExport, /async function fetchBytes\(url, \{ signal \} = \{\}\)[\s\S]*?signal,[\s\S]*?credentials: 'include'/);
 });
 
 test('coordinator serves the profile-color module imported by its workspace script', () => {
