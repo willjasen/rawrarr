@@ -107,7 +107,7 @@ now has its own localhost-only definition without a coordinator dependency.
 See [admin preview adoption](admin-console.md#local-preview) and the
 [retirement record](compose-layout.md#retired-mac-coordinator-definitions).
 
-## Prepare the Mac mini
+## Retired Mac-specific storage setups
 
 The internal coordinator moved from the Mac mini to do3 on 2026-10-27.
 Its definition is
@@ -117,32 +117,27 @@ second coordinator on a Mac from historical runbook commands. The internal
 coordinator remains at `https://rawrarr.risk-mermaid.ts.net/`; the Macs remain
 subscriber hosts. See the [migration record](../runbooks/2026-10-27-move-internal-coordinator-to-do3.md)
 and [retirement/adoption guidance](compose-layout.md#retired-mac-coordinator-definitions).
-The standalone storage example below is not the current internal Mac deployment.
+The old host-specific storage setup is not the current internal Mac deployment.
 
-The Mini runs `docker-compose.storage.yml`, with no PostgreSQL or roarlay container. It does not create an account or require the node to know a username: the healthy coordinator maps it to its existing owner and exposes it for approval.
+The operator confirmed the old MacBook boneyard and Mini transport/relay setups
+obsolete. Their host-specific templates and Caddy fixture have been removed.
+Do not replay their historical deployment commands or create replacement
+Tailscale identities. The current MacBook `rawrarr-node-internal` stack contains
+fossil, artwork-cache, and tailscale, using host-local files.
 
-1. On the Mini, verify OrbStack, free loopback port 7297, and the real `/Volumes/silo/Media/data` mount. Preserve other consumers of the disk. Obtain the source checkout or a tested locally built image; public registry publishing remains planned.
+The generic `docker-compose.storage.yml` remains available for an intentionally
+provisioned boneyard, not as a current Mac setup recipe. It requires an existing,
+separately managed Tailscale namespace selected by `RAWARR_TAILSCALE_CONTAINER`;
+its legacy fallback name does not provision that container. Inspect the actual
+namespace and configure verified HTTPS/coordinator and browser routes before
+deployment. The app binds loopback and publishes no host port, so starting it
+alone does not make `localhost:7297` reachable.
 
-2. Combine `docker-compose.storage.yml` with `docker-compose.tailscale-mini.yml`. The persistent Mini Tailscale container provides a userspace SOCKS5 proxy for roarlay bridge and Tailscale Serve for the storage page. Keep the Mini Serve endpoint private to the tailnet. PostgreSQL stays on roarlay's private Docker network and is never exposed through Tailscale or a public listener. The Mini browser origin remains `http://localhost:7297` for direct local access.
-
-3. Start boneyard using only the standalone file and let it submit its enrollment request. Do not configure Syncthing peers, accept devices, or share a folder during initial deployment. The node must remain pending until the owner reviews and approves it in roarlay workspace.
-
-   ```sh
-   export RAWARR_COORDINATOR_URL=https://rawrarr.risk-mermaid.ts.net
-   export RAWARR_COORDINATOR_LOCAL_HTTP=true
-   export RAWARR_NODE_ID=mac-mini-storage
-   export RAWARR_DEVICE_NAME="Mac mini"
-   export RAWARR_NODE_ENROLLMENT_ENABLED=true
-   export RAWARR_HOST_MEDIA_PATH=/Volumes/silo/Media/data
-   docker compose -p rawrarr-local -f docker-compose.storage.yml config --quiet
-   docker compose -p rawrarr-local -f docker-compose.storage.yml up -d --build
-   ```
-
-   The media bind is read-only and refuses to create a missing host path. The first startup creates a random node token in local `/data` and waits for approval. The coordinator associates the request with its existing owner; the node sends no username or user ID. Approve **Mac mini · boneyard node** in roarlay workspace. The approval card names the account it will join. Then registration completes. On the Mini, open `http://localhost:7297` and sign in using the localhost passkey. Unlock the age identity locally only if needed; it is neither requested by nor sent to roarlay. Do not mount the identity into roarlay or Syncthing.
-
-4. Only after explicit owner approval, configure Syncthing on the approved node and its intended counterpart. Use distinct persistent container state, verify device IDs out of band, and share only the intended folder with the same folder ID. Set `RAWARR_SYNCTHING_HOSTNAME` and `RAWARR_SHARED_DATA_PATH` as needed; each GUI is loopback 8385. Never auto-accept a device or folder based on network presence or enrollment alone. Do not use or modify host Syncthing. Never sync `/data`, PostgreSQL, node tokens, or private age identities. Confirm the existing `config.aged` and public `age-recipient` arrive and synchronization is error-free. Do not create a new age identity for this existing instance. A separate, explicitly selected media directory may be replicated between approved boneyard nodes with the [media-sharing procedure](user-guide.md#replicate-a-storage-nodes-media-folder); it is never part of `rawrarr-shared`.
-
-5. Verify `/health`, passkey sign-in, Radarr access, and shared-folder state. Enrolled storage nodes default to a daily 04:00 scan in the configured `RAWARR_STORAGE_SCAN_TIMEZONE` (UTC if unset). The owner can change the daily or weekly schedule and local wall-clock time from the storage node's Devices card, request a full media scan or a bounded movie sample, and watch its next run and progress there. Schedule configuration persists in node-local `/data`. Confirm encrypted sidecar propagation in both directions. A successful local scan/sync does not implement distributed catalog reconciliation or multi-library aggregation.
+Preserve the existing project's node-local `/data`, shared folder, media mounts,
+credentials, and transport identity. Owner approval is required before sharing
+Syncthing folders. No automatic migration or live teardown accompanies this
+retirement. Unexpected old callers must stop and inspect their labels and state;
+see [recovery guidance](compose-layout.md#retired-host-specific-storage-and-relays).
 
 ## Other shapes and recovery
 

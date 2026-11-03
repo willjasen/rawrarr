@@ -4,12 +4,10 @@ import { readFile } from 'node:fs/promises';
 
 const root = new URL('../../', import.meta.url);
 const read = path => readFile(new URL(path, root), 'utf8');
-const [base, metadata, storage, miniRelays, proxyConfig, orbstackEnvironment] = await Promise.all([
+const [base, metadata, storage, orbstackEnvironment] = await Promise.all([
   read('docker-compose.yml'),
   read('docker-compose.metadata.yml'),
   read('docker-compose.storage.yml'),
-  read('docker-compose.mini-relays.yml'),
-  read('storage-proxy.Caddyfile'),
   read('deploy/testing/compose.yml'),
 ]);
 
@@ -62,12 +60,9 @@ test('metadata artwork cache uses Valkey with bounded disposable storage and rem
   assert.match(metadata, /RAWARR_ARTWORK_CACHE_URL: redis:\/\/artwork-cache:6379\//);
 });
 
-test('Mini storage and Serve proxy use only loopback in the Tailscale namespace', () => {
+test('standalone storage uses loopback in an externally managed Tailscale namespace', () => {
   assert.match(storage, /network_mode: "container:\$\{RAWARR_TAILSCALE_CONTAINER:-rawrarr-mini-tailscale\}"/);
   assert.match(storage, /RUST_ARR_LISTEN_ADDR: 127\.0\.0\.1:8080/);
   assert.match(storage, /RUST_ARR_DIRECT_LISTEN_ADDR: 127\.0\.0\.1:8083/);
   assert.match(storage, /RAWARR_DIRECT_ALLOWED_ORIGIN: https:\/\/rawrarr\.risk-mermaid\.ts\.net/);
-  assert.match(miniRelays, /storage-proxy\.Caddyfile/);
-  assert.match(proxyConfig, /bind 127\.0\.0\.1/);
-  assert.match(proxyConfig, /reverse_proxy 127\.0\.0\.1:8080/);
 });

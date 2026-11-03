@@ -29,6 +29,11 @@ consolidation remains planned under
 [#154](https://github.com/willjasen/rawrarr/issues/154). See the
 [Compose inventory and adoption guidance](compose-layout.md).
 
+The old additional MacBook boneyard and Mini-specific transport/Caddy relay
+templates are also retired with explicit operator confirmation. Current
+host-local fossil deployments and generic role templates remain separate;
+source retirement never removes live identity state, data, or routes.
+
 ## Visual identity
 
 Rawrarr should feel approachable and distinctive without making the interface look like a toy. Use a restrained dark or light surface system, readable typography, clear section hierarchy, and green as the primary brand accent. Reserve bright colors for status, identity illustrations, and meaningful actions.

@@ -42,7 +42,6 @@ NODE_FILES = {
     "rust-arr/src/assets/subscriber-onboarding.js",
     "docker-compose.metadata.yml",
     "docker-compose.storage.yml",
-    "docker-compose.macbook-storage.yml",
     "docker-compose.syncthing.yml",
     "docker-compose.syncthing-media.yml",
     "docker-compose.syncthing-tailnet.yml",
@@ -70,6 +69,10 @@ NON_RUNTIME_PREFIXES = (
     ".github/",
 )
 NON_RUNTIME_FILES = {
+    "docker-compose.macbook-storage.yml",
+    "docker-compose.tailscale-mini.yml",
+    "docker-compose.mini-relays.yml",
+    "storage-proxy.Caddyfile",
     "AGENTS.md", "README.md", "ROADMAP.md", "TESTING.md",
     "docker-compose.orbstack-test.yml",
     "docker-compose.internal-mini.yml",
