@@ -331,6 +331,38 @@ let deviceRouteStatusByNode = new Map();
 function deviceNameTokens(value) {
   return new Set(String(value || '').toLowerCase().split(/[^a-z0-9]+/).filter(token => token.length >= 4));
 }
+function renderSigningKeyTopology(nodes) {
+  const panel = document.getElementById('signing-topology-content');
+  const rootFingerprint = nodes.find(node => node.signingRootFingerprint)?.signingRootFingerprint;
+  const root = document.createElement('div');
+  root.className = 'signing-root-card';
+  const title = document.createElement('strong');
+  title.textContent = 'You · instance signing root';
+  const detail = document.createElement('small');
+  detail.textContent = `ML-DSA-65 · user-held authority${rootFingerprint ? ` · fingerprint ${rootFingerprint}` : ''}`;
+  root.append(title, detail);
+  const stem = document.createElement('div');
+  stem.className = 'signing-tree-stem';
+  const devices = document.createElement('div');
+  devices.className = 'signing-device-list';
+  for (const node of nodes) {
+    const card = document.createElement('article');
+    const verified = Boolean(node.signingFingerprint);
+    card.className = `signing-device-card ${verified ? 'verified' : 'legacy'}`;
+    const name = document.createElement('strong');
+    name.textContent = deviceNames[node.nodeId] || (node.displayName && node.displayName !== node.nodeId ? node.displayName : roleLabel(node.role));
+    const state = document.createElement('small');
+    state.textContent = `${roleLabel(node.role)} · ${verified ? 'root-authorized signing key' : 'legacy · no root-signed key'}`;
+    card.append(name, state);
+    if (verified) {
+      const fingerprint = document.createElement('small');
+      fingerprint.textContent = `Device key · ${node.signingFingerprint}`;
+      card.append(fingerprint);
+    }
+    devices.append(card);
+  }
+  panel.replaceChildren(root, stem, devices);
+}
 function renderDeviceTopology(nodes, observedPeers, deviceNames, peerStatuses) {
   const panel = document.getElementById('device-topology-content');
   const graph = document.createElement('div');
@@ -1715,6 +1747,7 @@ async function loadNodes() {
   try {
     const nodes = await jsonRequest('/api/workspace/nodes');
     workspaceNodes = nodes;
+    renderSigningKeyTopology(nodes);
     void loadProfileAvatar();
     const healthByNode = new Map(await Promise.all(nodes.map(async node => {
       if (!node.online || !node.relayAvailable) return [node.nodeId, null];
@@ -2146,6 +2179,7 @@ async function loadPending() {
         approveNodeBackup.value = '';
         approveNodeFingerprint.value = '';
         approveNodeStatus.textContent = `${node.displayName} · ${roleLabel(node.role)} · ${node.nodeId}`;
+        document.getElementById('approve-node-attestation').replaceChildren();
         approveNodeDialog.showModal();
         approveNodeIdentity.focus();
       });
@@ -2181,6 +2215,7 @@ approveNodeDialog.addEventListener('close', () => {
   approveNodeIdentity.value = '';
   approveNodeBackup.value = '';
   approveNodeFingerprint.value = '';
+  document.getElementById('approve-node-attestation').replaceChildren();
   pendingNodeToApprove = null;
 });
 approveNodeForm.addEventListener('submit', async event => {
@@ -2197,6 +2232,17 @@ approveNodeForm.addEventListener('submit', async event => {
     const { inspectEncryptedRootBackup, signDeviceApproval } = await import('/assets/device-signing-client.js');
     const root = await inspectEncryptedRootBackup(encryptedBackup, ageIdentity);
     if (root.fingerprint !== savedFingerprint) throw new Error('The backup fingerprint does not match the fingerprint you saved independently.');
+    const attestation = document.getElementById('approve-node-attestation');
+    attestation.replaceChildren();
+    const heading = document.createElement('strong');
+    heading.textContent = 'You are signing off on this device';
+    const description = document.createElement('p');
+    description.textContent = 'Your root signature authorizes the exact device key and role below. Only continue if you initiated this setup and recognize this device.';
+    const request = document.createElement('p');
+    request.textContent = `${node.displayName} · ${roleLabel(node.role)} · ${node.nodeId}`;
+    const key = document.createElement('p');
+    key.textContent = `Device signing key · ${node.signingFingerprint || 'fingerprint unavailable'}`;
+    attestation.append(heading, description, request, key);
     const approval = await signDeviceApproval(encryptedBackup, ageIdentity, savedFingerprint, {
       requestId: node.requestId,
       nodeId: node.nodeId,

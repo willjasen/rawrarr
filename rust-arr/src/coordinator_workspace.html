@@ -120,6 +120,22 @@
     .topology-legend .connected-line { background:var(--green) }
     .topology-legend .disconnected-line { background:#ef7777 }
     .topology-empty { margin:14px 0 0 }
+    .signing-topology { margin-top:18px; padding:16px; border:1px solid #36543d; border-radius:10px; background:linear-gradient(145deg,#19241c,#131915) }
+    .signing-topology h3 { margin:0; font-size:16px }
+    .signing-topology-intro { color:var(--muted); margin:6px 0 14px; font-size:13px }
+    .signing-root-card { width:min(440px,100%); margin:0 auto; padding:14px; border:1px solid #7da77e; border-radius:10px; background:#202a22; text-align:center }
+    .signing-root-card strong,.signing-root-card small { display:block; overflow-wrap:anywhere }
+    .signing-root-card small { margin-top:5px; color:var(--muted) }
+    .signing-tree-stem { width:2px; height:24px; margin:auto; background:#7da77e }
+    .signing-device-list { display:flex; flex-wrap:wrap; justify-content:center; gap:10px }
+    .signing-device-card { flex:1 1 210px; max-width:320px; min-width:0; padding:12px; border:1px solid var(--line); border-radius:9px; background:#131915 }
+    .signing-device-card strong,.signing-device-card small { display:block; overflow-wrap:anywhere }
+    .signing-device-card small { margin-top:5px; color:var(--muted) }
+    .signing-device-card.verified { border-color:#36543d }
+    .signing-device-card.legacy { border-color:#806d42 }
+    .approval-attestation { margin:14px 0; padding:12px; border:1px solid #36543d; border-radius:9px; background:#19231b }
+    .approval-attestation strong { display:block; margin-bottom:5px }
+    .approval-attestation p { margin:4px 0; color:var(--muted); overflow-wrap:anywhere }
     .button-link { display:inline-block; padding:10px 14px; border:1px solid #6b916f; border-radius:8px; color:#101711; background:var(--green); font-weight:650; text-decoration:none }
     .node-state { display:inline-flex; min-width:0; align-items:center; gap:6px; color:var(--muted); font-size:12px; font-weight:650 }
     .node-state-label { min-width:0; overflow-wrap:anywhere }
@@ -345,6 +361,11 @@
       <h2 id="device-topology-title">Topology</h2>
       <p class="topology-intro">Syncthing connections between your devices.</p>
       <div id="device-topology-content"></div>
+      <section class="signing-topology" aria-labelledby="signing-topology-title">
+        <h3 id="signing-topology-title">Signing key topology</h3>
+        <p class="signing-topology-intro">You are the authority for this instance. Your user-held root key signs off on each device’s exact signing key and role. Passkey sign-in identifies your account; it does not replace this root signature.</p>
+        <div id="signing-topology-content" aria-live="polite"></div>
+      </section>
     </section>
     <p id="device-name-status" role="status" aria-live="polite"></p>
     </section>
@@ -505,6 +526,7 @@
       <form id="approve-node-form">
         <h2 style="margin:0 0 8px">Approve with the instance root key</h2>
         <p class="sub">This tab decrypts the root backup with your age ID and signs the displayed request locally. Only the public root key and signature are sent to roarlay. Compare the fingerprint with the copy you saved separately.</p>
+        <div id="approve-node-attestation" class="approval-attestation" aria-live="polite"><strong>Review before signing</strong><p>After the backup fingerprint matches, this panel will identify the exact device key and role your signature authorizes.</p></div>
         <p id="approve-node-status" class="connection-message" role="status" aria-live="polite"></p>
         <label for="approve-node-age-id">Age private ID</label>
         <input id="approve-node-age-id" type="password" autocomplete="off" spellcheck="false" required style="width:100%;min-height:42px;margin-top:6px;border:1px solid #46574a;border-radius:8px;background:#101411;color:var(--text);padding:10px;font:12px ui-monospace,monospace">

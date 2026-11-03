@@ -1439,6 +1439,8 @@ struct WorkspaceNode {
     online: bool,
     relay_available: bool,
     direct_url: Option<String>,
+    signing_fingerprint: Option<String>,
+    signing_root_fingerprint: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -1589,7 +1591,7 @@ async fn workspace_nodes(
     let Some(owner) = crate::auth::authenticated_user_id(&auth, &headers).await else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
-    let rows = match sqlx::query("SELECT n.id, n.role, n.last_seen::text AS last_seen, n.last_seen > now() - interval '90 seconds' AS online, n.origin, COALESCE(e.display_name, n.id) AS display_name FROM rawrarr_nodes n LEFT JOIN rawrarr_node_enrollments e ON e.node_id=n.id AND e.user_id=n.user_id WHERE n.user_id=$1 ORDER BY CASE n.role WHEN 'metadata' THEN 0 WHEN 'storage' THEN 1 ELSE 2 END, n.id")
+    let rows = match sqlx::query("SELECT n.id, n.role, n.last_seen::text AS last_seen, n.last_seen > now() - interval '90 seconds' AS online, n.origin, n.signing_fingerprint, COALESCE(e.display_name, n.id) AS display_name FROM rawrarr_nodes n LEFT JOIN rawrarr_node_enrollments e ON e.node_id=n.id AND e.user_id=n.user_id WHERE n.user_id=$1 ORDER BY CASE n.role WHEN 'metadata' THEN 0 WHEN 'storage' THEN 1 ELSE 2 END, n.id")
         .bind(owner).fetch_all(&state.pool).await {
             Ok(rows) => rows,
             Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
@@ -1614,9 +1616,16 @@ async fn workspace_nodes(
             role,
             last_seen: row.try_get("last_seen").unwrap_or_default(),
             online: row.try_get("online").unwrap_or(false),
+            signing_fingerprint: row.try_get("signing_fingerprint").ok().flatten(),
+            signing_root_fingerprint: None,
         })
     }).collect::<Vec<_>>();
-    Json(nodes).into_response()
+    let root_fingerprint = sqlx::query_scalar::<_, String>("SELECT fingerprint FROM rawrarr_instance_signing_root WHERE singleton=TRUE AND owner_user_id=$1")
+        .bind(owner).fetch_optional(&state.pool).await.unwrap_or(None);
+    Json(nodes.into_iter().map(|mut node| {
+        node.signing_root_fingerprint = node.signing_fingerprint.as_ref().and(root_fingerprint.clone());
+        node
+    }).collect::<Vec<_>>()).into_response()
 }
 
 const DIRECT_SESSION_SECONDS: i64 = 300;
