@@ -29,6 +29,7 @@ const contentStatus = document.getElementById('content-status');
 const moviesPanel = document.getElementById('movies');
 let aiMovies = null;
 let aiSeries = null;
+const reachableArrBases = new Map();
 const libraryTextCachePrefix = 'rawrarr.library-text.v1';
 function libraryTextCacheKey(nodeId, mediaType) {
   return `${libraryTextCachePrefix}:${encodeURIComponent(nodeId)}:${mediaType}`;
@@ -838,7 +839,6 @@ async function arrDirectRequest(path, options = {}) {
   return result;
 }
 
-const reachableArrBases = new Map();
 async function probeArrBase(service, url) {
   reachableArrBases.delete(service);
   try {
@@ -872,41 +872,75 @@ function renderLibraryBrowser({ containerId, searchId, filterId, countId, items,
   const config = type === 'movie'
     ? { service:'radarr', available:item => item.hasFile, status:item => item.hasFile ? 'Present' : 'Missing', details:item => [item.year || 'Year unknown', item.qualityProfile || 'Quality unknown', item.hasFile ? formatBytes(item.sizeOnDisk) : 'No file'] }
     : { service:'sonarr', art:'TV', available:item => Number(item.episodeFileCount) > 0, status:item => `${Number(item.episodeFileCount) || 0} episodes`, details:item => [item.year || 'Year unknown', `${Number(item.episodeFileCount) || 0} / ${Number(item.episodeCount) || 0} episodes`, item.qualityProfile || 'Quality unknown'] };
+  const existingCards = new Map(container.dataset.libraryNode === selectedNode
+    ? [...container.querySelectorAll('.library-card')].map(card => [card.dataset.libraryId, card]) : []);
+  container.dataset.libraryNode = selectedNode;
+  const cards = items.map(item => {
+    const id = String(type === 'movie' ? item.tmdbId || '' : item.tvdbId || '');
+    const existing = id ? existingCards.get(id) : null;
+    if (existing) existingCards.delete(id);
+    return { item, card: existing?.querySelector('.library-poster') ? existing : null };
+  });
   const paint = () => {
     const query = search.value.trim().toLocaleLowerCase();
     const mode = filter.value;
-    const visible = items.filter(item => {
+    const matches = item => {
       const available = config.available(item);
       if (mode === 'available' && !available || mode === 'missing' && available || mode === 'monitored' && !item.monitored) return false;
       return `${item.title || ''} ${item.year || ''}`.toLocaleLowerCase().includes(query);
-    });
-    container.replaceChildren();
+    };
+    const visible = items.filter(matches);
+    container.querySelector('.library-empty')?.remove();
     count.textContent = `${visible.length.toLocaleString()} of ${items.length.toLocaleString()} ${type === 'movie' ? 'movies' : 'series'}`;
     if (!visible.length) {
       const empty = document.createElement('div'); empty.className = 'library-empty';
       empty.textContent = items.length ? 'No titles match this search or filter.' : `No ${type === 'movie' ? 'movies' : 'series'} in this library yet.`;
-      container.append(empty); return;
+      container.append(empty);
     }
-    for (const item of visible) {
-      const card = document.createElement('article'); card.className = 'library-card';
-      card.dataset.libraryId = String(type === 'movie' ? item.tmdbId || '' : item.tvdbId || '');
-      const art = document.createElement('div'); art.className = 'library-art';
-      const placeholder = document.createElement('span'); placeholder.className = 'library-art-empty'; placeholder.textContent = type === 'movie' ? '▶' : '▤'; placeholder.setAttribute('aria-hidden', 'true'); art.append(placeholder);
-      const poster = document.createElement('img'); poster.className = 'library-poster'; poster.alt = ''; poster.loading = 'lazy'; poster.decoding = 'async'; poster.referrerPolicy = 'no-referrer';
-      if (type === 'movie') { poster.dataset.tmdbId = String(item.tmdbId || ''); if (item.posterUrl) poster.src = item.posterUrl; }
-      else if (Number(item.tvdbId) > 0) poster.dataset.tvdbId = String(item.tvdbId);
-      poster.addEventListener('load', () => { placeholder.hidden = true; }, { once:true });
-      poster.addEventListener('error', () => poster.remove(), { once:true });
-      art.append(poster);
-      const badge = document.createElement('span'); badge.className = 'library-state'; badge.textContent = config.status(item); art.append(badge);
-      const copy = document.createElement('div'); copy.className = 'library-card-copy';
-      const titleRow = document.createElement('div'); titleRow.className = 'library-title-row';
-      const title = document.createElement('span'); title.className = 'library-card-title'; title.textContent = item.title || 'Untitled'; title.title = item.title || 'Untitled'; titleRow.append(title);
+    for (const entry of cards) {
+      const { item } = entry;
+      let card = entry.card;
+      if (!card) {
+        card = document.createElement('article'); card.className = 'library-card';
+        entry.card = card;
+        card.dataset.libraryId = String(type === 'movie' ? item.tmdbId || '' : item.tvdbId || '');
+        const art = document.createElement('div'); art.className = 'library-art';
+        const placeholder = document.createElement('span'); placeholder.className = 'library-art-empty'; placeholder.textContent = type === 'movie' ? '▶' : '▤'; placeholder.setAttribute('aria-hidden', 'true'); art.append(placeholder);
+        const poster = document.createElement('img'); poster.className = 'library-poster'; poster.alt = ''; poster.loading = 'lazy'; poster.decoding = 'async'; poster.referrerPolicy = 'no-referrer';
+        if (type === 'movie') { poster.dataset.tmdbId = String(item.tmdbId || ''); if (item.posterUrl) poster.src = item.posterUrl; }
+        else if (Number(item.tvdbId) > 0) poster.dataset.tvdbId = String(item.tvdbId);
+        poster.addEventListener('load', () => { placeholder.hidden = true; });
+        poster.addEventListener('error', () => poster.remove(), { once:true });
+        art.append(poster);
+        const badge = document.createElement('span'); badge.className = 'library-state'; art.append(badge);
+        const copy = document.createElement('div'); copy.className = 'library-card-copy';
+        const titleRow = document.createElement('div'); titleRow.className = 'library-title-row';
+        const title = document.createElement('span'); title.className = 'library-card-title'; titleRow.append(title);
+        const meta = document.createElement('div'); meta.className = 'library-card-meta';
+        const detail = document.createElement('div'); detail.className = 'library-card-detail';
+        copy.append(titleRow, meta, detail); card.append(art, copy);
+      }
+      card.hidden = !matches(item);
+      card.querySelector('.library-state').textContent = config.status(item);
+      const title = card.querySelector('.library-card-title');
+      title.textContent = item.title || 'Untitled'; title.title = item.title || 'Untitled';
+      const titleRow = card.querySelector('.library-title-row');
+      titleRow.querySelector('.arr-external-link')?.remove();
       appendArrDetailLink(titleRow, config.service, item);
-      const meta = document.createElement('div'); meta.className = 'library-card-meta'; meta.textContent = `${item.year || 'Year unknown'}${item.monitored ? ' · Monitored' : ''}`;
-      const detail = document.createElement('div'); detail.className = 'library-card-detail';
-      for (const value of config.details(item)) { const part = document.createElement('span'); part.textContent = value; detail.append(part); }
-      copy.append(titleRow, meta, detail); card.append(art, copy); container.append(card);
+      card.querySelector('.library-card-meta').textContent = `${item.year || 'Year unknown'}${item.monitored ? ' · Monitored' : ''}`;
+      card.querySelector('.library-card-detail').replaceChildren(...config.details(item).map(value => {
+        const part = document.createElement('span'); part.textContent = value; return part;
+      }));
+      const poster = card.querySelector('.library-poster');
+      if (item.posterUrl && poster && poster.getAttribute('src') !== item.posterUrl) poster.src = item.posterUrl;
+    }
+    const retained = new Set(cards.map(entry => entry.card));
+    for (const card of container.querySelectorAll('.library-card')) {
+      if (!retained.has(card)) card.remove();
+    }
+    for (const [index, { card }] of cards.entries()) {
+      const current = container.children[index];
+      if (current !== card) container.insertBefore(card, current || null);
     }
   };
   search.oninput = paint; filter.onchange = paint; paint();
@@ -1174,6 +1208,7 @@ function openNode(node) {
     contentPanel.hidden = true;
     return;
   }
+  const nodeChanged = selectedNode !== node.nodeId;
   selectedNode = node.nodeId;
   sessionStorage.setItem(selectedNodeStorageKey, selectedNode);
   selectedNodeDetails = node;
@@ -1190,7 +1225,7 @@ function openNode(node) {
   contentPanel.hidden = node.role !== 'metadata';
   aiMovies = null;
   aiSeries = null;
-  moviesPanel.replaceChildren();
+  if (nodeChanged) moviesPanel.replaceChildren();
   resetArrSummary('radarr');
   status.textContent = node.role === 'metadata'
     ? `${node.nodeId} · fossil node`
@@ -1742,7 +1777,6 @@ window.setInterval(() => {
 
 function renderMovies(movies) {
   aiMovies = movies;
-  moviesPanel.replaceChildren();
   const files = movies.filter(movie => movie.hasFile).length;
   setArrSummaryValues('radarr', {
     libraryCount: String(movies.length),
