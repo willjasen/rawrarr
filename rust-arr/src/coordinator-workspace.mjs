@@ -329,6 +329,7 @@ let selectedRoutePromise = null;
 let selectedRoutePromiseNode = null;
 let deviceNames = {};
 let savingDeviceName = false;
+let deviceNamesRevision = 0;
 let workspaceNodes = [];
 fetch('/api/version', { cache: 'no-store' }).then(response => response.ok ? response.json() : null).then(version => {
   if (!version?.deployedAt) return;
@@ -1860,14 +1861,16 @@ deviceEditForm.addEventListener('submit', async event => {
   document.getElementById('device-edit-save').disabled = true;
   deviceEditName.disabled = true;
   savingDeviceName = true;
+  deviceNamesRevision += 1;
   deviceEditStatus.textContent = 'Saving device name into the age-encrypted config…';
   try {
+    await import('/assets/metadata-export.js');
     await window.rawrarrMiniExport.saveDeviceName(ageIdentity, `/nodes/${encodeURIComponent(configNode.nodeId)}`, node.nodeId, cleaned === node.nodeId ? '' : cleaned);
     deviceNames[node.nodeId] = cleaned === node.nodeId ? '' : cleaned;
     document.getElementById('device-name-status').textContent = 'Device name saved in the shared age-encrypted config.';
     savingDeviceName = false;
     deviceEditDialog.close();
-    await loadNodes();
+    await loadNodes(true);
   } catch (error) {
     savingDeviceName = false;
     deviceEditStatus.textContent = error.message || 'Could not save this device name.';
@@ -1893,49 +1896,93 @@ deviceEditDelete.addEventListener('click', async () => {
       contentPanel.hidden = true;
     }
     delete deviceNames[node.nodeId];
+    deviceNamesRevision += 1;
     deviceEditDialog.close();
-    await loadNodes();
+    await loadNodes(true);
   } catch (error) {
     deviceEditDelete.disabled = false;
     deviceEditStatus.textContent = error.message || 'Could not delete this device.';
   }
 });
 
-async function loadNodes() {
+let nodeRefreshInFlight = null;
+function loadNodes(refresh = false) {
   if (savingDeviceName) return;
+  if (refresh && nodeRefreshInFlight) return nodeRefreshInFlight.then(() => loadNodes());
+  if (!nodeRefreshInFlight) {
+    nodeRefreshInFlight = refreshNodes().finally(() => { nodeRefreshInFlight = null; });
+  }
+  return nodeRefreshInFlight;
+}
+
+async function refreshNodes() {
   try {
-    const nodes = await jsonRequest('/api/workspace/nodes');
+    const nodes = await jsonRequest('/api/workspace/nodes', { signal: AbortSignal.timeout(5000) });
     workspaceNodes = nodes;
     renderSigningKeyTopology(nodes);
     void loadProfileAvatar();
-    const healthByNode = new Map(await Promise.all(nodes.map(async node => {
+    const ageIdentity = ageIdentityInMemory;
+    const namesRevision = deviceNamesRevision;
+    const metadataNodes = nodes.filter(node => node.role === 'metadata' && (node.relayAvailable || node.directUrl));
+    const configNode = metadataNodes.find(node => node.online && node.directUrl)
+      || metadataNodes.find(node => node.online)
+      || metadataNodes[0];
+    renderNodes(nodes, new Map(), new Map(), configNode, false);
+    if (location.hash === '' || location.hash === '#overview') void loadOverviewMetadata();
+    const healthPromise = Promise.all(nodes.map(async node => {
       if (!node.online || !node.relayAvailable) return [node.nodeId, null];
       const cached = syncthingHealthCache.get(node.nodeId);
       if (cached && Date.now() - cached.checkedAt < 30000) return [node.nodeId, cached.value];
       try {
-        const value = await jsonRequest(`/nodes/${encodeURIComponent(node.nodeId)}/api/syncthing/shared-health`);
+        const value = await jsonRequest(`/nodes/${encodeURIComponent(node.nodeId)}/api/syncthing/shared-health`, { signal: AbortSignal.timeout(5000) });
         syncthingHealthCache.set(node.nodeId, { checkedAt: Date.now(), value });
         return [node.nodeId, value];
       } catch (_) {
         syncthingHealthCache.set(node.nodeId, { checkedAt: Date.now(), value: null });
         return [node.nodeId, null];
       }
-    })));
-    const configPeerStatusByNode = new Map(await Promise.all(nodes.filter(node => node.role === 'metadata').map(async node => {
+    }));
+    const peerStatusPromise = Promise.all(nodes.filter(node => node.role === 'metadata').map(async node => {
       if (!node.online || !node.relayAvailable) return [node.nodeId, { state: 'unreachable' }];
       const cached = configPeerStatusCache.get(node.nodeId);
       if (cached && Date.now() - cached.checkedAt < 15000) return [node.nodeId, cached.value];
       try {
-        const value = await jsonRequest(`/nodes/${encodeURIComponent(node.nodeId)}/api/config-peer/status`);
+        const value = await jsonRequest(`/nodes/${encodeURIComponent(node.nodeId)}/api/config-peer/status`, { signal: AbortSignal.timeout(5000) });
         configPeerStatusCache.set(node.nodeId, { checkedAt: Date.now(), value });
         return [node.nodeId, value];
       } catch (_) {
         configPeerStatusCache.set(node.nodeId, { checkedAt: Date.now(), value: { state: 'unreachable' } });
         return [node.nodeId, { state: 'unreachable' }];
       }
-    })));
-    if (location.hash === '' || location.hash === '#overview') void loadOverviewMetadata();
-    deviceRouteStatusByNode = await checkDeviceRoutes(nodes);
+    }));
+    const namesPromise = (async () => {
+      if (!ageIdentity || !configNode) return;
+      try {
+        await import('/assets/metadata-export.js');
+        return await window.rawrarrMiniExport.loadDeviceNames(ageIdentity, `/nodes/${encodeURIComponent(configNode.nodeId)}`, { signal: AbortSignal.timeout(5000) });
+      } catch (error) {
+        console.warn('Could not refresh encrypted device names; keeping existing labels.', error);
+      }
+    })();
+    const [healthEntries, peerEntries, routes] = await Promise.all([
+      healthPromise, peerStatusPromise, checkDeviceRoutes(nodes),
+    ]);
+    deviceRouteStatusByNode = routes;
+    if (!savingDeviceName) renderNodes(nodes, new Map(healthEntries), new Map(peerEntries), configNode);
+    void namesPromise.then(names => {
+      if (names && workspaceNodes === nodes && !savingDeviceName && namesRevision === deviceNamesRevision && ageIdentity === ageIdentityInMemory) {
+        deviceNames = names;
+        renderNodes(nodes, new Map(healthEntries), new Map(peerEntries), configNode);
+      }
+    }).catch(error => {
+      console.error('Could not render refreshed device names.', error);
+    });
+  } catch (error) {
+    status.textContent = error.message || 'Could not load connected nodes.';
+  }
+}
+
+function renderNodes(nodes, healthByNode, configPeerStatusByNode, configNode, selectDefault = true) {
     const observedSyncthingPeers = nodes.flatMap(source => {
       const report = healthByNode.get(source.nodeId);
       return (report?.folders || []).flatMap(folder => {
@@ -1950,16 +1997,6 @@ async function loadNodes() {
       });
     });
     const ageIdentity = ageIdentityInMemory;
-    const metadataNodes = nodes.filter(node => node.role === 'metadata' && (node.relayAvailable || node.directUrl));
-    const configNode = metadataNodes.find(node => node.online && node.directUrl)
-      || metadataNodes.find(node => node.online)
-      || metadataNodes[0];
-    if (ageIdentity && configNode) {
-      try {
-        await import('/assets/metadata-export.js');
-        deviceNames = await window.rawrarrMiniExport.loadDeviceNames(ageIdentity, `/nodes/${encodeURIComponent(configNode.nodeId)}`);
-      } catch (_) { /* Names remain editable when the encrypted config is unavailable. */ }
-    }
     nodesPanel.replaceChildren();
     const emptyDevices = document.getElementById('empty-devices');
     const topologySection = document.getElementById('device-topology');
@@ -1984,8 +2021,9 @@ async function loadNodes() {
       const routeLabel = {
         direct: 'Direct',
         relay: 'Relay',
+        checking: 'Checking route',
         offline: node.online ? 'Route unavailable' : 'Not checking in',
-      }[route?.status || 'offline'];
+      }[route?.status || (node.online ? 'checking' : 'offline')];
       const nodeStateLabel = node.online ? `Online · ${routeLabel}` : routeLabel;
       const latencyLabel = route?.status === 'direct' && route.directRoute
         ? `${route.directRoute.latencyMs.toFixed(0)} ms`
@@ -2248,6 +2286,7 @@ async function loadNodes() {
       renderDeviceTopology(nodes, observedSyncthingPeers, deviceNames, configPeerStatusByNode);
     }
     status.textContent = 'Choose a connected fossil or boneyard node to open its Rawrarr page.';
+    if (!selectDefault) return;
     const canOpen = canOpenNode;
     const requested = requestedNode && nodes.find(node => node.nodeId === requestedNode && canOpen(node));
     // Node status polling must not reset the active workspace or refetch its
@@ -2300,14 +2339,11 @@ async function loadNodes() {
         openNode(defaultNode);
       }
     }
-  } catch (error) {
-    status.textContent = error.message || 'Could not load connected nodes.';
-  }
 }
 
 async function loadPending() {
   try {
-    const pending = await jsonRequest('/api/workspace/pending');
+    const pending = await jsonRequest('/api/workspace/pending', { signal: AbortSignal.timeout(5000) });
     pendingPanel.hidden = pending.length === 0;
     pendingPanel.classList.toggle('has-pending', pending.length > 0);
     pendingPanel.replaceChildren();
@@ -2433,7 +2469,7 @@ approveNodeForm.addEventListener('submit', async event => {
     });
     approveNodeDialog.close();
     await loadPending();
-    if (decision === 'approve') await loadNodes();
+    if (decision === 'approve') await loadNodes(true);
   } catch (error) {
     approveNodeStatus.textContent = error.message || 'Could not approve this node.';
   } finally {
