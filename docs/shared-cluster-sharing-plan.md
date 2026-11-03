@@ -15,9 +15,9 @@ Planning only. No multi-person sharing, MLS protocol, revocation cleanup, or age
 
 ## Candidate technical design
 
-### Replicate encrypted config with RPC and Merkle reconciliation (planned)
+### Repair encrypted config with RPC and Merkle reconciliation (implemented; reconnect verification pending)
 
-The first two-fossil replication target is only `/shared/config.aged`, with its signed version history. The current MacBook file is age-encrypted; the new Mac mini fossil is missing it. Keep app metadata and artwork under `/shared/metadata` on their current Syncthing path. The planned Valkey mirror contains exact config ciphertext only; it does not receive decrypted settings or become the source of truth.
+The initial two-fossil repair path covers only `/shared/config.aged` and its signed version history. Keep app metadata and artwork under `/shared/metadata` on their current Syncthing path. Each node's Valkey mirror contains exact config ciphertext only; it does not receive decrypted settings or become the source of truth. The isolated end-to-end reconnect verification gate remains pending.
 
 - Keep `/shared/config.aged` as the application-facing local path, but exclude that root-level file from Syncthing on each node after both nodes run the RPC-capable release. Each Syncthing folder needs its own `/config.aged` ignore rule.
 - Store exact age ciphertext in each node's Valkey under an instance-scoped digest key. A missing or empty Valkey rebuilds from the local ciphertext file; a missing local file can be restored from an authorized peer and then mirrored. If every ciphertext copy is lost, content cannot be reconstructed.
@@ -26,7 +26,21 @@ The first two-fossil replication target is only `/shared/config.aged`, with its 
 - Authenticate peers using owner-approved device signing keys and root-signed certificates. Prefer direct Tailscale routes, use a fixed object API for `config.aged`, enforce request/size limits, verify digests and signatures, and stage ciphertext before atomic publication. Merkle equality aids reconciliation but never grants authorization.
 - Keep each node's Valkey independent. Two nodes can test recovery and convergence after reconnect, but cannot provide safe automatic failover or claim three-way durability. Offline nodes may author locally; a singleton must not promote itself as a cluster-wide primary.
 
-The [config peer-repair protocol](metadata-peer-repair-protocol.md) records the draft wire format, counter/tombstone handling, Valkey representation, Syncthing exclusion, and isolated two-node verification gate. Durable service implementation and live Syncthing exclusions require protocol review first.
+The [config peer-repair protocol](metadata-peer-repair-protocol.md) records the wire format, counter/tombstone handling, Valkey representation, Syncthing exclusion, and isolated two-node verification gate.
+
+### Broader encrypted metadata synchronization (planned)
+
+The config repair path does not replicate app metadata or artwork. A separate future protocol may exchange approved encrypted metadata objects and their versioned logical mappings; it must not broaden the fixed `config.aged` RPC API implicitly.
+
+- Keep encrypted objects as payloads. Validate cluster/instance identity, membership, object class, size limits, and signed revision metadata; Merkle matches aid reconciliation but never authorize data.
+- Bind each signed revision to the cluster/instance, authoring device, record class, opaque logical key, ciphertext object key and digest, schema/mapping version, and revision. A device signature does not authorize membership changes.
+- Reconcile both encrypted object files and logical records using deterministic canonical encodings and separately verifiable object/mapping views. Resolve concurrent revisions using a persistent logical counter and stable device ID/digest tie-breakers, never host timestamps.
+- Authenticate peers with approved device signing keys, use bounded RPC and staged atomic publication, and retain deletion tombstones until every active authorized device has acknowledged them.
+- Persist accepted trust-history heads and per-instance roots locally. Quarantine stale, unknown, or incompatible state until validated catch-up or recovery.
+- Keep `/shared` authoritative and Valkey node-local, independent, and rebuildable. This plan defines no cluster-wide Valkey primary or automatic failover; any future failover design needs a separately reviewed fencing and voter model.
+- Allow signed offline revisions to remain pending convergence, then validate and merge them deterministically after reconnect. Do not make quorum a prerequisite for local authoring.
+
+Before implementing this broader scope, specify its wire protocol, schema negotiation, resource limits, counter/rollback behavior, tombstone lifecycle, interrupted-transfer recovery, and malicious/stale-peer tests.
 
 ### Separate responsibilities
 

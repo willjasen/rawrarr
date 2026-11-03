@@ -67,6 +67,7 @@
 
 - [Hide generated device IDs from device labels](2026-10-26-hide-device-id-label.md) — Keep opaque stable IDs out of visible topology labels while preserving their internal use (issue [#155](https://github.com/willjasen/rawrarr/issues/155)).
 
+- [Garage-inspired Valkey mirror and repair design](2026-10-26-garage-inspired-valkey-repair.md) — Preserve the original broader metadata-repair proposal as historical context; the current implementation is config-only and uses independent Valkey mirrors (issue [#100](https://github.com/willjasen/rawrarr/issues/100)).
 - [Replicate config.aged through Valkey and peer RPC/Merkle](2026-10-26-valkey-metadata-mirror-rpc.md) — Implement and deploy encrypted two-fossil repair, including native ARM64 Mac mini Valkey/RPC, with owner-decryption and Syncthing exclusion follow-up (issue [#100](https://github.com/willjasen/rawrarr/issues/100)).
 
 - [Fix database integration tests](2026-10-26-fix-db-integrations.md) — Update the disposable coordinator, node, and configuration integrations for explicit roles, coordinator trust, and current owner bootstrap (issue [#130](https://github.com/willjasen/rawrarr/issues/130)).
@@ -84,7 +85,6 @@
 - [Complete OrbStack Arr connection testing](2026-10-26-complete-orbstack-arr-connections.md) — Exercise fossil's encrypted Radarr/Sonarr connection, status, and library paths through a private test CA (issue [#99](https://github.com/willjasen/rawrarr/issues/99)).
 
 - [Temporarily disable UI signature enforcement](2026-10-26-temporarily-disable-ui-signature.md) — Remove UI publisher-signature enforcement and the unverified badge while retaining checksum and archive validation (issue [#107](https://github.com/willjasen/rawrarr/issues/107)).
-
 - [Peer metadata synchronization design decisions](2026-10-26-peer-metadata-sync-design-decisions.md) — Record user-only device membership, device-key RPC authentication, versioned object/logical Merkle mapping, deterministic newest-revision convergence, tombstone acknowledgements, and revision history retention (issue [#100](https://github.com/willjasen/rawrarr/issues/100)).
 
 - [Use Valkey for fossil cache and plan peer metadata sync](2026-10-25-valkey-metadata-peer-sync.md) — Switch metadata Compose definitions to Valkey, add regression coverage, and record the planned RPC/Merkle peer synchronization direction (issue [#100](https://github.com/willjasen/rawrarr/issues/100)).
