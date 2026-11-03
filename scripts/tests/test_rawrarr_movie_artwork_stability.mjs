@@ -103,6 +103,21 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 375, height: 812 
     }));
     assert.ok(geometry.documentWidth <= geometry.width, 'Movies must not overflow horizontally');
     for (const rect of [geometry.card, geometry.title]) assert.ok(rect.width > 0 && rect.left >= 0 && rect.right <= viewport.width);
+    const gridColumns = await page.evaluate(() => {
+      const grid = document.createElement('div');
+      grid.className = 'library-grid';
+      Object.assign(grid.style, { position: 'fixed', visibility: 'hidden', width: '1000px', top: '0', left: '0' });
+      for (let index = 0; index < 12; index++) {
+        const card = document.createElement('div');
+        card.className = 'library-card';
+        grid.append(card);
+      }
+      document.body.append(grid);
+      const columns = getComputedStyle(grid).gridTemplateColumns.trim().split(/\s+/).length;
+      grid.remove();
+      return columns;
+    });
+    assert.equal(gridColumns, viewport.width <= 560 ? 2 : 6, 'shared Movies and TV artwork grid should show six desktop columns and preserve two mobile columns');
     await page.locator('#refresh-movies').scrollIntoViewIfNeeded();
     assert.equal(await page.locator('#refresh-movies').isVisible(), true);
 
