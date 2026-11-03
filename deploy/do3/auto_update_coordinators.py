@@ -30,7 +30,7 @@ INTERNAL = {
     "image_base": "rawrarr:internal-base-amd64",
 }
 PUBLIC = {
-    "container": "rawrarr-roarlay-prod-roarlay",
+    "container": "rawrarr-prod-roarlay",
     "lock": Path("/opt/rawrarr-roarlay-prod/.container-rebuild-roarlay.lock"),
     "project_dir": Path("/opt/rawrarr-roarlay-prod"),
     "version_url": "http://127.0.0.1:8080/api/version",
@@ -52,6 +52,7 @@ NON_RUNTIME_FILES = {
     "TESTING.md",
     "deploy/do3/docker-compose.internal-coordinator.yml",
     "deploy/do3/docker-compose.analytics-dashboard-internal.yml",
+    "deploy/do3/docker-compose.production-container-names.yml",
 }
 
 
