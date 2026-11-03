@@ -2345,7 +2345,11 @@ fn age_vault_open_error(error: secure_config::VaultError) -> (StatusCode, &'stat
     match error {
         secure_config::VaultError::InvalidIdentity => (
             StatusCode::BAD_REQUEST,
-            "This user age ID is invalid or does not match the group identity for this shared data.",
+            "This is not a valid post-quantum age identity.",
+        ),
+        secure_config::VaultError::GroupIdentityUnavailable => (
+            StatusCode::BAD_REQUEST,
+            "This user age ID could not unlock the shared group identity. Verify it matches the identity used to configure this shared data, or restore the group's wrapped identity file.",
         ),
         secure_config::VaultError::AgeUnavailable => (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -2370,15 +2374,28 @@ fn age_vault_open_error(error: secure_config::VaultError) -> (StatusCode, &'stat
     }
 }
 
+fn age_identity_envelope_error(error: secure_config::VaultError) -> (StatusCode, &'static str) {
+    match error {
+        secure_config::VaultError::AgeUnavailable | secure_config::VaultError::StorageFailed => {
+            age_vault_open_error(error)
+        }
+        _ => (
+            StatusCode::BAD_REQUEST,
+            "The age-wrapped user identity could not be opened by this device.",
+        ),
+    }
+}
+
 async fn unlock_age_settings(
     State(state): State<Arc<AppState>>,
     Json(request): Json<AgeIdentityRequest>,
 ) -> Result<Json<AgeSettingsInfo>, (StatusCode, Json<ApiError>)> {
-    let identity = secure_config::AgeVault::decrypt_user_identity_envelope(&request.identity_envelope)
-        .map_err(|_| (
-            StatusCode::BAD_REQUEST,
-            Json(ApiError { error: "The age-wrapped user identity could not be opened by this device" }),
-        ))?;
+    let identity =
+        secure_config::AgeVault::decrypt_user_identity_envelope(&request.identity_envelope)
+            .map_err(|error| {
+                let (status, message) = age_identity_envelope_error(error);
+                (status, Json(ApiError { error: message }))
+            })?;
     let vault = secure_config::AgeVault::from_identity(identity).map_err(|error| {
         let (status, message) = age_vault_open_error(error);
         (status, Json(ApiError { error: message }))
@@ -3321,14 +3338,19 @@ mod age_identity_request_tests {
 
 #[cfg(test)]
 mod age_vault_open_error_tests {
-    use super::{age_vault_open_error, secure_config::VaultError};
+    use super::{age_identity_envelope_error, age_vault_open_error, secure_config::VaultError};
     use axum::http::StatusCode;
 
     #[test]
     fn reports_invalid_identity_separately_from_node_setup_failures() {
         let (status, message) = age_vault_open_error(VaultError::InvalidIdentity);
         assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert!(message.contains("invalid or does not match the group identity"));
+        assert!(message.contains("not a valid post-quantum age identity"));
+
+        let (status, message) = age_vault_open_error(VaultError::GroupIdentityUnavailable);
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(message.contains("could not unlock the shared group identity"));
+        assert!(message.contains("restore the group's wrapped identity file"));
 
         let (status, message) = age_vault_open_error(VaultError::AgeUnavailable);
         assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
@@ -3352,6 +3374,21 @@ mod age_vault_open_error_tests {
         let (status, message) = age_vault_open_error(VaultError::InvalidConfig);
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert!(message.contains("invalid format"));
+    }
+
+    #[test]
+    fn reports_device_age_tool_and_storage_failures_during_envelope_open() {
+        let (status, message) = age_identity_envelope_error(VaultError::AgeUnavailable);
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert!(message.contains("age tools are unavailable"));
+
+        let (status, message) = age_identity_envelope_error(VaultError::StorageFailed);
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(message.contains("could not access its local or shared age-key files"));
+
+        let (status, message) = age_identity_envelope_error(VaultError::InvalidIdentity);
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(message.contains("age-wrapped user identity could not be opened"));
     }
 }
 

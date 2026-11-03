@@ -188,8 +188,39 @@ def verify_configuration(session, mode):
     wrong_identity_response = expect_json('/api/settings/age', 'POST', {
         'identityEnvelope': encrypt_identity_for_node(wrong_identity),
     }, 400)
-    assert 'invalid or does not match the group identity' in wrong_identity_response['error']
+    assert 'could not unlock the shared group identity' in wrong_identity_response['error'], wrong_identity_response['error']
+
+    invalid_identity_response = expect_json('/api/settings/age', 'POST', {
+        'identityEnvelope': encrypt_identity_for_node('not an age identity'),
+    }, 400)
+    assert 'not a valid post-quantum age identity' in invalid_identity_response['error'], invalid_identity_response['error']
+
+    user_envelope_path = shared_dir / 'group-age-user-envelope.aged'
+    user_envelope = user_envelope_path.read_bytes()
+    try:
+        user_envelope_path.write_bytes(b'age-encryption.org/v1\ncorrupt envelope fixture\n')
+        group_error = expect_json('/api/settings/age', 'POST', {
+            'identityEnvelope': encrypt_identity_for_node(identity),
+        }, 400)
+        assert 'could not unlock the shared group identity' in group_error['error'], group_error['error']
+    finally:
+        user_envelope_path.write_bytes(user_envelope)
+
+    config_ciphertext = config_path.read_bytes()
+    try:
+        config_path.write_bytes(b'age-encryption.org/v1\ncorrupt config fixture\n')
+        config_error = expect_json('/api/settings/age', 'POST', {
+            'identityEnvelope': encrypt_identity_for_node(identity),
+        }, 400)
+        assert 'could not decrypt the group-encrypted settings' in config_error['error'], config_error['error']
+    finally:
+        config_path.write_bytes(config_ciphertext)
+
+    assert unlock_identity(identity)['unlocked'] is True
     assert expect_json('/api/settings/age')['unlocked'] is True
+    if mode == 'metadata-age':
+        print('TEST_IDENTITY_B64:' + base64.b64encode(identity.encode()).decode())
+        return
 
     poster = b'disposable encrypted poster fixture'
     artwork = shared_dir / 'metadata' / 'movies' / 'artwork'
@@ -209,7 +240,7 @@ payload_identity = ''
 def main():
     global payload_identity
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=('metadata', 'storage', 'locked'),
+    parser.add_argument('mode', choices=('metadata', 'metadata-age', 'storage', 'locked'),
         help='test stage; the disposable role integration supplies the approved node and session')
     args = parser.parse_args()
     payload = json.loads(sys.stdin.readline())

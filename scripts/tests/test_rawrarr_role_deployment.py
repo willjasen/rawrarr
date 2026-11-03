@@ -47,6 +47,8 @@ def request(base, path, method='GET', payload=None, cookie=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--apply', action='store_true')
+    parser.add_argument('--age-unlock-only', action='store_true',
+        help='limit metadata configuration checks to age-vault unlock errors')
     parser.add_argument('--image', default='rawrarr:roles-test')
     parser.add_argument('--browser-image', default='rawrarr-testing-base:local')
     args = parser.parse_args()
@@ -189,15 +191,19 @@ def main():
             metadata_namespace, metadata = start_node('metadata', 'metadata-test', metadata_namespace, plaintext_config=True)
             helper.stdin.write('approve metadata-test\n')
             helper.stdin.flush()
-            if not helper.stdout.readline().startswith('APPROVED metadata-test'):
-                raise RuntimeError('owner did not approve metadata enrollment')
+            approval_result = helper.stdout.readline()
+            if not approval_result.startswith('APPROVED metadata-test'):
+                helper_error = helper.stderr.read()[-2000:] if helper.poll() is not None else approval_result.strip()
+                raise RuntimeError('owner did not approve metadata enrollment: ' + helper_error)
             wait_node(metadata)
 
             storage_namespace, storage = start_node('storage', 'storage-test')
             helper.stdin.write('approve storage-test\n')
             helper.stdin.flush()
-            if not helper.stdout.readline().startswith('APPROVED storage-test'):
-                raise RuntimeError('owner did not approve storage enrollment')
+            approval_result = helper.stdout.readline()
+            if not approval_result.startswith('APPROVED storage-test'):
+                helper_error = helper.stderr.read()[-2000:] if helper.poll() is not None else approval_result.strip()
+                raise RuntimeError('owner did not approve storage enrollment: ' + helper_error)
             wait_node(storage)
             print('PASS real Chromium passkey owner setup, encrypted root creation, and signed metadata/storage approval')
 
@@ -218,7 +224,8 @@ def main():
             assert metadata_status == '200' and storage_status == '401', 'session was not scoped to its metadata node'
             print('PASS PostgreSQL-backed sessions are scoped to the approved node')
 
-            config_full = docker('exec', '-i', metadata, 'python3', '/tests/test_rawrarr_configuration.py', 'metadata',
+            config_mode = 'metadata-age' if args.age_unlock_only else 'metadata'
+            config_full = docker('exec', '-i', metadata, 'python3', '/tests/test_rawrarr_configuration.py', config_mode,
                 input=json.dumps({'session': session}))
             if config_full.returncode:
                 raise RuntimeError('configuration API integration failed: ' + config_full.stderr.strip())
@@ -228,6 +235,9 @@ def main():
                 raise RuntimeError('configuration integration did not return its temporary age identity')
             test_identity = base64.b64decode(identity_line.removeprefix('TEST_IDENTITY_B64:')).decode()
             print('\n'.join(line for line in output_lines if not line.startswith('TEST_IDENTITY_B64:')))
+            if args.age_unlock_only:
+                print('PASS age unlock API distinguishes malformed identities, group-envelope failures, and encrypted-config failures')
+                return 0
 
             storage_session = secrets.token_hex(32)
             storage_digest = hashlib.sha256(storage_session.encode()).hexdigest()
@@ -279,7 +289,11 @@ def main():
                     helper.wait(timeout=10)
                 except Exception:
                     helper.terminate()
-                    helper.wait(timeout=5)
+                    try:
+                        helper.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        helper.kill()
+                        helper.wait()
             for name in reversed(containers):
                 subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.run(['docker', 'network', 'rm', network], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
