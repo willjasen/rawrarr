@@ -68,18 +68,93 @@ class SupportImageUpdaterTests(unittest.TestCase):
         self.assertEqual(args[-6:], ["up", "-d", "--no-deps", "--pull", "never", "postgres"])
         self.assertEqual(args.count("-f"), 2)
 
+    def test_compose_command_includes_protected_environment_file(self):
+        env_file = Path("/opt/rawrarr-internal-do3/secrets/analytics.env")
+        args = UPDATER.compose_args(
+            "rawrarr-internal-do3",
+            Path("/opt/rawrarr-internal-do3"),
+            [Path("base.yml")],
+            ["config", "--quiet"],
+            env_file=env_file,
+        )
+        env_file_index = args.index("--env-file")
+        self.assertEqual(args[env_file_index:env_file_index + 2], ["--env-file", str(env_file)])
+        self.assertEqual(args[-2:], ["config", "--quiet"])
+
+    def test_internal_compose_environment_file_is_used_when_present(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project_dir = Path(temporary)
+            env_file = project_dir / "secrets" / "analytics.env"
+            env_file.parent.mkdir()
+            env_file.write_text("DATABASE_PASSWORD=not-a-real-secret\n", encoding="utf-8")
+            with patch.dict(
+                UPDATER.PROJECTS["rawrarr-internal-do3"],
+                {"environment_file": Path("secrets/analytics.env")},
+            ):
+                self.assertEqual(
+                    UPDATER.compose_environment_file("rawrarr-internal-do3", project_dir),
+                    env_file,
+                )
+
+    def test_internal_compose_environment_file_rejects_paths_outside_project(self):
+        with tempfile.TemporaryDirectory() as temporary, tempfile.TemporaryDirectory() as outside:
+            project_dir = Path(temporary)
+            env_file = project_dir / "secrets" / "analytics.env"
+            env_file.parent.mkdir()
+            outside_file = Path(outside) / "analytics.env"
+            outside_file.write_text("DATABASE_PASSWORD=not-a-real-secret\n", encoding="utf-8")
+            env_file.symlink_to(outside_file)
+            with patch.dict(
+                UPDATER.PROJECTS["rawrarr-internal-do3"],
+                {"environment_file": Path("secrets/analytics.env")},
+            ):
+                with self.assertRaisesRegex(RuntimeError, "Invalid protected Compose environment file"):
+                    UPDATER.compose_environment_file("rawrarr-internal-do3", project_dir)
+
     def test_internal_compose_environment_uses_the_running_app_image(self):
         app = {"Config": {"Image": "rawrarr:published-revision-amd64"}}
         with patch.object(UPDATER, "docker_container", return_value=app), \
-                patch.dict(UPDATER.os.environ, {"RAWARR_INTERNAL_IMAGE": "rawrarr:stale"}):
-            environment = UPDATER.compose_environment("rawrarr-internal-do3")
+                patch.dict(UPDATER.os.environ, {"RAWARR_INTERNAL_IMAGE": "rawrarr:stale"}), \
+                patch.dict(
+                    UPDATER.PROJECTS["rawrarr-internal-do3"],
+                    {"directory": Path("/opt/rawrarr-internal-do3")},
+                ):
+            environment = UPDATER.compose_environment(
+                "rawrarr-internal-do3", Path("/opt/rawrarr-internal-do3"), []
+            )
         self.assertEqual(environment["RAWARR_INTERNAL_IMAGE"], "rawrarr:published-revision-amd64")
 
     def test_internal_compose_environment_fails_without_a_rawrarr_image(self):
         app = {"Config": {"Image": "postgres:17-alpine"}}
         with patch.object(UPDATER, "docker_container", return_value=app):
             with self.assertRaisesRegex(RuntimeError, "active internal coordinator image"):
-                UPDATER.compose_environment("rawrarr-internal-do3")
+                UPDATER.compose_environment(
+                    "rawrarr-internal-do3", Path("/opt/rawrarr-internal-do3"), []
+                )
+
+    def test_public_crowdsec_compose_values_come_from_active_project_files(self):
+        revision = "a" * 40
+        with tempfile.TemporaryDirectory() as temporary:
+            project_dir = Path(temporary)
+            source_root = project_dir / "builds" / "published" / "source"
+            crowdsec_compose = source_root / "deploy" / "do3" / "crowdsec" / "compose.yml"
+            crowdsec_compose.parent.mkdir(parents=True)
+            crowdsec_compose.touch()
+            rawrarr_compose = project_dir / f"docker-compose.rawrarr-main-{revision}.yml"
+            rawrarr_compose.touch()
+            secret_file = project_dir / "secrets" / "caddy-crowdsec-bouncer"
+            secret_file.parent.mkdir()
+            secret_file.touch()
+            with patch.dict(
+                UPDATER.PROJECTS["rawrarr-roarlay-prod"],
+                {"directory": project_dir},
+            ), patch.dict(UPDATER.os.environ, {}, clear=True):
+                environment = UPDATER.compose_environment(
+                    "rawrarr-roarlay-prod", project_dir, [rawrarr_compose, crowdsec_compose]
+                )
+        self.assertEqual(environment["CROWDSEC_SOURCE_ROOT"], str(source_root))
+        self.assertEqual(environment["RAWRARR_SOURCE_SHA"], revision)
+        self.assertEqual(environment["CROWDSEC_BOUNCER_SECRET_FILE"], str(secret_file))
 
     def test_override_is_private_and_never_pulls_during_up(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -145,6 +220,13 @@ class SupportImageUpdaterTests(unittest.TestCase):
             UPDATER.verify_public_edge()
         print_warning.assert_called_once()
         self.assertIn("403", print_warning.call_args.args[0])
+
+    def test_command_can_capture_expected_nonzero_health_probe(self):
+        completed = subprocess.CompletedProcess(["curl"], 0, "403", "")
+        with patch.object(UPDATER.subprocess, "run", return_value=completed) as run:
+            result = UPDATER.command(["curl"], check=False)
+        self.assertIs(result, completed)
+        self.assertFalse(run.call_args.kwargs["check"])
 
 
 if __name__ == "__main__":
