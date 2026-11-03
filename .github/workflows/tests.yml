@@ -91,27 +91,3 @@ jobs:
               fi
             fi
           } >> "$GITHUB_STEP_SUMMARY"
-
-  publish-ui:
-    name: Publish private UI bundle
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.test.result == 'success'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Package same-origin UI assets
-        run: python3 scripts/package_ui_bundle.py --output "$RUNNER_TEMP/ui-bundle.zip"
-      - name: Publish rolling UI release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ui-${{ github.sha }}
-          target_commitish: ${{ github.sha }}
-          name: Rawrarr UI ${{ github.sha }}
-          body: Automatically published same-origin UI assets with a SHA-256 checksum. UI publisher-signature generation and verification are temporarily disabled under issue #107.
-          files: |
-            ${{ runner.temp }}/ui-bundle.zip
-            ${{ runner.temp }}/ui-bundle.zip.sha256
-          overwrite_files: true
-          make_latest: true

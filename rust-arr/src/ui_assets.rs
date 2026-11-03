@@ -1,26 +1,27 @@
-//! Runtime UI bundle loader with embedded first-boot fallback.
-use std::{env, path::PathBuf};
+//! UI assets are compiled into the application image and served from that
+//! image's source revision. Container volumes must never shadow these assets.
 
-pub async fn text(path: &'static str, fallback: &'static str) -> String {
-    match bundle_path(path) {
-        Some(path) => tokio::fs::read_to_string(path).await.unwrap_or_else(|_| fallback.to_owned()),
-        None => fallback.to_owned(),
-    }
+pub async fn text(_path: &'static str, embedded: &'static str) -> String {
+    embedded.to_owned()
 }
 
-pub async fn bytes(path: &'static str, fallback: &'static [u8]) -> Vec<u8> {
-    match bundle_path(path) {
-        Some(path) => tokio::fs::read(path).await.unwrap_or_else(|_| fallback.to_vec()),
-        None => fallback.to_vec(),
-    }
+pub async fn bytes(_path: &'static str, embedded: &'static [u8]) -> Vec<u8> {
+    embedded.to_vec()
 }
 
-fn bundle_path(relative: &str) -> Option<PathBuf> {
-    // Callers use compile-time paths; reject traversal anyway so this remains
-    // safe if a future caller accepts input.
-    if relative.is_empty() || relative.split('/').any(|part| part.is_empty() || part == "." || part == "..") {
-        return None;
+#[cfg(test)]
+mod tests {
+    use super::{bytes, text};
+
+    #[tokio::test]
+    async fn always_serves_embedded_assets_regardless_of_bundle_path() {
+        assert_eq!(
+            text("/ui/current/page.html", "from image").await,
+            "from image"
+        );
+        assert_eq!(
+            bytes("/ui/current/asset.bin", b"from image").await,
+            b"from image"
+        );
     }
-    let root = env::var_os("RAWARR_UI_DIR").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/ui/current"));
-    Some(root.join(relative))
 }
