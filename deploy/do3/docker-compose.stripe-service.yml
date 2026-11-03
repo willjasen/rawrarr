@@ -1,7 +1,7 @@
 services:
   stripe-service:
     image: rawrarr-stripe-service:do3
-    container_name: rawrarr-roarlay-prod-stripe-service
+    container_name: rawrarr-prod-stripe-service
     restart: unless-stopped
     user: "10001:10001"
     read_only: true

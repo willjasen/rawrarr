@@ -1,6 +1,7 @@
 services:
   caddy:
     image: rawrarr-roarlay-prod-caddy-crowdsec:${RAWRARR_SOURCE_SHA:?RAWRARR_SOURCE_SHA must be the published GitHub main commit SHA}
+    container_name: rawrarr-prod-caddy
     pull_policy: never
     ports: !override
       - "104.248.184.91:443:443"
@@ -27,6 +28,7 @@ services:
 
   crowdsec:
     image: crowdsecurity/crowdsec:v1.8.2
+    container_name: rawrarr-prod-crowdsec
     pull_policy: never
     restart: unless-stopped
     environment:

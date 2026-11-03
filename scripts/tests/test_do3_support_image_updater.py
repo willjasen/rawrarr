@@ -41,6 +41,28 @@ class SupportImageUpdaterTests(unittest.TestCase):
             UPDATER.PROJECTS["rawrarr-internal-do3"]["tailscale_container"],
             "rawrarr-int-tailscale",
         )
+        production_containers = {
+            container for project, container, _service, _image in UPDATER.TARGETS
+            if project == "rawrarr-roarlay-prod"
+        }
+        self.assertEqual(production_containers, {
+            "rawrarr-prod-postgres",
+            "rawrarr-prod-tailscale",
+            "rawrarr-prod-caddy",
+            "rawrarr-prod-cloudflared",
+            "rawrarr-prod-crowdsec",
+            "rawrarr-prod-headscale",
+            "rawrarr-prod-umami",
+            "rawrarr-prod-umami-postgres",
+        })
+        self.assertEqual(
+            UPDATER.PROJECTS["rawrarr-roarlay-prod"]["health_container"],
+            "rawrarr-prod-roarlay",
+        )
+        self.assertEqual(
+            UPDATER.PROJECTS["rawrarr-roarlay-prod"]["tailscale_container"],
+            "rawrarr-prod-tailscale",
+        )
         for project, settings in UPDATER.PROJECTS.items():
             override = ROOT / "deploy" / "do3" / settings["compose"]
             self.assertTrue(override.is_file())
@@ -224,7 +246,7 @@ class SupportImageUpdaterTests(unittest.TestCase):
             UPDATER.verify_route("rawrarr-roarlay-prod")
         self.assertEqual(command.call_count, 1)
         self.assertIn(
-            "rawrarr-roarlay-prod-roarlay",
+            "rawrarr-prod-roarlay",
             command.call_args.args[0],
         )
         self.assertNotEqual(command.call_args.args[0][0], "curl")

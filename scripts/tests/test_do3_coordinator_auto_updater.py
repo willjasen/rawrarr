@@ -21,12 +21,16 @@ class CoordinatorAutoUpdaterTests(unittest.TestCase):
         self.assertEqual(UPDATER.INTERNAL["container"], "rawrarr-int-roarlay")
         self.assertEqual(UPDATER.INTERNAL_TAILSCALE_CONTAINER, "rawrarr-int-tailscale")
 
+    def test_public_container_reference_uses_the_prod_prefix(self):
+        self.assertEqual(UPDATER.PUBLIC["container"], "rawrarr-prod-roarlay")
+
     def test_runtime_paths_select_coordinator_updates(self):
         self.assertTrue(UPDATER.affects_coordinator(["rust-arr/src/coordinator.rs"]))
         self.assertTrue(UPDATER.affects_coordinator(["rust-arr/src/node_role.rs"]))
         self.assertFalse(UPDATER.affects_coordinator([
             "deploy/do3/docker-compose.internal-coordinator.yml",
             "deploy/do3/docker-compose.analytics-dashboard-internal.yml",
+            "deploy/do3/docker-compose.production-container-names.yml",
         ]))
         self.assertFalse(UPDATER.affects_coordinator(["deploy/do3/auto_update_coordinators.py"]))
 
