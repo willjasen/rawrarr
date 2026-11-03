@@ -912,11 +912,11 @@ async function loadArrSettings(service) {
       const isSettingsCopy = copy.form === `settings-${service}-settings`;
       document.getElementById(copy.nodeNote).textContent = settings.configured
         ? isSettingsCopy
-          ? `Connected on ${selectedNodeDetails.nodeId}. Credentials stay encrypted on this node.`
-          : `Connected to ${fields.label} on ${selectedNodeDetails.nodeId}. Settings are sent directly from this browser to the node; roarlay does not receive the ${service === 'radarr' ? 'API key or UI login' : 'API key'}.`
+          ? `Connected on ${selectedNodeLabel()}. Credentials stay encrypted on this node.`
+          : `Connected to ${fields.label} on ${selectedNodeLabel()}. Settings are sent directly from this browser to the node; roarlay does not receive the ${service === 'radarr' ? 'API key or UI login' : 'API key'}.`
         : isSettingsCopy
-          ? `Not configured on ${selectedNodeDetails.nodeId}. Add the connection when ready.`
-          : `${fields.label} is not configured on ${selectedNodeDetails.nodeId}. Add it here when ready. Credentials go directly from this browser to the node; roarlay never receives them.`;
+          ? `Not configured on ${selectedNodeLabel()}. Add the connection when ready.`
+          : `${fields.label} is not configured on ${selectedNodeLabel()}. Add it here when ready. Credentials go directly from this browser to the node; roarlay never receives them.`;
       const message = document.getElementById(copy.message);
       message.textContent = settings.configured ? `Saved ${fields.label} settings loaded from the age-encrypted config.` : `Enter your ${fields.label} HTTPS URL and API key.`;
       message.dataset.state = '';
@@ -1144,6 +1144,14 @@ function openNode(node) {
       void loadArrSettings('sonarr');
     }
   }
+}
+
+function selectedNodeLabel() {
+  const node = selectedNodeDetails;
+  if (!node) return 'selected node';
+  return deviceNames[node.nodeId]
+    || (node.displayName && node.displayName !== node.nodeId ? node.displayName : '')
+    || roleLabel(node.role);
 }
 
 function renderStorageScanStatus(nodeId, message) {

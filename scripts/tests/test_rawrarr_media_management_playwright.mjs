@@ -14,7 +14,7 @@ const moduleFiles = new Map(await Promise.all([
   'coordinator-ai.mjs',
 ].map(async name => [name, await readFile(new URL(`rust-arr/src/${name}`, root), 'utf8')])));
 const metadataExportStub = `window.rawrarrMiniExport = {
-  loadDeviceNames: async () => ({}),
+  loadDeviceNames: async () => ({ 'fossil-1': 'Will’s MacBook fossil' }),
   deriveProfileRecipient: async () => 'age1pq1fixture-recipient',
   prepareGroupIdentityForDevice: async () => false,
   encryptIdentityForDevice: async () => 'fixture-envelope',
@@ -111,7 +111,8 @@ test('media service cards show configured and unconfigured states in compact dia
   assert.equal(await page.locator('#settings-radarr-saved').isVisible(), true);
   assert.equal(await page.locator('#settings-radarr-saved-url').textContent(), 'https://radarr.example.test');
   assert.equal(await page.locator('#settings-sonarr-saved').isVisible(), false);
-  assert.match(await page.locator('#settings-sonarr-node-note').textContent(), /Not configured on fossil-1/);
+  assert.equal(await page.locator('#settings-sonarr-node-note').textContent(), 'Not configured on Will’s MacBook fossil. Add the connection when ready.');
+  assert.match(await page.locator('#settings-radarr-node-note').textContent(), /Connected on Will’s MacBook fossil/);
   assert.equal(await page.locator('#settings-radarr-settings').isVisible(), false);
   assert.equal(await page.locator('#settings-sonarr-settings').isVisible(), false);
 
