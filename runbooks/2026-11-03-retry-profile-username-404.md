@@ -15,8 +15,8 @@ The coordinator workspace loads the generated account name with `GET /api/worksp
 
 ## Verification
 
-The focused bounded-retry regression passed in the isolated OrbStack test container (1 passed, 34 unrelated cases skipped by name filter). The full required isolated suite is running; a prior attempt stalled in the unrelated Playwright signing-topology test after all Node.js tests passed.
+The focused bounded-retry regression passed in the isolated OrbStack test container (1 passed, 34 unrelated cases skipped by name filter). The full isolated runner completed: Node.js passed 151/151 and Rust passed 116/116. Playwright had three unrelated failures: Radarr settings timed out waiting for its node note, the Docker healthcheck test expected an older runner source pattern, and signing-key topology failed its desktop title visibility assertion. The new profile retry regression passed in the Node.js suite.
 
 ## Final state
 
-Pending verification and commit.
+The workspace retries the profile endpoint after transient 404 responses and retains a successfully loaded generated name across later detail errors. Changes were committed on the task branch and submitted in PR #364; no migration or deployment was performed.
