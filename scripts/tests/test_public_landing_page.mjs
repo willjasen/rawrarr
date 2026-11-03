@@ -15,6 +15,9 @@ test('public rawrarr.net landing page is static, accurate, and responsive', asyn
   assert.match(netlify, /Content-Security-Policy\s*=\s*"default-src 'self'/);
   assert.match(netlify, /X-Content-Type-Options\s*=\s*"nosniff"/);
   assert.match(html, /<link rel="canonical" href="https:\/\/rawrarr\.net\/">/);
+  assert.match(html, /<meta name="color-scheme" content="dark light">/);
+  assert.match(css, /:root\s*\{\s*color-scheme:\s*dark;/);
+  assert.match(css, /@media \(prefers-color-scheme: light\)/);
   assert.match(html, /The coordinator can see account, device, routing, timing, and traffic-size information/);
   assert.match(html, /has not had an independent security audit/i);
   assert.doesNotMatch(html, /href="\/auth"|<script\b/i, 'public page has no private sign-in link or executable script');
@@ -45,7 +48,7 @@ test('public rawrarr.net landing page is static, accurate, and responsive', asyn
   t.after(() => new Promise(resolve => server.close(resolve)));
   const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
   t.after(() => browser.close());
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, colorScheme: 'no-preference' });
   const origin = `http://127.0.0.1:${server.address().port}`;
   const offsiteRequests = [];
   page.on('request', request => {
@@ -63,13 +66,41 @@ test('public rawrarr.net landing page is static, accurate, and responsive', asyn
   assert.equal(await page.locator('img').first().evaluate(image => image.complete && image.naturalWidth > 0), true);
   assert.equal(offsiteRequests.length, 0, `all assets load locally: ${offsiteRequests.join(', ')}`);
 
-  for (const viewport of [{ width: 1280, height: 800 }, { width: 375, height: 812 }]) {
-    await page.setViewportSize(viewport);
-    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${viewport.width}px layout has no horizontal overflow`);
-    const action = await page.getByRole('link', { name: 'Open Rawrarr app' }).boundingBox();
-    assert.ok(action, `${viewport.width}px primary action is rendered`);
-    assert.ok(action.width >= 44 && action.height >= 44, `${viewport.width}px primary action has a usable hit area`);
-    assert.ok(action.x >= 0 && action.y >= 0 && action.x + action.width <= viewport.width && action.y + action.height <= viewport.height, `${viewport.width}px primary action is in the initial viewport`);
+  assert.match(css, /:root\s*\{\s*color-scheme:\s*dark;[\s\S]*?--paper:\s*#101611;/, 'dark is the stylesheet fallback before the light media override');
+  assert.match(css, /@media \(prefers-color-scheme: light\)\s*\{\s*:root\s*\{\s*color-scheme:\s*light;/, 'explicit system light overrides the dark fallback');
+  const colorSchemes = [
+    { name: 'light', scheme: 'light', root: 'light', body: 'rgb(245, 246, 241)', text: 'rgb(23, 37, 28)', surface: 'rgb(255, 255, 255)', privacy: 'rgb(34, 58, 42)' },
+    { name: 'dark', scheme: 'dark', root: 'dark', body: 'rgb(16, 22, 17)', text: 'rgb(237, 243, 233)', surface: 'rgb(23, 31, 24)', privacy: 'rgb(26, 42, 29)' },
+  ];
+
+  for (const colorScheme of colorSchemes) {
+    await page.emulateMedia({ colorScheme: colorScheme.scheme });
+    const palette = await page.evaluate(() => {
+      const style = element => getComputedStyle(element);
+      return {
+        scheme: style(document.documentElement).colorScheme,
+        body: style(document.body).backgroundColor,
+        text: style(document.body).color,
+        surface: style(document.querySelector('.step-card')).backgroundColor,
+        privacy: style(document.querySelector('.privacy-section')).backgroundColor,
+      };
+    });
+    assert.deepEqual(palette, {
+      scheme: colorScheme.root,
+      body: colorScheme.body,
+      text: colorScheme.text,
+      surface: colorScheme.surface,
+      privacy: colorScheme.privacy,
+    }, `${colorScheme.name} palette is applied`);
+
+    for (const viewport of [{ width: 1280, height: 800 }, { width: 375, height: 812 }]) {
+      await page.setViewportSize(viewport);
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${colorScheme.name} ${viewport.width}px layout has no horizontal overflow`);
+      const action = await page.getByRole('link', { name: 'Open Rawrarr app' }).boundingBox();
+      assert.ok(action, `${colorScheme.name} ${viewport.width}px primary action is rendered`);
+      assert.ok(action.width >= 44 && action.height >= 44, `${colorScheme.name} ${viewport.width}px primary action has a usable hit area`);
+      assert.ok(action.x >= 0 && action.y >= 0 && action.x + action.width <= viewport.width && action.y + action.height <= viewport.height, `${colorScheme.name} ${viewport.width}px primary action is in the initial viewport`);
+    }
   }
 });
