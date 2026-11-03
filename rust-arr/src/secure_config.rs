@@ -1277,6 +1277,19 @@ impl AgeVault {
 
     /// Update only Sonarr while holding the same lock used by Radarr saves.
     pub fn save_sonarr(&self, connection: Option<ArrConnection>) -> Result<(), VaultError> {
+        self.save_service("sonarr", connection)
+    }
+
+    /// Update only Prowlarr while preserving all other service entries.
+    pub fn save_prowlarr(&self, connection: Option<ArrConnection>) -> Result<(), VaultError> {
+        self.save_service("prowlarr", connection)
+    }
+
+    fn save_service(
+        &self,
+        service_type: &str,
+        connection: Option<ArrConnection>,
+    ) -> Result<(), VaultError> {
         let _guard = CONFIG_WRITE_LOCK
             .lock()
             .map_err(|_| VaultError::StorageFailed)?;
@@ -1291,7 +1304,22 @@ impl AgeVault {
             additional_services: Vec::new(),
             needs_migration: false,
         });
-        config.sonarr = connection;
+        if service_type == "sonarr" {
+            config.sonarr = connection;
+        } else {
+            config
+                .additional_services
+                .retain(|service| service.service_type != service_type);
+            if let Some(connection) = connection {
+                config.additional_services.push(ServiceConfig {
+                    service_type: service_type.to_owned(),
+                    url: connection.url.clone(),
+                    api_key: connection.api_key.clone(),
+                    ui_username: None,
+                    ui_password: None,
+                });
+            }
+        }
         ensure_filename_key(&mut config)?;
         self.write_config(&config)
     }
@@ -2511,6 +2539,38 @@ mod tests {
         assert_eq!(loaded.radarr_url, config.radarr_url);
         assert_eq!(loaded.radarr_ui_username, config.radarr_ui_username);
         assert_eq!(loaded.radarr_ui_password, config.radarr_ui_password);
+        drop(loaded);
+        let prowlarr_key = "disposable encrypted Prowlarr fixture";
+        vault
+            .save_prowlarr(Some(ArrConnection {
+                url: "https://prowlarr.example.test".to_owned(),
+                api_key: prowlarr_key.to_owned(),
+            }))
+            .expect("save encrypted Prowlarr settings");
+        let encrypted_config = fs::read(&config_path).expect("read Prowlarr ciphertext");
+        assert!(!encrypted_config
+            .windows(prowlarr_key.len())
+            .any(|window| window == prowlarr_key.as_bytes()));
+        let loaded = vault.load().expect("load Prowlarr config").unwrap();
+        let prowlarr = loaded
+            .additional_services
+            .iter()
+            .find(|service| service.service_type == "prowlarr")
+            .expect("Prowlarr config is present");
+        assert_eq!(prowlarr.url, "https://prowlarr.example.test");
+        assert_eq!(prowlarr.api_key, prowlarr_key);
+        assert_eq!(loaded.radarr_api_key, config.radarr_api_key);
+        drop(loaded);
+        vault
+            .save_prowlarr(None)
+            .expect("clear only Prowlarr settings");
+        let loaded = vault.load().expect("load config after clearing Prowlarr").unwrap();
+        assert!(loaded
+            .additional_services
+            .iter()
+            .all(|service| service.service_type != "prowlarr"));
+        assert_eq!(loaded.radarr_api_key, config.radarr_api_key);
+        drop(loaded);
         assert!(vault.config_exists());
 
         let wrong_identity_output = Command::new("age-keygen")

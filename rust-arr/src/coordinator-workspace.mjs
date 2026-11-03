@@ -131,10 +131,11 @@ const copyAgeRecipientButton = document.getElementById('copy-age-recipient');
 const ageRecipientMessage = document.getElementById('age-recipient-message');
 let ageRecipientVisible = false;
 let agePublicRecipient = '';
-const views = Object.fromEntries(['overview', 'roarlay', 'fossils', 'movies', 'series', 'assistant', 'configuration', 'settings', 'about'].map(name => [name, document.getElementById(`${name}-view`)]));
+const views = Object.fromEntries(['overview', 'roarlay', 'fossils', 'movies', 'series', 'discovery', 'assistant', 'configuration', 'settings', 'about'].map(name => [name, document.getElementById(`${name}-view`)]));
 const roarlayHealthState = document.getElementById('roarlay-health-state');
 const roarlayHealthLabel = document.getElementById('roarlay-health-label');
 const roarlayHealthDetail = document.getElementById('roarlay-health-detail');
+let prowlarrDiscoveryGeneration = 0;
 document.getElementById('roarlay-address').textContent = location.origin;
 function roleLabel(role) {
   return role === 'coordinator' ? 'roarlay' : role === 'storage' ? 'boneyard' : 'fossil';
@@ -169,7 +170,9 @@ function showView(name, updateHash = true) {
   if (view === 'settings' && updateHash) {
     void loadArrSettings('radarr');
     void loadArrSettings('sonarr');
+    void loadArrSettings('prowlarr');
   }
+  if (view === 'discovery') void loadProwlarrDiscovery();
   if (view === 'overview' && updateHash) {
     void loadOverviewMetadata();
     if (selectedNodeDetails?.role === 'metadata') {
@@ -1007,6 +1010,14 @@ const arrSettings = {
     mediaCard: 'sonarr-connection-card', saved: 'settings-sonarr-saved', savedUrl: 'settings-sonarr-saved-url', endpoint: '/settings/sonarr', label: 'Sonarr',
     dialog: 'settings-sonarr-dialog', configure: 'settings-configure-sonarr', test: 'settings-test-sonarr',
   },
+  prowlarr: {
+    overviewCards: [],
+    copies: [
+      { url: 'settings-prowlarr-url', key: 'settings-prowlarr-key', form: 'settings-prowlarr-settings', note: 'settings-prowlarr-key-note', message: 'settings-prowlarr-settings-message', button: 'settings-save-prowlarr', clear: 'settings-clear-prowlarr', nodeNote: 'settings-prowlarr-node-note' },
+    ],
+    saved: 'settings-prowlarr-saved', savedUrl: 'settings-prowlarr-saved-url', endpoint: '/settings/prowlarr', label: 'Prowlarr',
+    dialog: 'settings-prowlarr-dialog', configure: 'settings-configure-prowlarr', test: 'settings-test-prowlarr',
+  },
 };
 
 async function loadArrSettings(service) {
@@ -1022,8 +1033,8 @@ async function loadArrSettings(service) {
     await unlockMetadataVaultForSettings();
     const settings = await arrDirectRequest(fields.endpoint);
     for (const id of fields.overviewCards) document.getElementById(id).hidden = !settings.configured;
-    void probeArrBase(service, settings.url || '');
-    document.getElementById(fields.mediaCard).hidden = Boolean(settings.configured);
+    if (service !== 'prowlarr') void probeArrBase(service, settings.url || '');
+    if (fields.mediaCard) document.getElementById(fields.mediaCard).hidden = Boolean(settings.configured);
     for (const copy of fields.copies) {
       document.getElementById(copy.url).value = settings.url || '';
       const key = document.getElementById(copy.key);
@@ -1048,7 +1059,7 @@ async function loadArrSettings(service) {
           ? `Not configured on ${selectedNodeLabel()}. Add the connection when ready.`
           : `${fields.label} is not configured on ${selectedNodeLabel()}. Add it here when ready. Credentials go directly from this browser to the node; roarlay never receives them.`;
       const message = document.getElementById(copy.message);
-      message.textContent = settings.configured ? `Saved ${fields.label} settings loaded from the age-encrypted config.` : `Enter your ${fields.label} HTTPS URL and API key.`;
+      message.textContent = settings.configured ? `Saved ${fields.label} settings loaded from the age-encrypted config.` : `Enter your ${fields.label} HTTPS URL or node-loopback HTTP URL and API key.`;
       message.dataset.state = '';
       document.getElementById(copy.button).disabled = false;
     }
@@ -1071,8 +1082,8 @@ async function loadArrSettings(service) {
   } catch (error) {
     document.getElementById(fields.saved).hidden = true;
     if (location.hash === '' || location.hash === '#overview') {
-      const id = service === 'radarr' ? 'overview-movie-detail' : 'overview-series-detail';
-      document.getElementById(id).textContent = error.message || `Could not load ${fields.label} statistics.`;
+      const id = fields.overviewDetail || (service === 'radarr' ? 'overview-movie-detail' : service === 'sonarr' ? 'overview-series-detail' : null);
+      if (id) document.getElementById(id).textContent = error.message || `Could not load ${fields.label} statistics.`;
     }
     for (const copy of fields.copies) {
       const message = document.getElementById(copy.message);
@@ -1172,11 +1183,18 @@ for (const [service, fields] of Object.entries(arrSettings)) {
           document.getElementById(peer.message).dataset.state = '';
           document.getElementById(peer.message).textContent = `${fields.label} settings cleared from the age-encrypted config.`;
         }
-        document.getElementById(fields.mediaCard).hidden = false;
+        if (fields.mediaCard) document.getElementById(fields.mediaCard).hidden = false;
         document.getElementById(fields.saved).hidden = true;
         document.getElementById(fields.configure).textContent = `Configure ${fields.label}`;
         if (copy.form === `settings-${service}-settings`) dialog.close();
         if (service === 'sonarr') document.getElementById('tv-library').hidden = true;
+        if (service === 'prowlarr') {
+          document.getElementById('prowlarr-discovery-content').hidden = true;
+          document.getElementById('prowlarr-not-configured').hidden = false;
+          document.getElementById('prowlarr-indexers').replaceChildren();
+          document.getElementById('prowlarr-search-results').replaceChildren();
+          document.getElementById('prowlarr-discovery-status').textContent = 'Prowlarr settings cleared from the age-encrypted config.';
+        }
       } catch (error) {
         message.dataset.state = 'error';
         message.textContent = error.message || `Could not clear ${fields.label} settings.`;
@@ -1184,6 +1202,159 @@ for (const [service, fields] of Object.entries(arrSettings)) {
     });
   }
 }
+
+function renderProwlarrIndexers(indexers) {
+  const container = document.getElementById('prowlarr-indexers');
+  container.replaceChildren();
+  if (!indexers.length) {
+    const empty = document.createElement('li');
+    empty.className = 'discovery-indexer';
+    empty.textContent = 'No indexers are configured in Prowlarr.';
+    container.append(empty);
+    return;
+  }
+  for (const indexer of indexers) {
+    const item = document.createElement('li');
+    item.className = 'discovery-indexer';
+    const name = document.createElement('strong');
+    name.textContent = indexer.name || 'Unknown indexer';
+    const detail = document.createElement('p');
+    const state = indexer.status === 'temporarily-disabled' ? 'Temporarily disabled'
+      : indexer.enabled ? 'Enabled' : 'Disabled';
+    detail.textContent = `${state} · ${indexer.protocol || 'Unknown protocol'} · ${indexer.supportsSearch ? 'Search supported' : 'Search unavailable'}`;
+    item.append(name, detail);
+    container.append(item);
+  }
+}
+
+function renderProwlarrResults(results) {
+  const container = document.getElementById('prowlarr-search-results');
+  container.replaceChildren();
+  if (!results.length) {
+    const empty = document.createElement('p');
+    empty.className = 'connection-note';
+    empty.textContent = 'No results found.';
+    container.append(empty);
+    return;
+  }
+  for (const result of results) {
+    const card = document.createElement('article');
+    card.className = 'discovery-result';
+    const title = document.createElement('h3');
+    title.textContent = result.title || 'Untitled result';
+    const source = document.createElement('p');
+    const size = Number.isSafeInteger(result.sizeBytes) && result.sizeBytes >= 0
+      ? `${(result.sizeBytes / 1_000_000_000).toFixed(2)} GB`
+      : 'Size unavailable';
+    source.textContent = `${result.indexerName || 'Unknown indexer'} · ${result.protocol || 'Unknown protocol'} · ${size}`;
+    const identity = document.createElement('p');
+    identity.textContent = `Result ID: ${result.id}`;
+    const categories = document.createElement('p');
+    categories.textContent = result.categories?.length ? `Categories: ${result.categories.join(', ')}` : 'Categories unavailable';
+    card.append(title, source, identity, categories);
+    container.append(card);
+  }
+}
+
+async function loadProwlarrDiscovery() {
+  const generation = ++prowlarrDiscoveryGeneration;
+  const status = document.getElementById('prowlarr-discovery-status');
+  const content = document.getElementById('prowlarr-discovery-content');
+  const setup = document.getElementById('prowlarr-not-configured');
+  status.dataset.state = '';
+  status.textContent = 'Checking Prowlarr on the selected fossil node…';
+  content.hidden = true;
+  setup.hidden = true;
+  document.getElementById('prowlarr-search-results').replaceChildren();
+  try {
+    const settings = await arrDirectRequest('/settings/prowlarr');
+    if (generation !== prowlarrDiscoveryGeneration) return;
+    if (!settings.configured) {
+      setup.hidden = false;
+      status.textContent = `Prowlarr is not configured on ${selectedNodeLabel()}.`;
+      document.getElementById('prowlarr-indexers').replaceChildren();
+      return;
+    }
+    const indexers = await arrDirectRequest('/prowlarr/indexers');
+    if (generation !== prowlarrDiscoveryGeneration) return;
+    renderProwlarrIndexers(indexers);
+    content.hidden = false;
+    status.textContent = `Connected to Prowlarr on ${selectedNodeLabel()}.`;
+  } catch (error) {
+    if (generation !== prowlarrDiscoveryGeneration) return;
+    status.dataset.state = 'error';
+    status.textContent = error.message || 'Could not load Prowlarr indexers.';
+  }
+}
+
+document.getElementById('configure-prowlarr-discovery').addEventListener('click', () => showView('settings'));
+document.getElementById('refresh-prowlarr-indexers').addEventListener('click', () => void loadProwlarrDiscovery());
+document.getElementById('download-prowlarr-compose').addEventListener('click', () => {
+  const message = document.getElementById('prowlarr-compose-message');
+  try {
+    if (selectedNodeDetails?.role !== 'metadata') {
+      throw new Error('Select a fossil node before generating its Prowlarr Compose overlay.');
+    }
+    const overlay = [
+      '# Rawrarr Prowlarr overlay. Review before applying beside the existing compose.yaml.',
+      '# Prowlarr state stays in a node-local Docker volume; the external instance is not changed.',
+      'services:',
+      '  tailscale:',
+      '    ports:',
+      '      - "127.0.0.1:9696:9696"',
+      '  prowlarr:',
+      '    image: lscr.io/linuxserver/prowlarr:latest',
+      '    network_mode: service:tailscale',
+      '    depends_on:',
+      '      tailscale:',
+      '        condition: service_started',
+      '    volumes:',
+      '      - prowlarr-config:/config',
+      '    restart: unless-stopped',
+      'volumes:',
+      '  prowlarr-config:',
+      '',
+    ].join('\n');
+    const blob = new Blob([overlay], { type: 'application/yaml' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'prowlarr-compose.yaml';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    message.dataset.state = '';
+    message.textContent = 'Prowlarr Compose overlay downloaded. Review it before applying on the selected fossil host.';
+  } catch (error) {
+    message.dataset.state = 'error';
+    message.textContent = error.message || 'Could not generate the Prowlarr Compose overlay.';
+  }
+});
+document.getElementById('prowlarr-search-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = document.getElementById('prowlarr-search-button');
+  const status = document.getElementById('prowlarr-search-status');
+  const generation = prowlarrDiscoveryGeneration;
+  const nodeId = selectedNode;
+  button.disabled = true;
+  status.dataset.state = '';
+  status.textContent = 'Searching configured indexers…';
+  try {
+    const results = await arrDirectRequest('/prowlarr/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: document.getElementById('prowlarr-search-query').value }),
+    });
+    if (generation !== prowlarrDiscoveryGeneration || nodeId !== selectedNode) return;
+    renderProwlarrResults(results);
+    status.textContent = `${results.length} result${results.length === 1 ? '' : 's'} returned.`;
+  } catch (error) {
+    if (generation !== prowlarrDiscoveryGeneration || nodeId !== selectedNode) return;
+    status.dataset.state = 'error';
+    status.textContent = error.message || 'Prowlarr search failed.';
+  } finally {
+    button.disabled = false;
+  }
+});
 
 async function loadClusterConfiguration() {
   const identity = ageIdentityInMemory;
@@ -1276,7 +1447,9 @@ function openNode(node) {
     if (currentView === 'settings') {
       void loadArrSettings('radarr');
       void loadArrSettings('sonarr');
+      void loadArrSettings('prowlarr');
     }
+    if (currentView === 'discovery') void loadProwlarrDiscovery();
   }
 }
 

@@ -54,7 +54,7 @@ pub(super) async fn test_connection(
     let client = ArrClient::new(request.url.clone(), key).map_err(|_| {
         failure(
             StatusCode::BAD_REQUEST,
-            "Enter a valid Sonarr HTTPS URL and API key",
+            "Enter a valid Sonarr HTTPS URL or node-loopback HTTP URL and API key",
         )
     })?;
     let status = client.status().await.map_err(|_| {
@@ -90,7 +90,7 @@ pub(super) async fn save(
     let client = ArrClient::new(request.url.clone(), key).map_err(|_| {
         failure(
             StatusCode::BAD_REQUEST,
-            "Enter a valid Sonarr HTTPS URL and API key",
+            "Enter a valid Sonarr HTTPS URL or node-loopback HTTP URL and API key",
         )
     })?;
     let status = client.status().await.map_err(|_| {

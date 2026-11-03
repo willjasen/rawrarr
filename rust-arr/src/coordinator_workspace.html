@@ -203,6 +203,11 @@
     .library-filter { min-height:40px }
     .library-count { color:var(--muted); font-size:12px; margin-left:auto }
     .library-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:14px; margin-top:14px }
+    .discovery-results { display:grid; gap:10px; margin-top:14px }
+    .discovery-result,.discovery-indexer { min-width:0; padding:14px; border:1px solid var(--line); border-radius:9px; background:#101411 }
+    .discovery-result h3 { margin:0; font-size:15px; overflow-wrap:anywhere }
+    .discovery-result p,.discovery-indexer p { margin:5px 0 0; color:var(--muted); font-size:12px; overflow-wrap:anywhere }
+    .discovery-indexers { display:grid; gap:8px; padding:0; margin:14px 0 0; list-style:none }
     .library-card { min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:10px; background:#101411; transition:border-color .15s,transform .15s }
     .library-card:hover { border-color:#536756; transform:translateY(-2px) }
     .library-art { position:relative; display:block; aspect-ratio:2/3; overflow:hidden; background:linear-gradient(145deg,#26352a,#151b17 72%) }
@@ -306,6 +311,7 @@
     @media(max-width:850px) { .rawrs-launcher { left:86px } .rawrs-voice-panel { left:86px } }
     @media(max-width:760px) { .summary { grid-template-columns:repeat(2,minmax(0,1fr)) } }
     @media(max-width:640px) { .app { display:block } aside { position:sticky; z-index:2; top:0; height:60px; display:flex; align-items:center; border-right:0; border-bottom:1px solid var(--line); padding:0 10px } .brand { font-size:13px; padding:0; margin-right:auto } .section-label { display:none } .nav-item { width:40px; min-height:40px; margin:0 2px } .nav-text { display:none } .nav-item.active { box-shadow:inset 0 -2px var(--green) } header { padding:12px } main { padding:12px } .ai-panel { min-height:calc(100vh - 130px); padding:14px } .ai-answer { min-height:260px; max-height:50vh } .devices-page-heading { align-items:flex-start; gap:10px } .devices-page-heading > :first-child { min-width:0 } .devices-page-heading .button-link { flex:none; margin-left:0 } #nodes { min-width:0 } .device-card { box-sizing:border-box; min-width:0; flex-basis:100%; width:100%; max-width:none; padding:14px } .device-identity-row,.device-heading { min-width:0 } .device-heading { flex-wrap:wrap; justify-content:flex-start; gap:8px } .device-name-group { flex:1 1 150px } .device-name { min-width:0; font-size:18px } .node-state { flex:0 1 auto; max-width:100%; white-space:normal; overflow-wrap:anywhere } .device-edit-button { min-height:40px; padding:8px 12px } .topology-section { min-width:0; padding:14px } .topology-graph { min-height:340px } .topology-device { width:min(140px,30%); padding:9px; font-size:13px } }
+    @media(max-width:640px) { aside { min-width:0; overflow-x:auto; scrollbar-width:thin } .brand { width:100px; flex:0 0 100px } .nav-item { flex:0 0 40px } }
     @media(max-width:640px) { .rawrs-launcher { left:12px; bottom:12px } .rawrs-voice-panel { left:12px; bottom:76px; max-height:calc(100vh - 100px) } }
   </style>
 </head>
@@ -322,6 +328,7 @@
     <a class="nav-item" href="/billing" aria-label="Subscription"><span class="nav-icon" aria-hidden="true">$</span><span class="nav-text">Subscription</span></a>
     <button class="nav-item" data-view="roarlay"><span class="nav-icon">⌂</span><span class="nav-text">Roarlay</span></button>
     <button class="nav-item" data-view="fossils"><span class="nav-icon">◫</span><span class="nav-text">Fossils</span></button>
+    <button class="nav-item" data-view="discovery"><span class="nav-icon">⌕</span><span class="nav-text">Discover</span></button>
     <button class="nav-item" data-view="movies"><span class="nav-icon">▧</span><span class="nav-text">Movies</span></button>
     <button class="nav-item" data-view="series"><span class="nav-icon">▧</span><span class="nav-text">TV</span></button>
     <button class="nav-item" data-view="assistant"><span class="nav-icon">✦</span><span class="nav-text">rawrs</span></button>
@@ -451,6 +458,32 @@
         </article>
       </section>
     </section>
+    <section id="discovery-view" hidden><h1 class="page-title">Discover</h1>
+      <p class="connection-intro">Search the configured Prowlarr indexers from the selected fossil node. Searches are owner initiated and read-only; Rawrarr does not download or fulfill results.</p>
+      <p id="prowlarr-discovery-status" class="connection-message" role="status" aria-live="polite">Select an online fossil node to check Prowlarr.</p>
+      <article id="prowlarr-not-configured" class="connection-card" hidden>
+        <h2>Prowlarr is not configured</h2>
+        <p class="connection-intro">Connect an external or node-local Prowlarr instance in Settings. Its URL and API key stay on the selected fossil node. Settings can also generate a reviewable Compose overlay for an owner-run local service.</p>
+        <button id="configure-prowlarr-discovery" type="button">Open Prowlarr settings</button>
+      </article>
+      <section id="prowlarr-discovery-content" hidden>
+        <article class="panel">
+          <div class="panel-head"><h2>Indexer status</h2><button id="refresh-prowlarr-indexers" type="button">Refresh</button></div>
+          <ul id="prowlarr-indexers" class="discovery-indexers" aria-label="Prowlarr indexers"></ul>
+        </article>
+        <article class="panel" style="margin-top:14px">
+          <h2>Search indexers</h2>
+          <form id="prowlarr-search-form" class="library-tools">
+            <label for="prowlarr-search-query">Search term</label>
+            <input id="prowlarr-search-query" class="library-search" type="search" maxlength="120" autocomplete="off" required>
+            <button id="prowlarr-search-button" type="submit">Search</button>
+          </form>
+          <p class="connection-note">Up to 50 results per search. Result download links are not exposed.</p>
+          <p id="prowlarr-search-status" class="connection-message" role="status" aria-live="polite"></p>
+          <div id="prowlarr-search-results" class="discovery-results" aria-label="Prowlarr search results"></div>
+        </article>
+      </section>
+    </section>
     <section id="configuration-view" hidden><h1 class="page-title">Cluster configuration</h1>
       <p class="sub">Shared age-encrypted configuration, decrypted in this browser. Secret values are replaced with &lt;REDACTED&gt;.</p>
       <p id="configuration-status" class="sub" role="status" aria-live="polite">Loading shared configuration…</p>
@@ -524,7 +557,7 @@
       </article>
       </div>
       <h2 style="margin:26px 0 4px">Media service connections</h2>
-      <p class="connection-intro">Connect services to the selected fossil. Credentials are tested and saved by that node in its age-encrypted config; roarlay never receives them.</p>
+      <p class="connection-intro">Connect Radarr, Sonarr, and Prowlarr to the selected fossil. Credentials are tested and saved by that node in its age-encrypted config; roarlay never receives them.</p>
       <div class="settings-connections">
         <article class="connection-card" aria-labelledby="settings-radarr-title">
           <h2 id="settings-radarr-title">Radarr</h2>
@@ -564,6 +597,42 @@
             <p id="settings-sonarr-key-note" class="connection-note">Required for the first save.</p>
             <div class="connection-actions"><button id="settings-test-sonarr" type="button">Test connection</button><button id="settings-save-sonarr" type="submit">Save and connect</button><button id="settings-clear-sonarr" type="button">Clear connection</button><button class="arr-dialog-close" type="button">Cancel</button></div>
             <p id="settings-sonarr-settings-message" class="connection-message" role="status" aria-live="polite"></p>
+          </form>
+          </dialog>
+        </article>
+        <article class="connection-card" aria-labelledby="settings-prowlarr-title">
+          <h2 id="settings-prowlarr-title">Prowlarr</h2>
+          <div id="settings-prowlarr-saved" class="connection-saved" hidden role="status" aria-live="polite"><strong>Prowlarr details saved</strong><span id="settings-prowlarr-saved-url" class="connection-saved-url"></span><span class="connection-saved-note">API key stored in the age-encrypted config on this node.</span></div>
+          <p class="connection-intro" id="settings-prowlarr-node-note">Select an online fossil node in Fossils to manage this connection.</p>
+          <button id="settings-configure-prowlarr" type="button">Configure Prowlarr</button>
+          <div class="managed-prowlarr-setup">
+            <h3>Run Prowlarr on this fossil</h3>
+            <p class="connection-note">Download a reviewable Compose overlay for an owner-run deployment. It keeps Prowlarr data in a node-local Docker volume and exposes its setup page only on the node host at <code>http://127.0.0.1:9696</code>. Applying it can briefly restart the node's Tailscale sidecar; run it during a maintenance window.</p>
+            <button id="download-prowlarr-compose" type="button">Download Prowlarr Compose overlay</button>
+            <p id="prowlarr-compose-message" class="connection-message" role="status" aria-live="polite"></p>
+            <details>
+              <summary>Review and adopt an existing Prowlarr</summary>
+              <ol>
+                <li>Keep the external Prowlarr running. Before cutover, save its URL and API key in a password manager; Rawrarr never displays a saved API key again.</li>
+                <li>On the external Prowlarr, create a backup from System → Backup and download the archive. Treat it as sensitive because it can contain service configuration and credentials; the archive stays in your browser and is never sent through Rawrarr or roarlay.</li>
+                <li>On the fossil computer, save the overlay beside the existing Rawrarr <code>compose.yaml</code>. Review it, confirm host port 9696 is free, run <code>docker compose -f compose.yaml -f prowlarr-compose.yaml config --quiet</code>, then apply with <code>docker compose -f compose.yaml -f prowlarr-compose.yaml up -d prowlarr</code>. Keep the existing volumes; never use <code>down -v</code>.</li>
+                <li>Open <code>http://127.0.0.1:9696</code>, complete Prowlarr's setup, and restore the downloaded backup into this new instance only. Restore replaces the target's configuration; use a fresh managed instance and confirm its image version supports the backup before applying the overlay.</li>
+                <li>Compare the target's indexers, enabled states, and connected applications with the external instance in both Prowlarr pages. Use Settings → Prowlarr → Test connection with <code>http://127.0.0.1:9696</code> and the target API key before saving. Then save the managed connection and verify Discover status and a manual search.</li>
+                <li>The external instance and its data are not changed. To roll back, restore its saved URL and API key in Rawrarr; leave the managed data volume intact until the rollback is verified.</li>
+              </ol>
+            </details>
+          </div>
+          <dialog class="arr-settings-dialog" id="settings-prowlarr-dialog" aria-labelledby="settings-prowlarr-dialog-title">
+          <form id="settings-prowlarr-settings" class="connection-form">
+            <h2 id="settings-prowlarr-dialog-title">Configure Prowlarr</h2>
+            <label for="settings-prowlarr-url">Prowlarr URL</label>
+            <input id="settings-prowlarr-url" name="url" type="url" placeholder="https://prowlarr.example.com or http://127.0.0.1:9696" autocomplete="url" required>
+            <p class="connection-note">Use HTTPS for remote instances. HTTP is accepted only for loopback addresses on this node.</p>
+            <label for="settings-prowlarr-key">Prowlarr API key</label>
+            <input id="settings-prowlarr-key" name="apiKey" type="password" autocomplete="new-password">
+            <p id="settings-prowlarr-key-note" class="connection-note">Required for the first save.</p>
+            <div class="connection-actions"><button id="settings-test-prowlarr" type="button">Test connection</button><button id="settings-save-prowlarr" type="submit">Save and connect</button><button id="settings-clear-prowlarr" type="button">Clear connection</button><button class="arr-dialog-close" type="button">Cancel</button></div>
+            <p id="settings-prowlarr-settings-message" class="connection-message" role="status" aria-live="polite"></p>
           </form>
           </dialog>
         </article>
