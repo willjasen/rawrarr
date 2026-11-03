@@ -125,7 +125,13 @@ def main() -> int:
     parser.add_argument("--rebuild-base", action="store_true", help="rebuild the dependency image (for toolchain or dependency updates)")
     parser.add_argument("--cleanup-dry-run", action="store_true", help="list stopped test containers older than one hour without removing them")
     parser.add_argument("--cleanup-now", action="store_true", help="remove eligible old stopped test containers now, without starting a test run")
+    parser.add_argument("--browser-enrollment-export", action="store_true",
+                        help="run disposable real-service passkey approval and browser metadata decryption")
+    parser.add_argument("--browser-enrollment-inject-failure", action="store_true",
+                        help="with --browser-enrollment-export, fail after approval to exercise cleanup")
     args = parser.parse_args()
+    if args.browser_enrollment_inject_failure and not args.browser_enrollment_export:
+        parser.error("--browser-enrollment-inject-failure requires --browser-enrollment-export")
 
     context = docker(args.context, "context", "show")
     if context != args.context:
@@ -137,6 +143,12 @@ def main() -> int:
     if args.cleanup_now:
         cleanup_if_due(args.context, dry_run=False, force=True)
         return 0
+
+    if args.browser_enrollment_export:
+        if args.rebuild_base:
+            parser.error("the browser enrollment tier reuses the existing test base; rebuild separately")
+        from browser_enrollment_docker import run
+        return run(args.context, inject_failure=args.browser_enrollment_inject_failure)
 
     cleanup_if_due(args.context)
 
