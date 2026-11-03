@@ -8,11 +8,21 @@ ARG TARGETARCH
 ARG RAWARR_BUILD_REVISION=unknown
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
+RUN mkdir src migrations \
+    && printf '%s\n' 'fn main() {}' > src/main.rs
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git/db,sharing=locked \
+    case "$TARGETARCH" in \
+      amd64) rust_target=x86_64-unknown-linux-gnu ;; \
+      arm64) rust_target=aarch64-unknown-linux-gnu ;; \
+      *) echo "Unsupported target architecture: $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+    && rustup target add "$rust_target" \
+    && cargo build --release --locked --target "$rust_target"
 COPY src ./src
 COPY migrations ./migrations
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git/db,sharing=locked \
-    --mount=type=cache,target=/src/target,sharing=locked \
     case "$TARGETARCH" in \
       amd64) rust_target=x86_64-unknown-linux-gnu ;; \
       arm64) rust_target=aarch64-unknown-linux-gnu ;; \
