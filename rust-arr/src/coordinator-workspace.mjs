@@ -538,6 +538,11 @@ function updateAgeIdControls() {
   const hasIdentity = Boolean(ageIdentityInMemory);
   ageIdEntry.hidden = hasIdentity;
   clearKeyButton.hidden = !hasIdentity;
+  if (hasIdentity && contentStatus.textContent.trim() === 'Enter your age private ID to unlock. It will be saved in this browser after validation.') {
+    contentStatus.textContent = ageIdentityStored
+      ? 'Age private ID is saved in this browser and ready to unlock your encrypted movies.'
+      : 'Age private ID is available in this page and ready to unlock your encrypted movies.';
+  }
   updateAgeStorageSettings();
 }
 function rememberAgeIdentity(identity) {

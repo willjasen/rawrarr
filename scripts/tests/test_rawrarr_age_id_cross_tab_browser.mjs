@@ -21,6 +21,7 @@ test('Movies picks up an age ID imported in another tab', async t => {
   t.after(() => context.close());
   const page = await context.newPage();
   const identity = 'AGE-SECRET-KEY-PQ-1cross-tab-test-fixture';
+  let nodes = [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }];
   let unlocked = false;
   let loadedMovies = false;
 
@@ -37,7 +38,7 @@ test('Movies picks up an age ID imported in another tab', async t => {
     if (url.pathname === '/assets/coordinator-ai.mjs') return route.fulfill({ body: aiModule, contentType: 'text/javascript' });
     if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: "window.rawrarrMiniExport = { deriveProfileRecipient: async () => 'age1pq1testrecipient', prepareGroupIdentityForDevice: async () => false, encryptIdentityForDevice: async value => `age-ciphertext:${value}` };" });
     if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
-    if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }] });
+    if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: nodes });
     if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
     if (url.pathname === '/api/workspace/direct-session') return route.fulfill({ status: 204, headers: { 'set-cookie': `rawrarr_direct_session=${'a'.repeat(64)}; Path=/direct-api/; SameSite=Strict` } });
     if (url.pathname === '/direct-api/health') return route.fulfill({ status: 204 });
@@ -97,4 +98,12 @@ test('Movies picks up an age ID imported in another tab', async t => {
   await page.waitForFunction(() => !document.getElementById('age-id-entry').hidden);
   assert.equal(await page.locator('#movies .library-empty').count(), 0);
   assert.match(await page.locator('#content-status').textContent(), /metadata is locked/);
+
+  nodes = [];
+  const noNodePage = await context.newPage();
+  await noNodePage.addInitScript(value => localStorage.setItem('rawrarr.browser.age-id', value), identity);
+  await noNodePage.goto('http://rawrarr.test/#movies');
+  await noNodePage.waitForFunction(() => document.getElementById('age-id-entry').hidden);
+  assert.match(await noNodePage.locator('#content-status').textContent(), /Age private ID is saved in this browser/);
+  assert.doesNotMatch(await noNodePage.locator('#content-status').textContent(), /Enter your age private ID/);
 });
