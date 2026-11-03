@@ -159,3 +159,111 @@ test('Settings-saved age ID is recognized when navigating to Movies in the same 
   assert.equal(loadedMovies, true);
   assert.equal((await page.locator('body').innerText()).includes('Enter your age private ID to unlock'), false);
 });
+
+for (const viewport of [{ width: 1280, height: 800 }, { width: 375, height: 812 }]) {
+  test(`Movies loads with a saved age ID before diagnostics at ${viewport.width}px`, { timeout: 20000 }, async t => {
+    const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
+    t.after(() => browser.close());
+    const context = await browser.newContext({ viewport });
+    t.after(() => context.close());
+    const page = await context.newPage();
+    const identity = 'AGE-SECRET-KEY-PQ-1initial-load-test-fixture';
+    const movie = { tmdbId: 123, title: 'A deliberately long movie title that wraps on a narrow screen', year: 2026, hasFile: true, sizeOnDisk: 1024, genres: [] };
+    let releaseDiagnostics;
+    const diagnosticsReady = new Promise(resolve => { releaseDiagnostics = resolve; });
+    t.after(() => releaseDiagnostics());
+    let diagnosticResponses = 0;
+    let libraryRequests = 0;
+    let pendingStatus = 200;
+    const pageErrors = [];
+    page.on('pageerror', error => pageErrors.push(error.message));
+    const assets = {
+      '/assets/coordinator-workspace.mjs': `${script}\nwindow.rawrarrTestWorkspaceReady = true; window.rawrarrTestLoadPending = loadPending;`,
+      '/assets/coordinator-availability.mjs': availabilityModule,
+      '/assets/coordinator-device-routes.mjs': deviceRoutes,
+      '/assets/coordinator-node-avatar.mjs': nodeAvatar,
+      '/assets/profile-color.mjs': profileColor,
+      '/assets/coordinator-ai.mjs': aiModule,
+      '/assets/metadata-export.js': "window.rawrarrMiniExport = { deriveProfileRecipient: async () => 'age1pq1testrecipient', loadDeviceNames: async () => ({}) };",
+    };
+    await context.route('http://localhost/**', async route => {
+      const request = route.request();
+      const url = new URL(request.url());
+      if (assets[url.pathname]) return route.fulfill({ contentType: 'text/javascript', body: assets[url.pathname] });
+      if (url.pathname === '/') return route.fulfill({ contentType: 'text/html', body: html });
+      if (url.pathname === '/health' || url.pathname === '/direct-api/health') return route.fulfill({ status: 204 });
+      if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
+      if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://localhost/direct-api/' }] });
+      if (url.pathname === '/api/workspace/pending') return route.fulfill({ status: pendingStatus, json: [] });
+      if (url.pathname === '/api/workspace/direct-session') return route.fulfill({ status: 204, headers: { 'set-cookie': `rawrarr_direct_session=${'a'.repeat(64)}; Path=/direct-api/; SameSite=Strict` } });
+      if (url.pathname.endsWith('/syncthing/shared-health') || url.pathname.endsWith('/config-peer/status')) {
+        await diagnosticsReady;
+        diagnosticResponses += 1;
+        return route.fulfill({ status: 401, json: { error: 'Node diagnostic session rejected' } });
+      }
+      if (url.pathname === '/direct-api/api/settings/age') return route.fulfill({ json: { unlocked: true, encryptedConfigExists: true } });
+      if (url.pathname === '/direct-api/api/radarr/live-library') {
+        libraryRequests += 1;
+        return route.fulfill({ json: [movie] });
+      }
+      if (url.pathname.startsWith('/nodes/')) return route.fulfill({ status: 401, json: { error: 'Node request rejected' } });
+      if (url.pathname.startsWith('/direct-api/api/')) return route.fulfill({ json: {} });
+      if (url.pathname.startsWith('/api/workspace/')) return route.fulfill({ json: {} });
+      return route.fulfill({ status: 404 });
+    });
+    await page.addInitScript(({ identity, restoreSelection }) => {
+      localStorage.setItem('rawrarr.browser.age-id', identity);
+      if (restoreSelection) sessionStorage.setItem('rawrarr.coordinator.selected-node', 'metadata-one');
+    }, { identity, restoreSelection: viewport.width === 1280 });
+
+    await page.goto('http://localhost/#movies', { waitUntil: 'commit' });
+    await page.waitForFunction(() => document.querySelector('#movies .library-card'), null, { timeout: 2500 });
+    assert.equal(diagnosticResponses, 0, 'library loads while optional diagnostics are still pending');
+    assert.equal(await page.locator('#age-id-entry').isVisible(), false);
+    assert.equal(await page.locator('#movies .library-card-title').textContent(), movie.title);
+    releaseDiagnostics();
+    await page.waitForFunction(() => window.rawrarrTestWorkspaceReady);
+    assert.equal(diagnosticResponses, 2);
+    assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), identity, 'node 401 responses must not erase the imported identity');
+    assert.equal(await page.locator('#age-id-entry').isVisible(), false);
+
+    const geometry = await page.evaluate(() => ({
+      width: innerWidth, documentWidth: document.documentElement.scrollWidth,
+      card: document.querySelector('#movies .library-card').getBoundingClientRect().toJSON(),
+      clear: document.querySelector('#clear-key').getBoundingClientRect().toJSON(),
+      rescan: document.querySelector('#refresh-movies').getBoundingClientRect().toJSON(),
+    }));
+    assert.ok(geometry.documentWidth <= geometry.width, 'Movies must not overflow horizontally');
+    for (const rect of [geometry.card, geometry.clear, geometry.rescan]) {
+      assert.ok(rect.width > 0 && rect.left >= 0 && rect.right <= viewport.width, 'movie and primary actions fit the viewport');
+    }
+
+    // Hash navigation and back/forward-cache restoration must start the same load flow.
+    await page.locator('.nav-item[data-view="settings"]').click();
+    const beforeHashNavigation = libraryRequests;
+    await page.evaluate(() => { location.hash = '#movies'; });
+    await page.waitForFunction(() => document.querySelector('#content-status').textContent.includes('Radarr library entries loaded'));
+    assert.ok(libraryRequests > beforeHashNavigation);
+    const beforeRestore = libraryRequests;
+    await page.evaluate(() => {
+      window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    });
+    await page.waitForFunction(() => document.querySelector('#content-status').textContent.includes('Radarr library entries loaded'));
+    assert.ok(libraryRequests > beforeRestore);
+    assert.equal(await page.locator('#age-id-entry').isVisible(), false);
+
+    pendingStatus = 401;
+    await page.evaluate(() => window.rawrarrTestLoadPending());
+    assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), identity, 'an expired coordinator session is not an explicit sign-out');
+    assert.equal((await page.locator('body').innerText()).includes(identity), false);
+    await page.evaluate(() => {
+      window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+      localStorage.removeItem('rawrarr.browser.age-id');
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    });
+    assert.equal(await page.locator('#age-id-entry').isVisible(), true);
+    assert.equal(await page.locator('#movies .library-card').count(), 0, 'a page restored after ID removal must not show the old library');
+    assert.deepEqual(pageErrors, []);
+  });
+}
