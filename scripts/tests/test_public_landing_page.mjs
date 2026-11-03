@@ -56,7 +56,9 @@ test('public rawrarr.net landing page is static, accurate, and responsive', asyn
   await page.getByRole('heading', { name: 'Your library. Your devices.' }).waitFor();
   await page.getByRole('heading', { name: 'Your media stack, in one place.' }).waitFor();
   await page.getByRole('heading', { name: 'Useful boundaries. Honest limits.' }).waitFor();
-  assert.equal(await page.getByRole('link', { name: 'See how Rawrarr fits' }).count(), 1);
+  assert.equal(await page.getByRole('link', { name: 'Open Rawrarr app' }).count(), 1);
+  assert.equal(await page.getByRole('link', { name: 'Open app' }).getAttribute('href'), 'https://roarlay.rawrarr.net/');
+  assert.equal(await page.getByRole('link', { name: 'Open Rawrarr app' }).getAttribute('href'), 'https://roarlay.rawrarr.net/');
   assert.equal(await page.locator('script').count(), 0);
   assert.equal(await page.locator('img').first().evaluate(image => image.complete && image.naturalWidth > 0), true);
   assert.equal(offsiteRequests.length, 0, `all assets load locally: ${offsiteRequests.join(', ')}`);
@@ -65,7 +67,7 @@ test('public rawrarr.net landing page is static, accurate, and responsive', asyn
     await page.setViewportSize(viewport);
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${viewport.width}px layout has no horizontal overflow`);
-    const action = await page.getByRole('link', { name: 'See how Rawrarr fits' }).boundingBox();
+    const action = await page.getByRole('link', { name: 'Open Rawrarr app' }).boundingBox();
     assert.ok(action, `${viewport.width}px primary action is rendered`);
     assert.ok(action.width >= 44 && action.height >= 44, `${viewport.width}px primary action has a usable hit area`);
     assert.ok(action.x >= 0 && action.y >= 0 && action.x + action.width <= viewport.width && action.y + action.height <= viewport.height, `${viewport.width}px primary action is in the initial viewport`);
