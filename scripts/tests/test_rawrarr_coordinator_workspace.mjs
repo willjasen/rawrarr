@@ -365,6 +365,12 @@ test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from th
   assert.doesNotMatch(coordinator, /SELECT\s+(?:profile_picture|avatar_seed)/i);
 });
 
+test('profile retries a temporary 404 and preserves a loaded username through later profile errors', () => {
+  assert.match(workspaceScript, /for \(let attempt = 0; attempt < 3; attempt \+= 1\)[\s\S]*?error\.status !== 404 \|\| attempt === 2[\s\S]*?setTimeout\(resolve, 250 \* \(attempt \+ 1\)\)/);
+  assert.match(workspaceScript, /error\.status = response\.status/);
+  assert.match(workspaceScript, /if \(!profileBaseName\) \{\s*document\.getElementById\('profile-name'\)\.textContent = error\.message/);
+});
+
 test('device pictures use the deterministic fossil renderer while profile pictures retain dinosaurs', () => {
   assert.match(workspaceScript, /device-picture\/\$\{seed\}\/jxl/);
   assert.match(workspaceScript, /device-picture\/\$\{seed\}\/png/);
