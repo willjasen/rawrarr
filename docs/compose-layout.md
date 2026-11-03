@@ -21,9 +21,10 @@ Lack of a repository caller is not evidence that a deployed overlay is unused.
 
 ## Root-file inventory
 
-There were 22 root Compose files before the first increment; 16 remain after
+There were 22 root Compose files before the first increment; 13 remain after
 retiring the former Mac coordinator overlays and both obsolete staged Headscale
-clients. Generic self-hosting templates are not internal Mac deployment recipes.
+clients and the confirmed-obsolete host-specific storage/transport/relay setups.
+Generic self-hosting templates are not internal Mac deployment recipes.
 Paths in the caller column are relative to the repository. Test names are under
 `scripts/tests/`. Historical runbooks record past usage, not current deployment
 authority. All root `docker-compose*.yml` files are also copied into regression
@@ -37,8 +38,8 @@ containers by `scripts/tests/run_rawrarr_tests_in_docker.py`.
 | `docker-compose.storage.yml` | Standalone boneyard using an existing Tailscale container namespace; not a coordinator stack. | Deployment guide; deploy classifier; workspace, direct-route, and network-isolation tests. |
 | `docker-compose.internal-mini.yml` | Retired: former private Mac mini coordinator/PostgreSQL/Tailscale topology, superseded internally by do3. | Former analytics/workspace/trial callers now cover the do3 definition. October 22-27 runbooks remain historical; deployment classifiers ignore the retired path. |
 | `docker-compose.tailscale-macbook.yml` | Retired: former shared MacBook coordinator/fossil transport/cache overlay. | Admin preview is standalone; workspace/direct-route coverage uses do3, isolation/cache coverage uses retained subscriber/test definitions. Historical runbooks remain records. |
-| `docker-compose.tailscale-mini.yml` | Separate Mac mini Tailscale companion used by storage/relay definitions. | Deployment guide. Requires inspection of host-local active files before consolidation. |
-| `docker-compose.macbook-storage.yml` | Additional MacBook boneyard using an existing namespace and protected node-local mounts. | Deploy classifier; `runbooks/2026-10-18-storage-media-replication.md`. |
+| `docker-compose.tailscale-mini.yml` | Retired: operator-confirmed obsolete Mini storage transport identity. | Historical runbooks only; classifiers ignore the retired path. Current subscriber transport is not removed. |
+| `docker-compose.macbook-storage.yml` | Retired: operator-confirmed obsolete additional MacBook boneyard. | Historical storage replication record; classifiers ignore the retired path. |
 | `docker-compose.media.yml` | Changes the base fossil into a storage-role node with a read-only media bind. | Deployment/user guides; `rust-arr/README.md`; local-library-scan runbook. |
 | `docker-compose.age-identity.yml` | Optional fossil private identity secret mount; never a coordinator overlay. | `docs/user-guide.md`. |
 | `docker-compose.admin.yml` | Standalone localhost-only sample admin preview; no coordinator or transport dependency. | `docs/admin-console.md`; admin-preview test; original preview runbook is historical. |
@@ -50,7 +51,7 @@ containers by `scripts/tests/run_rawrarr_tests_in_docker.py`.
 | `docker-compose.syncthing-tailnet.yml` | Syncthing SOCKS/tailnet routing overlay; requires established TCP forwarding. | `scripts/README.md`; deploy classifier; storage-media-replication runbook. |
 | `docker-compose.headscale-macbook.yml` | Retired: obsolete staged MacBook Headscale client, confirmed by operator. | Deployment-guide/classifier callers retired; staging runbook remains historical. |
 | `docker-compose.headscale-mini.yml` | Retired: obsolete staged Mac mini Headscale client, confirmed by operator. | Deployment-guide instructions retired; staging runbook remains historical. |
-| `docker-compose.mini-relays.yml` | Caddy storage relay in the existing Mini Tailscale namespace. | Node-network-isolation test; mounts root `storage-proxy.Caddyfile`. No current script caller found. |
+| `docker-compose.mini-relays.yml` | Retired: obsolete Mini loopback Caddy storage relay. | Its `storage-proxy.Caddyfile` fixture and executable test/snapshot callers are removed. Historical runbooks remain records. |
 | `docker-compose.tailscale-serve.yml` | Retired: empty compatibility overlay after removing the TCP proxy. | `runbooks/2026-10-18-remove-syncthing-proxy.md` is historical. No executable caller found; deployment classifiers ignore the retired path. |
 
 The moved `docker-compose.orbstack-test.yml` was referenced by
@@ -76,6 +77,11 @@ and clarified that coordinator deployment on either Mac is no longer needed.
 Removed both staged templates and the MacBook coordinator overlay. The admin
 preview is now independently localhost-only, as selected by the operator.
 The internal coordinator stays on do3; the Macs are subscriber hosts.
+
+Implemented fourth: after inspecting the current MacBook OrbStack stack, the
+operator confirmed both old Mac-specific storage setups obsolete. Removed the
+additional MacBook boneyard, Mini transport/relay templates, and Caddy fixture.
+Generic storage and current host-local fossil deployments remain unchanged.
 
 Planned, not yet implemented:
 
@@ -194,3 +200,28 @@ from published Git commit `94fda4c` if needed, preserving its original project, 
 container name, and state path. Do not create a replacement identity, revoke a
 key, stop a container, or remove state as part of this source cleanup.
 There is no data/protocol migration or automatic deployment.
+
+## Retired host-specific storage and relays
+
+The operator explicitly confirmed both old storage setups obsolete after
+reviewing the current MacBook OrbStack stack. Removed
+`docker-compose.macbook-storage.yml`, `docker-compose.tailscale-mini.yml`,
+`docker-compose.mini-relays.yml`, and `storage-proxy.Caddyfile`.
+Local read-only labels match the screenshot: `rawrarr-node-internal` contains
+fossil, artwork-cache, and tailscale using host-local definitions. Remote Mac
+audit remains blocked; this retirement relies on operator confirmation for that
+gap, not a claim that both hosts were independently audited.
+
+There is no persistent-state, database, or protocol migration. No running or
+stopped containers, identities, mounts, routes, or volumes are removed. Current
+host-local subscriber stacks need no adoption action. Generic role templates,
+Syncthing companions, and do3 definitions remain unchanged.
+
+Old external commands now fail on missing filenames. Do not substitute generic
+templates or merely drop overlays and recreate the old project: inspect its
+actual labels and namespace dependencies first. All four files are recoverable
+from published commit `f67b072`, retaining the original project, identity state,
+credentials, volumes, and media paths. Restoring source alone changes no live
+service. Never run `down`, delete identity state, or enroll replacement identities
+as part of recovery. The retained generic storage template requires an explicitly
+verified existing transport namespace; it no longer has a bundled Mini companion.

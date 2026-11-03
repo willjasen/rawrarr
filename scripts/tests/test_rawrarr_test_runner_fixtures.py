@@ -12,6 +12,9 @@ SPEC.loader.exec_module(RUNNER)
 
 
 class RootFixtureCopyTests(unittest.TestCase):
+    def test_retired_storage_proxy_is_not_a_snapshot_fixture(self):
+        self.assertNotIn("storage-proxy.Caddyfile", RUNNER.ROOT_FIXTURES)
+
     def test_relocated_test_stack_is_copied_with_deploy_fixtures(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

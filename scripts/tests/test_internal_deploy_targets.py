@@ -7,6 +7,15 @@ from classify_internal_deploy_targets import classify_paths
 
 
 class InternalDeployTargetTests(unittest.TestCase):
+    def test_retired_host_specific_storage_paths_do_not_trigger_deploys(self):
+        for path in (
+            "docker-compose.macbook-storage.yml", "docker-compose.tailscale-mini.yml",
+            "docker-compose.mini-relays.yml", "storage-proxy.Caddyfile",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(classify_paths([path])["targets"], [])
+                self.assertEqual(classify_paths([path, "rust-arr/src/library.rs"])["targets"], ["nodes"])
+
     def test_coordinator_only_changes_select_coordinator(self):
         result = classify_paths(["rust-arr/src/coordinator.rs", "rust-arr/src/coordinator-passkey.mjs"])
         self.assertEqual(result["targets"], ["coordinator"])

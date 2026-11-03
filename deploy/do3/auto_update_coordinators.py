@@ -46,6 +46,10 @@ HEALTH_TIMEOUT_SECONDS = 150
 
 NON_RUNTIME_PREFIXES = ("docs/", "runbooks/", "scripts/", ".github/", "website/")
 NON_RUNTIME_FILES = {
+    "docker-compose.macbook-storage.yml",
+    "docker-compose.tailscale-mini.yml",
+    "docker-compose.mini-relays.yml",
+    "storage-proxy.Caddyfile",
     "AGENTS.md",
     "README.md",
     "ROADMAP.md",

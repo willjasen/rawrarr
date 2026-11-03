@@ -9,12 +9,24 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ComposeLayoutTests(unittest.TestCase):
+    def test_retired_host_specific_storage_templates_are_not_inputs(self):
+        for name in (
+            "docker-compose.macbook-storage.yml",
+            "docker-compose.tailscale-mini.yml",
+            "docker-compose.mini-relays.yml",
+            "storage-proxy.Caddyfile",
+        ):
+            with self.subTest(name=name):
+                self.assertFalse((ROOT / name).exists())
+        self.assertTrue((ROOT / "docker-compose.storage.yml").is_file())
+        self.assertTrue((ROOT / "docker-compose.metadata.yml").is_file())
+
     def test_retired_staged_headscale_clients_are_not_installation_inputs(self):
         for name in ("docker-compose.headscale-macbook.yml", "docker-compose.headscale-mini.yml"):
             with self.subTest(name=name):
                 self.assertFalse((ROOT / name).exists())
         self.assertTrue((ROOT / "deploy" / "testing" / "headscale" / "config.yaml").is_file())
-        self.assertTrue((ROOT / "docker-compose.tailscale-mini.yml").is_file())
+        self.assertTrue((ROOT / "docker-compose.storage.yml").is_file())
         self.assertFalse((ROOT / "docker-compose.tailscale-macbook.yml").exists())
 
     def test_retired_mac_coordinator_definitions_are_not_installation_inputs(self):

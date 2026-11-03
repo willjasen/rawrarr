@@ -1,5 +1,11 @@
 # Storage media replication
 
+> Historical deployment record. The operator confirmed the old Mac-specific
+> storage setups obsolete on 2026-11-03. The MacBook storage template and Mini
+> transport/relay templates are retired; current Macs host fossil subscribers.
+> This does not remove media, Syncthing data, identities, or live containers.
+> See [retirement and recovery](../docs/compose-layout.md#retired-host-specific-storage-and-relays).
+
 ## Objective and initial state
 
 Add an explicit Syncthing setup path for sharing selected media folders from the Mac mini apex to a second MacBook apex node. The existing `rawrarr-shared` folder carries application data; storage nodes mount `/media` read-only in Rawrarr, and Syncthing did not initially mount media. The user selected only top-level music folders beginning with A or a, with the Mini as send-only source and the MacBook as receive-only destination. The Mini had two matching folders totaling about 3.3 GiB; the MacBook had about 139 GiB free.

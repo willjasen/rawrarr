@@ -17,6 +17,15 @@ SPEC.loader.exec_module(UPDATER)
 
 
 class CoordinatorAutoUpdaterTests(unittest.TestCase):
+    def test_retired_host_specific_storage_paths_do_not_rebuild_coordinators(self):
+        for path in (
+            "docker-compose.macbook-storage.yml", "docker-compose.tailscale-mini.yml",
+            "docker-compose.mini-relays.yml", "storage-proxy.Caddyfile",
+        ):
+            with self.subTest(path=path):
+                self.assertFalse(UPDATER.affects_coordinator([path]))
+                self.assertTrue(UPDATER.affects_coordinator([path, "rust-arr/src/coordinator.rs"]))
+
     def test_internal_container_references_use_the_stable_int_prefix(self):
         self.assertEqual(UPDATER.INTERNAL["container"], "rawrarr-int-roarlay")
         self.assertEqual(UPDATER.INTERNAL_TAILSCALE_CONTAINER, "rawrarr-int-tailscale")

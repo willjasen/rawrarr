@@ -46,6 +46,10 @@
 - The same Python checks guard retirement of both staged Headscale clients and
   the MacBook coordinator overlay while preserving subscriber/test inputs.
   Mixed-path checks ensure real runtime updates remain selected.
+- These guards also cover retired MacBook storage and Mini transport/relay paths;
+  the snapshot fixture check rejects the retired Caddy fixture. Network-isolation
+  coverage retains the generic storage listener/namespace checks, not the removed
+  Mini proxy implementation.
 
 - `test_rawrarr_movie_artwork_stability.mjs` — Chromium checks loaded and in-flight movie posters survive cached-to-live library updates and filtering without duplicate requests, while metadata, explicit artwork changes, additions, and removals still update; verifies the shared Movies/TV poster grid shows six desktop columns and two mobile columns without horizontal overflow. Run through `python3 scripts/tests/run_rawrarr_tests_in_docker.py`.
 
