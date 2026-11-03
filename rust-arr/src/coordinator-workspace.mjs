@@ -180,7 +180,7 @@ function showView(name, updateHash = true) {
   if (view === 'roarlay') void checkRoarlayHealth();
   if ((view === 'movies' || view === 'series') && updateHash) void loadMetadataSizes();
 }
-window.addEventListener('hashchange', () => showView(location.hash.slice(1) || 'overview', false));
+window.addEventListener('hashchange', () => showView(location.hash.slice(1) || 'overview'));
 document.querySelectorAll('.nav-item[data-view]').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
 document.getElementById('configure-sonarr')?.addEventListener('click', () => showView('settings'));
 showView(location.hash.slice(1) || 'overview', false);
@@ -732,6 +732,21 @@ window.addEventListener('pagehide', () => {
   approveNodeBackup.value = '';
   approveNodeFingerprint.value = '';
 });
+window.addEventListener('pageshow', event => {
+  if (!event.persisted) return;
+  try { ageIdentityInMemory = localStorage.getItem(ageSessionKey) || ''; } catch { /* Storage can be disabled by browser policy. */ }
+  ageIdentityStored = Boolean(ageIdentityInMemory);
+  if (!ageIdentityInMemory) {
+    aiMovies = null;
+    aiSeries = null;
+    moviesPanel.replaceChildren();
+    document.getElementById('sonarr-series').replaceChildren();
+    resetArrSummary('radarr');
+    resetArrSummary('sonarr');
+  }
+  updateAgeIdControls();
+  showView(location.hash.slice(1) || 'overview');
+});
 
 document.getElementById('age-storage-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -1142,8 +1157,9 @@ async function jsonRequest(path, options = {}) {
   const response = await fetch(path, { headers: { Accept: 'application/json', ...(options.headers || {}) }, cache: 'no-store', ...options });
   if (!response.ok) {
     if (response.status === 401) {
-      clearAgeIdentity();
-      throw new Error('Your roarlay sign-in expired. Sign in again.');
+      throw new Error(path.startsWith('/nodes/')
+        ? 'The node rejected this request (HTTP 401). Check its connection and try again.'
+        : 'Your roarlay sign-in expired. Sign in again.');
     }
     const error = new Error(`Request failed (HTTP ${response.status}).`);
     error.status = response.status;
@@ -1942,6 +1958,11 @@ async function refreshNodes() {
       || metadataNodes[0];
     renderNodes(nodes, new Map(), new Map(), configNode, false);
     if (location.hash === '' || location.hash === '#overview') void loadOverviewMetadata();
+    const routesPromise = checkDeviceRoutes(nodes).then(routes => {
+      deviceRouteStatusByNode = routes;
+      if (!savingDeviceName) renderNodes(nodes, new Map(), new Map(), configNode);
+      return routes;
+    });
     const healthPromise = Promise.all(nodes.map(async node => {
       if (!node.online || !node.relayAvailable) return [node.nodeId, null];
       const cached = syncthingHealthCache.get(node.nodeId);
@@ -1978,7 +1999,7 @@ async function refreshNodes() {
       }
     })();
     const [healthEntries, peerEntries, routes] = await Promise.all([
-      healthPromise, peerStatusPromise, checkDeviceRoutes(nodes),
+      healthPromise, peerStatusPromise, routesPromise,
     ]);
     deviceRouteStatusByNode = routes;
     if (!savingDeviceName) renderNodes(nodes, new Map(healthEntries), new Map(peerEntries), configNode);
@@ -2308,7 +2329,8 @@ function renderNodes(nodes, healthByNode, configPeerStatusByNode, configNode, se
     if (selectedNode) {
       const current = nodes.find(node => node.nodeId === selectedNode && canOpen(node));
       if (current) {
-        selectedNodeDetails = current;
+        if (!selectedNodeDetails) openNode(current);
+        else selectedNodeDetails = current;
         for (const card of nodesPanel.querySelectorAll('.device-card')) {
           card.dataset.selected = String(card.dataset.nodeId === selectedNode);
         }
@@ -2520,7 +2542,6 @@ const coordinatorAvailability = createCoordinatorAvailabilityMonitor({
 coordinatorAvailability.start();
 
 await loadNodes();
-if (location.hash === '#movies' && ageIdentityInMemory && selectedNodeDetails?.role === 'metadata') void unlockMetadata();
 await loadPending();
 initialWorkspaceLoadFinished = true;
 if (location.hash === '#configuration') void loadClusterConfiguration();
