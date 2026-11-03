@@ -22,7 +22,7 @@ BASE36 = "0123456789abcdefghijklmnopqrstuvwxyz"
 CLEANUP_INTERVAL_SECONDS = 60 * 60
 CLEANUP_STATE = Path.home() / "Library" / "Application Support" / "Rawrarr" / ".test-container-cleanup-last-run"
 ROOT_FIXTURES = (
-    ".github", "admin", "deploy", "docs", "netlify-ignore-build.sh", "netlify.toml",
+    ".github", ".nvmrc", "admin", "deploy", "docs", "netlify-ignore-build.sh", "netlify.toml",
     "storage-proxy.Caddyfile", "stripe-service", "website",
 )
 

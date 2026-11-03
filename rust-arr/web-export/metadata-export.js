@@ -38,16 +38,16 @@ function normalizePostQuantumIdentity(value) {
   return identities[0];
 }
 
-async function fetchBytes(url) {
-  const response = await fetch(url, { cache: 'no-store', credentials: 'include', headers: { Accept: 'application/octet-stream' } });
+async function fetchBytes(url, { signal } = {}) {
+  const response = await fetch(url, { signal, cache: 'no-store', credentials: 'include', headers: { Accept: 'application/octet-stream' } });
   if (!response.ok) throw new Error(`Could not fetch encrypted metadata (${response.status})`);
   return new Uint8Array(await response.arrayBuffer());
 }
 
-async function resolveGroupIdentity(userIdentity, base) {
+async function resolveGroupIdentity(userIdentity, base, { signal } = {}) {
   const prefix = base.endsWith('/') ? base : `${base}/`;
   const response = await fetch(`${prefix}api/metadata/export/group-user-envelope`, {
-    cache: 'no-store', credentials: 'include', headers: { Accept: 'application/octet-stream' },
+    signal, cache: 'no-store', credentials: 'include', headers: { Accept: 'application/octet-stream' },
   });
   legacyUserIdentity = userIdentity.trim();
   if (response.status === 404) return userIdentity;
@@ -63,7 +63,7 @@ async function resolveGroupIdentity(userIdentity, base) {
   try { groupRecipient = await age.identityToRecipient(groupIdentity); }
   catch { throw new Error('The group identity envelope is invalid.'); }
   const recipientResponse = await fetch(`${prefix}api/metadata/export/recipient`, {
-    cache: 'no-store', credentials: 'include', headers: { Accept: 'text/plain' },
+    signal, cache: 'no-store', credentials: 'include', headers: { Accept: 'text/plain' },
   });
   if (!recipientResponse.ok) throw new Error('Could not read the shared group recipient.');
   const publishedRecipient = (await recipientResponse.text()).trim();
@@ -217,10 +217,10 @@ export async function saveDeviceName(identity, base, nodeId, name) {
   }
 }
 
-export async function loadDeviceNames(identity, base) {
+export async function loadDeviceNames(identity, base, { signal } = {}) {
   const prefix = base.endsWith('/') ? base : `${base}/`;
-  identity = await resolveGroupIdentity(identity, base);
-  const encrypted = await fetchBytes(`${prefix}api/metadata/export/config`);
+  identity = await resolveGroupIdentity(identity, base, { signal });
+  const encrypted = await fetchBytes(`${prefix}api/metadata/export/config`, { signal });
   const plaintext = await decrypt(identity, encrypted);
   encrypted.fill(0);
   let config;

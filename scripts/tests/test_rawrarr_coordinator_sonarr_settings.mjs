@@ -404,6 +404,57 @@ test('Settings imports an age ID locally without an online node and clears it ma
   assert.equal(await page.locator('#remember-age-id').count(), 0);
 });
 
+test('Settings keeps a validated age ID usable when browser storage fails', async t => {
+  const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  const identity = 'AGE-SECRET-KEY-PQ-1storage-failure-test-fixture';
+  await page.addInitScript(() => {
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === 'rawrarr.browser.age-id') throw new DOMException('Storage is unavailable', 'QuotaExceededError');
+      return setItem.call(this, key, value);
+    };
+  });
+  await page.route('http://rawrarr.test/**', async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/health') return route.fulfill({ status: 200, body: 'ok' });
+    if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
+    if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-availability.mjs') return route.fulfill({ body: availabilityModule, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-ai.mjs') return route.fulfill({ body: aiModule, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({
+      contentType: 'text/javascript',
+      body: "window.rawrarrMiniExport = { deriveProfileRecipient: async identity => { if (!identity.startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('invalid identity'); return 'age1pq1validrecipient'; } };",
+    });
+    if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
+    if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [] });
+    if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
+    if (url.pathname.startsWith('/api/workspace/')) return route.fulfill({ json: {} });
+    return route.fulfill({ status: 404, body: 'not found' });
+  });
+
+  await page.goto('http://rawrarr.test/#settings');
+  await page.getByText('Age private ID is not stored in this browser.').waitFor();
+  await page.locator('#settings-age-id').fill(identity);
+  await page.click('#save-age-id');
+  await page.locator('#age-storage-message').getByText('Age private ID is valid for this page, but this browser could not save it. Keep this page open or enter it again after refreshing.').waitFor();
+
+  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null, 'the failed write must not appear saved');
+  assert.equal(await page.locator('#settings-age-id').inputValue(), '', 'the password field is cleared after validation');
+  assert.equal(await page.locator('#settings-age-id').isHidden(), true, 'the validated ID remains available in page memory');
+  assert.match(await page.locator('#age-storage-status').textContent(), /this browser could not save it/);
+  assert.equal((await page.locator('body').innerText()).includes(identity), false, 'the private ID is not rendered');
+
+  await page.reload();
+  await page.getByText('Age private ID is not stored in this browser.').waitFor();
+  assert.equal(await page.locator('#settings-age-id').isVisible(), true, 'the age ID must be requested again after refresh');
+  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
+});
+
 test('Settings rejects an invalid age ID without persisting it', async t => {
   const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
   t.after(() => browser.close());

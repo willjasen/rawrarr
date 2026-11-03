@@ -10,6 +10,7 @@ const testDockerfile = await readFile(new URL('./Dockerfile', import.meta.url), 
 const clonePreparation = await readFile(new URL('./prepare-test-clone.sh', import.meta.url), 'utf8');
 const cloneEntrypoint = await readFile(new URL('./wait-for-test-trigger.sh', import.meta.url), 'utf8');
 const syncthingTest = await readFile(new URL('./test_rawrarr_syncthing_orbstack.py', import.meta.url), 'utf8');
+const nodeVersion = await readFile(new URL('../../.nvmrc', import.meta.url), 'utf8');
 
 test('Rawrarr and PostgreSQL containers define readiness health checks', () => {
   assert.match(dockerfile, /apt-get install[^\n]*\bcurl\b/);
@@ -35,6 +36,18 @@ test('test base installs age for the native target architecture', () => {
   assert.match(testDockerfile, /test "\$\(dpkg --print-architecture\)" = "\$TARGETARCH"/);
 });
 
+test('test base and linked clones use Node.js 26', () => {
+  assert.equal(nodeVersion.trim(), '26');
+  assert.match(testDockerfile, /ARG NODE_MAJOR=26/);
+  assert.match(testDockerfile, /deb\.nodesource\.com\/node_\$\{NODE_MAJOR\}\.x/);
+  assert.match(testDockerfile, /node --version[^\n]*v\$\{NODE_MAJOR\}/);
+  assert.match(testDockerfile, /npm install --global --prefix \/usr\/local playwright-core/);
+  assert.match(clonePreparation, /node_major=26/);
+  assert.match(clonePreparation, /deb\.nodesource\.com\/node_%s\.x/);
+  assert.match(clonePreparation, /expected Node\.js major \$node_major/);
+  assert.match(testEntrypoint, /regression suites require Node\.js 26/);
+});
+
 test('Docker test containers have unique names in the rawrarr-test-regression group', () => {
   assert.match(testRunner, /BASE36 = "0123456789abcdefghijklmnopqrstuvwxyz"/);
   assert.match(testRunner, /def timestamp_code\(\)/);
@@ -54,8 +67,17 @@ test('Docker test containers have unique names in the rawrarr-test-regression gr
   assert.match(cloneEntrypoint, /rawrarr-test-ready/);
   assert.match(testRunner, /shutil\.copytree/);
   assert.doesNotMatch(testRunner, /copytree\([^\n]*web-export/);
-  assert.match(testRunner, /ROOT_FIXTURES = \([\s\S]*"\.github"[\s\S]*"admin"[\s\S]*"deploy"[\s\S]*"docs"[\s\S]*"stripe-service"/);
+  assert.match(testRunner, /ROOT_FIXTURES = \(/);
+  assert.match(testRunner, /"\.nvmrc"/);
+  assert.match(testRunner, /"\.github"/);
+  assert.match(testRunner, /"deploy"/);
+  assert.match(testRunner, /"docs"/);
+  assert.match(testRunner, /"stripe-service"/);
   assert.match(testEntrypoint, /grep -Eq.*playwright-core/);
+  assert.match(testEntrypoint, /playwright_core=\/usr\/local\/lib\/node_modules\/playwright-core/);
+  assert.match(testEntrypoint, /playwright_alias=\/workspace\/scripts\/tests\/node_modules\/playwright/);
+  assert.match(testEntrypoint, /ln -s "\$playwright_core" "\$playwright_alias"/);
+  assert.match(testEntrypoint, /readlink "\$playwright_alias"/);
   assert.match(testEntrypoint, /playwright_core=\/usr\/local\/lib\/node_modules\/playwright-core/);
   assert.match(testEntrypoint, /playwright_alias=\/workspace\/scripts\/tests\/node_modules\/playwright/);
   assert.match(testEntrypoint, /ln -s "\$playwright_core" "\$playwright_alias"/);

@@ -224,7 +224,7 @@
     .devices-page-heading .button-link { margin-left:auto }
     .stub { padding:24px; border:1px solid var(--line); border-radius:12px; background:var(--panel); color:var(--muted) }
     .profile-card { display:flex; align-items:center; gap:20px; max-width:620px; padding:22px; border:1px solid var(--line); border-radius:12px; background:var(--panel) }
-    .settings-identity { display:grid; grid-template-columns:minmax(380px, 1.2fr) minmax(0, .8fr); align-items:stretch; gap:18px; max-width:1320px }
+    .settings-identity { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); align-items:stretch; gap:18px; max-width:1320px }
     .settings-identity .profile-card,.settings-identity .settings-crypto-card,.settings-identity .age-storage-card { box-sizing:border-box; width:100%; max-width:none; min-width:0; margin:0 }
     @media(max-width:900px) { .settings-identity { grid-template-columns:1fr } }
     .profile-avatar { display:block; overflow:hidden; width:124px; height:124px; border:1px solid #ffffff18; border-radius:50%; background:#202821; flex:none; box-shadow:0 10px 30px #0005 }
@@ -466,7 +466,7 @@
         <p id="crypto-wallet-status" class="profile-avatar-status" role="status" aria-live="polite">Checking linked ENS wallet…</p>
         <form id="crypto-wallet-link-form" class="connection-form">
           <label for="crypto-ens-name">Link an ENS wallet</label>
-          <input id="crypto-ens-name" type="text" autocomplete="username" spellcheck="false" placeholder="willjasen.eth">
+          <input id="crypto-ens-name" type="text" autocomplete="username" spellcheck="false">
           <button id="crypto-link-wallet" type="submit">Link wallet with signature</button>
           <p id="crypto-link-message" role="status" aria-live="polite"></p>
         </form>

@@ -9,12 +9,12 @@ Testing containers belong to the Docker project group `rawrarr-testing`. Keep th
 The local image `rawrarr-testing-base:local` is the reusable dependency base. Each run clones it into a newly named container using Docker's copy-on-write image layers, copies the current project source into that container, and then starts the tests. The base contains:
 
 - Rust 1.85.
-- Node.js for the browser-side and source-structure tests.
+- Node.js 26 and its bundled npm for the browser-side and source-structure tests.
 - Chromium and `playwright-core` 1.55.0 for the separate browser suite.
 - The locked Cargo crate cache and compiled dependency artifacts used by Rust tests.
 - The upstream `age` 1.3.2 binaries, including `age-keygen`, verified against the release archive's SHA-256 checksum.
 
-The base downloads the Rust crates and compiles dependency artifacts from a placeholder application. It does not contain Rawrarr source or project tests. The runner builds the base only when it is missing. It does not refresh an existing base when project source or tests change. Use `--rebuild-base` deliberately after changing the Rust toolchain, Cargo lockfile, or base-image dependencies. The current Rust source, migrations, Compose files, current UI/browser source files plus selected admin/documentation fixtures, and test files (including the runner script) are copied into each new container before it starts, so each run tests the current checkout. The runner copies only the root fixtures used by source-structure tests; it does not copy `.git`, ignored runtime data, or local secrets.
+The base downloads the Rust crates and compiles dependency artifacts from a placeholder application. It does not contain Rawrarr source or project tests. The runner builds the base only when it is missing. It does not refresh an existing base when project source or tests change. Use `--rebuild-base` deliberately after changing the Rust toolchain, Cargo lockfile, or base-image dependencies, including the Node.js major version. Clone preparation upgrades a stale base layer to Node.js 26 before tests and rejects any other major. The current Rust source, migrations, Compose files, current UI/browser source files plus selected admin/documentation fixtures, and test files (including the runner script) are copied into each new container before it starts, so each run tests the current checkout. The runner copies only the root fixtures used by source-structure tests; it does not copy `.git`, ignored runtime data, or local secrets.
 
 Each runner works like a linked clone: Docker stores and shares the base's immutable image layers, while each test container gets a separate writable layer. Every run has its own generated name, timestamp-derived identifier, and `rawrarr-testing` service label. The identifier is the current Unix timestamp in milliseconds encoded in lowercase base36. The container has no network and does not mount the live repository; it tests the source snapshot copied into its own writable layer.
 
@@ -101,6 +101,8 @@ For a quick focused check on a host with Node.js installed, run from the reposit
 ```sh
 node --test scripts/tests/test_rawrarr_age_setup.mjs
 ```
+
+Rawrarr's host-side Node tooling targets major version 26, declared in `.nvmrc`; select it with `nvm install`/`nvm use` when using nvm. This does not change the host's global default. The Mac mini fast-deploy workflow builds the Rust service image and does not run Node; its host-side web-export dependency preparation uses `npm ci --prefix rust-arr/web-export` with the committed lockfile.
 
 This command reads the current local source. The Playwright test has container-specific Chromium and module paths, so run it through the main container runner. If an older base lacks Chromium or Playwright, refresh it with `--rebuild-base`.
 

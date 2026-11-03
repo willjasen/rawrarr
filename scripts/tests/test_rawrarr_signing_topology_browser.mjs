@@ -214,6 +214,7 @@ test('Signing key topology fits desktop and mobile with long device labels', asy
     const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height } });
     await page.goto(`http://127.0.0.1:${server.address().port}/#fossils`);
     await page.waitForSelector('.signing-device-card');
+    await page.locator('#signing-topology-title').scrollIntoViewIfNeeded();
     const layout = await page.evaluate(() => ({
       width: document.documentElement.scrollWidth,
       viewport: window.innerWidth,
@@ -223,7 +224,10 @@ test('Signing key topology fits desktop and mobile with long device labels', asy
     }));
     assert.ok(layout.width <= layout.viewport, `${viewport.name} has no horizontal overflow`);
     assert.ok(layout.root.x >= 0 && layout.root.right <= layout.viewport, `${viewport.name} root card fits`);
-    assert.ok(layout.title.width > 0 && layout.title.bottom <= viewport.height, `${viewport.name} section title is visible`);
+    assert.ok(layout.title.width > 0 && layout.title.height > 0
+      && layout.title.x >= 0 && layout.title.right <= layout.viewport
+      && layout.title.y >= 0 && layout.title.bottom <= viewport.height,
+    `${viewport.name} section title is visible after scrolling`);
     assert.equal(layout.cards.length, 2);
     assert.ok(layout.cards.every(card => card.x >= 0 && card.right <= layout.viewport), `${viewport.name} device cards fit`);
     assert.match(await page.locator('.signing-device-card').first().innerText(), /root-authorized signing key/);
