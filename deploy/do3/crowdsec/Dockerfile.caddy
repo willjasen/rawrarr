@@ -7,5 +7,5 @@ RUN xcaddy build \
 FROM caddy:${CADDY_VERSION}-alpine
 USER root
 RUN mkdir -p /var/log/caddy \
-    && chown caddy:caddy /var/log/caddy
+    && chmod 0750 /var/log/caddy
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
