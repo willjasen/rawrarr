@@ -90,6 +90,34 @@ for (const [name, devices, expectedVisible] of [
   });
 }
 
+test('Overview omits node setup and keeps its remaining content within desktop and mobile viewports', async t => {
+  const server = await serveWorkspace([]);
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+
+  for (const viewport of [
+    { name: 'desktop', width: 1280, height: 800 },
+    { name: 'narrow mobile', width: 375, height: 812 },
+  ]) {
+    const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/#overview`);
+    await page.locator('#overview-view').waitFor({ state: 'visible' });
+
+    assert.equal(await page.getByRole('heading', { name: 'Set up another node' }).count(), 0, `${viewport.name}: node setup is not promoted on Overview`);
+    assert.equal(await page.getByRole('heading', { name: 'Shared folder' }).isVisible(), true, `${viewport.name}: overview content remains visible`);
+    assert.equal(await page.getByRole('heading', { name: 'Shared metadata' }).isVisible(), true, `${viewport.name}: overview content remains visible`);
+    const layout = await page.evaluate(() => ({
+      viewportWidth: window.innerWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      overview: document.querySelector('.overview-grid').getBoundingClientRect().toJSON(),
+    }));
+    assert.ok(layout.documentWidth <= layout.viewportWidth, `${viewport.name}: page should not overflow horizontally`);
+    assert.ok(layout.overview.x >= 0 && layout.overview.right <= layout.viewportWidth, `${viewport.name}: overview cards should fit the viewport`);
+    await page.close();
+  }
+});
+
 test('Fossils fits desktop and narrow mobile viewports with long labels and reachable actions', async t => {
   const devices = [
     { nodeId: 'device-alpha', role: 'metadata', online: true, relayAvailable: false, displayName: 'Brandon workstation with an exceptionally long display name' },
