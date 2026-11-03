@@ -9,7 +9,7 @@ const [auth, coordinator, migration, publicCompose, internalCompose, localCompos
   read('rust-arr/src/coordinator.rs'),
   read('rust-arr/migrations/0009_account_trials.sql'),
   read('docker-compose.coordinator.yml'),
-  read('docker-compose.internal-mini.yml'),
+  read('deploy/do3/docker-compose.internal-coordinator.yml'),
   read('docker-compose.yml'),
   read('rust-arr/src/coordinator_workspace.html'),
   read('rust-arr/src/coordinator-workspace.mjs'),

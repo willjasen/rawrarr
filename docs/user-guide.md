@@ -4,45 +4,47 @@
 
 This guide covers features available in the current Docker prototype. For completed and outstanding project work, see the [roadmap](../ROADMAP.md); for data and security constraints, see [technical status](technical-status.md).
 
-## Start Rawrarr locally (generic/legacy Compose example)
+## Internal coordinator and Mac subscribers
 
-Requirements: Docker Compose, a local PostgreSQL password file, and a browser with passkey support. OrbStack provides Docker on macOS.
+Requirements: Docker Compose and a browser with passkey support. OrbStack provides
+Docker on macOS. The internal coordinator lives on do3 and stays there; neither
+Mac needs a coordinator or a PostgreSQL deployment. Both Macs are fossil
+subscriber hosts, using their established host-local Compose definitions.
 
-> **Generic/legacy local setup:** The `rawrarr-local` examples in this guide describe an existing user-owned local Compose installation. They are not instructions for current internal Rawrarr deployments. Internal operators should use the current environment names and deployment guidance in [AGENTS.md](../AGENTS.md).
-
-For an existing user-owned local installation, reuse Compose project `rawrarr-local` and its protected password file. Do not generate a replacement password for its existing database. Before starting or rebuilding, inspect ownership of port 7297:
-
-```sh
-lsof -nP -iTCP:7297 -sTCP:LISTEN
-docker ps --filter publish=7297 --format 'table {{.Names}}\t{{.Ports}}'
-```
-
-If the port belongs to the existing `rawrarr-local` app, update that project. Resolve any other owner before proceeding; do not choose another port or remove volumes to work around a conflict. From the repository root, identify the Compose file set recorded by each running service before an update:
+Open `https://rawrarr.risk-mermaid.ts.net/` for the internal roarlay workspace.
+Before maintaining a subscriber, inspect its Compose project/file labels and use
+the recorded settings with the per-container deployment locks:
 
 ```sh
-export RAWARR_POSTGRES_PASSWORD_FILE="$HOME/Library/Application Support/rawrarr/orbstack-postgres-password"
-test -f "$RAWARR_POSTGRES_PASSWORD_FILE"
-docker inspect rawrarr-local-roarlay-1 --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}'
-docker inspect rawrarr-local-fossil-1 --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}'
+docker inspect rawrarr-node-internal-fossil-1 \
+  --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}'
+docker ps --filter label=com.docker.compose.project=rawrarr-node-internal \
+  --format 'table {{.Names}}\t{{.Status}}'
 ```
 
-Use the recorded files and project name when updating a service; the MacBook Tailscale overlay supplies the 7297 listener and shared network namespace. The base `docker-compose.yml` alone does not publish port 7297. Follow the [deployment guide](container-deployment.md) and the per-container rebuild locks in [project instructions](../AGENTS.md) before recreating a service. If the password file is missing, inspect the existing Compose secret mount to locate it without reading its contents. For a genuinely new installation, provision a protected random PostgreSQL password file outside the repository first.
+Preserve node identities, credentials, `/data`, and `/shared`. Do not substitute
+the generic root Compose templates for an existing internal deployment or
+replay old Mac coordinator setup commands. Generic self-hosting and standalone
+node examples remain in the [deployment guide](container-deployment.md);
+the [Compose inventory](compose-layout.md) distinguishes them from current
+internal deployment files.
 
-Open `https://rawrarr.risk-mermaid.ts.net/` for the roarlay workspace and its tailnet-origin passkey. In the current MacBook overlay, `127.0.0.1:7297` and `127.0.0.1:7298` both forward to roarlay for local diagnostics; the fossil service listens inside the shared Tailscale namespace on `127.0.0.1:8081`. The tailnet and `localhost` WebAuthn origins use separate credentials linked to the same account. Keep the origin and relying-party hostname aligned when configuring another hostname.
-
-With the password-file variable set, useful commands are:
-
-```sh
-docker compose -p rawrarr-local logs -f fossil
-docker compose -p rawrarr-local ps
-curl --fail http://127.0.0.1:7297/health
-```
-
-The `/health` route returns an HTML web-process status page with a 30-second refresh. On 7297 in the current MacBook overlay it identifies roarlay. HTTP 200 confirms that the web process responds; it does not verify PostgreSQL queries, Radarr, Syncthing, other nodes, or end-to-end readiness. Check the Compose container health and the relevant integration separately.
+HTTP 200 from `/health` confirms web-process liveness, not PostgreSQL queries,
+Arr integrations, synchronization, other nodes, or end-to-end readiness. The
+tailnet and localhost WebAuthn origins use separate credentials; retain the
+configured origin/RP and verify the relevant service and integration separately.
 
 The container logs request method, path, status, and duration by default. Request paths are logged without query parameters, and headers and bodies are never logged. Set `RAWARR_QUIET_LOGS=true` in the Compose environment to suppress routine request lines; server errors remain visible. Successful library scans also log numeric summary counts.
 
-Compose stores the shared Rawrarr data in `~/Library/Application Support/rawrarr/shared-data` by default, outside the source repository. Open it in Finder with:
+## Generic/legacy local Compose data
+
+The `rawrarr-local` examples below describe an existing user-owned local Compose
+installation, not the current internal deployments. Internal operators should
+use the environment-specific guidance in [AGENTS.md](../AGENTS.md). Preserve an
+existing installation's project and protected PostgreSQL password file; do not
+generate a replacement password for its database.
+
+Generic local Compose stores the shared Rawrarr data in `~/Library/Application Support/rawrarr/shared-data` by default, outside the source repository. Open it in Finder with:
 
 ```sh
 open "$HOME/Library/Application Support/rawrarr/shared-data"

@@ -1,5 +1,7 @@
 # Isolated local coordinator, Headscale and two metadata subscribers.
 # Secret files are generated under ~/Library/Application Support/rawrarr/orbstack-test/.
+name: rawrarr-test-environment
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -48,7 +50,7 @@ services:
   arr-proxy:
     image: caddy:2-alpine
     volumes:
-      - ./arr-orbstack-test.Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./arr.Caddyfile:/etc/caddy/Caddyfile:ro
       - ${HOME}/Library/Application Support/rawrarr/orbstack-test/arr-tls/arr-test.crt:/certs/arr-test.crt:ro
       - ${HOME}/Library/Application Support/rawrarr/orbstack-test/arr-tls/arr-test.key:/certs/arr-test.key:ro
     networks:
@@ -66,7 +68,7 @@ services:
     image: headscale/headscale:0.29.5
     command: serve
     volumes:
-      - ./headscale-orbstack-test:/etc/headscale:ro
+      - ./headscale:/etc/headscale:ro
       - orbstack-test-headscale:/var/lib/headscale
     secrets:
       - headscale_tls_cert
@@ -93,7 +95,7 @@ services:
 
   roarlay:
     build:
-      context: ./rust-arr
+      context: ../../rust-arr
     image: rawrarr:orbstack-test
     environment:
       RAWARR_ROLE: coordinator

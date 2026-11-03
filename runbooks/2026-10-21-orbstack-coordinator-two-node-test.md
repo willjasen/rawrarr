@@ -1,5 +1,11 @@
 # OrbStack coordinator and two-node Headscale test
 
+> Historical record. Since 2026-11-03 the definition and static fixtures live
+> under `deploy/testing/`, and the current project is `rawrarr-test-environment`.
+> Use [the current testing guide](../TESTING.md#isolated-coordinator-and-two-fossil-environment)
+> and [the cleanup/adoption record](2026-11-03-compose-inventory-test-layout.md)
+> instead of replaying the old commands below.
+
 ## Objective and boundaries
 
 Run an isolated Rawrarr coordinator, PostgreSQL, Headscale, and two metadata subscribers in OrbStack. Verify coordinator/node health, node heartbeats, Headscale enrollment, and bidirectional Tailscale peer pings. This test does not use production `do2`, Swarmsail's active projects, or the existing Rawrarr Tailscale client identities.
@@ -16,8 +22,8 @@ The main checkout contained user changes at task start. They were not reverted o
 
 ## Configuration and operation
 
-- [`docker-compose.orbstack-test.yml`](../docker-compose.orbstack-test.yml) defines PostgreSQL, coordinator, Headscale, and two metadata subscribers. Only the coordinator binds a host port, on `127.0.0.1:17397`.
-- [`headscale-orbstack-test/config.yaml`](../headscale-orbstack-test/config.yaml) gives the test its own `100.108.0.0/24` allocation range, SQLite database, and MagicDNS suffix.
+- [`deploy/testing/compose.yml`](../deploy/testing/compose.yml) defines PostgreSQL, coordinator, Headscale, and two metadata subscribers. Only the coordinator binds a host port, on `127.0.0.1:17397`.
+- [`deploy/testing/headscale/config.yaml`](../deploy/testing/headscale/config.yaml) gives the test its own `100.108.0.0/24` allocation range, SQLite database, and MagicDNS suffix.
 - Host-only files contain random PostgreSQL and Rawrarr node credentials, a synthetic approved-node registry, one-use Headscale preauth keys, and the self-signed TLS certificate/key. Never copy them into Git or another environment.
 - Bring the existing stack back up with:
 

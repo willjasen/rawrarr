@@ -1,5 +1,12 @@
 # Headscale container client staging
 
+> Historical experiment, not a current deployment procedure. The operator
+> confirmed both staged clients obsolete on 2026-11-03. Their Compose definitions
+> and the MacBook coordinator overlay are retired. The internal coordinator stays
+> on do3; do not replay the old enrollment or Mac coordinator-route instructions.
+> No live sidecar, state, or enrollment was removed. See the
+> [retirement record](2026-11-03-retire-staged-headscale-compose.md).
+
 ## Objective and initial state
 
 Connect Docker Tailscale clients on the MacBook and Mac mini to the Swarmsail Headscale instance at `https://rawrarr.willjasen.net`. Do not alter native Tailscale on either Mac. Use `https://swarmsail.willjasen.net` for Caddy-routed coordinator calls; do not use Tailscale Serve with Headscale.

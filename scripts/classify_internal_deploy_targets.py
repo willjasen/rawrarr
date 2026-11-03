@@ -24,7 +24,6 @@ COORDINATOR_FILES = {
     # UI release updates run only in the coordinator container, gated by
     # RAWARR_ROLE=coordinator in rust-arr/container-entrypoint.sh.
     "rust-arr/update_ui_bundle.py",
-    "docker-compose.internal-mini.yml",
     "docker-compose.coordinator.yml",
 }
 
@@ -47,8 +46,6 @@ NODE_FILES = {
     "docker-compose.syncthing.yml",
     "docker-compose.syncthing-media.yml",
     "docker-compose.syncthing-tailnet.yml",
-    "docker-compose.tailscale-macbook.yml",
-    "docker-compose.headscale-macbook.yml",
 }
 
 COORDINATOR_PREFIXES = ("rust-arr/migrations/",)
@@ -66,12 +63,21 @@ BOTH_FILES = {
 }
 
 NON_RUNTIME_PREFIXES = (
+    "deploy/testing/",
     "docs/",
     "runbooks/",
     "scripts/",
     ".github/",
 )
-NON_RUNTIME_FILES = {"AGENTS.md", "README.md", "ROADMAP.md", "TESTING.md"}
+NON_RUNTIME_FILES = {
+    "AGENTS.md", "README.md", "ROADMAP.md", "TESTING.md",
+    "docker-compose.orbstack-test.yml",
+    "docker-compose.internal-mini.yml",
+    "docker-compose.tailscale-serve.yml",
+    "docker-compose.headscale-macbook.yml",
+    "docker-compose.headscale-mini.yml",
+    "docker-compose.tailscale-macbook.yml",
+}
 
 
 def classify_paths(paths: list[str]) -> dict[str, object]:

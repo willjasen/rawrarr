@@ -40,6 +40,27 @@ class CoordinatorAutoUpdaterTests(unittest.TestCase):
             ".github/workflows/tests.yml", "website/styles.css",
         ]))
 
+    def test_test_stack_relocation_does_not_rebuild_coordinators(self):
+        for path in [
+            "docker-compose.orbstack-test.yml",
+            "deploy/testing/compose.yml",
+            "deploy/testing/arr.Caddyfile",
+            "deploy/testing/headscale/config.yaml",
+        ]:
+            with self.subTest(path=path):
+                self.assertFalse(UPDATER.affects_coordinator([path]))
+
+    def test_retired_mac_coordinator_files_do_not_rebuild_coordinators(self):
+        for path in ("docker-compose.internal-mini.yml", "docker-compose.tailscale-serve.yml", "docker-compose.tailscale-macbook.yml"):
+            with self.subTest(path=path):
+                self.assertFalse(UPDATER.affects_coordinator([path]))
+
+    def test_retired_staged_clients_do_not_rebuild_coordinators(self):
+        for path in ("docker-compose.headscale-macbook.yml", "docker-compose.headscale-mini.yml"):
+            with self.subTest(path=path):
+                self.assertFalse(UPDATER.affects_coordinator([path]))
+                self.assertTrue(UPDATER.affects_coordinator([path, "rust-arr/src/coordinator.rs"]))
+
     def test_override_pins_local_image_and_records_deployment_time(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "deployment-info.override.yml"

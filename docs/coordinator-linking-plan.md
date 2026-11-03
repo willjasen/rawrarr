@@ -45,7 +45,12 @@ The fixed `/devices/link` path and displayed code are the selected interaction. 
 
 The worker initiates HTTPS to the coordinator through Tailscale. Tailscale controls network reachability; Rawrarr enrollment controls application permissions. The code flow cannot bootstrap its own missing Tailscale membership or DNS reachability: establish those first, then link Rawrarr.
 
-Prefer a stable named Tailscale Service for the coordinator, with only the MacBook coordinator as its initial backend. A device-specific Serve URL can be a first verification step. Storage and shard nodes must not advertise the coordinator UI as equivalent backends. Preserve the local app listener at `127.0.0.1:7297`; a host-level Serve proxy can target it. A sidecar must reach the app through an explicitly verified Docker network, not assume its own localhost is the Mac host.
+The internal coordinator stays on do3 at `https://rawrarr.risk-mermaid.ts.net/`,
+with its dedicated Tailscale sidecar forwarding to coordinator loopback. Neither
+Mac is a coordinator backend. Subscribers must not advertise the coordinator UI
+as an interchangeable backend or assume shared ciphertext provides failover.
+Keep subscriber transport distinct from coordinator ingress and verify routes
+against the actual host's namespace, not the Mac host's localhost.
 
 The existing localhost passkey RP/origin is not automatically usable on a Tailscale HTTPS hostname. Before deployment, implement and test a controlled origin/RP enrollment or migration path while retaining working local access. Never broaden accepted origins arbitrarily or assume that TLS alone fixes WebAuthn. Do not publish the link as usable before login works at that URL.
 

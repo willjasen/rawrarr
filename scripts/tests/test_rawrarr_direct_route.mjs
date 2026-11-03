@@ -11,7 +11,7 @@ const [coordinator, main, nodeAuth, workspace, script, routes, compose, storageC
   read('rust-arr/src/coordinator_workspace.html'),
   read('rust-arr/src/coordinator-workspace.mjs'),
   read('rust-arr/src/coordinator-device-routes.mjs'),
-  read('docker-compose.tailscale-macbook.yml'),
+  read('deploy/do3/docker-compose.internal-coordinator.yml'),
   read('docker-compose.storage.yml'),
 ]);
 
@@ -69,8 +69,7 @@ test('workspace automatically selects direct Tailscale access, visibly reports i
   assert.match(script, /const relayRoute = \{ nodeId: node\.nodeId, base: `\/nodes\/\$\{encodeURIComponent\(node\.nodeId\)\}`, direct: false \}/);
   assert.match(script, /Direct Tailscale route active/);
   assert.match(compose, /RAWARR_NODE_DIRECT_TARGETS/);
-  assert.match(compose, /RUST_ARR_DIRECT_LISTEN_ADDR: 127\.0\.0\.1:8082/);
-  assert.match(compose, /mac-mini-storage.*rawrarr-mini\.risk-mermaid\.ts\.net/);
+  assert.match(compose, /device-8de78fadda6400a45ca1a30b.*rawrarr-mac-mini\.risk-mermaid\.ts\.net\/direct-api\//);
   assert.match(storageCompose, /RUST_ARR_DIRECT_LISTEN_ADDR: 127\.0\.0\.1:8083/);
   assert.match(storageCompose, /RAWARR_DIRECT_ALLOWED_ORIGIN: https:\/\/rawrarr\.risk-mermaid\.ts\.net/);
 });

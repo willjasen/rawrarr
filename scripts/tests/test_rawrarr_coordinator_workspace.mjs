@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 const root = new URL('../../', import.meta.url);
 const read = path => readFile(new URL(path, root), 'utf8');
-const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, metadataUi, compose, metadataExport, mainRs, tailscaleCompose, boneyardCompose, coordinatorAvatar, internalMiniCompose] = await Promise.all([
+const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, metadataUi, compose, metadataExport, mainRs, boneyardCompose, coordinatorAvatar, internalDo3Compose] = await Promise.all([
   read('rust-arr/src/coordinator.rs'),
   read('rust-arr/src/auth.rs'),
   read('rust-arr/src/node_auth.rs'),
@@ -15,10 +15,9 @@ const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, me
   read('docker-compose.yml'),
   read('rust-arr/web-export/metadata-export.js'),
   read('rust-arr/src/main.rs'),
-  read('docker-compose.tailscale-macbook.yml'),
   read('docker-compose.storage.yml'),
   read('rust-arr/src/coordinator_avatar.rs'),
-  read('docker-compose.internal-mini.yml'),
+  read('deploy/do3/docker-compose.internal-coordinator.yml'),
 ]);
 
 test('About explains all four identity domains and marks planned capabilities clearly', () => {
@@ -420,13 +419,13 @@ test('node list and relay are restricted to the signed-in owner and trusted conf
 });
 
 test('internal coordinator maps current fossil IDs to their relay and direct Tailscale routes', () => {
-  assert.match(internalMiniCompose, /"device-398f0ce833b6d7e2b9e8f760":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/"/);
-  assert.match(internalMiniCompose, /"device-398f0ce833b6d7e2b9e8f760":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/direct-api\/"/);
-  assert.match(internalMiniCompose, /"device-d3ee53b1d561fb349955b199":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/"/);
-  assert.match(internalMiniCompose, /"device-d3ee53b1d561fb349955b199":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/direct-api\/"/);
-  assert.match(internalMiniCompose, /"device-8de78fadda6400a45ca1a30b":"https:\/\/rawrarr-mac-mini\.risk-mermaid\.ts\.net\/"/);
-  assert.match(internalMiniCompose, /"device-8de78fadda6400a45ca1a30b":"https:\/\/rawrarr-mac-mini\.risk-mermaid\.ts\.net\/direct-api\/"/);
-  assert.match(internalMiniCompose, /"device-9288eb3b039608d16a9102a5"/);
+  assert.match(internalDo3Compose, /"device-398f0ce833b6d7e2b9e8f760":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/"/);
+  assert.match(internalDo3Compose, /"device-398f0ce833b6d7e2b9e8f760":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/direct-api\/"/);
+  assert.match(internalDo3Compose, /"device-d3ee53b1d561fb349955b199":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/"/);
+  assert.match(internalDo3Compose, /"device-d3ee53b1d561fb349955b199":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/direct-api\/"/);
+  assert.match(internalDo3Compose, /"device-8de78fadda6400a45ca1a30b":"https:\/\/rawrarr-mac-mini\.risk-mermaid\.ts\.net\/"/);
+  assert.match(internalDo3Compose, /"device-8de78fadda6400a45ca1a30b":"https:\/\/rawrarr-mac-mini\.risk-mermaid\.ts\.net\/direct-api\/"/);
+  assert.match(internalDo3Compose, /"device-9288eb3b039608d16a9102a5"/);
 });
 
 test('coordinator relay can reach tailnet nodes through its Tailscale SOCKS5 sidecar', () => {
@@ -446,7 +445,7 @@ test('coordinator workspace selects nodes, reads Radarr directly, and keeps conf
   assert.match(compose, /  roarlay:\n/);
   assert.doesNotMatch(compose, /  coordinator:\n/);
   assert.match(boneyardCompose, /  boneyard:\n/);
-  assert.match(tailscaleCompose, /aliases:\n          - coordinator/);
+  assert.match(internalDo3Compose, /network_mode: service:tailscale/);
   assert.match(workspaceScript, /ageIdentityInMemory = identity/);
   assert.match(workspaceScript, /arrDirectRequest\('\/radarr\/live-library'\)/);
   assert.doesNotMatch(workspaceScript, /window\.rawrarrMiniExport\.loadRadarrLibrary/);

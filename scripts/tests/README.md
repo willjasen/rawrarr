@@ -31,6 +31,22 @@
   disposable browser tier's isolation, dispatch and cleanup paths. Run with
   `python3 -m unittest discover -s scripts/tests -p test_browser_enrollment_docker.py`.
 
+- `test_compose_layout.py` — checks root Compose inventory coverage, the absolute
+  `deploy/testing/compose.yml` integration entry point, explicit test project,
+  rebased build context, and colocated static fixtures. Run
+  `python3 -m unittest discover -s scripts/tests -p test_compose_layout.py`.
+- `test_rawrarr_test_runner_fixtures.py` — checks that regression snapshots copy
+  `deploy/`, including the relocated environment definition, as well as root
+  build-script fixtures.
+- Compose relocation checks in `test_internal_deploy_targets.py` and
+  `test_do3_coordinator_auto_updater.py` ensure the old/new test paths do not
+  select live deployments or coordinator rebuilds. They also cover retired
+  Mini coordinator/empty Serve filenames; `test_compose_layout.py` guards their
+  retirement while retaining the supported generic and do3 definitions.
+- The same Python checks guard retirement of both staged Headscale clients and
+  the MacBook coordinator overlay while preserving subscriber/test inputs.
+  Mixed-path checks ensure real runtime updates remain selected.
+
 - `test_rawrarr_movie_artwork_stability.mjs` — Chromium checks loaded and in-flight movie posters survive cached-to-live library updates and filtering without duplicate requests, while metadata, explicit artwork changes, additions, and removals still update; verifies the shared Movies/TV poster grid shows six desktop columns and two mobile columns without horizontal overflow. Run through `python3 scripts/tests/run_rawrarr_tests_in_docker.py`.
 
 - `test_rawrarr_crypto_ui.mjs` — Playwright and source-backed regressions for signed-out donations, subscription page and workspace navigation at 1280×800 and 375×812, donation/entitlement separation, Ethereum mainnet gating, manual subscription verification flow, preflight rejection for unsigned or mismatched wallets, ENS challenge signing and selected-account rejection, one-fossil tier enforcement across enrollment/approval/proxy access, account tier display, mocked-RPC finality/reorg/failed-transfer verification, and server-side finalized-transfer requirements. Run with `node --test scripts/tests/test_rawrarr_crypto_ui.mjs` in the isolated Playwright test image.
@@ -92,7 +108,7 @@
 - `test_rawrarr_device_routes.mjs` — checks the shared all-device route-status helper for Direct, Relay, and Offline states, Redis cache reachability in measured node latency, cached probes, and explicit refresh. Run with `node --test scripts/tests/test_rawrarr_device_routes.mjs`.
 - `test_rawrarr_device_routes.mjs` — checks the shared all-device route-status helper for Direct, Relay, and Offline states, Redis cache reachability in measured node latency, probe caching, and explicit refresh. Run with `node --test scripts/tests/test_rawrarr_device_routes.mjs`.
 
-- `test_rawrarr_node_network_isolation.mjs` — checks subscriber service blocks in base, metadata, storage, and the two-node OrbStack test Compose have no host-published ports; metadata shares its Tailscale namespace with loopback-only listeners; and both metadata Compose variants use Valkey with bounded, non-persistent cache settings, health checks, and the opt-in default disabled. Requires Node.js; run `node --test scripts/tests/test_rawrarr_node_network_isolation.mjs`.
+- `test_rawrarr_node_network_isolation.mjs` — checks subscriber service blocks in base, metadata, storage, and the two-node OrbStack test Compose have no host-published ports; test subscribers bind loopback in their own Tailscale namespaces; standalone metadata uses bounded, disposable, opt-in Valkey. Run through `python3 scripts/tests/run_rawrarr_tests_in_docker.py`.
 
 - `test_rawrarr_mini_export.mjs` — headless Chromium mini-export test using real post-quantum ciphertext from the `age` CLI; verifies browser decryption through a user-wrapped group envelope with age-keygen comment lines, published-recipient matching, device provisioning, HMAC filename matching, local ZIP contents, wrong-key handling, and that the private ID is never sent. Run in the isolated Playwright test image.
 
