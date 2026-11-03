@@ -21,6 +21,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     && cargo build --release --locked --target "$rust_target"
 COPY src ./src
 COPY migrations ./migrations
+RUN find src migrations -type f -exec touch {} +
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git/db,sharing=locked \
     case "$TARGETARCH" in \
