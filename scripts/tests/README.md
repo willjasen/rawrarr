@@ -53,6 +53,7 @@
 - `test_rawrarr_arr_summary.mjs` — checks that Radarr and Sonarr use the shared configurable four-card summary renderer. Run with `node --test scripts/tests/test_rawrarr_arr_summary.mjs`.
 
 - `test_rawrarr_metadata_sizes.mjs` — checks the metadata API and Movies/TV cards report separate media-subtree sizes. Run with `node --test scripts/tests/test_rawrarr_metadata_sizes.mjs`.
+- `test_rawrarr_metadata_storage.rs` — verifies repeatable fresh-volume metadata initialization, encrypted writes through the container alias, preservation of existing ciphertext, invalid-directory rejection, and exact nested file-size/error reporting. Included in the isolated Rust suite through `secure_config::metadata_storage_tests`.
 
 - `test_rawrarr_sonarr_completion_ui.mjs` — confirms Movies and TV use the shared provider-aware scrape status/progress updater, and that the TV view hides scrape completion and successful-load messages after the Sonarr artwork cache is complete while retaining errors. Run with `node --test scripts/tests/test_rawrarr_sonarr_completion_ui.mjs`.
 
