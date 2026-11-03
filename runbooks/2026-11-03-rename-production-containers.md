@@ -26,4 +26,25 @@ If service health or routes fail, stop further recreations and restore the saved
 
 ## Execution record
 
-To be completed after deployment from the merged, published `main` revision with the source SHA/archive digest, affected services, preserved image/volume IDs, verification results, and rollback state.
+The naming overlay was installed from published `main` revision `5624a8ef1afc325df88c36aa37119485d94608e2`; the archive SHA-256 was `c5812b432d4bdcb0edcca1830ca38d213d35e85ad4c4028581388af494c661da`. All twelve services retained the `rawrarr-roarlay-prod` project and their service labels:
+
+| Service | Final container | State after rename | Image ID preserved through rename |
+|---|---|---|---|
+| `postgres` | `rawrarr-prod-postgres` | Running, healthy | `sha256:ab20e934b27ba3ff927c1b4c9ff8cf6c32f315f743efe68dd3441182a87fb085` |
+| `umami-postgres` | `rawrarr-prod-umami-postgres` | Running, healthy | `sha256:ab20e934b27ba3ff927c1b4c9ff8cf6c32f315f743efe68dd3441182a87fb085` |
+| `caddy` | `rawrarr-prod-caddy` | Running, healthy | `sha256:3067cc4e02c091399edbd5d65f85a3ff4d511574aecadb47f280c3761e68852e` |
+| `cloudflared` | `rawrarr-prod-cloudflared` | Running | `sha256:1475624a6d235381d8886c0e0a7ca8694d01ae535370047a09c89787380e9d6c` |
+| `swarmsail` | `rawrarr-prod-swarmsail` | Running | `sha256:107ead296b9b5463ab6468123b57f2ea9f54383272ae8d50c647b509a3e48713` |
+| `crowdsec` | `rawrarr-prod-crowdsec` | Running, healthy | `sha256:5b37d0928f5b8600d2a09b1414471f77cbf2615be5e403311e66eb188852b018` |
+| `umami` | `rawrarr-prod-umami` | Running | `sha256:341cf1f89cdf5326193015875c287bdb7a4d8b036156c3349268a86921f0206b` |
+| `stripe-service` | `rawrarr-prod-stripe-service` | Running | `sha256:7f6539604372189cdfa85e6b546a57db53fbf285c0ba11b285353607ece41c49` |
+| `headscale` | `rawrarr-prod-headscale` | Running | `sha256:46a8a7728a6fa2774e093313fa587922f68e1b56dc82f8276117050f27661939` |
+| `tailscale` | `rawrarr-prod-tailscale` | Running | `sha256:9cb91ed119a2c502813cfef5a14430944163dfb2b290ccfc69d671d1469ec09d` |
+| `roarlay` | `rawrarr-prod-roarlay` | Running, healthy | `sha256:e170627ecedd5b7cf321fc2318a134cf7373d167591227ab007160aab600bb66` |
+| `subscriber-provisioner` | `rawrarr-prod-subscriber-provisioner` | Created; remains stopped | `sha256:c4947d56b51b3d36a11999526b01a12cb25641d19b95566204a39fe7ec9f77de` |
+
+Before/after service records confirmed unchanged mounts, volumes, and network attachments for every rename. Preserved persistent volumes include the production PostgreSQL data, Umami PostgreSQL data, CrowdSec configuration/data, Caddy access logs, Tailscale state, and Roarlay UI. The saved source snapshot, live Compose files, pre-rename metadata, and per-service deployment logs are under `/opt/rawrarr-roarlay-prod/builds/production-container-rename-5624a8ef/rollback/`. The empty Compose-created `rawrarr-roarlay-prod_default` network was rechecked with zero endpoints and removed.
+
+PostgreSQL readiness and `SELECT 1` passed; Umami PostgreSQL readiness passed; Caddy configuration validation passed; CrowdSec and Roarlay reported healthy. Production Tailscale reported `Running`, and Roarlay's network namespace matched the new Tailscale container. Production local `/health` and the internal coordinator HTTPS health route passed. The public `https://roarlay.rawrarr.net/health` edge continued returning the known baseline HTTP 403. No deployment locks remain.
+
+After the renames, the authorized coordinator timer run exposed a missing Compose env-file argument. Issue [#407](https://github.com/willjasen/rawrarr/issues/407) fixed this in [PR #408](https://github.com/willjasen/rawrarr/pull/408). The updater was installed on do3 from published revision `c6698d0ee0e81c4d63893cf237e02a6d9624a992` (archive SHA-256 `7cd7c3c7b1570c22b9c55953675e93dbe8e5f218b3d47d9b1e1a9574933c0c59`). Its timer completed successfully at 2026-11-03 11:13:49 UTC and is enabled and active. Both internal and production coordinators now run that published revision from image `rawrarr:c6698d0ee0e81c4d63893cf237e02a6d9624a992-amd64` (`sha256:edf81411d1d4b4f6df838d5496af4c8e7e1d71b1aad1cd0fe0e7b5808f9fe32a`) and are healthy. This additional app rollout was explicitly approved; it preserved existing mounts and persistent data. The previous updater script and coordinator rollback images remain available.
