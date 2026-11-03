@@ -11,7 +11,7 @@ const pageHtml = workspaceHtml.replace(
   '',
 );
 
-test('Settings separates profile and Ethereum/ENS cards responsively', async () => {
+test('Settings places profile, Ethereum/ENS, and age-ID cards responsively', async () => {
   const server = createServer((_request, response) => {
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
     response.end(pageHtml);
@@ -28,6 +28,7 @@ test('Settings separates profile and Ethereum/ENS cards responsively', async () 
 
       const profile = page.locator('.profile-card');
       const crypto = page.locator('.settings-crypto-card');
+      const age = page.locator('.age-storage-card');
       assert.equal(await profile.locator('#profile-name').count(), 1);
       assert.equal(await profile.locator('#trial-status').count(), 1);
       assert.equal(await profile.locator('#crypto-access-status').count(), 0);
@@ -38,6 +39,10 @@ test('Settings separates profile and Ethereum/ENS cards responsively', async () 
       assert.equal(await crypto.locator('#crypto-ens-name').inputValue(), '');
       assert.equal(await crypto.locator('#crypto-ens-name').getAttribute('placeholder'), null);
       assert.equal(await crypto.getByRole('link', { name: 'Manage subscription' }).getAttribute('href'), '/billing');
+      assert.equal(await age.getByRole('heading', { name: 'Age private ID in this browser' }).count(), 1);
+      assert.equal(await age.locator('#age-storage-form').count(), 1);
+      assert.equal(await age.locator('#settings-age-id').count(), 1);
+      assert.equal(await age.locator('#save-age-id').count(), 1);
 
       const geometry = await page.evaluate(() => {
         const bounds = selector => {
@@ -49,8 +54,11 @@ test('Settings separates profile and Ethereum/ENS cards responsively', async () 
           documentWidth: document.documentElement.scrollWidth,
           profile: bounds('.profile-card'),
           crypto: bounds('.settings-crypto-card'),
+          age: bounds('.age-storage-card'),
           input: bounds('#crypto-ens-name'),
           button: bounds('#crypto-link-wallet'),
+          ageInput: bounds('#settings-age-id'),
+          ageButton: bounds('#save-age-id'),
         };
       });
       assert.ok(geometry.documentWidth <= geometry.width, `horizontal overflow at ${viewport.width}px`);
@@ -58,13 +66,18 @@ test('Settings separates profile and Ethereum/ENS cards responsively', async () 
         crypto: geometry.crypto,
         input: geometry.input,
         button: geometry.button,
+        age: geometry.age,
+        ageInput: geometry.ageInput,
+        ageButton: geometry.ageButton,
       })) {
         assert.ok(bounds.x >= 0 && bounds.right <= geometry.width, `${name} exceeds the viewport at ${viewport.width}px`);
       }
       if (viewport.width > 900) {
         assert.ok(Math.abs(geometry.profile.y - geometry.crypto.y) < 1, 'profile and ETH/ENS cards should share a desktop row');
+        assert.ok(Math.abs(geometry.profile.y - geometry.age.y) < 1, 'profile and age-ID cards should share a desktop row');
       } else {
         assert.ok(geometry.crypto.y > geometry.profile.y, 'ETH/ENS card should stack below the profile on mobile');
+        assert.ok(geometry.age.y > geometry.crypto.y, 'age-ID card should stack below ETH/ENS on mobile');
       }
       await page.close();
     }
