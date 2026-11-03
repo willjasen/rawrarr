@@ -460,6 +460,9 @@ const canOpenNode = node => node.relayAvailable || Boolean(node.directUrl);
 const selectedNodeStorageKey = 'rawrarr.coordinator.selected-node';
 const initialUrl = new URL(window.location.href);
 const requestedNode = initialUrl.searchParams.get('node') || sessionStorage.getItem(selectedNodeStorageKey);
+// Restore the previous node selection immediately so its browser-cached movie
+// list can render before node health and route checks finish.
+selectedNode = requestedNode;
 if (initialUrl.searchParams.has('node')) {
   initialUrl.searchParams.delete('node');
   window.history.replaceState(null, '', initialUrl);
@@ -525,6 +528,10 @@ metadataExportForm?.addEventListener('submit', async event => {
 let ageIdentityInMemory = rememberedAgeIdentity;
 let ageIdentityStored = Boolean(rememberedAgeIdentity);
 ageInput.value = '';
+if (location.hash === '#movies' && ageIdentityInMemory && selectedNode && readLibraryTextCache(selectedNode, 'movies')) {
+  contentPanel.hidden = false;
+  renderCachedMovies(selectedNode);
+}
 
 function updateAgeIdControls() {
   const hasIdentity = Boolean(ageIdentityInMemory);
@@ -2401,6 +2408,7 @@ const coordinatorAvailability = createCoordinatorAvailabilityMonitor({
 coordinatorAvailability.start();
 
 await loadNodes();
+if (location.hash === '#movies' && ageIdentityInMemory && selectedNodeDetails?.role === 'metadata') void unlockMetadata();
 await loadPending();
 initialWorkspaceLoadFinished = true;
 if (location.hash === '#configuration') void loadClusterConfiguration();
