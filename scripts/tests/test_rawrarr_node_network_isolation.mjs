@@ -11,7 +11,7 @@ const [base, metadata, storage, macbookTailscale, miniRelays, proxyConfig, orbst
   read('docker-compose.tailscale-macbook.yml'),
   read('docker-compose.mini-relays.yml'),
   read('storage-proxy.Caddyfile'),
-  read('docker-compose.orbstack-test.yml'),
+  read('deploy/testing/compose.yml'),
 ]);
 
 function serviceBlock(compose, service) {

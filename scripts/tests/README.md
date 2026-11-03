@@ -31,6 +31,17 @@
   disposable browser tier's isolation, dispatch and cleanup paths. Run with
   `python3 -m unittest discover -s scripts/tests -p test_browser_enrollment_docker.py`.
 
+- `test_compose_layout.py` — checks root Compose inventory coverage, the absolute
+  `deploy/testing/compose.yml` integration entry point, explicit test project,
+  rebased build context, and colocated static fixtures. Run
+  `python3 -m unittest discover -s scripts/tests -p test_compose_layout.py`.
+- `test_rawrarr_test_runner_fixtures.py` — checks that regression snapshots copy
+  `deploy/`, including the relocated environment definition, as well as root
+  build-script fixtures.
+- Compose relocation checks in `test_internal_deploy_targets.py` and
+  `test_do3_coordinator_auto_updater.py` ensure the old/new test paths do not
+  select live deployments or coordinator rebuilds.
+
 - `test_rawrarr_movie_artwork_stability.mjs` — Chromium checks loaded and in-flight movie posters survive cached-to-live library updates and filtering without duplicate requests, while metadata, explicit artwork changes, additions, and removals still update; verifies the shared Movies/TV poster grid shows six desktop columns and two mobile columns without horizontal overflow. Run through `python3 scripts/tests/run_rawrarr_tests_in_docker.py`.
 
 - `test_rawrarr_crypto_ui.mjs` — Playwright and source-backed regressions for signed-out donations, subscription page and workspace navigation at 1280×800 and 375×812, donation/entitlement separation, Ethereum mainnet gating, manual subscription verification flow, preflight rejection for unsigned or mismatched wallets, ENS challenge signing and selected-account rejection, one-fossil tier enforcement across enrollment/approval/proxy access, account tier display, mocked-RPC finality/reorg/failed-transfer verification, and server-side finalized-transfer requirements. Run with `node --test scripts/tests/test_rawrarr_crypto_ui.mjs` in the isolated Playwright test image.

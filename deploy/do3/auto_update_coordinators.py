@@ -50,6 +50,7 @@ NON_RUNTIME_FILES = {
     "README.md",
     "ROADMAP.md",
     "TESTING.md",
+    "docker-compose.orbstack-test.yml",
     "deploy/do3/docker-compose.internal-coordinator.yml",
     "deploy/do3/docker-compose.analytics-dashboard-internal.yml",
     "deploy/do3/docker-compose.production-container-names.yml",

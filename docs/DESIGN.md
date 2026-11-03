@@ -14,6 +14,16 @@ This is the living product-design guide for how Rawrarr should behave and feel t
 - **Design for “eventually.”** Distinguish app configuration data from app metadata. Radarr settings (configuration data) follow the authenticated RPC/Merkle work; age-encrypted app metadata such as movie records and artwork lives under `/shared/in/metadata` and replicates with Syncthing. Current code copies missing legacy metadata files from `/shared/metadata` on vault unlock without deleting or overwriting. `/shared/out` is for larger content deliberately published to peers, such as selected media collections. Metadata should converge when approved peers reconnect; databases and other node-local state remain local unless explicitly designed otherwise. Sharing media requires deliberate owner approval; Syncthing transport does not encrypt files at rest.
 - **Support sharing beyond media.** Treat device-to-device file sharing as a core direction for Rawrarr, following the broader Synkpieces idea. Users should eventually be able to share ordinary files and folders; media automation is the first focused use case, not a required data type.
 
+### Deployment definition organization
+
+Keep generated subscriber installations, operator deployments, and isolated tests
+distinct. Compose cleanup proceeds in caller-traced groups, preserving explicit
+project/resource names and data-domain boundaries rather than hiding incompatible
+topologies behind one universal stack. The first implemented group lives under
+`deploy/testing/`; role-base consolidation remains planned under
+[#154](https://github.com/willjasen/rawrarr/issues/154). See the
+[Compose inventory and adoption guidance](compose-layout.md).
+
 ## Visual identity
 
 Rawrarr should feel approachable and distinctive without making the interface look like a toy. Use a restrained dark or light surface system, readable typography, clear section hierarchy, and green as the primary brand accent. Reserve bright colors for status, identity illustrations, and meaningful actions.

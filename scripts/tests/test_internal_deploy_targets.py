@@ -39,6 +39,17 @@ class InternalDeployTargetTests(unittest.TestCase):
         result = classify_paths(["rust-arr/src/coordinator.rs", "rust-arr/src/library.rs"])
         self.assertEqual(result["targets"], ["coordinator", "nodes"])
 
+    def test_test_stack_relocation_does_not_trigger_live_deploys(self):
+        result = classify_paths([
+            "docker-compose.orbstack-test.yml",
+            "arr-orbstack-test.Caddyfile",
+            "headscale-orbstack-test/config.yaml",
+            "deploy/testing/compose.yml",
+            "deploy/testing/arr.Caddyfile",
+            "deploy/testing/headscale/config.yaml",
+        ])
+        self.assertEqual(result["targets"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

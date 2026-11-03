@@ -66,12 +66,16 @@ BOTH_FILES = {
 }
 
 NON_RUNTIME_PREFIXES = (
+    "deploy/testing/",
     "docs/",
     "runbooks/",
     "scripts/",
     ".github/",
 )
-NON_RUNTIME_FILES = {"AGENTS.md", "README.md", "ROADMAP.md", "TESTING.md"}
+NON_RUNTIME_FILES = {
+    "AGENTS.md", "README.md", "ROADMAP.md", "TESTING.md",
+    "docker-compose.orbstack-test.yml",
+}
 
 
 def classify_paths(paths: list[str]) -> dict[str, object]:

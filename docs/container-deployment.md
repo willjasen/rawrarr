@@ -1,5 +1,12 @@
 # Roarlay, fossil, and boneyard deployments
 
+See the [Compose inventory](compose-layout.md) before choosing or changing a
+definition. The root files include historical Mac topologies, not just current
+deployments. The isolated two-fossil test stack is now
+[`deploy/testing/compose.yml`](../deploy/testing/compose.yml); do3 definitions
+remain under `deploy/do3/`. Existing operational commands must keep their recorded
+Compose project, full overlay combination, and persistent resources.
+
 ## Fast internal-to-public coordinator promotion on do3
 
 For rapid coordinator iteration, keep the native `linux/amd64` BuildKit cache on do3 warm and build each published source revision once. The internal coordinator uses the `rawrarr-int-*` container names in the `rawrarr-internal-do3` Compose project; the public/live coordinator uses `rawrarr-prod-*` names in the `rawrarr-roarlay-prod` project, supplied by `docker-compose.production-container-names.yml`. Include this overlay in production Compose commands so future recreations preserve the names. They share the host's Docker image store, so the same immutable image can be tested internally and then promoted publicly without compiling again. Their Compose projects, databases, configuration, secrets, and deployment locks stay separate.
