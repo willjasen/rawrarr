@@ -6,6 +6,31 @@
 - `test_rawrarr_subscriber_compose.mjs` — checks subscriber role Compose generation, fossil-prefixed generated IDs, and private GHCR image/auth guidance; run `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
 # Rawrarr tests
 
+- `browser_enrollment_docker.py` and `helpers/browser_enrollment_export.mjs` --
+  opt-in real-service Chromium enrollment/decryption tier for #390. Invoke
+  `python3 scripts/tests/run_rawrarr_tests_in_docker.py --browser-enrollment-export`.
+  Requires existing OrbStack images `rawrarr-testing-base:local` and
+  `postgres:17-alpine`; snapshots current local source, prepares locked dependencies,
+  then runs offline with loopback-only production coordinator/metadata executables
+  and tmpfs PostgreSQL, without host ports, bind mounts or persistent volumes.
+  Exercises real passkey registration/sign-in, encrypted signing-root creation,
+  browser-signed node approval and the actual Settings export action. Checks exact
+  synthetic JSON/artwork ZIP output, wrong valid age key/no-download controls at
+  1280x800 and 375x812, rendered export-control fit/no horizontal overflow, anonymous
+  browser and invalid-session HTTP 401s (including text/artwork ciphertext), and generated private-marker absence from
+  coordinator HTTP, browser requests, service logs and PostgreSQL data. Also runs
+  focused Rust export tests and existing Node workspace/Playwright mini-export
+  regressions in the clone. Add `--browser-enrollment-inject-failure` to deliberately
+  fail after real approval and exercise failure cleanup (expect exit 1). Owned
+  containers/data are removed on success/failure; cleanup errors are explicit.
+  Synthetic ciphertext is harness-seeded: upstream ingestion, hardware passkeys,
+  HTTPS/Tailscale, storage nodes, direct routing, rotation and exhaustive
+  confidentiality are not covered. See
+  `runbooks/2026-11-03-browser-enrollment-decryption.md`.
+- `test_browser_enrollment_docker.py` -- host Python lifecycle tests for the
+  disposable browser tier's isolation, dispatch and cleanup paths. Run with
+  `python3 -m unittest discover -s scripts/tests -p test_browser_enrollment_docker.py`.
+
 - `test_rawrarr_movie_artwork_stability.mjs` — Chromium checks loaded and in-flight movie posters survive cached-to-live library updates and filtering without duplicate requests, while metadata, explicit artwork changes, additions, and removals still update; verifies the shared Movies/TV poster grid shows six desktop columns and two mobile columns without horizontal overflow. Run through `python3 scripts/tests/run_rawrarr_tests_in_docker.py`.
 
 - `test_rawrarr_crypto_ui.mjs` — Playwright and source-backed regressions for signed-out donations, subscription page and workspace navigation at 1280×800 and 375×812, donation/entitlement separation, Ethereum mainnet gating, manual subscription verification flow, preflight rejection for unsigned or mismatched wallets, ENS challenge signing and selected-account rejection, one-fossil tier enforcement across enrollment/approval/proxy access, account tier display, mocked-RPC finality/reorg/failed-transfer verification, and server-side finalized-transfer requirements. Run with `node --test scripts/tests/test_rawrarr_crypto_ui.mjs` in the isolated Playwright test image.
