@@ -1,7 +1,7 @@
 export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, mediaPath = '', networkMode, controlServer, authKey, rootFingerprint }) {
   if (!['metadata', 'storage'].includes(role)) throw new Error('Only fossil and boneyard nodes can be installed here.');
   if (!['internal-tailscale', 'headscale'].includes(networkMode)) throw new Error('Choose internal Tailscale or public Headscale networking.');
-  if (!/^device-[0-9a-f]{24}$/.test(nodeId)) throw new Error('Invalid generated device ID.');
+  if (!/^fossil-[0-9a-f]{24}$/.test(nodeId)) throw new Error('Invalid generated fossil ID.');
   const defaultName = role === 'storage' ? 'My boneyard node' : 'My fossil node';
   const name = String(deviceName ?? defaultName).trim();
   if (!name || name.length > 64 || /[\u0000-\u001f\u007f]/.test(name)) throw new Error('Enter a device name of 1 to 64 characters without control characters.');
@@ -20,8 +20,7 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
     ? `rawrarr-${baseHostname}`.slice(0, 63)
     : baseHostname;
   const lines = [
-    '# Rawrarr subscriber node. Requires the rawrarr:local image until a public release is published.',
-    '# UI auto-updates require a private-repository Contents:Read token in RAWARR_UI_GITHUB_TOKEN_PATH.',
+    '# Rawrarr subscriber node. Sign in to ghcr.io with a GitHub token that has read:packages access before the first pull.',
     '# This file runs no coordinator, roarlay, or PostgreSQL service.',
     'services:',
     '  tailscale:',
@@ -57,7 +56,8 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
   }
   lines.push(
     `  ${role === 'storage' ? 'boneyard' : 'fossil'}:`,
-    '    image: rawrarr:local',
+    '    image: ghcr.io/willjasen/rawrarr:main',
+    '    pull_policy: always',
     '    environment:',
     `      RAWARR_ROLE: ${role}`,
     '      RUST_ARR_LISTEN_ADDR: 0.0.0.0:8080',
@@ -70,8 +70,6 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
     `      RAWARR_DEVICE_NAME: ${quote(name)}`,
     `      RAWARR_INSTANCE_ROOT_FINGERPRINT: ${String(rootFingerprint).toLowerCase()}`,
     `      RAWARR_COORDINATOR_URL: ${quote(coordinatorUrl)}`,
-    '      RAWARR_UI_GITHUB_REPO: willjasen/rawrarr',
-    '      RAWARR_UI_GITHUB_TOKEN_FILE: /run/secrets/rawrarr_ui_github_token',
     `      RAWARR_DIRECT_ALLOWED_ORIGIN: ${quote(coordinatorUrl)}`,
     '      RAWARR_NODE_TOKEN_FILE: /data/node-token',
     '      RAWARR_NODE_ENROLLMENT_ENABLED: "true"',
@@ -91,10 +89,8 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
     '      - rawrarr-ui:/ui',
   );
   if (role === 'storage') lines.push('      - type: bind', `        source: ${quote(mediaPath.trim())}`, '        target: /media', '        read_only: true', '        bind:', '          create_host_path: false');
-  lines.push('    restart: unless-stopped', '    secrets:', '      - rawrarr_ui_github_token');
-  lines.push('secrets:');
-  if (networkMode === 'headscale') lines.push('  tailscale-authkey:', '    file: ./tailscale-authkey');
-  lines.push('  rawrarr_ui_github_token:', '    file: ${RAWARR_UI_GITHUB_TOKEN_PATH:?Set RAWARR_UI_GITHUB_TOKEN_PATH to a fine-grained read-only GitHub token file}');
+  lines.push('    restart: unless-stopped');
+  if (networkMode === 'headscale') lines.push('secrets:', '  tailscale-authkey:', '    file: ./tailscale-authkey');
   lines.push(
     'volumes:',
     '  tailscale-state:',

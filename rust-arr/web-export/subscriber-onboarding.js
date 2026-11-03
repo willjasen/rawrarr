@@ -7,7 +7,7 @@ let ageIdentity = '';
 let rootBackup = '';
 let generatedAge = false;
 let rootFingerprint = '';
-const nodeId = `device-${[...crypto.getRandomValues(new Uint8Array(12))].map(value => value.toString(16).padStart(2, '0')).join('')}`;
+const nodeId = `fossil-${[...crypto.getRandomValues(new Uint8Array(12))].map(value => value.toString(16).padStart(2, '0')).join('')}`;
 
 function fail(id, error) { byId(id).textContent = error instanceof Error ? error.message : 'Setup failed. Try again.'; }
 function clearCompose() {
@@ -20,7 +20,9 @@ function clearCompose() {
 function updateSteps() {
   const ageReady = Boolean(ageIdentity) && (!generatedAge || byId('age-backed-up').checked);
   byId('root-step').hidden = !ageReady;
-  byId('deploy-step').hidden = !ageReady || !rootBackup || !byId('root-backed-up').checked;
+  const setupReady = ageReady && Boolean(rootBackup) && byId('root-backed-up').checked;
+  byId('setup-complete-actions').hidden = !setupReady;
+  byId('deploy-step').hidden = !setupReady || byId('deploy-step').dataset.opened !== 'true';
 }
 function resetRoot() {
   rootBackup = '';
@@ -46,13 +48,30 @@ async function setAge(value, isGenerated) {
   byId('copy-age').hidden = !isGenerated;
   byId('age-recipient').textContent = `Public recipient: ${recipient.slice(0, 14)}…${recipient.slice(-8)}`;
   resetRoot();
+  return recipient;
 }
 
+async function useRememberedAgeIdentity() {
+  let rememberedIdentity;
+  try { rememberedIdentity = localStorage.getItem('rawrarr.browser.age-id'); }
+  catch { return; }
+  if (!rememberedIdentity) return;
+  try {
+    const recipient = await setAge(rememberedIdentity, false);
+    byId('age-recipient').textContent = `Using age ID saved in this browser. Public recipient: ${recipient.slice(0, 14)}…${recipient.slice(-8)}`;
+  } catch {
+    byId('age-recipient').textContent = 'The age ID saved in this browser could not be used. Create or import an age ID to continue.';
+  }
+}
+
+void useRememberedAgeIdentity();
+
 byId('create-age').addEventListener('click', async event => {
-  event.currentTarget.disabled = true;
+  const button = event.currentTarget;
+  button.disabled = true;
   try { await setAge(await generateHybridIdentity(), true); byId('age-recipient').textContent += ' · Copy and save the private ID before continuing.'; }
   catch (error) { fail('age-recipient', error); }
-  finally { event.currentTarget.disabled = false; }
+  finally { button.disabled = false; }
 });
 byId('use-age').addEventListener('click', async () => {
   try { await setAge(byId('import-age').value.trim(), false); }
@@ -65,7 +84,8 @@ byId('copy-age').addEventListener('click', async () => {
 byId('age-backed-up').addEventListener('change', updateSteps);
 
 byId('create-root').addEventListener('click', async event => {
-  event.currentTarget.disabled = true;
+  const button = event.currentTarget;
+  button.disabled = true;
   try {
     const root = await createEncryptedRootBackup(await identityToRecipient(ageIdentity));
     rootBackup = root.encryptedBackup;
@@ -79,7 +99,7 @@ byId('create-root').addEventListener('click', async event => {
     byId('copy-root').hidden = false;
     updateSteps();
   } catch (error) { fail('root-fingerprint', error); }
-  finally { event.currentTarget.disabled = false; }
+  finally { button.disabled = false; }
 });
 byId('copy-root').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(rootBackup); byId('root-backed-up').disabled = false; byId('root-fingerprint').textContent += ' · Encrypted backup copied. Save it outside this browser.'; }
@@ -106,6 +126,15 @@ byId('use-root').addEventListener('click', async () => {
   } catch (error) { fail('root-fingerprint', error); }
 });
 byId('root-backed-up').addEventListener('change', updateSteps);
+byId('add-node-now').addEventListener('click', () => {
+  byId('deploy-step').dataset.opened = 'true';
+  updateSteps();
+  byId('deploy-step').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+byId('deploy-step').querySelector('[data-reopen="deploy-step"]').addEventListener('click', () => {
+  byId('deploy-step').dataset.opened = 'true';
+  updateSteps();
+});
 byId('root-fingerprint-confirm').addEventListener('input', clearCompose);
 let automaticDeviceName = 'My fossil node';
 byId('node-role').addEventListener('change', () => {

@@ -17,6 +17,51 @@ services:
       timeout: 3s
       retries: 20
 
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: UTC
+    volumes:
+      - orbstack-test-radarr:/config
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:7878/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: UTC
+    volumes:
+      - orbstack-test-sonarr:/config
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8989/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  arr-proxy:
+    image: caddy:2-alpine
+    volumes:
+      - ./arr-orbstack-test.Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${HOME}/Library/Application Support/rawrarr/orbstack-test/arr-tls/arr-test.crt:/certs/arr-test.crt:ro
+      - ${HOME}/Library/Application Support/rawrarr/orbstack-test/arr-tls/arr-test.key:/certs/arr-test.key:ro
+    networks:
+      default:
+        aliases:
+          - radarr.test
+          - sonarr.test
+    depends_on:
+      radarr:
+        condition: service_healthy
+      sonarr:
+        condition: service_healthy
+
   headscale:
     image: headscale/headscale:0.29.5
     command: serve
@@ -44,7 +89,7 @@ services:
         aliases:
           - coordinator
     ports:
-      - "127.0.0.1:17397:8080"
+      - "127.0.0.1:${RAWARR_TEST_COORDINATOR_HOST_PORT:-17397}:8080"
 
   roarlay:
     build:
@@ -89,8 +134,10 @@ services:
     environment:
       TS_HOSTNAME: test-metadata-a
       TS_STATE_DIR: /var/lib/tailscale
+      TS_AUTHKEY: file:/run/secrets/tailscale_a_key
       TS_USERSPACE: "true"
       TS_AUTH_ONCE: "false"
+      TS_EXTRA_ARGS: --accept-dns=false --login-server=https://headscale
     secrets:
       - tailscale_a_key
       - headscale_ca
@@ -105,26 +152,53 @@ services:
     environment:
       RAWARR_ROLE: metadata
       RAWARR_NODE_ID: test-metadata-a
-      RAWARR_DEVICE_NAME: Test metadata node A
+      RAWARR_DEVICE_NAME: fossil
+      RAWARR_INSTANCE_ROOT_FINGERPRINT: ${RAWARR_INSTANCE_ROOT_FINGERPRINT:-}
       RUST_ARR_LISTEN_ADDR: 127.0.0.1:8080
       RAWARR_DATA_DIR: /data
       RAWARR_SHARED_DATA_DIR: /shared
       RAWARR_METADATA_DIR: /metadata
+      RAWARR_CONFIG_CACHE_URL: redis://127.0.0.1:6379/
+      RAWARR_LOCAL_PLAINTEXT_CONFIG: "false"
       RAWARR_COORDINATOR_URL: http://coordinator:8080
       RAWARR_COORDINATOR_LOCAL_HTTP: "true"
+      RAWARR_ARR_CA_CERT_FILE: /run/secrets/arr_test_ca
       RAWARR_NODE_TOKEN_FILE: /run/secrets/node_token
       RAWARR_WEBAUTHN_RP_ID: localhost
-      RAWARR_WEBAUTHN_ORIGIN: http://localhost:17397
+      RAWARR_WEBAUTHN_ORIGIN: http://localhost:${RAWARR_TEST_COORDINATOR_HOST_PORT:-17397}
     secrets:
       - source: node_a_token
         target: node_token
+      - source: arr_test_ca
+        target: arr_test_ca
     volumes:
       - orbstack-test-node-a:/data
-      - orbstack-test-shared:/shared
+      - orbstack-test-shared-a:/shared
     network_mode: service:tailscale-a
     depends_on:
       roarlay:
         condition: service_healthy
+      radarr:
+        condition: service_healthy
+      sonarr:
+        condition: service_healthy
+      arr-proxy:
+        condition: service_started
+      valkey-a:
+        condition: service_healthy
+
+  valkey-a:
+    image: valkey/valkey:8-alpine
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    network_mode: service:tailscale-a
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    depends_on:
+      tailscale-a:
+        condition: service_started
 
   tailscale-b:
     image: tailscale/tailscale:stable
@@ -134,8 +208,10 @@ services:
     environment:
       TS_HOSTNAME: test-metadata-b
       TS_STATE_DIR: /var/lib/tailscale
+      TS_AUTHKEY: file:/run/secrets/tailscale_b_key
       TS_USERSPACE: "true"
       TS_AUTH_ONCE: "false"
+      TS_EXTRA_ARGS: --accept-dns=false --login-server=https://headscale
     secrets:
       - tailscale_b_key
       - headscale_ca
@@ -151,32 +227,53 @@ services:
       RAWARR_ROLE: metadata
       RAWARR_NODE_ID: test-metadata-b
       RAWARR_DEVICE_NAME: Test metadata node B
+      RAWARR_INSTANCE_ROOT_FINGERPRINT: ${RAWARR_INSTANCE_ROOT_FINGERPRINT:-}
       RUST_ARR_LISTEN_ADDR: 127.0.0.1:8080
       RAWARR_DATA_DIR: /data
       RAWARR_SHARED_DATA_DIR: /shared
       RAWARR_METADATA_DIR: /metadata
+      RAWARR_CONFIG_CACHE_URL: redis://127.0.0.1:6379/
+      RAWARR_LOCAL_PLAINTEXT_CONFIG: "false"
       RAWARR_COORDINATOR_URL: http://coordinator:8080
       RAWARR_COORDINATOR_LOCAL_HTTP: "true"
       RAWARR_NODE_TOKEN_FILE: /run/secrets/node_token
       RAWARR_WEBAUTHN_RP_ID: localhost
-      RAWARR_WEBAUTHN_ORIGIN: http://localhost:17397
+      RAWARR_WEBAUTHN_ORIGIN: http://localhost:${RAWARR_TEST_COORDINATOR_HOST_PORT:-17397}
     secrets:
       - source: node_b_token
         target: node_token
     volumes:
       - orbstack-test-node-b:/data
-      - orbstack-test-shared:/shared
+      - orbstack-test-shared-b:/shared
     network_mode: service:tailscale-b
     depends_on:
       roarlay:
         condition: service_healthy
+      valkey-b:
+        condition: service_healthy
+
+  valkey-b:
+    image: valkey/valkey:8-alpine
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    network_mode: service:tailscale-b
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    depends_on:
+      tailscale-b:
+        condition: service_started
 
 volumes:
   orbstack-test-postgres:
+  orbstack-test-radarr:
+  orbstack-test-sonarr:
   orbstack-test-headscale:
   orbstack-test-node-a:
   orbstack-test-node-b:
-  orbstack-test-shared:
+  orbstack-test-shared-a:
+  orbstack-test-shared-b:
   orbstack-test-ts-a:
   orbstack-test-ts-b:
   orbstack-test-ts-coordinator:
@@ -197,6 +294,8 @@ secrets:
   node_b_token:
     file: ${HOME}/Library/Application Support/rawrarr/orbstack-test/node-b-token
   tailscale_a_key:
-    file: ${HOME}/Library/Application Support/rawrarr/orbstack-test/tailscale-a-key
+    file: ${RAWARR_TEST_TAILSCALE_A_KEY_FILE:-${HOME}/Library/Application Support/rawrarr/orbstack-test/tailscale-a-key}
   tailscale_b_key:
-    file: ${HOME}/Library/Application Support/rawrarr/orbstack-test/tailscale-b-key
+    file: ${RAWARR_TEST_TAILSCALE_B_KEY_FILE:-${HOME}/Library/Application Support/rawrarr/orbstack-test/tailscale-b-key}
+  arr_test_ca:
+    file: ${HOME}/Library/Application Support/rawrarr/orbstack-test/arr-tls/arr-test-ca.crt

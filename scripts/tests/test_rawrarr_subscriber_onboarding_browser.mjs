@@ -54,7 +54,7 @@ test('first-account identity setup finishes on Devices before optional node Comp
   await page.locator('#root-backed-up').check();
   await page.locator('#setup-complete-actions').waitFor({ state: 'visible' });
   assert.equal(await page.locator('#deploy-step').isVisible(), false, 'Compose is no longer part of required first-account setup');
-  assert.equal(await page.getByRole('link', { name: 'Continue to Devices' }).getAttribute('href'), '/#devices');
+  assert.equal(await page.getByRole('link', { name: 'Continue to Fossils' }).getAttribute('href'), '/#fossils');
   await page.getByRole('button', { name: 'Set up a node now' }).click();
   await page.locator('#deploy-step').waitFor({ state: 'visible' });
   const rootFingerprint = (await page.locator('#root-fingerprint').innerText()).match(/[0-9a-f]{64}/i)?.[0];
@@ -79,7 +79,18 @@ test('first-account identity setup finishes on Devices before optional node Comp
   assert.deepEqual(await page.locator('#network-mode option').allTextContents(), ['Internal use · my Tailscale tailnet', 'Public service · Headscale']);
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download compose.yml' }).click()]);
   assert.equal(download.suggestedFilename(), 'compose.yaml');
-  assert.deepEqual(requests.filter(path => path !== '/favicon.ico'), ['/setup/node', '/assets/subscriber-onboarding.js'], 'private material never leaves the browser in the setup flow');
+  await page.evaluate(value => localStorage.setItem('rawrarr.browser.age-id', value), identity);
+  await page.reload();
+  await page.locator('#root-step').waitFor({ state: 'visible' });
+  assert.match(await page.locator('#age-recipient').innerText(), /^Using age ID saved in this browser\./);
+  assert.equal(await page.locator('#import-age').inputValue(), '', 'the remembered private ID is not copied into the password field');
+  assert.equal((await page.locator('body').innerText()).includes(identity), false, 'the remembered private ID is not rendered into the page');
+  await page.evaluate(() => localStorage.setItem('rawrarr.browser.age-id', 'invalid-saved-identity'));
+  await page.reload();
+  await page.locator('#age-recipient').getByText(/could not be used/).waitFor();
+  assert.equal(await page.locator('#root-step').isVisible(), false, 'invalid saved IDs fall back to manual setup');
+  assert.equal(await page.locator('#import-age').isVisible(), true);
+  assert.ok(requests.every(path => ['/setup/node', '/assets/subscriber-onboarding.js', '/assets/rawrarr-favicon.svg', '/favicon.ico'].includes(path)), 'only page assets are requested; private identity material stays local');
   assert.deepEqual(pageErrors, [], 'age and signing-key generation complete without browser errors');
   await context.close();
 });

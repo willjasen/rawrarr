@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
+  <link rel="icon" type="image/svg+xml" href="/assets/rawrarr-favicon.svg">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <title>rawrarr</title>
   <style>
     :root { color-scheme:dark; --bg:#101411; --panel:#171d19; --line:#29332c; --text:#edf3ec; --muted:#96a397; --green:#a6e3a1 }
@@ -14,10 +16,15 @@
     .brand { display:block; width:180px; max-width:100%; padding:4px 10px 30px }
     .brand img { display:block; width:100%; height:auto; border-radius:8px; background:#dff4bd }
     .section-label { color:#68766c; font-size:10px; text-transform:uppercase; letter-spacing:.13em; padding:0 10px 8px }
-    .nav-item { display:flex; align-items:center; gap:12px; width:100%; min-height:42px; margin:3px 0; padding:0 12px; border:0; border-radius:9px; color:var(--muted); background:transparent; text-align:left; font:13px system-ui; cursor:pointer }
+    .nav-item { display:flex; align-items:center; gap:12px; width:100%; min-height:42px; margin:3px 0; padding:0 12px; border:0; border-radius:9px; color:var(--muted); background:transparent; text-align:left; font:13px system-ui; cursor:pointer; text-decoration:none }
+    .nav-text { text-transform:lowercase }
     .nav-item:hover { color:var(--text); background:#1a231d }
     .nav-item.active { color:var(--text); background:#202a23; box-shadow:inset 2px 0 var(--green) }
     .nav-icon { width:17px; text-align:center }
+    .roarlay-details { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin:22px 0 0 }
+    .roarlay-details div { padding:14px; border:1px solid var(--line); border-radius:10px; background:#141b16 }
+    .roarlay-details dt { color:var(--muted); font-size:12px }
+    .roarlay-details dd { margin:6px 0 0; font-size:14px }
     .ai-panel { width:100%; min-height:calc(100vh - 170px); padding:24px; border:1px solid var(--line); border-radius:12px; background:var(--panel) }
     .ai-tabs { display:flex; gap:8px; border-bottom:1px solid var(--line); margin:18px 0; padding-bottom:8px }
     .ai-tabs button[aria-selected="true"] { border-color:var(--green); color:var(--text); background:#202a23 }
@@ -28,12 +35,17 @@
     .ai-note,.ai-history { color:var(--muted); font-size:13px }
     .ai-answer { min-height:380px; max-height:60vh; overflow:auto; margin:16px 0; padding:18px; border:1px solid var(--line); border-radius:10px; background:#101411; white-space:pre-wrap }
     .ai-history li { margin:8px 0 }
-    .sidebar-bottom { position:fixed; bottom:20px; display:flex; align-items:center; gap:10px; width:202px; border-top:1px solid var(--line); padding:14px 10px 0; color:var(--text) }
+    .rawrs-launcher { position:fixed; z-index:20; left:256px; bottom:20px; border:1px solid #46574a; border-radius:999px; padding:12px 18px; color:#101411; background:var(--green); box-shadow:0 8px 28px #0008; font-weight:700 }
+    .rawrs-voice-panel { position:fixed; z-index:19; left:256px; bottom:82px; width:min(360px,calc(100vw - 32px)); max-height:min(70vh,560px); overflow:auto; padding:16px; border:1px solid var(--line); border-radius:14px; background:var(--panel); box-shadow:0 18px 55px #000b }
+    .rawrs-voice-panel[hidden] { display:none }
+    .rawrs-voice-heading { display:flex; align-items:center; justify-content:space-between; gap:12px }
+    .rawrs-voice-heading h2 { margin:0; font-size:17px }
+    .rawrs-voice-panel .ai-answer { min-height:90px; max-height:28vh; margin:12px 0; padding:12px; font-size:14px }
+    .sidebar-bottom { position:fixed; bottom:20px; display:grid; gap:8px; width:210px; border-top:1px solid var(--line); padding:14px 10px 0; color:var(--text) }
+    .sidebar-bottom-profile { display:flex; align-items:center; gap:10px }
+    .sidebar-update { color:var(--muted); font-size:10px; line-height:1.35; overflow-wrap:anywhere }
     .sidebar-profile-picture { width:38px; height:38px; flex:none; border:1px solid #ffffff18; border-radius:50%; background:#202821; object-fit:cover }
     .sidebar-profile-name { min-width:0; display:grid; grid-template-columns:max-content max-content; align-content:center; gap:0 5px; color:var(--text); font-size:11px; font-weight:600; line-height:1.25; overflow-wrap:anywhere }
-    .sidebar-signature-status { grid-column:1/-1; margin-top:4px; color:#f0c77c; font-size:10px; font-weight:650 }
-    .sidebar-signature-status[data-status="signed"] { color:#a6e3a1 }
-    .sidebar-signature-status[data-status="rejected"] { color:#ff8a8a }
     .workspace { min-width:0 }
     #coordinator-pending-dialog { width:min(520px,calc(100vw - 32px)); border:1px solid var(--line); border-radius:14px; padding:26px; color:var(--text); background:var(--panel); box-shadow:0 20px 70px #0009 }
     #coordinator-pending-dialog::backdrop { background:#101411f2 }
@@ -56,16 +68,20 @@
     .device-identity-row { display:flex; min-width:0; align-items:center; gap:12px }
     .device-avatar { display:block; flex:none; width:54px; height:54px; overflow:hidden; border:1px solid #ffffff18; border-radius:50%; background:#202821 }
     .device-avatar img { display:block; width:100%; height:100%; border-radius:inherit; object-fit:cover }
-    .device-heading { display:flex; align-items:center; justify-content:space-between; gap:14px }
+    .device-heading { display:flex; min-width:0; flex:1 1 auto; align-items:center; justify-content:space-between; gap:14px }
     .device-name-group { display:flex; min-width:0; flex:0 1 auto; align-items:center; gap:8px }
-    .device-name-input { display:block; min-width:0; flex:0 1 auto; padding:0; border:0; border-bottom:1px solid transparent; border-radius:0; background:transparent; color:var(--text); font:650 20px/1.3 system-ui }
-    .device-name-input[readonly] { cursor:default }
-    .device-name-input:hover,.device-name-input:focus { border-bottom-color:#46574a; outline:none }
-    .device-name-input:focus { border-bottom-color:var(--green) }
-    .device-name-edit-button { flex:none; padding:5px 9px; font-size:12px }
+    .device-name { overflow-wrap:anywhere; font-size:20px; line-height:1.3; font-weight:650 }
     .device-detail { display:block; color:var(--muted); margin-top:8px; font-size:13px }
-    .device-delete-button { align-self:flex-end; margin-top:12px; border-color:#744747; color:#ffb0b0; padding:6px 9px; font-size:12px }
-    .device-delete-button:hover,.reject-button:hover { border-color:#ff9999; background:#392323 }
+    .device-edit-button { align-self:flex-end; margin-top:12px; padding:6px 9px; font-size:12px }
+    .device-edit-dialog { width:min(460px,calc(100vw - 32px)); border:1px solid var(--line); border-radius:14px; padding:22px; color:var(--text); background:var(--panel); box-shadow:0 20px 70px #0009 }
+    .device-edit-dialog::backdrop { background:#101411c9 }
+    .device-edit-dialog h2 { margin:0 0 8px }
+    .device-edit-dialog label { display:block; margin-top:16px; color:var(--muted) }
+    .device-edit-dialog input { width:100%; min-height:42px; margin-top:6px; border:1px solid #46574a; border-radius:8px; background:#101411; color:var(--text); padding:10px; font:inherit }
+    .device-edit-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-top:18px }
+    .device-edit-actions > div { display:flex; flex-wrap:wrap; gap:8px }
+    .device-edit-delete { border-color:#744747; color:#ffb0b0 }
+    .device-edit-delete:hover,.reject-button:hover { border-color:#ff9999; background:#392323 }
     .storage-scan-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px }
     .storage-scan-status { display:block; color:var(--muted); margin-top:8px; font-size:12px }
     .storage-scan-schedule { display:grid; grid-template-columns:repeat(auto-fit,minmax(115px,1fr)); gap:8px; margin-top:14px; padding-top:12px; border-top:1px solid var(--line) }
@@ -82,6 +98,12 @@
     .device-sync-health { display:flex; flex-wrap:wrap; align-items:center; gap:4px; line-height:1.5 }
     .sync-health-state { color:var(--text); font-weight:600 }
     .sync-health-detail { color:var(--muted) }
+    .merkle-status { align-items:center; gap:7px }
+    .merkle-status-icon { display:inline-grid; width:17px; height:17px; place-items:center; border:1px solid currentColor; border-radius:50%; font-size:11px; font-weight:700 }
+    .merkle-current .merkle-status-icon { color:var(--green) }
+    .merkle-partial .merkle-status-icon,.merkle-checking .merkle-status-icon { color:#e5bd62 }
+    .merkle-stale .merkle-status-icon { color:#e5bd62 }
+    .merkle-unreachable .merkle-status-icon { color:#ef7777 }
     .topology-section { margin-top:30px; padding:20px; border:1px solid var(--line); border-radius:12px; background:var(--panel) }
     .topology-section h2 { margin:0; font-size:20px }
     .topology-intro,.topology-empty { color:var(--muted); margin:6px 0 16px }
@@ -91,6 +113,7 @@
     .topology-edge.connected { stroke:var(--green); stroke-width:3 }
     .topology-edge.disconnected { stroke:#ef7777 }
     .topology-device { position:absolute; z-index:1; width:min(190px,32%); display:flex; flex-direction:column; gap:4px; padding:12px 14px; border:1px solid var(--line); border-radius:9px; background:#131915; box-shadow:0 8px 20px #0008; transform:translate(-50%,-50%) }
+    .topology-device strong,.topology-device small { min-width:0; overflow-wrap:anywhere }
     .topology-device small { color:var(--muted); font-size:12px }
     .topology-device.online { border-color:#36543d }
     .topology-device.offline { opacity:.7 }
@@ -100,11 +123,30 @@
     .topology-legend .connected-line { background:var(--green) }
     .topology-legend .disconnected-line { background:#ef7777 }
     .topology-empty { margin:14px 0 0 }
+    .signing-topology { margin-top:18px; padding:16px; border:1px solid #36543d; border-radius:10px; background:linear-gradient(145deg,#19241c,#131915) }
+    .signing-topology h3 { margin:0; font-size:16px }
+    .signing-topology-intro { color:var(--muted); margin:6px 0 14px; font-size:13px }
+    .signing-root-card { width:min(440px,100%); margin:0 auto; padding:14px; border:1px solid #7da77e; border-radius:10px; background:#202a22; text-align:center }
+    .signing-root-card strong,.signing-root-card small { display:block; overflow-wrap:anywhere }
+    .signing-root-card small { margin-top:5px; color:var(--muted) }
+    .signing-tree-stem { width:2px; height:24px; margin:auto; background:#7da77e }
+    .signing-device-list { display:flex; flex-wrap:wrap; justify-content:center; gap:10px }
+    .signing-device-card { flex:1 1 210px; max-width:320px; min-width:0; padding:12px; border:1px solid var(--line); border-radius:9px; background:#131915 }
+    .signing-device-card strong,.signing-device-card small { display:block; overflow-wrap:anywhere }
+    .signing-device-card small { margin-top:5px; color:var(--muted) }
+    .signing-device-card.verified { border-color:#36543d }
+    .signing-device-card.legacy { border-color:#806d42 }
+    .approval-attestation { margin:14px 0; padding:12px; border:1px solid #36543d; border-radius:9px; background:#19231b }
+    .approval-attestation strong { display:block; margin-bottom:5px }
+    .approval-attestation p { margin:4px 0; color:var(--muted); overflow-wrap:anywhere }
     .button-link { display:inline-block; padding:10px 14px; border:1px solid #6b916f; border-radius:8px; color:#101711; background:var(--green); font-weight:650; text-decoration:none }
-    .node-state { display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:12px; font-weight:650 }
+    .node-state { display:inline-flex; min-width:0; align-items:center; gap:6px; color:var(--muted); font-size:12px; font-weight:650 }
+    .node-state-label { min-width:0; overflow-wrap:anywhere }
     .node-state-indicator { flex:0 0 13px; width:13px; height:13px; border:1px solid #ffffff90; border-radius:50%; background:#8b9290; box-shadow:0 0 0 3px #ffffff18 }
     .node-state.online .node-state-indicator { border-color:#a6e3a1; background:#3bc46b; box-shadow:0 0 0 3px #3bc46b40 }
     .node-state.offline .node-state-indicator { border-color:#ff9999; background:#ef5c5c; box-shadow:0 0 0 3px #ef5c5c40 }
+    .node-state.online.offline .node-state-indicator { border-color:#d5b66a; background:#b98c27; box-shadow:0 0 0 3px #b98c2740 }
+    .node-state.online.offline .node-state-label { color:#e4c879 }
     .node-state.online .node-state-label { color:#8fe0a6 }
     .node-state.offline .node-state-label { color:#ff9999 }
     .node-state.direct .node-state-indicator { border-color:#a6e3a1; background:#3bc46b; box-shadow:0 0 0 3px #3bc46b40 }
@@ -177,10 +219,13 @@
     .library-empty { grid-column:1/-1; padding:34px 16px; border:1px dashed var(--line); border-radius:10px; color:var(--muted); text-align:center }
     @media(max-width:560px) { .library-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px } .library-count { width:100%; margin-left:0 } }
     .page-title { margin:0 0 18px; font-size:25px }
+    .devices-page-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px }
+    .devices-page-heading .page-title { margin:0 }
+    .devices-page-heading .button-link { margin-left:auto }
     .stub { padding:24px; border:1px solid var(--line); border-radius:12px; background:var(--panel); color:var(--muted) }
     .profile-card { display:flex; align-items:center; gap:20px; max-width:620px; padding:22px; border:1px solid var(--line); border-radius:12px; background:var(--panel) }
-    .settings-identity { display:grid; grid-template-columns:minmax(380px, 1.2fr) minmax(0, .8fr); align-items:stretch; gap:18px; max-width:1320px }
-    .settings-identity .profile-card,.settings-identity .age-storage-card { box-sizing:border-box; width:100%; max-width:none; min-width:0; margin:0 }
+    .settings-identity { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); align-items:stretch; gap:18px; max-width:1320px }
+    .settings-identity .profile-card,.settings-identity .settings-crypto-card,.settings-identity .age-storage-card { box-sizing:border-box; width:100%; max-width:none; min-width:0; margin:0 }
     @media(max-width:900px) { .settings-identity { grid-template-columns:1fr } }
     .profile-avatar { display:block; overflow:hidden; width:124px; height:124px; border:1px solid #ffffff18; border-radius:50%; background:#202821; flex:none; box-shadow:0 10px 30px #0005 }
     .profile-avatar img { display:block; width:100%; height:100%; border-radius:inherit; object-fit:cover }
@@ -205,12 +250,38 @@
     .connection-saved strong { font-size:14px }
     .connection-saved-url { color:var(--text); font-size:13px; overflow-wrap:anywhere }
     .connection-saved-note { color:var(--muted); font-size:12px }
+    .about-page { max-width:1120px }
+    .about-hero { position:relative; overflow:hidden; margin:0 0 16px; padding:clamp(24px,4vw,46px); border:1px solid #34463a; border-radius:20px; background:radial-gradient(circle at 88% 20%,#a6e3a126,transparent 31%),linear-gradient(132deg,#1d2b21,#171d19 70%); box-shadow:0 18px 48px #0003 }
+    .about-hero::after { position:absolute; top:-125px; right:-55px; width:280px; height:280px; border:1px solid #a6e3a124; border-radius:50%; box-shadow:0 0 0 28px #a6e3a10b,0 0 0 58px #a6e3a108; content:""; pointer-events:none }
+    .about-kicker { margin:0 0 10px; color:var(--green); font-size:11px; font-weight:750; letter-spacing:.16em; text-transform:uppercase }
+    .about-hero h2 { position:relative; z-index:1; max-width:760px; margin:0; font-size:clamp(30px,4.5vw,46px); letter-spacing:-.035em; line-height:1.08 }
+    .about-lead { position:relative; z-index:1; max-width:720px; margin:16px 0 0; color:#c1cdc2; font-size:clamp(14px,1.6vw,17px); line-height:1.7 }
+    .about-steps { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px }
+    .about-step { min-width:0; padding:20px; border:1px solid var(--line); border-radius:15px; background:linear-gradient(155deg,#1a211c,#151a16 76%); box-shadow:0 10px 28px #00000012 }
+    .about-step-index { display:grid; place-items:center; width:34px; height:34px; margin-bottom:18px; border:1px solid #a6e3a14d; border-radius:11px; color:var(--green); background:#a6e3a112; font-size:11px; font-weight:750; letter-spacing:.05em }
+    .about-step h3 { margin:0 0 8px; font-size:16px; letter-spacing:-.01em }
+    .about-step p { margin:0; color:var(--muted); font-size:13px; line-height:1.7 }
+    .about-privacy { display:flex; align-items:flex-start; gap:12px; margin-top:14px; padding:15px 18px; border:1px solid #344239; border-radius:13px; background:#151c17 }
+    .about-privacy-mark { display:grid; place-items:center; width:28px; height:28px; flex:none; border-radius:9px; color:var(--green); background:#a6e3a112; font-size:14px }
+    .about-privacy p { margin:1px 0 0; color:#b5c1b6; font-size:12px; line-height:1.65 }
+    @media(max-width:760px) { .about-steps { grid-template-columns:1fr } .about-step { padding:17px } .about-step-index { margin-bottom:12px } }
+    @media(max-width:560px) { .about-hero { padding:24px 20px; border-radius:16px } .about-hero::after { right:-180px } .about-privacy { padding:13px } }
     .settings-connections { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr)); gap:16px; margin-top:18px }
     .settings-connections .connection-card { margin:0; max-width:none }
+    .settings-connections .connection-card { padding:16px 18px }
+    .settings-connections .connection-intro { margin:6px 0 10px }
+    .settings-connections .connection-saved { margin:8px 0; padding:9px 11px }
+    .arr-settings-dialog { width:min(540px,calc(100% - 28px)); max-height:85vh; overflow:auto; border:1px solid #39463d; border-radius:14px; background:#151b18; color:var(--text); padding:22px }
+    .arr-settings-dialog::backdrop { background:#050806bb; backdrop-filter:blur(3px) }
+    .arr-settings-dialog .connection-form { width:100%; max-width:none }
+    .arr-settings-dialog[open] { display:block }
     .age-security-warning { max-width:640px; margin:7px 0 0; color:#e5c889; font-size:12px }
     .age-storage-card { max-width:780px; margin:18px 0; padding:20px; border:1px solid var(--line); border-radius:12px; background:linear-gradient(135deg,#18211a,#131915 72%) }
     .age-storage-card h2 { margin:0; font-size:18px }
     .age-storage-status { margin:8px 0; color:var(--muted); font-size:13px }
+    .age-recipient-display { display:flex; align-items:center; flex-wrap:wrap; gap:9px; margin:8px 0 }
+    .age-recipient-display[hidden] { display:none }
+    #age-recipient-short { min-width:0; overflow-wrap:anywhere; font-family:ui-monospace,SFMono-Regular,Menlo,monospace }
     .age-storage-status[data-state="stored"] { color:#b8efc2 }
     .age-storage-status[data-state="error"] { color:#ffb0a8 }
     .age-storage-form { display:grid; gap:8px; max-width:560px }
@@ -218,9 +289,11 @@
     .age-storage-form input { width:100%; min-height:42px; padding:10px 12px; border:1px solid #46574a; border-radius:8px; outline:none; color:var(--text); background:#101411; font:inherit }
     .age-storage-form input:focus { border-color:var(--green); box-shadow:0 0 0 3px #a6e3a122 }
     .profile-name { display:grid; grid-template-columns:repeat(2,minmax(0,max-content)); column-gap:14px; margin:0; font-size:23px; line-height:1.35 }
-    @media(max-width:850px) { .app { grid-template-columns:70px minmax(0,1fr) } aside { padding:22px 10px } .brand { width:42px; padding:0 0 28px; margin:0 auto } .brand img { height:42px; object-fit:cover; object-position:left center } .section-label,.nav-text,.sidebar-bottom { display:none } .nav-item { justify-content:center; padding:0 } main { padding:24px } }
+    @media(max-width:850px) { .app { grid-template-columns:70px minmax(0,1fr) } aside { padding:22px 10px } .brand { width:42px; padding:0 0 28px; margin:0 auto } .brand img { height:42px; object-fit:cover; object-position:left center } .section-label,.nav-text { display:none } .sidebar-bottom { left:78px; bottom:8px; width:calc(100vw - 88px); padding:0; border:0; gap:0; z-index:10 } .sidebar-bottom-profile { display:none } .sidebar-update { display:block; font-size:9px } .nav-item { justify-content:center; padding:0 } main { padding:24px } }
+    @media(max-width:850px) { .rawrs-launcher { left:86px } .rawrs-voice-panel { left:86px } }
     @media(max-width:760px) { .summary { grid-template-columns:repeat(2,minmax(0,1fr)) } }
-    @media(max-width:640px) { .app { display:block } aside { position:sticky; z-index:2; top:0; height:60px; display:flex; align-items:center; border-right:0; border-bottom:1px solid var(--line); padding:0 10px } .brand { font-size:13px; padding:0; margin-right:auto } .section-label { display:none } .nav-item { width:40px; min-height:40px; margin:0 2px } .nav-text { display:none } .nav-item.active { box-shadow:inset 0 -2px var(--green) } header { padding:12px } main { padding:12px } .ai-panel { min-height:calc(100vh - 130px); padding:14px } .ai-answer { min-height:260px; max-height:50vh } .topology-section { padding:14px } .topology-graph { min-height:340px } .topology-device { width:min(150px,36%); padding:9px; font-size:13px } }
+    @media(max-width:640px) { .app { display:block } aside { position:sticky; z-index:2; top:0; height:60px; display:flex; align-items:center; border-right:0; border-bottom:1px solid var(--line); padding:0 10px } .brand { font-size:13px; padding:0; margin-right:auto } .section-label { display:none } .nav-item { width:40px; min-height:40px; margin:0 2px } .nav-text { display:none } .nav-item.active { box-shadow:inset 0 -2px var(--green) } header { padding:12px } main { padding:12px } .ai-panel { min-height:calc(100vh - 130px); padding:14px } .ai-answer { min-height:260px; max-height:50vh } .devices-page-heading { align-items:flex-start; gap:10px } .devices-page-heading > :first-child { min-width:0 } .devices-page-heading .button-link { flex:none; margin-left:0 } #nodes { min-width:0 } .device-card { box-sizing:border-box; min-width:0; flex-basis:100%; width:100%; max-width:none; padding:14px } .device-identity-row,.device-heading { min-width:0 } .device-heading { flex-wrap:wrap; justify-content:flex-start; gap:8px } .device-name-group { flex:1 1 150px } .device-name { min-width:0; font-size:18px } .node-state { flex:0 1 auto; max-width:100%; white-space:normal; overflow-wrap:anywhere } .device-edit-button { min-height:40px; padding:8px 12px } .topology-section { min-width:0; padding:14px } .topology-graph { min-height:340px } .topology-device { width:min(140px,30%); padding:9px; font-size:13px } }
+    @media(max-width:640px) { .rawrs-launcher { left:12px; bottom:12px } .rawrs-voice-panel { left:12px; bottom:76px; max-height:calc(100vh - 100px) } }
   </style>
 </head>
 <body>
@@ -233,14 +306,16 @@
    <aside aria-label="Main navigation">
     <div class="brand"><picture><source srcset="/assets/rawrarr-logo.jxl" type="image/jxl"><img src="/assets/rawrarr-logo.png" alt="rawrarr" width="180" height="60"></picture></div><div class="section-label">rawrchive</div>
     <button class="nav-item active" data-view="overview"><span class="nav-icon">⌂</span><span class="nav-text">Overview</span></button>
-    <button class="nav-item" data-view="devices"><span class="nav-icon">◫</span><span class="nav-text">Devices</span></button>
+    <a class="nav-item" href="/billing" aria-label="Subscription"><span class="nav-icon" aria-hidden="true">$</span><span class="nav-text">Subscription</span></a>
+    <button class="nav-item" data-view="roarlay"><span class="nav-icon">⌂</span><span class="nav-text">Roarlay</span></button>
+    <button class="nav-item" data-view="fossils"><span class="nav-icon">◫</span><span class="nav-text">Fossils</span></button>
     <button class="nav-item" data-view="movies"><span class="nav-icon">▧</span><span class="nav-text">Movies</span></button>
     <button class="nav-item" data-view="series"><span class="nav-icon">▧</span><span class="nav-text">TV</span></button>
     <button class="nav-item" data-view="assistant"><span class="nav-icon">✦</span><span class="nav-text">rawrs</span></button>
     <button class="nav-item" data-view="configuration"><span class="nav-icon">◇</span><span class="nav-text">Configuration</span></button>
     <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span><span class="nav-text">Settings</span></button>
     <button class="nav-item" data-view="about"><span class="nav-icon">ⓘ</span><span class="nav-text">About</span></button>
-    <div class="sidebar-bottom" aria-label="Signed-in profile"><picture><source id="sidebar-profile-picture-jxl" type="image/jxl"><img id="sidebar-profile-picture" class="sidebar-profile-picture" alt="" aria-hidden="true"></picture><span id="sidebar-profile-name" class="sidebar-profile-name">Loading profile…<span id="sidebar-ui-signature" class="sidebar-signature-status" data-status="unverified" role="status" aria-live="polite">UI signature unverified</span></span></div>
+    <div class="sidebar-bottom"><div class="sidebar-bottom-profile" aria-label="Signed-in profile"><picture><source id="sidebar-profile-picture-jxl" type="image/jxl"><img id="sidebar-profile-picture" class="sidebar-profile-picture" alt="" aria-hidden="true"></picture><span id="sidebar-profile-name" class="sidebar-profile-name">Loading profile…</span></div><span id="coordinator-last-updated" class="sidebar-update" aria-live="polite"></span></div>
    </aside>
    <div class="workspace"><header><div class="brand" style="font-size:12px;padding:0;color:var(--muted)"></div><button id="sign-out" type="button">Sign out</button></header>
   <main>
@@ -249,22 +324,25 @@
       <div class="overview-grid" aria-label="Workspace overview">
         <article class="overview-card"><h2>Shared folder</h2><div id="overview-folder-state" class="overview-value">Checking…</div><div id="overview-folder-detail" class="overview-detail" role="status" aria-live="polite">Loading shared-folder status…</div></article>
         <article class="overview-card"><h2>Shared metadata</h2><div id="overview-metadata-size" class="overview-value">—</div><div id="overview-metadata-detail" class="overview-detail">Encrypted metadata stored on the selected fossil node</div></article>
-        <article class="overview-card"><h2>Radarr</h2><div id="overview-movie-count" class="overview-value">—</div><div id="overview-movie-detail" class="overview-detail">Movie library statistics</div></article>
-        <article class="overview-card"><h2>Sonarr</h2><div id="overview-series-count" class="overview-value">—</div><div id="overview-series-detail" class="overview-detail">TV library statistics</div></article>
-        <article class="overview-card overview-genre-card"><h2>Radarr genres</h2><div id="overview-movie-genres" class="overview-genre-chart overview-detail" aria-live="polite">Genre breakdown loads with the movie library.</div></article>
-        <article class="overview-card overview-genre-card"><h2>Sonarr genres</h2><div id="overview-series-genres" class="overview-genre-chart overview-detail" aria-live="polite">Genre breakdown loads with the TV library.</div></article>
+        <article id="overview-radarr-card" class="overview-card" hidden><h2>Radarr</h2><div id="overview-movie-count" class="overview-value">—</div><div id="overview-movie-detail" class="overview-detail">Movie library statistics</div></article>
+        <article id="overview-sonarr-card" class="overview-card" hidden><h2>Sonarr</h2><div id="overview-series-count" class="overview-value">—</div><div id="overview-series-detail" class="overview-detail">TV library statistics</div></article>
+        <article id="overview-radarr-genres-card" class="overview-card overview-genre-card" hidden><h2>Radarr genres</h2><div id="overview-movie-genres" class="overview-genre-chart overview-detail" aria-live="polite">Genre breakdown loads with the movie library.</div></article>
+        <article id="overview-sonarr-genres-card" class="overview-card overview-genre-card" hidden><h2>Sonarr genres</h2><div id="overview-series-genres" class="overview-genre-chart overview-detail" aria-live="polite">Genre breakdown loads with the TV library.</div></article>
       </div>
+    </section>
+    <section id="roarlay-view" hidden><h1 class="page-title">Roarlay</h1>
+      <article class="overview-card" aria-labelledby="roarlay-node-title">
+        <div class="devices-page-heading"><div><h2 id="roarlay-node-title">Coordinator node</h2><p class="overview-detail">This roarlay instance coordinates your Rawrarr workspace and subscriber nodes.</p></div><span id="roarlay-health-state" class="node-state offline" role="status" aria-live="polite"><span class="node-state-indicator" aria-hidden="true"></span><span id="roarlay-health-label" class="node-state-label">Checking…</span></span></div>
+        <dl class="roarlay-details"><div><dt>Node</dt><dd>Roarlay</dd></div><div><dt>Role</dt><dd>Coordinator</dd></div><div><dt>Address</dt><dd id="roarlay-address">This workspace</dd></div><div><dt>Health</dt><dd id="roarlay-health-detail" role="status" aria-live="polite">Checking coordinator health…</dd></div></dl>
+        <div class="connection-actions"><button id="roarlay-health-refresh" type="button">Check again</button><a href="/health" target="_blank" rel="noopener">Open health page</a></div>
+      </article>
     </section>
     <section id="assistant-view" hidden><h1 class="page-title">rawrs</h1>
       <div class="ai-panel">
-        <p>Ask about your library. Try “Which of my movies were made in the 90s?” or “What percentage of my file sizes is Movies versus TV?”</p>
+        <p>Ask about your library. I’m Rawr, your tiny, thoughtful dino helper: curious, kind, dependable, and a little goofy. Try “Which of my movies were made in the 90s?” or “What percentage of my file sizes is Movies versus TV?”</p>
         <p id="ai-quota" class="ai-note" role="status">Checking daily allowance…</p>
-        <p class="ai-note">Sending a question or using rawrs sends your words or recording to OpenAI. Roarlay saves the question and interpreted request in its private PostgreSQL inbox. Movie titles and library sizes stay in this browser. Unlock Movies before asking.</p>
-        <div class="ai-tabs" role="tablist" aria-label="Assistant mode">
-          <button id="ai-tab-chat" type="button" role="tab" aria-selected="true" aria-controls="ai-chat-panel">Chat</button>
-          <button id="ai-tab-voice" type="button" role="tab" aria-selected="false" aria-controls="ai-voice-panel" tabindex="-1">rawrs</button>
-        </div>
-        <section id="ai-chat-panel" class="ai-tab-panel" role="tabpanel" aria-labelledby="ai-tab-chat">
+        <p class="ai-note">Sending a question or using rawrs sends your words or recording to OpenAI. Roarlay saves the question and interpreted request in its private PostgreSQL inbox. Movie titles and library sizes stay in this browser.</p>
+        <section id="ai-chat-panel" class="ai-tab-panel" aria-label="Chat">
           <div id="ai-answer" class="ai-answer" role="status" aria-live="polite"></div>
           <form id="ai-form" class="ai-form">
             <label for="ai-question">Your question</label>
@@ -272,18 +350,11 @@
             <div class="ai-actions"><button id="ai-submit" type="submit">Ask</button></div>
           </form>
         </section>
-        <section id="ai-voice-panel" class="ai-tab-panel" role="tabpanel" aria-labelledby="ai-tab-voice" hidden>
-          <button id="ai-talk" type="button" hidden>Talk</button>
-          <p class="ai-note">Talk uses your microphone. Spoken answers use a local browser voice when available; otherwise only a generic message is spoken and the full answer appears below.</p>
-          <p id="ai-voice-transcript" class="ai-note" role="status"></p>
-          <div id="ai-voice-answer" class="ai-answer" role="status" aria-live="polite"></div>
-        </section>
-        <p><button id="ai-open-movies" type="button">Unlock Movies</button></p>
         <details><summary>Request inbox</summary><p class="ai-note">Questions and interpreted filters stay in roarlay’s PostgreSQL database for review.</p>
           <ol id="ai-history" class="ai-history"></ol></details>
       </div>
     </section>
-    <section id="devices-view" hidden><h1 class="page-title">Devices</h1>
+    <section id="fossils-view" hidden><div class="devices-page-heading"><h1 class="page-title">Fossils</h1><a class="button-link" href="/setup/node">Add a fossil</a></div>
     <section id="pending" aria-label="Nodes waiting for approval" hidden></section>
     <div id="status" role="status" aria-live="polite">Loading your connected nodes…</div>
     <article id="empty-devices" class="connection-card" hidden aria-labelledby="empty-devices-title">
@@ -296,13 +367,18 @@
       <h2 id="device-topology-title">Topology</h2>
       <p class="topology-intro">Syncthing connections between your devices.</p>
       <div id="device-topology-content"></div>
+      <section class="signing-topology" aria-labelledby="signing-topology-title">
+        <h3 id="signing-topology-title">Signing key topology</h3>
+        <p class="signing-topology-intro">You are the authority for this instance. Your user-held root key signs off on each device’s exact signing key and role. Passkey sign-in identifies your account; it does not replace this root signature.</p>
+        <div id="signing-topology-content" aria-live="polite"></div>
+      </section>
     </section>
     <p id="device-name-status" role="status" aria-live="polite"></p>
     </section>
     <section id="movies-view" hidden><h1 class="page-title">Movies</h1>
     <article id="radarr-connection-card" class="connection-card" aria-labelledby="radarr-connection-title" hidden>
       <h2 id="radarr-connection-title">Radarr connection</h2>
-      <p class="connection-intro" id="radarr-node-note">Select an online metadata node in Devices. The URL, API key, and optional UI login go directly from this browser to that node; roarlay never receives the credentials. Settings are saved in its age-encrypted config.</p>
+      <p class="connection-intro" id="radarr-node-note">Select an online metadata node in Fossils. The URL, API key, and optional UI login go directly from this browser to that node; roarlay never receives the credentials. Settings are saved in its age-encrypted config.</p>
       <form id="radarr-settings" class="connection-form">
         <label for="radarr-url">Radarr URL</label>
         <input id="radarr-url" name="url" type="url" placeholder="https://radarr.example.com" autocomplete="url" required>
@@ -324,7 +400,7 @@
         <label for="age-id">Age private ID</label><br>
         <input id="age-id" type="password" autocomplete="off" spellcheck="false" placeholder="AGE-SECRET-KEY-PQ-1…">
         <button id="unlock" type="button">Unlock metadata</button>
-        <p class="age-security-warning">Your ID is saved in this browser so you can use the main pages without entering it again. Sign out or clear it in Settings to remove it.</p>
+        <p class="age-security-warning">After validation, Rawrarr saves your ID in this browser when browser storage is available. Sign out or clear it in Settings to remove it.</p>
       </div>
       <button id="clear-key" type="button" hidden>Clear private ID</button>
       </div></div>
@@ -341,7 +417,7 @@
     <section id="series-view" hidden><h1 class="page-title">TV</h1>
       <article id="sonarr-connection-card" class="connection-card" aria-labelledby="sonarr-connection-title" hidden>
         <h2 id="sonarr-connection-title">Sonarr connection</h2>
-        <p class="connection-intro" id="sonarr-node-note">Select an online fossil node in Devices. The URL and API key go directly from this browser to that node; roarlay never receives the API key. Settings are saved in its age-encrypted config.</p>
+        <p class="connection-intro" id="sonarr-node-note">Select an online fossil node in Fossils. The URL and API key go directly from this browser to that node; roarlay never receives the API key. Settings are saved in its age-encrypted config.</p>
         <form id="sonarr-settings" class="connection-form">
           <label for="sonarr-url">Sonarr URL</label>
           <input id="sonarr-url" name="url" type="url" placeholder="https://sonarr.example.com" autocomplete="url" required>
@@ -368,37 +444,58 @@
       <p id="configuration-status" class="sub" role="status" aria-live="polite">Loading shared configuration…</p>
       <pre id="configuration-json" class="stub" style="margin-top:14px;white-space:pre-wrap;overflow-wrap:anywhere" aria-label="Redacted cluster configuration">Cluster configuration is not loaded.</pre>
     </section>
-    <section id="about-view" hidden><h1 class="page-title">About rawrarr</h1>
-      <article class="connection-card">
-        <h2>Browse your libraries from the web app</h2>
-        <p class="connection-intro">Sign in with your passkey, choose an approved online fossil, and use Rawrarr to browse the movie and TV libraries connected to that node.</p>
-        <p class="sub">Connect an existing Radarr or Sonarr in Settings. The browser sends its URL and credentials directly to the selected fossil; roarlay does not receive the credentials. The node saves the connection in its age-encrypted configuration.</p>
-        <p class="sub">Open Movies or TV to load the selected node’s library. Enter your age private ID in this browser to unlock encrypted metadata. Devices shows your enrolled nodes and their available connection routes.</p>
-        <p class="sub">Roarlay handles sign-in and coordinates access to your nodes. The web app uses a direct browser-to-node route when available and a scoped roarlay relay when needed.</p>
-      </article>
+    <section id="about-view" class="about-page" hidden><h1 class="page-title">About rawrarr</h1>
+      <div class="about-hero">
+        <p class="about-kicker">Your library, one workspace</p>
+        <h2>See your movie and TV libraries together.</h2>
+        <p class="about-lead">Sign in with your passkey, choose an approved online fossil, and use Rawrarr’s web app to browse the libraries connected to that node.</p>
+      </div>
+      <div class="about-steps" aria-label="How the Rawrarr web app works">
+        <article class="about-step"><span class="about-step-index" aria-hidden="true">01</span><h3>Choose a node</h3><p>Fossils shows your enrolled nodes and available routes. Select an approved, online fossil to work with its libraries.</p></article>
+        <article class="about-step"><span class="about-step-index" aria-hidden="true">02</span><h3>Connect Radarr or Sonarr</h3><p>Connect an existing service in Settings. Your browser sends its URL and credentials directly to the selected fossil, which saves them in its age-encrypted configuration.</p></article>
+        <article class="about-step"><span class="about-step-index" aria-hidden="true">03</span><h3>Browse your library</h3><p>Open Movies or TV to load that node’s library. Enter your age private ID in this browser to unlock encrypted metadata.</p></article>
+      </div>
+      <aside class="about-privacy"><span class="about-privacy-mark" aria-hidden="true">↗</span><p>Roarlay handles sign-in and coordinates access to your nodes. The browser connects directly when it can, with a scoped roarlay relay available when needed. Radarr and Sonarr credentials stay between your browser and the selected fossil.</p></aside>
     </section>
     <section id="settings-view" hidden><h1 class="page-title">Settings</h1>
       <div class="settings-identity">
-      <article class="profile-card"><picture class="profile-avatar"><source id="profile-picture-jxl" type="image/jxl"><img id="profile-picture" alt="Generated dinosaur profile picture"></picture><div class="profile-avatar-copy"><h2 class="profile-name" id="profile-name">Loading profile…</h2><p class="profile-avatar-status" id="profile-avatar-status" role="status" aria-live="polite">Preparing your profile picture…</p></div></article>
+      <article class="profile-card"><picture class="profile-avatar"><source id="profile-picture-jxl" type="image/jxl"><img id="profile-picture" alt="Generated dinosaur profile picture"></picture><div class="profile-avatar-copy"><h2 class="profile-name" id="profile-name">Loading profile…</h2><p class="profile-avatar-status" id="profile-avatar-status" role="status" aria-live="polite">Preparing your profile picture…</p><p id="trial-status" class="profile-avatar-status" role="status" aria-live="polite" hidden></p></div></article>
+      <article class="settings-crypto-card connection-card" aria-labelledby="settings-crypto-title">
+        <h2 id="settings-crypto-title">Ethereum &amp; ENS</h2>
+        <p id="crypto-access-status" class="profile-avatar-status" role="status" aria-live="polite">Loading account tier…</p>
+        <p id="crypto-wallet-status" class="profile-avatar-status" role="status" aria-live="polite">Checking linked ENS wallet…</p>
+        <form id="crypto-wallet-link-form" class="connection-form">
+          <label for="crypto-ens-name">Link an ENS wallet</label>
+          <input id="crypto-ens-name" type="text" autocomplete="username" spellcheck="false">
+          <button id="crypto-link-wallet" type="submit">Link wallet with signature</button>
+          <p id="crypto-link-message" role="status" aria-live="polite"></p>
+        </form>
+        <p><a href="/billing">Manage subscription</a></p>
+      </article>
       <article class="age-storage-card" aria-labelledby="age-storage-title">
         <h2 id="age-storage-title">Age private ID in this browser</h2>
         <p id="age-storage-status" class="age-storage-status" role="status" aria-live="polite">Checking browser storage…</p>
         <form id="age-storage-form" class="age-storage-form">
           <label id="settings-age-id-label" for="settings-age-id">Age private ID</label>
           <input id="settings-age-id" type="password" autocomplete="off" spellcheck="false" placeholder="AGE-SECRET-KEY-PQ-1…">
-          <div class="connection-actions"><button id="save-age-id" type="submit">Save age ID in this browser</button><button id="remove-age-id" type="button" hidden>Clear saved age ID</button></div>
+          <div class="connection-actions"><button id="save-age-id" type="submit">Save age ID in this browser</button><button id="show-age-recipient" type="button" hidden>Show age public ID</button><button id="remove-age-id" type="button" hidden>Clear saved age ID</button></div>
+          <div id="age-recipient-display" class="age-recipient-display" hidden><code id="age-recipient-short"></code><button id="copy-age-recipient" type="button">Copy age public ID</button></div>
+          <p id="age-recipient-message" class="age-storage-status" role="status" aria-live="polite" hidden></p>
           <p id="age-storage-message" class="connection-message" role="status" aria-live="polite"></p>
         </form>
       </article>
       </div>
       <h2 style="margin:26px 0 4px">Media service connections</h2>
-      <p class="connection-intro">Save Radarr and Sonarr details to the selected metadata node's age-encrypted config. API keys and the optional Radarr UI login go directly from this browser to that node and are never shown after saving.</p>
+      <p class="connection-intro">Connect services to the selected fossil. Credentials are tested and saved by that node in its age-encrypted config; roarlay never receives them.</p>
       <div class="settings-connections">
         <article class="connection-card" aria-labelledby="settings-radarr-title">
           <h2 id="settings-radarr-title">Radarr</h2>
           <div id="settings-radarr-saved" class="connection-saved" hidden role="status" aria-live="polite"><strong>Radarr details saved</strong><span id="settings-radarr-saved-url" class="connection-saved-url"></span><span class="connection-saved-note">API key and optional UI login stored in the age-encrypted config.</span></div>
-          <p class="connection-intro" id="settings-radarr-node-note">Select an online metadata node in Devices to manage this connection.</p>
+          <p class="connection-intro" id="settings-radarr-node-note">Select an online metadata node in Fossils to manage this connection.</p>
+          <button id="settings-configure-radarr" type="button">Configure Radarr</button>
+          <dialog class="arr-settings-dialog" id="settings-radarr-dialog" aria-labelledby="settings-radarr-dialog-title">
           <form id="settings-radarr-settings" class="connection-form">
+            <h2 id="settings-radarr-dialog-title">Configure Radarr</h2>
             <label for="settings-radarr-url">Radarr URL</label>
             <input id="settings-radarr-url" name="url" type="url" placeholder="https://radarr.example.com" autocomplete="url" required>
             <label for="settings-radarr-key">Radarr API key</label>
@@ -409,23 +506,28 @@
             <label for="settings-radarr-ui-password">Radarr UI password (optional)</label>
             <input id="settings-radarr-ui-password" name="uiPassword" type="password" autocomplete="current-password">
             <p id="settings-radarr-ui-auth-note" class="connection-note">Enter both only if Radarr requires a UI login to download backups. Stored in the age-encrypted config.</p>
-            <div class="connection-actions"><button id="settings-save-radarr" type="submit">Save and connect</button><button id="settings-clear-radarr" type="button">Clear connection</button></div>
+            <div class="connection-actions"><button id="settings-test-radarr" type="button">Test connection</button><button id="settings-save-radarr" type="submit">Save and connect</button><button id="settings-clear-radarr" type="button">Clear connection</button><button class="arr-dialog-close" type="button">Cancel</button></div>
             <p id="settings-radarr-settings-message" class="connection-message" role="status" aria-live="polite"></p>
           </form>
+          </dialog>
         </article>
         <article class="connection-card" aria-labelledby="settings-sonarr-title">
           <h2 id="settings-sonarr-title">Sonarr</h2>
           <div id="settings-sonarr-saved" class="connection-saved" hidden role="status" aria-live="polite"><strong>Sonarr details saved</strong><span id="settings-sonarr-saved-url" class="connection-saved-url"></span><span class="connection-saved-note">API key stored in the age-encrypted config.</span></div>
-          <p class="connection-intro" id="settings-sonarr-node-note">Select an online fossil node in Devices to manage this connection.</p>
+          <p class="connection-intro" id="settings-sonarr-node-note">Select an online fossil node in Fossils to manage this connection.</p>
+          <button id="settings-configure-sonarr" type="button">Configure Sonarr</button>
+          <dialog class="arr-settings-dialog" id="settings-sonarr-dialog" aria-labelledby="settings-sonarr-dialog-title">
           <form id="settings-sonarr-settings" class="connection-form">
+            <h2 id="settings-sonarr-dialog-title">Configure Sonarr</h2>
             <label for="settings-sonarr-url">Sonarr URL</label>
             <input id="settings-sonarr-url" name="url" type="url" placeholder="https://sonarr.example.com" autocomplete="url" required>
             <label for="settings-sonarr-key">Sonarr API key</label>
             <input id="settings-sonarr-key" name="apiKey" type="password" autocomplete="new-password">
             <p id="settings-sonarr-key-note" class="connection-note">Required for the first save.</p>
-            <div class="connection-actions"><button id="settings-save-sonarr" type="submit">Save and connect</button><button id="settings-clear-sonarr" type="button">Clear connection</button></div>
+            <div class="connection-actions"><button id="settings-test-sonarr" type="button">Test connection</button><button id="settings-save-sonarr" type="submit">Save and connect</button><button id="settings-clear-sonarr" type="button">Clear connection</button><button class="arr-dialog-close" type="button">Cancel</button></div>
             <p id="settings-sonarr-settings-message" class="connection-message" role="status" aria-live="polite"></p>
           </form>
+          </dialog>
         </article>
       </div>
       <article class="panel" style="max-width:620px;margin-top:16px"><h2>Export metadata</h2><p class="sub">Download all available movie metadata records and matching artwork. Your browser decrypts the files and builds the ZIP locally.</p><button id="export-metadata" class="primary-button" type="button">Export metadata ZIP</button><p id="metadata-export-status" class="sub" role="status" aria-live="polite"></p></article>
@@ -443,7 +545,8 @@
     <dialog id="approve-node-dialog" style="width:min(640px,calc(100% - 28px));border:1px solid #39463d;border-radius:14px;background:#151b18;color:#e7eee8;padding:22px">
       <form id="approve-node-form">
         <h2 style="margin:0 0 8px">Approve with the instance root key</h2>
-        <p class="sub">This tab decrypts the root backup with your age ID and signs the displayed request locally. Only the public root key and signature are sent to roarlay. Compare the fingerprint with the copy you saved separately.</p>
+        <p class="sub">This tab decrypts the root backup with your age ID and signs the displayed approval or rejection locally. Only the public root key and signature are sent to roarlay. Compare the fingerprint with the copy you saved separately.</p>
+        <div id="approve-node-attestation" class="approval-attestation" aria-live="polite"><strong>Review before signing</strong><p>After the backup fingerprint matches, this panel will identify the exact device key and role your signature authorizes.</p></div>
         <p id="approve-node-status" class="connection-message" role="status" aria-live="polite"></p>
         <label for="approve-node-age-id">Age private ID</label>
         <input id="approve-node-age-id" type="password" autocomplete="off" spellcheck="false" required style="width:100%;min-height:42px;margin-top:6px;border:1px solid #46574a;border-radius:8px;background:#101411;color:var(--text);padding:10px;font:12px ui-monospace,monospace">
@@ -454,9 +557,31 @@
         <div class="connection-actions"><button type="submit">Sign and approve</button><button id="approve-node-cancel" type="button">Cancel</button></div>
       </form>
     </dialog>
+    <dialog id="device-edit-dialog" class="device-edit-dialog" aria-labelledby="device-edit-title">
+      <form id="device-edit-form">
+        <h2 id="device-edit-title">Edit device</h2>
+        <p id="device-edit-description" class="sub"></p>
+        <label for="device-edit-name">Device name</label>
+        <input id="device-edit-name" type="text" maxlength="80" autocomplete="off" required>
+        <p id="device-edit-status" class="connection-message" role="status" aria-live="polite"></p>
+        <div class="device-edit-actions">
+          <button id="device-edit-delete" class="device-edit-delete" type="button">Delete device</button>
+          <div><button id="device-edit-cancel" type="button">Cancel</button><button id="device-edit-save" type="submit">Save name</button></div>
+        </div>
+      </form>
+    </dialog>
   </main>
    </div>
   </div>
+  <button id="rawrs-launcher" class="rawrs-launcher" type="button" aria-label="Open rawrs voice agent" aria-expanded="false" aria-controls="ai-voice-panel">rawr</button>
+  <section id="ai-voice-panel" class="rawrs-voice-panel" aria-label="rawrs voice agent" hidden>
+    <div class="rawrs-voice-heading"><h2>Talk to rawrs</h2><button id="rawrs-close" type="button" aria-label="Close rawrs voice panel">×</button></div>
+    <p class="ai-note">Your recording is sent to OpenAI for transcription. Spoken answers use a local browser voice when available.</p>
+    <button id="ai-talk" type="button" hidden>Talk</button>
+    <p id="ai-voice-transcript" class="ai-note" role="status"></p>
+    <div id="ai-voice-answer" class="ai-answer" role="status" aria-live="polite"></div>
+    <button id="ai-open-movies" type="button">Unlock Movies</button>
+  </section>
   <script type="module" src="/assets/coordinator-workspace.mjs"></script>
 </body>
 </html>

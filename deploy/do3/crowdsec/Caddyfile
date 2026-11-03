@@ -1,0 +1,95 @@
+{
+	admin unix//run/caddy/admin.sock
+	crowdsec {
+		api_url http://crowdsec:8080
+		api_key {$CROWDSEC_BOUNCER_KEY}
+		ticker_interval 15s
+	}
+}
+
+rawrarr.willjasen.net {
+	tls /etc/caddy/certs/rawrarr.crt /etc/caddy/certs/rawrarr.key
+
+	@internal_swarmsail path /internal/swarmsail/*
+	@public_account_callback {
+		path /internal/swarmsail/*
+		not remote_ip 172.30.99.3
+	}
+	@headscale_admin_api path /api/v1* /api/v2*
+	@headscale path /ts2021 /robots.txt /version /key /register/* /auth/* /oidc/callback /register/confirm/* /apple /apple/* /windows /swagger /swagger/* /verify /derp /derp/* /bootstrap-dns /machine/*
+	@swarmsail path /swarmsail /swarmsail/*
+	@stripe_webhook path /v1/webhooks/stripe
+
+	log {
+		output file /var/log/caddy/access.log {
+			mode 0600
+			roll_size 20MiB
+			roll_interval 24h
+			roll_keep 7
+			roll_keep_for 168h
+			roll_uncompressed
+		}
+		format filter {
+			request>uri regexp `\?.*` ""
+			request>headers>Authorization delete
+			request>headers>Proxy-Authorization delete
+			request>headers>Cookie delete
+		}
+	}
+	log_skip @internal_swarmsail
+	log_skip @headscale
+	log_skip @stripe_webhook
+
+	handle @public_account_callback {
+		route {
+			crowdsec
+			respond "Not Found" 404
+		}
+	}
+
+	handle @headscale_admin_api {
+		route {
+			crowdsec
+			respond "Not Found" 404
+		}
+	}
+
+	handle @headscale {
+		route {
+			crowdsec
+			reverse_proxy headscale:8080 {
+				header_up True-Client-IP {remote_host}
+				header_up X-Real-IP {remote_host}
+			}
+		}
+	}
+
+	handle @swarmsail {
+		route {
+			crowdsec
+			respond "Not Found" 404
+		}
+	}
+
+	handle @stripe_webhook {
+		route {
+			crowdsec
+			reverse_proxy stripe-service:8090
+		}
+	}
+
+	handle {
+		route {
+			crowdsec
+			reverse_proxy tailscale:8080
+		}
+	}
+}
+
+shale-mammoth-roarlay.willjasen.net {
+	log_skip
+	route {
+		crowdsec
+		reverse_proxy headscale-swarmsail-1:8080
+	}
+}

@@ -49,5 +49,7 @@ test('subscriber recipient endpoint and coordinator device cards use the node id
   assert.match(workspace, /device-avatar/);
   assert.match(workspace, /device-picture\/\$\{seed\}\/jxl/);
   assert.match(workspace, /device-picture\/\$\{seed\}\/png/);
+  assert.doesNotMatch(workspace, /async function loadNodeAvatar\(node, pictureSource, image\) \{\s*if \(!node\.online \|\| !node\.relayAvailable\)/);
+  assert.match(workspace, /rawrarr-node:\$\{node\.nodeId\}/);
   assert.match(html, /\.device-avatar/);
 });

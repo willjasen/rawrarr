@@ -1,19 +1,24 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { subscriberCompose } from '../../rust-arr/web-export/subscriber-compose.js';
 
-const base = { nodeId: `device-${'a'.repeat(24)}`, coordinatorUrl: 'https://rawrarr.example.test', networkMode: 'internal-tailscale', authKey: 'tskey-auth-test-fixture', rootFingerprint: 'a'.repeat(64) };
+const base = { nodeId: `fossil-${'a'.repeat(24)}`, coordinatorUrl: 'https://rawrarr.example.test', networkMode: 'internal-tailscale', authKey: 'tskey-auth-test-fixture', rootFingerprint: 'a'.repeat(64) };
 
-test('subscriber Compose offers fossil and boneyard with private UI update credentials', () => {
+test('subscriber Compose offers fossil and boneyard without coordinator GitHub updater credentials', () => {
   for (const role of ['metadata', 'storage']) {
     const yaml = subscriberCompose({ ...base, role, mediaPath: '/srv/media' });
+    assert.doesNotMatch(yaml, /^\s*ports\s*:/m, `${role} subscriber Compose must not publish any container port to the host`);
     assert.match(yaml, new RegExp(`RAWARR_ROLE: ${role}`));
     assert.match(yaml, /network_mode: service:tailscale/);
     assert.match(yaml, /TS_AUTHKEY: "tskey-auth-test-fixture"/);
     assert.doesNotMatch(yaml, /tailscale-authkey/);
     assert.match(yaml, /rawrarr-ui:\/ui/);
-    assert.match(yaml, /RAWARR_UI_GITHUB_TOKEN_FILE: \/run\/secrets\/rawrarr_ui_github_token/);
-    assert.match(yaml, /RAWARR_UI_GITHUB_TOKEN_PATH/);
+    assert.match(yaml, /image: ghcr\.io\/willjasen\/rawrarr:main/);
+    assert.match(yaml, /pull_policy: always/);
+    assert.match(yaml, /read:packages access before the first pull/);
+    assert.doesNotMatch(yaml, /rawrarr:local/);
+    assert.doesNotMatch(yaml, /RAWARR_UI_GITHUB_TOKEN|rawrarr_ui_github_token/);
     assert.match(yaml, new RegExp(`TS_HOSTNAME: rawrarr-my-${role === 'storage' ? 'boneyard' : 'fossil'}-node`));
     assert.match(yaml, /tailscale-state:\/var\/lib\/tailscale/);
     assert.match(yaml, /rawrarr-data:\/data/);
@@ -42,10 +47,23 @@ test('subscriber Compose offers fossil and boneyard with private UI update crede
   assert.throws(() => subscriberCompose({ nodeId: base.nodeId, coordinatorUrl: base.coordinatorUrl, role: 'metadata' }), /Choose internal Tailscale/);
 });
 
+test('generated node IDs use the fossil prefix', () => {
+  return Promise.all([
+    readFile(new URL('../../rust-arr/web-export/subscriber-onboarding.js', import.meta.url), 'utf8'),
+    readFile(new URL('../../rust-arr/src/assets/subscriber-onboarding.js', import.meta.url), 'utf8'),
+  ]).then(([source, bundle]) => {
+    assert.match(source, /const nodeId = `fossil-/);
+    assert.match(bundle, /g0=`fossil-/);
+    assert.match(bundle, /\^fossil-\[0-9a-f\]\{24\}\$/);
+  });
+});
+
 test('public mode configures the selected Headscale control server without embedding its key', () => {
   const yaml = subscriberCompose({ ...base, role: 'metadata', networkMode: 'headscale', controlServer: 'https://headscale.example.test' });
   assert.match(yaml, /TS_EXTRA_ARGS: "--accept-dns=false --login-server=https:\/\/headscale\.example\.test"/);
   assert.match(yaml, /TS_AUTHKEY: file:\/run\/secrets\/tailscale-authkey/);
+  assert.match(yaml, /secrets:\n  tailscale-authkey:/);
+  assert.doesNotMatch(yaml, /RAWARR_UI_GITHUB_TOKEN|rawrarr_ui_github_token/);
   assert.doesNotMatch(yaml, /TS_EXTRA_ARGS:.*tailscale\.com/);
   assert.throws(() => subscriberCompose({ ...base, role: 'metadata', networkMode: 'headscale' }), /Headscale control server URL/);
   assert.throws(() => subscriberCompose({ ...base, role: 'metadata', networkMode: 'headscale', controlServer: 'http://headscale.example.test' }), /HTTPS Headscale/);

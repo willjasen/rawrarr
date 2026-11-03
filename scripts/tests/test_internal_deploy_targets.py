@@ -11,6 +11,18 @@ class InternalDeployTargetTests(unittest.TestCase):
         result = classify_paths(["rust-arr/src/coordinator.rs", "rust-arr/src/coordinator-passkey.mjs", "docker-compose.internal-mini.yml"])
         self.assertEqual(result["targets"], ["coordinator"])
 
+    def test_ui_updater_changes_select_coordinator_only(self):
+        result = classify_paths(["rust-arr/update_ui_bundle.py"])
+        self.assertEqual(result["targets"], ["coordinator"])
+
+    def test_coordinator_signing_asset_and_database_migrations_are_coordinator_only(self):
+        result = classify_paths([
+            "rust-arr/src/assets/device-signing-client.js",
+            "rust-arr/web-export/device-signing-client.js",
+            "rust-arr/migrations/0011_signed_device_rejections.sql",
+        ])
+        self.assertEqual(result["targets"], ["coordinator"])
+
     def test_node_only_changes_select_nodes(self):
         result = classify_paths(["rust-arr/src/library.rs", "docker-compose.metadata.yml"])
         self.assertEqual(result["targets"], ["nodes"])

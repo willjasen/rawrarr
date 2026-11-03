@@ -97,7 +97,7 @@ test('generated private age identity has a short preview and full value is expos
       if (options.method === 'POST') return { ok: true, async json() { return { unlocked: true, themeSeed }; } };
       return { ok: true, async json() { return { unlocked: false, encryptedConfigExists: false }; } };
     },
-    window: { location: { origin: 'http://localhost:7297', replaced: [], replace(path) { this.replaced.push(path); } }, addEventListener() {} }
+    window: { location: { origin: 'http://localhost:7297', replaced: [], replace(path) { this.replaced.push(path); } }, addEventListener() {}, rawrarrMiniExport: { async prepareGroupIdentityForDevice() { return false; }, async encryptIdentityForDevice(value) { return `age-ciphertext:${value}`; } } }
   };
   const script = page.match(/<script>([\s\S]*?)<\/script>/i)?.[1];
   assert.ok(script, 'age setup page contains client script');
@@ -157,5 +157,6 @@ test('generated private age identity has a short preview and full value is expos
   await elements['import-submit'].click();
   assert.equal(unlockCount(), 2, 'imported ID unlocks directly without creating a new ID');
   const submitted = fetchCalls.filter(call => call.url === '/api/settings/age' && call.options.method === 'POST').at(-1);
-  assert.equal(JSON.parse(submitted.options.body).identity, privateKey);
+  assert.equal(JSON.parse(submitted.options.body).identityEnvelope, `age-ciphertext:${privateKey}`);
+  assert.equal(Object.hasOwn(JSON.parse(submitted.options.body), 'identity'), false, 'the browser never posts its user identity as plaintext');
 });

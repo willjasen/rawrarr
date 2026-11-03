@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHmac, randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -14,7 +14,16 @@ const ageModule = await import('../../rust-arr/web-export/node_modules/age-encry
 const generatedIdentity = execFileSync('age-keygen', ['-pq'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 const privateIdentity = generatedIdentity.split('\n').find(line => line.startsWith('AGE-SECRET-KEY-PQ-1'));
 assert.ok(privateIdentity);
-const recipient = execFileSync('age-keygen', ['-y'], { input: privateIdentity, encoding: 'utf8' }).trim();
+const userRecipient = execFileSync('age-keygen', ['-y'], { input: privateIdentity, encoding: 'utf8' }).trim();
+const groupGeneratedIdentity = execFileSync('age-keygen', ['-pq'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+const groupPrivateIdentity = groupGeneratedIdentity.split('\n').find(line => line.startsWith('AGE-SECRET-KEY-PQ-1'));
+assert.ok(groupPrivateIdentity);
+const groupRecipient = execFileSync('age-keygen', ['-y'], { input: groupPrivateIdentity, encoding: 'utf8' }).trim();
+const groupUserEnvelope = execFileSync('age', ['--recipient', userRecipient], { input: Buffer.from(groupGeneratedIdentity) });
+const nodeIdentity = execFileSync('age-keygen', ['-pq'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+const nodePrivateIdentity = nodeIdentity.split('\n').find(line => line.startsWith('AGE-SECRET-KEY-PQ-1'));
+assert.ok(nodePrivateIdentity);
+const nodeRecipient = execFileSync('age-keygen', ['-y'], { input: nodePrivateIdentity, encoding: 'utf8' }).trim();
 const filenameKey = randomBytes(32);
 const records = [
   { tmdbId: 24001, title: 'Mini Export Fixture One', schemaVersion: 1 },
@@ -25,8 +34,8 @@ const records = [
 function hmacFilename(kind, id, suffix) {
   return `${createHmac('sha256', filenameKey).update(`rawrarr-metadata-filename-v1\0${kind}\0tmdb\0${id}`).digest('hex')}${suffix}`;
 }
-function encrypt(plaintext) {
-  return execFileSync('age', ['--recipient', recipient], { input: plaintext });
+function encrypt(plaintext, targetRecipient = groupRecipient) {
+  return execFileSync('age', ['--recipient', targetRecipient], { input: plaintext });
 }
 const configCiphertext = encrypt(Buffer.from(JSON.stringify({ metadata_filename_key: filenameKey.toString('hex'), radarr_api_key: 'fixture-secret' })));
 const encryptedText = new Map(records.map(record => [hmacFilename('text', record.tmdbId, '.json.aged'), encrypt(Buffer.from(JSON.stringify(record)))]));
@@ -41,6 +50,7 @@ test('browser metadata export includes every indexed movie record and matching a
   const tmp = await mkdtemp(join(tmpdir(), 'rawrarr-mini-export-'));
   t.after(async () => { await browser?.close(); await new Promise(resolve => server?.close(resolve)); await rm(tmp, { recursive: true, force: true }); });
   const requests = [];
+  let installedGroupEnvelope;
   server = createServer((request, response) => {
     requests.push({ url: request.url, method: request.method, body: '' });
     if (request.url === '/') {
@@ -56,6 +66,19 @@ test('browser metadata export includes every indexed movie record and matching a
       response.end(JSON.stringify({ textFiles: [...encryptedText.keys()], artworkFiles: [...artworkPayloads.keys()] })); return;
     }
     if (request.url === '/api/metadata/export/config') { response.end(configCiphertext); return; }
+    if (request.url === '/api/metadata/export/group-user-envelope') { response.end(groupUserEnvelope); return; }
+    if (request.url === '/api/metadata/export/recipient') { response.end(groupRecipient); return; }
+    if (request.url === '/api/metadata/export/node-recipient') { response.end(nodeRecipient); return; }
+    if (request.url === '/api/settings/age/group-identity' && request.method === 'PUT') {
+      const chunks = [];
+      request.on('data', chunk => chunks.push(chunk));
+      request.on('end', () => {
+        installedGroupEnvelope = Buffer.concat(chunks);
+        response.statusCode = 204;
+        response.end();
+      });
+      return;
+    }
     const match = request.url.match(/^\/api\/metadata\/export\/ciphertext\/(text|artwork)\/([a-f0-9]{64}\.(?:json\.)?aged)$/);
     if (!match) { response.statusCode = 404; response.end(); return; }
     const [, kind, name] = match;
@@ -102,7 +125,15 @@ test('browser metadata export includes every indexed movie record and matching a
     const expected = artworkPayloads.get(hmacFilename('artwork', record.tmdbId, '.aged')).bytes;
     assert.deepEqual(Buffer.from(archive[movie.artworkPath]), expected);
   }
-  assert.equal(requests.some(({ method, url, body }) => method !== 'GET' || url.includes(privateIdentity) || body.includes(privateIdentity)), false);
+  assert.equal(await page.evaluate(identity => window.rawrarrMiniExport.prepareGroupIdentityForDevice(identity), privateIdentity), true);
+  assert.ok(installedGroupEnvelope, 'device provisioning should install an age-encrypted group identity');
+  const nodeEnvelopePath = join(tmp, 'node-group-envelope.aged');
+  await writeFile(nodeEnvelopePath, installedGroupEnvelope);
+  const installedGroupIdentity = execFileSync('age', ['--decrypt', '--identity', '-', nodeEnvelopePath], {
+    input: nodePrivateIdentity, encoding: 'utf8',
+  }).trim();
+  assert.equal(installedGroupIdentity, groupPrivateIdentity, 'device provisioning should normalize and preserve the group identity');
+  assert.equal(requests.some(({ url, body }) => url.includes(privateIdentity) || body.includes(privateIdentity)), false);
   assert.equal(await page.locator('#identity').inputValue(), privateIdentity);
   await context.close();
   assert.ok(await ageModule.identityToRecipient(privateIdentity));

@@ -12,6 +12,7 @@ test('Sonarr settings save the entered key, reload only its URL, and clear the c
   const errors = [];
   const saves = [];
   let configured = false;
+  const libraryRequests = [];
 
   page.on('pageerror', error => errors.push(error.message));
   await page.route('http://rawrarr.test/**', async route => {
@@ -31,25 +32,35 @@ test('Sonarr settings save the entered key, reload only its URL, and clear the c
       configured = false;
       return route.fulfill({ json: { configured: false, persisted: false, url: null } });
     }
+    if (url.pathname === '/api/sonarr/series') { libraryRequests.push(url.pathname); return route.fulfill({ json: [] }); }
     return route.fulfill({ status: 503, json: { error: 'Fixture unavailable' } });
   });
 
   await page.goto('http://rawrarr.test/');
-  await page.click('#settings-nav');
+  await page.click('#series-nav');
+  await page.locator('#sonarr-settings-panel').waitFor({ state: 'visible' });
+  assert.match(await page.locator('#sonarr-settings-panel .setup-intro').textContent(), /Enter your Sonarr URL and API key/);
+  assert.equal(libraryRequests.length, 0);
+  assert.equal(await page.locator('#series-content > .grid').isVisible(), false);
   await page.locator('#sonarr-settings-panel').scrollIntoViewIfNeeded();
   await page.locator('#sonarr-url').fill('https://sonarr.example.test');
   await page.locator('#sonarr-key').fill('sonarr-test-api-key');
   await page.click('#save-sonarr');
-  await page.getByText('Connected to Sonarr. Settings saved encrypted.').waitFor();
+  await page.waitForFunction(() => document.getElementById('sonarr-settings-message').textContent === 'Connected to Sonarr. Settings saved encrypted.');
 
   assert.deepEqual(saves, [{ url: 'https://sonarr.example.test', apiKey: 'sonarr-test-api-key' }]);
   assert.equal(await page.locator('#sonarr-key').inputValue(), '');
   assert.equal(await page.locator('#sonarr-url').inputValue(), 'https://sonarr.example.test');
   assert.equal(await page.locator('#sonarr-key').evaluate(element => element.required), false);
+  assert.equal(libraryRequests.length, 1);
+  assert.equal(await page.locator('#sonarr-settings-panel').isVisible(), false);
 
+  await page.click('#edit-sonarr-connection');
+  await page.locator('#sonarr-settings-panel').waitFor({ state: 'visible' });
   await page.click('#clear-sonarr');
   await page.getByText('Sonarr settings cleared.').waitFor();
   assert.equal(await page.locator('#sonarr-url').inputValue(), '');
   assert.equal(await page.locator('#sonarr-key').evaluate(element => element.required), true);
+  assert.equal(await page.locator('#sonarr-settings-panel').isVisible(), true);
   assert.deepEqual(errors, []);
 });

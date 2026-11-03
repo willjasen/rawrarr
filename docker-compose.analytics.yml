@@ -1,0 +1,7 @@
+# Coordinator-only analytics settings. This file does not start Umami or a database.
+# Analytics remain disabled unless both variables are explicitly configured.
+services:
+  roarlay:
+    environment:
+      RAWARR_ANALYTICS_SITE_ID: ${RAWARR_ANALYTICS_SITE_ID:-}
+      RAWARR_ANALYTICS_UPSTREAM: ${RAWARR_ANALYTICS_UPSTREAM:-}

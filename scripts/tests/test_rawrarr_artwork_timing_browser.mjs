@@ -11,6 +11,7 @@ test('scrolling to a deferred poster measures its request rather than time since
   await page.route('http://rawrarr.test/**', async route => {
     const path = new URL(route.request().url()).pathname;
     if (path === '/') return route.fulfill({ body: html, contentType: 'text/html' });
+    if (path === '/api/settings/radarr') return route.fulfill({ json: { configured: true, persisted: true, url: 'https://radarr.test/' } });
     if (path === '/api/radarr/movies') return route.fulfill({ json: Array.from({ length: 150 }, (_, i) => ({ title: `Movie ${i}`, posterUrl: `/poster/${i}`, artworkSource: 'shared' })) });
     if (path.startsWith('/poster/')) {
       requested.add(path);

@@ -2,7 +2,9 @@
 
 ## Purpose and current decisions
 
-Rawrarr is intended to be self-hosted from a packaged Docker image. The first setup receives a 24-hour trial; afterward, access is gated until a subscription is active. The selected direction is hosted checkout plus a signed license. Billing, licensing, and the blind data relay are separate services. This document proposes a model for discussion; it does not implement billing or enforcement.
+Rawrarr is intended to be self-hosted from a packaged Docker image. A new account on a public deployment receives a three-day trial; internal deployments do not receive a billing trial. The public coordinator enforces a full-access three-day trial, then a permanent free tier with at most one fossil (metadata) node, and a paid tier that lifts the fossil cap while active. After trial expiry, the effective tier falls back to free. Sign-in, recovery, export, and deletion remain available, and tier changes never delete subscriber data. The current implementation gates fossil enrollment and approval at the coordinator; it does not yet issue signed offline entitlements to subscriber nodes.
+
+Voluntary ETH donations do not require an account and never change the account tier. The first ETH subscription flow is a manual Ethereum-mainnet renewal; automatic recurring payments require a later, separately audited contract. Treasury address and exact plan amounts must be deliberately configured before their corresponding payment controls are enabled. ETH payment verification and coordinator entitlement are implemented; CCIP Read and smart-account signatures are not yet supported. Stripe remains a separate integration workstream and does not change ETH donation or subscription verification. See [ENS identity and ETH payments](crypto-identity-and-payments.md) and the [product/design decisions](DESIGN.md#account-tiers-ens-sign-in-and-voluntary-eth).
 
 ## Proposed commercial shape
 
@@ -16,13 +18,13 @@ This leaves a future product decision: whether collaborator count or optional ho
 
 Start with one paid self-hosted plan, offered monthly and annually once pricing is decided. The plan unlocks the full self-hosted product for one instance and its participating nodes. Consider an optional relay service or collaboration tier later, after their operating costs and access rules are understood. Avoid a multi-tier matrix before Rawrarr has stable feature boundaries.
 
-The trial is a one-time 24-hour evaluation for an instance, beginning when setup reaches the usable dashboard. Persist its start against the shared `instance_id`; restarting or adding a node must not restart it. First-use enforcement can be bypassed by a host owner who controls the container and its data, so it is a product gate rather than tamper-proof licensing.
+A new account on a public deployment receives one three-day evaluation, beginning when passkey registration completes. PostgreSQL records its start timestamp on the new account row; restarting the coordinator does not restart it. Internal deployments set `RAWARR_BILLING_AUDIENCE=internal` and do not record or expose trial timing. Existing accounts are left unset by the migration. The current implementation reports the start and end in the authenticated profile but does not yet gate features after expiry. First-use enforcement can be bypassed by a host owner who controls the container and its data, so it is a product gate rather than tamper-proof licensing.
 
 ## Proposed purchase and license flow
 
 1. Rawrarr creates a random instance identity and starts its trial after setup is complete.
 2. The owner selects **Subscribe** in the app and goes to a hosted checkout page. Payment details stay with the billing provider.
-3. A separate licensing service receives the provider's verified subscription events and associates the active plan with the opaque instance ID.
+3. The hosted account portal creates a Stripe customer linked to the authenticated `rawrarr_users.id`. The separate Stripe service verifies selected provider events, records an idempotent event inbox, and maintains customer/subscription references against that same account row. A later licensing worker must associate the active plan with the opaque instance ID.
 4. The licensing service issues a signed entitlement. The app stores the signed payload in shared Rawrarr app data so connected nodes can verify the same entitlement without sharing a database.
 5. Every node verifies the signature locally against a public verification key packaged with Rawrarr. The app does not need the license-signing private key or billing credentials.
 6. Nodes periodically refresh entitlement state. When the licensing service is unavailable, a previously valid signed entitlement continues to work through a proposed 14-day renewal grace window.
@@ -31,7 +33,7 @@ Keep the entitlement payload small and free of personal billing details. Candida
 
 ## Trial expiry, renewal, and offline behavior
 
-- During the 24-hour trial, the instance has the intended paid feature set except that each signed-in account may submit at most five AI questions per UTC calendar day across text and voice. Roarlay enforces this using its local PostgreSQL request records. Show the remaining allowance and local-time reset; do not count failed requests without a usable result, internal model/tool turns, or owner review-agent processing. The initial AI implementation applies this limit to all accounts; trial and paid entitlement enforcement remain planned.
+- During the three-day trial, the instance has the intended paid feature set except that each signed-in account may submit at most five AI questions per UTC calendar day across text and voice. Roarlay enforces this using its local PostgreSQL request records. Show the remaining allowance and local-time reset; do not count failed requests without a usable result, internal model/tool turns, or owner review-agent processing. The initial AI implementation applies this limit to all accounts; connecting this allowance to the new trial record and enforcing paid entitlements remain planned.
 - At trial expiry with no valid subscription, gate product workflows. Always retain passkey sign-in, subscription recovery, data export, backup recovery, and account/data deletion paths. Preserve the user's data; never delete or re-encrypt it as a payment enforcement action.
 - On cancellation, retain access through the provider-confirmed paid-through date. On a failed renewal, allow the proposed 14-day grace period before gating features.
 - An offline node can use the most recent signed entitlement until its grace deadline. Do not treat a temporary billing-service outage as cancellation.
@@ -68,7 +70,7 @@ The hosted service may associate public age recipients with the account's passke
 
 1. Finalize product rules and write a feature/lock-state matrix.
 2. Define versioned trial and entitlement records keyed by `instance_id`, with safe conflict handling under eventual synchronization.
-3. Build a licensing service that verifies payment-provider webhooks and signs licenses; keep it separate from the relay.
+3. Build on the separate Stripe webhook inbox with event processing and signed license issuance; keep billing and licensing separate from the blind relay.
 4. Add hosted checkout and customer-portal links without collecting card data in Rawrarr.
 5. Add local signature verification, shared-folder license storage, refresh/grace handling, and key rotation.
 6. Gate server-side API mutations and workflows, not only UI buttons; keep recovery/export routes available.
