@@ -54,7 +54,7 @@ test('first-account identity setup finishes on Devices before optional node Comp
   await page.locator('#root-backed-up').check();
   await page.locator('#setup-complete-actions').waitFor({ state: 'visible' });
   assert.equal(await page.locator('#deploy-step').isVisible(), false, 'Compose is no longer part of required first-account setup');
-  assert.equal(await page.getByRole('link', { name: 'Continue to Devices' }).getAttribute('href'), '/#devices');
+  assert.equal(await page.getByRole('link', { name: 'Continue to Fossils' }).getAttribute('href'), '/#fossils');
   await page.getByRole('button', { name: 'Set up a node now' }).click();
   await page.locator('#deploy-step').waitFor({ state: 'visible' });
   const rootFingerprint = (await page.locator('#root-fingerprint').innerText()).match(/[0-9a-f]{64}/i)?.[0];
@@ -90,7 +90,7 @@ test('first-account identity setup finishes on Devices before optional node Comp
   await page.locator('#age-recipient').getByText(/could not be used/).waitFor();
   assert.equal(await page.locator('#root-step').isVisible(), false, 'invalid saved IDs fall back to manual setup');
   assert.equal(await page.locator('#import-age').isVisible(), true);
-  assert.ok(requests.every(path => ['/setup/node', '/assets/subscriber-onboarding.js', '/favicon.ico'].includes(path)), 'only page assets are requested; private identity material stays local');
+  assert.ok(requests.every(path => ['/setup/node', '/assets/subscriber-onboarding.js', '/assets/rawrarr-favicon.svg', '/favicon.ico'].includes(path)), 'only page assets are requested; private identity material stays local');
   assert.deepEqual(pageErrors, [], 'age and signing-key generation complete without browser errors');
   await context.close();
 });

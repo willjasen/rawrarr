@@ -40,6 +40,7 @@ services:
     image: rawrarr:internal-mini
     environment:
       RAWARR_ROLE: coordinator
+      RAWARR_BILLING_AUDIENCE: internal
       RAWARR_UI_GITHUB_REPO: willjasen/rawrarr
       RAWARR_UI_GITHUB_TOKEN_FILE: /run/secrets/rawrarr_ui_github_token
       RUST_ARR_LISTEN_ADDR: 0.0.0.0:8080

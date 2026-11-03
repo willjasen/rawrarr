@@ -5,6 +5,7 @@ mod sonarr;
 
 pub mod auth;
 mod coordinator;
+mod coordinator_crypto;
 mod device_signing;
 mod artwork_cache;
 mod config_repair;
@@ -74,6 +75,7 @@ struct AppState {
     artwork_cache: Arc<artwork_cache::ArtworkCache>,
     config_mirror: Arc<config_repair::CiphertextMirror>,
     config_peer: config_repair::PeerRpc,
+    config_peer_status: config_repair::PeerSyncStatus,
 }
 
 #[derive(Clone, Default, Serialize)]
@@ -750,7 +752,7 @@ fn poster_image(movie: &serde_json::Value) -> Option<&serde_json::Value> {
 async fn health() -> Html<&'static str> {
     Html(
         r##"<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101514"><title>rawrarr — System health</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101514"><link rel="icon" type="image/svg+xml" href="/assets/rawrarr-favicon.svg"><link rel="icon" type="image/x-icon" href="/favicon.ico"><title>rawrarr — System health</title>
 <style>
 :root{color-scheme:dark;--bg:#101514;--panel:#171e1a;--line:#303b33;--text:#edf3ed;--muted:#9aa89e;--green:#b8f36a;font:16px Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 75% 0,#263322 0,transparent 42%),var(--bg)}main{width:min(760px,100%);margin:auto;padding:64px 24px}.brand{color:var(--green);font-size:13px;letter-spacing:.14em;text-transform:uppercase;font-weight:750}.eyebrow{margin-top:62px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.14em}h1{font-size:clamp(36px,8vw,62px);letter-spacing:-.06em;margin:10px 0 12px}.summary{color:var(--muted);line-height:1.65;max-width:520px}.state{display:inline-flex;align-items:center;gap:9px;margin-top:22px;border:1px solid #435638;background:#202a1b;color:#d5f7aa;border-radius:999px;padding:9px 13px;font-size:13px}.dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 14px #b8f36a99}.panel{margin-top:42px;border:1px solid var(--line);background:var(--panel);border-radius:16px;overflow:hidden}.panel h2{font-size:14px;margin:0;padding:19px 21px;border-bottom:1px solid var(--line)}.check{display:flex;justify-content:space-between;align-items:center;padding:17px 21px;border-bottom:1px solid #27312a}.check:last-child{border:0}.check strong{font-size:14px;font-weight:600}.check span{font-size:12px;color:var(--muted)}.ok{color:var(--green)!important}.foot{margin-top:24px;color:#718076;font-size:12px}a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}@media(max-width:520px){main{padding:36px 20px}.eyebrow{margin-top:48px}.check{gap:12px}.check span{text-align:right}}
 </style></head><body><main><div class="brand">rawrarr</div><div class="eyebrow">System status</div><h1>All systems ready.</h1><p class="summary">The rawrarr service is responding and ready to handle requests. This page checks the web process; connected services are reported separately in the app.</p><div class="state"><i class="dot"></i>Operational</div><section class="panel" aria-label="Health checks"><h2>Service checks</h2><div class="check"><strong>Web service</strong><span class="ok">● &nbsp;Responding</span></div><div class="check"><strong>Health endpoint</strong><span>/health · HTTP 200</span></div><div class="check"><strong>Checked</strong><span id="checked">Just now</span></div></section><p class="foot"><a href="/">Open rawrarr</a> &nbsp;·&nbsp; Auto-refreshes every 30 seconds</p></main><script>const checked=document.getElementById('checked');function update(){checked.textContent=new Intl.DateTimeFormat(undefined,{hour:'numeric',minute:'2-digit',second:'2-digit'}).format(new Date())}update();setInterval(()=>location.reload(),30000)</script></body></html>"##,
@@ -795,6 +797,13 @@ async fn rawrarr_favicon() -> Response<Body> {
     static_asset(
         "image/svg+xml",
         ui_assets::text("assets/rawrarr-favicon.svg", include_str!("assets/rawrarr-favicon.svg")).await.into_bytes(),
+    )
+}
+
+async fn rawrarr_favicon_ico() -> Response<Body> {
+    static_asset(
+        "image/x-icon",
+        ui_assets::bytes("assets/rawrarr-favicon.ico", include_bytes!("assets/rawrarr-favicon.ico")).await,
     )
 }
 
@@ -966,6 +975,7 @@ mod dashboard_event_tests {
             artwork_cache: Arc::new(artwork_cache::ArtworkCache::disabled()),
             config_mirror: Arc::new(config_repair::CiphertextMirror::from_env()),
             config_peer: config_repair::PeerRpc::from_env("fixture"),
+            config_peer_status: config_repair::PeerSyncStatus::default(),
         });
         let response = dashboard_events(State(state)).await.into_response();
         assert_eq!(response.headers()[header::CONTENT_TYPE], "text/event-stream");
@@ -1410,36 +1420,43 @@ struct MetadataStorageStatus {
     tv_bytes: u64,
 }
 
-async fn metadata_storage_status() -> Json<MetadataStorageStatus> {
+fn directory_size(path: &std::path::Path) -> std::io::Result<u64> {
+    let mut entries = match std::fs::read_dir(path) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(error) => return Err(error),
+    };
+    entries.try_fold(0_u64, |total, entry| {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let bytes = if file_type.is_dir() {
+            directory_size(&entry.path())?
+        } else if file_type.is_file() {
+            entry.metadata()?.len()
+        } else {
+            0
+        };
+        total.checked_add(bytes).ok_or_else(|| std::io::Error::other("Metadata size overflow"))
+    })
+}
+
+async fn metadata_storage_status() -> Result<Json<MetadataStorageStatus>, (StatusCode, Json<ApiError>)> {
     let metadata_dir = secure_config::AgeVault::metadata_dir();
     let bytes = tokio::task::spawn_blocking(move || {
-        fn directory_size(path: &std::path::Path) -> u64 {
-            let Ok(entries) = std::fs::read_dir(path) else {
-                return 0;
-            };
-            entries
-                .filter_map(Result::ok)
-                .map(|entry| {
-                    let Ok(file_type) = entry.file_type() else {
-                        return 0;
-                    };
-                    if file_type.is_dir() {
-                        directory_size(&entry.path())
-                    } else if file_type.is_file() {
-                        entry.metadata().map(|metadata| metadata.len()).unwrap_or(0)
-                    } else {
-                        0
-                    }
-                })
-                .sum()
-        }
-        let movies_bytes = directory_size(&metadata_dir.join("movies"));
-        let tv_bytes = directory_size(&metadata_dir.join("tv"));
-        (directory_size(&metadata_dir), movies_bytes, tv_bytes)
+        let movies_bytes = directory_size(&metadata_dir.join("movies"))?;
+        let tv_bytes = directory_size(&metadata_dir.join("tv"))?;
+        Ok::<_, std::io::Error>((directory_size(&metadata_dir)?, movies_bytes, tv_bytes))
     })
     .await
-    .unwrap_or((0, 0, 0));
-    Json(MetadataStorageStatus { bytes: bytes.0, movies_bytes: bytes.1, tv_bytes: bytes.2 })
+    .map_err(|error| {
+        eprintln!("rawrarr metadata storage task failed: {error}");
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError { error: "Could not read encrypted metadata storage" }))
+    })?
+    .map_err(|error| {
+        eprintln!("rawrarr metadata storage read failed: {error}");
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError { error: "Could not read encrypted metadata storage" }))
+    })?;
+    Ok(Json(MetadataStorageStatus { bytes: bytes.0, movies_bytes: bytes.1, tv_bytes: bytes.2 }))
 }
 
 async fn run_metadata_artwork_backfill(state: Arc<AppState>) {
@@ -2084,6 +2101,10 @@ async fn metadata_status(State(state): State<Arc<AppState>>) -> Json<MetadataSta
     })
 }
 
+async fn config_peer_status_handler(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
+    Json(state.config_peer_status.snapshot())
+}
+
 async fn get_radarr_settings(State(state): State<Arc<AppState>>) -> Json<ArrSettingsInfo> {
     let radarr = state.radarr.read().await;
     Json(ArrSettingsInfo {
@@ -2411,6 +2432,8 @@ async fn unlock_age_settings(
     let exists = vault.config_exists();
     let theme_seed = age_theme_seed(vault.user_recipient());
     *state.vault.write().await = Some(vault);
+    state.artwork_scrape_notify.notify_one();
+    state.sonarr_scrape_notify.notify_one();
     state.radarr_backup_notify.notify_one();
     Ok(Json(AgeSettingsInfo {
         unlocked: true,
@@ -2559,6 +2582,64 @@ async fn put_radarr_settings(
     }))
 }
 
+async fn test_radarr_settings(
+    Json(mut settings): Json<RadarrSettingsRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
+    let api_key = settings.api_key.take().filter(|key| !key.trim().is_empty()).ok_or((
+        StatusCode::BAD_REQUEST,
+        Json(ApiError {
+            error: "Enter a Radarr API key to test the connection",
+        }),
+    ))?;
+    let ui_username = settings
+        .ui_username
+        .take()
+        .filter(|value| !value.is_empty())
+        .map(Zeroizing::new);
+    let ui_password = settings
+        .ui_password
+        .take()
+        .filter(|value| !value.is_empty())
+        .map(Zeroizing::new);
+    if ui_username.is_some() != ui_password.is_some() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiError {
+                error: "Enter both Radarr UI credentials, or leave both blank",
+            }),
+        ));
+    }
+    let client = RadarrClient::new_with_ui_auth(
+        settings.url.clone(),
+        Zeroizing::new(api_key),
+        ui_username,
+        ui_password,
+    )
+    .map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ApiError {
+                error: "Enter a valid Radarr HTTPS URL and credentials",
+            }),
+        )
+    })?;
+    let status = client.status().await.map_err(|_| (
+        StatusCode::BAD_GATEWAY,
+        Json(ApiError {
+            error: "Could not connect to Radarr; check the URL and API key",
+        }),
+    ))?;
+    if !status.app_name.eq_ignore_ascii_case("radarr") {
+        return Err((
+            StatusCode::BAD_GATEWAY,
+            Json(ApiError {
+                error: "The service did not identify itself as Radarr",
+            }),
+        ));
+    }
+    Ok(Json(serde_json::json!({ "ok": true, "version": status.version })))
+}
+
 async fn delete_radarr_settings(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<ArrSettingsInfo>, (StatusCode, Json<ApiError>)> {
@@ -2610,6 +2691,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         axum::serve(listener, app).await?;
         return Ok(());
     }
+    secure_config::AgeVault::initialize_metadata_storage()?;
     secure_config::AgeVault::ensure_node_identity()?;
     secure_config::AgeVault::ensure_node_signing_key()?;
     let device_id = devices::load_or_create_device_id()?;
@@ -2656,6 +2738,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     secure_config::AgeVault::enforce_local_config_policy()?;
     let config_mirror = Arc::new(config_repair::CiphertextMirror::from_env());
     let config_peer = config_repair::PeerRpc::from_env(&node_id);
+    let config_peer_status = config_repair::PeerSyncStatus::default();
     if role == node_role::NodeRole::Metadata {
         let path = secure_config::AgeVault::config_path();
         config_mirror.restore_revisions();
@@ -2663,7 +2746,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!("rawrarr config ciphertext restore from Valkey failed: {error}");
         }
         let certificate = auth.signing_certificate();
-        let _ = config_peer.reconcile_once(&config_mirror, &path, certificate.as_ref()).await;
+        let _ = config_peer.reconcile_once(&config_mirror, &path, certificate.as_ref(), &config_peer_status).await;
     }
     let local_settings = secure_config::AgeVault::load_local_config()?;
     let identity_path = env::var_os("RAWARR_AGE_IDENTITY_FILE")
@@ -2743,6 +2826,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         artwork_cache: Arc::new(artwork_cache::ArtworkCache::from_env()),
         config_mirror: config_mirror.clone(),
         config_peer: config_peer.clone(),
+        config_peer_status: config_peer_status.clone(),
     });
     if role == node_role::NodeRole::Metadata {
         let mirror = state.config_mirror.clone();
@@ -2770,7 +2854,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let peer_mirror = mirror.clone();
                 let peer_path = path.clone();
                 let peer_certificate = revision_certificate.clone();
-                let repaired = peer_state.reconcile_once(&peer_mirror, &peer_path, peer_certificate.as_ref()).await;
+                let repaired = peer_state.reconcile_once(&peer_mirror, &peer_path, peer_certificate.as_ref(), &application_state.config_peer_status).await;
                 if repaired {
                     let vault = application_state.vault.read().await.clone();
                     if let Some(vault) = vault {
@@ -2824,6 +2908,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(get_movie_poster),
         )
         .route("/api/metadata/status", get(metadata_status))
+        .route("/api/config-peer/status", get(config_peer_status_handler))
         .route("/api/metadata/export/mini", get(mini_metadata_export_index))
         .route("/api/metadata/session/library", axum::routing::post(encrypted_radarr_library))
         .route("/api/metadata/export/config", get(export_config_ciphertext).put(replace_config_ciphertext))
@@ -2840,6 +2925,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/settings/radarr",
             get(get_radarr_settings)
                 .put(put_radarr_settings)
+                .post(test_radarr_settings)
                 .delete(delete_radarr_settings),
         )
         .route(
@@ -2859,6 +2945,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/settings/sonarr",
             get(sonarr::settings)
                 .put(sonarr::save)
+                .post(sonarr::test_connection)
                 .delete(sonarr::clear),
         )
         .route("/api/radarr/status", get(radarr_status))
@@ -2897,12 +2984,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/settings/radarr",
             get(get_radarr_settings)
                 .put(put_radarr_settings)
+                .post(test_radarr_settings)
                 .delete(delete_radarr_settings),
         )
         .route(
             "/api/settings/sonarr",
             get(sonarr::settings)
                 .put(sonarr::save)
+                .post(sonarr::test_connection)
                 .delete(sonarr::clear),
         )
         .route("/api/sonarr/status", get(sonarr::status))
@@ -2935,6 +3024,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/assets/rawrarr-logo.png", get(rawrarr_logo))
         .route("/assets/rawrarr-logo.jxl", get(rawrarr_logo_jxl))
         .route("/assets/rawrarr-favicon.svg", get(rawrarr_favicon))
+        .route("/favicon.ico", get(rawrarr_favicon_ico))
         .route("/assets/passkey-client.mjs", get(passkey_client_js))
         .route("/assets/metadata-export.js", get(metadata_export_js))
         .route("/api/auth/status", get(node_auth::proxy))

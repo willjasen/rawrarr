@@ -9,9 +9,9 @@ function formatStorageSize(bytes) {
 }
 
 export function answerMovieQuery(intent, movies, series = null) {
-  if (!Array.isArray(movies)) return 'Could you unlock Movies first? Then I can look through your library.';
+  if (!Array.isArray(movies)) return 'Could you unlock Movies first? Then I can take a little look through your library.';
   if (intent?.kind === 'library_storage_share') {
-    if (!Array.isArray(series)) return 'I can see Movies, but I could not load TV sizes yet. Open TV and check its Sonarr connection, then try again.';
+    if (!Array.isArray(series)) return 'I can see Movies, but I could not load TV sizes just yet. Could you open TV and check its Sonarr connection? Then I can try again.';
     const totalSize = records => records.reduce((total, item) => {
       const size = Number(item.sizeOnDisk);
       return total + (Number.isFinite(size) && size > 0 ? size : 0);
@@ -19,10 +19,10 @@ export function answerMovieQuery(intent, movies, series = null) {
     const movieBytes = totalSize(movies);
     const tvBytes = totalSize(series);
     const combined = movieBytes + tvBytes;
-    if (!combined) return 'I could not find reported file sizes for Movies or TV yet. What would you like to check next?';
-    return `From the file sizes reported by Radarr and Sonarr, Movies use ${formatStorageSize(movieBytes)} (${(movieBytes / combined * 100).toFixed(1)}%) and TV uses ${formatStorageSize(tvBytes)} (${(tvBytes / combined * 100).toFixed(1)}%) of their combined ${formatStorageSize(combined)}. What else are you curious about?`;
+    if (!combined) return 'I could not find reported file sizes for Movies or TV just yet, so I cannot work out their share. What shall we check next?';
+    return `I had a look at the file sizes reported by Radarr and Sonarr. Movies use ${formatStorageSize(movieBytes)} (${(movieBytes / combined * 100).toFixed(1)}%) and TV uses ${formatStorageSize(tvBytes)} (${(tvBytes / combined * 100).toFixed(1)}%) of their combined ${formatStorageSize(combined)}. What else are you curious about?`;
   }
-  if (intent?.kind !== 'movie_filter') return 'I saved that question for review. I can search your movies by year or genre right now. What would you like to try?';
+  if (intent?.kind !== 'movie_filter') return 'I saved that question for review so it can get a closer look. Right now, I can search your movies by year or genre. What would you like to try?';
   const start = Number.isInteger(intent.startYear) ? intent.startYear : null;
   const end = Number.isInteger(intent.endYear) ? intent.endYear : null;
   const genre = typeof intent.genre === 'string' ? intent.genre.trim().toLowerCase() : '';
@@ -34,11 +34,11 @@ export function answerMovieQuery(intent, movies, series = null) {
   });
   const yearLabel = start !== null && end !== null ? ` from ${start}–${end}` : start !== null ? ` from ${start} onward` : end !== null ? ` through ${end}` : '';
   const genreLabel = genre ? ` in ${genre}` : '';
-  const header = `I found ${matches.length} movie${matches.length === 1 ? '' : 's'}${yearLabel}${genreLabel} in your unlocked library.`;
-  if (!matches.length) return `${header}\nI couldn't find a matching title in the records loaded here.`;
+  const header = `I found ${matches.length} movie${matches.length === 1 ? '' : 's'}${yearLabel}${genreLabel} in the library records loaded here.`;
+  if (!matches.length) return `${header}\nNo matching title showed up in those records. Want to try another year or genre?`;
   const titles = matches.slice(0, 30).map(movie => `• ${movie.title}${movie.year ? ` (${movie.year})` : ''}`);
-  const more = matches.length > 30 ? `\n…and ${matches.length - 30} more.` : '';
-  return `${header}\n${titles.join('\n')}${more}`;
+  const more = matches.length > 30 ? `\n…and ${matches.length - 30} more. There are lots to look through!` : '';
+  return `${header}\n${titles.join('\n')}${more}\nWhat else are you curious about?`;
 }
 
 export async function readAiStream(response, onDelta) {
@@ -85,33 +85,22 @@ export function initAiChat({ getMovies, getSeries, loadSeries, openMovies }) {
   const history = document.getElementById('ai-history');
   const submit = document.getElementById('ai-submit');
   const talk = document.getElementById('ai-talk');
-  const chatTab = document.getElementById('ai-tab-chat');
-  const voiceTab = document.getElementById('ai-tab-voice');
-  const chatPanel = document.getElementById('ai-chat-panel');
   const voicePanel = document.getElementById('ai-voice-panel');
+  const launcher = document.getElementById('rawrs-launcher');
+  const closeVoice = document.getElementById('rawrs-close');
   document.getElementById('ai-open-movies').addEventListener('click', openMovies);
   let recorder = null;
-
-  function selectMode(mode) {
-    const chat = mode === 'chat';
-    chatTab.setAttribute('aria-selected', String(chat));
-    voiceTab.setAttribute('aria-selected', String(!chat));
-    chatTab.tabIndex = chat ? 0 : -1;
-    voiceTab.tabIndex = chat ? -1 : 0;
-    chatPanel.hidden = !chat;
-    voicePanel.hidden = chat;
+  function setVoicePanelOpen(open) {
+    voicePanel.hidden = !open;
+    launcher.setAttribute('aria-expanded', String(open));
+    if (open) talk.focus();
+    else launcher.focus();
   }
-  chatTab.addEventListener('click', () => selectMode('chat'));
-  voiceTab.addEventListener('click', () => selectMode('voice'));
-  for (const [tab, mode] of [[chatTab, 'chat'], [voiceTab, 'voice']]) {
-    tab.addEventListener('keydown', event => {
-      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-      event.preventDefault();
-      const next = event.key === 'Home' ? 'chat' : event.key === 'End' ? 'voice' : mode === 'chat' ? 'voice' : 'chat';
-      selectMode(next);
-      (next === 'chat' ? chatTab : voiceTab).focus();
-    });
-  }
+  launcher.addEventListener('click', () => setVoicePanelOpen(voicePanel.hidden));
+  closeVoice.addEventListener('click', () => setVoicePanelOpen(false));
+  voicePanel.addEventListener('keydown', event => {
+    if (event.key === 'Escape') setVoicePanelOpen(false);
+  });
 
   function speak(answerText) {
     if (!('speechSynthesis' in window)) return;

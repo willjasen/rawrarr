@@ -21,6 +21,18 @@ const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, me
   read('docker-compose.internal-mini.yml'),
 ]);
 
+test('rawrs Talk stays available from a persistent bottom-left voice panel', () => {
+  assert.match(workspace, /id="rawrs-launcher" class="rawrs-launcher"[^>]*aria-controls="ai-voice-panel"/);
+  assert.match(workspace, /id="rawrs-launcher"[^>]*aria-label="Open rawrs voice agent"[^>]*>rawr<\/button>/);
+  assert.match(workspace, /id="ai-voice-panel" class="rawrs-voice-panel"[^>]*hidden/);
+  assert.match(workspace, /\.rawrs-launcher \{ position:fixed;[^}]*bottom:20px/);
+  assert.match(workspace, /@media\(max-width:640px\) \{ \.rawrs-launcher \{ left:12px/);
+  assert.match(workspace, /id="ai-talk" type="button"/);
+  assert.match(workspace, /id="ai-voice-transcript"/);
+  assert.match(workspace, /id="ai-voice-answer"/);
+  assert.doesNotMatch(workspace, /id="ai-tab-voice"/);
+});
+
 test('coordinator labels the Sonarr section TV in navigation and its page heading', () => {
   assert.doesNotMatch(workspace, /id="tv-route-status" class="route-status"/);
   assert.match(workspace, /data-view=\"series\"[^>]*>[\s\S]*?<span class=\"nav-text\">TV<\/span>/);
@@ -48,6 +60,23 @@ test('coordinator labels the Sonarr section TV in navigation and its page headin
   assert.match(workspaceScript, /catch \(error\) \{[\s\S]*?moviesPanel\.replaceChildren\(\);\s*updateAgeIdControls\(\);\s*contentStatus\.textContent/);
 });
 
+test('left navigation renders every visible option in lowercase', () => {
+  const sidebar = workspace.match(/<aside aria-label="Main navigation">([\s\S]*?)<\/aside>/)?.[1];
+  assert.ok(sidebar, 'main navigation sidebar exists');
+  assert.match(workspace, /\.nav-text\s*\{[^}]*text-transform:\s*lowercase/i);
+  const labels = [...sidebar.matchAll(/<span class="nav-text">([^<]+)<\/span>/g)].map(([, label]) => label);
+  assert.deepEqual(labels.map(label => label.toLowerCase()), ['overview', 'subscription', 'roarlay', 'fossils', 'movies', 'tv', 'rawrs', 'configuration', 'settings', 'about']);
+  assert.match(sidebar, /<a class="nav-item" href="\/billing" aria-label="Subscription"[\s\S]*?<span class="nav-text">Subscription<\/span><\/a>/);
+});
+
+test('Roarlay has a dedicated coordinator page and uses the same-origin health check', () => {
+  assert.match(workspace, /data-view="roarlay"[^>]*>[\s\S]*?<span class="nav-text">Roarlay<\/span>/);
+  assert.match(workspace, /<section id="roarlay-view" hidden>[\s\S]*?Coordinator node[\s\S]*?id="roarlay-health-label"[\s\S]*?id="roarlay-health-refresh"/);
+  assert.match(workspaceScript, /'overview', 'roarlay', 'fossils'/);
+  assert.match(workspaceScript, /if \(view === 'roarlay'\) void checkRoarlayHealth\(\)/);
+  assert.match(workspaceScript, /fetch\('\/health', \{ cache: 'no-store'/);
+});
+
 test('Movies and TV cached library data stays hidden until an age ID is loaded', () => {
   assert.match(workspaceScript, /async function unlockMetadata\(\) \{[\s\S]*?if \(!selectedNode \|\| !identity\) return;/);
   assert.match(workspaceScript, /if \(view === 'movies' && updateHash\) \{[\s\S]*?if \(ageIdentityInMemory && selectedNode\) void unlockMetadata\(\)/);
@@ -71,36 +100,74 @@ test('device shared-folder health is concise and formatted without exposing the 
   assert.doesNotMatch(workspaceScript, /\$\{peer\.folderId\} ·/);
 });
 
-test('Devices shows a network diagram with one link for each device pair', () => {
-  assert.match(workspace, /<section id="devices-view"[^>]*><div class="devices-page-heading"><h1 class="page-title">Devices<\/h1><a class="button-link" href="\/setup\/node">Add a device<\/a><\/div>/);
+test('metadata device cards display verified Merkle freshness from the node peer status route', () => {
+  assert.match(workspaceScript, /\/nodes\/\$\{encodeURIComponent\(node\.nodeId\)\}\/api\/config-peer\/status/);
+  assert.match(workspaceScript, /state: 'unreachable'/);
+  assert.match(workspaceScript, /Merkle up to date/);
+  assert.match(workspaceScript, /Merkle sync incomplete/);
+  assert.match(workspaceScript, /Merkle peers unreachable/);
+  assert.match(workspaceScript, /merkleStatus\.matchingPeers/);
+  assert.match(mainRs, /\.route\("\/api\/config-peer\/status", get\(config_peer_status_handler\)\)/);
+  assert.match(mainRs, /async fn config_peer_status_handler\(State\(state\): State<Arc<AppState>>\)/);
+  assert.match(coordinator, /path == "api\/config-peer\/status"/);
+});
+
+test('Fossils shows a network diagram with one link for each node pair', () => {
+  assert.match(workspace, /<section id="fossils-view"[^>]*><div class="devices-page-heading"><h1 class="page-title">Fossils<\/h1><a class="button-link" href="\/setup\/node">Add a fossil<\/a><\/div>/);
   assert.match(workspace, /<section id="device-topology" class="topology-section" aria-labelledby="device-topology-title" hidden>[\s\S]*?<h2 id="device-topology-title">Topology<\/h2>/);
   assert.match(workspace, /<div id="device-topology-content"><\/div>/);
-  assert.match(workspaceScript, /function renderDeviceTopology\(nodes, observedPeers, deviceNames\)/);
+  assert.match(workspace, /id="signing-topology-title">Signing key topology<\/h3>/);
+  assert.match(workspace, /You are the authority for this instance/);
+  assert.match(workspaceScript, /function renderSigningKeyTopology\(nodes\)/);
+  assert.match(workspaceScript, /You · instance signing root/);
+  assert.match(workspaceScript, /legacy · no root-signed key/);
+  assert.match(coordinator, /signing_root_fingerprint: Option<String>/);
+  assert.match(workspaceScript, /function renderDeviceTopology\(nodes, observedPeers, deviceNames, peerStatuses\)/);
   assert.match(workspaceScript, /deviceNames\[node\.nodeId\] \|\| \(node\.displayName && node\.displayName !== node\.nodeId \? node\.displayName : roleLabel\(node\.role\)\)/);
   assert.match(workspaceScript, /deviceNameTokens\(node\.displayName\)/);
   assert.match(workspaceScript, /getElementById\('device-topology-content'\)/);
   assert.match(workspaceScript, /nodes\.length \* \(nodes\.length - 1\) \/ 2/);
   assert.match(workspaceScript, /for \(let leftIndex = 0; leftIndex < count; leftIndex \+= 1\)/);
   assert.match(workspaceScript, /for \(let rightIndex = leftIndex \+ 1; rightIndex < count; rightIndex \+= 1\)/);
-  assert.match(workspaceScript, /topology-edge\$\{observed \? observed\.connected \? ' connected' : ' disconnected' : ''\}/);
+  assert.match(workspaceScript, /const tailnetReachable = leftCanReachRight \|\| rightCanReachLeft/);
+  assert.match(workspaceScript, /leftStatus\?\.state !== 'stale'/);
+  assert.match(workspaceScript, /rightStatus\?\.state !== 'stale'/);
+  assert.match(workspaceScript, /tailnetReachable \? ' connected'/);
+  assert.match(workspaceScript, /Reachable over tailnet/);
   assert.match(workspaceScript, /Add another device to see its links in the network diagram\./);
   assert.match(workspace, /\.topology-edge\.connected \{ stroke:var\(--green\); stroke-width:3 \}/);
   assert.match(workspace, /\.topology-edge\.disconnected \{ stroke:#ef7777 \}/);
 });
 
+test('Fossils layout wraps cards, statuses, actions, and topology at mobile widths', () => {
+  assert.match(workspace, /\.devices-page-heading \{ align-items:flex-start; gap:10px \}/);
+  assert.match(workspace, /\.device-card \{ box-sizing:border-box; min-width:0; flex-basis:100%; width:100%; max-width:none/);
+  assert.match(workspace, /\.device-heading \{ flex-wrap:wrap/);
+  assert.match(workspace, /\.node-state \{ flex:0 1 auto; max-width:100%; white-space:normal; overflow-wrap:anywhere/);
+  assert.match(workspace, /\.device-edit-button \{ min-height:40px/);
+  assert.match(workspace, /\.topology-device \{ width:min\(140px,30%\)/);
+  assert.match(workspace, /\.topology-device strong,\.topology-device small \{ min-width:0; overflow-wrap:anywhere \}/);
+});
+
+test('Fossils uses the new page hash and redirects the old Devices bookmark', () => {
+  assert.match(workspaceScript, /name === 'devices' \? 'fossils' : name/);
+  assert.match(workspaceScript, /location\.hash === '#devices'[\s\S]*#fossils/);
+  assert.match(workspaceScript, /\['overview', 'roarlay', 'fossils', 'movies'/);
+});
+
 test('Devices keeps topology hidden until an enrolled device is online', () => {
   assert.match(workspaceScript, /const topologySection = document\.getElementById\('device-topology'\);\s*emptyDevices\.hidden = nodes\.length !== 0;\s*topologySection\.hidden = !nodes\.some\(node => node\.online === true\);/);
-  assert.match(workspaceScript, /if \(nodes\.some\(node => node\.online === true\)\) \{\s*renderDeviceTopology\(nodes, observedSyncthingPeers, deviceNames\);\s*\}/);
+  assert.match(workspaceScript, /if \(nodes\.some\(node => node\.online === true\)\) \{\s*renderDeviceTopology\(nodes, observedSyncthingPeers, deviceNames, configPeerStatusByNode\);\s*\}/);
   assert.match(workspace, /<section id="device-topology"[^>]*hidden/);
 });
 
-test('device names have an adjacent Edit button that unlocks the name field', () => {
-  assert.match(workspaceScript, /nameInput\.readOnly = true/);
-  assert.match(workspaceScript, /editNameButton\.textContent = 'Edit'/);
-  assert.match(workspaceScript, /nameGroup\.append\(nameInput, editNameButton\)/);
-  assert.match(workspaceScript, /nameInput\.readOnly = false;\s*nameInput\.focus\(\);/);
+test('device names open the existing edit dialog from the device card', () => {
+  assert.match(workspaceScript, /editButton\.textContent = 'Edit'/);
+  assert.match(workspaceScript, /editButton\.addEventListener\('click', event => \{[\s\S]*?deviceEditDialog\.showModal\(\)/);
+  assert.match(workspaceScript, /card\.append\(editButton\)/);
+  assert.match(workspace, /<dialog id="device-edit-dialog"[\s\S]*?id="device-edit-name"/);
   assert.match(workspaceScript, /saveDeviceName\(ageIdentity/);
-  assert.match(workspace, /\.device-name-group \{ display:flex/);
+  assert.match(workspace, /\.device-edit-dialog \{ width:min/);
 });
 
 test('metadata export in Settings prompts for an age ID when tab memory is empty', () => {
@@ -135,7 +202,7 @@ test('Radarr and Sonarr settings use the configured user-node URL directly from 
 });
 
 test('encrypted metadata fetches include the direct node browser session cookie', () => {
-  assert.match(metadataExport, /async function fetchBytes\(url\)[\s\S]*?credentials: 'include'/);
+  assert.match(metadataExport, /async function fetchBytes\(url, \{ signal \} = \{\}\)[\s\S]*?signal,[\s\S]*?credentials: 'include'/);
 });
 
 test('coordinator serves the profile-color module imported by its workspace script', () => {
@@ -159,6 +226,9 @@ test('coordinator root selects passkey sign-in or an owner workspace while healt
   assert.match(workspace, /id="age-storage-status"/);
   assert.match(workspace, /id="save-age-id"/);
   assert.match(workspace, /id="remove-age-id"/);
+  assert.match(workspace, /id="show-age-recipient" type="button" hidden>Show age public ID<\/button>/);
+  assert.match(workspace, /id="age-recipient-display" class="age-recipient-display" hidden/);
+  assert.match(workspace, /id="copy-age-recipient" type="button">Copy age public ID/);
   assert.match(workspace, /User signing keys are never saved in browser storage/);
   assert.match(workspace, /id="clear-key" type="button" hidden/);
   assert.match(workspace, /<title>rawrarr<\/title>/);
@@ -172,6 +242,12 @@ test('coordinator root selects passkey sign-in or an owner workspace while healt
   assert.match(workspaceScript, /try \{\s*localStorage\.setItem\(ageSessionKey, identity\);[\s\S]*?return false;/);
   assert.match(workspaceScript, /this browser could not save it/);
   assert.match(workspaceScript, /localStorage\.removeItem\(ageSessionKey\)/);
+  assert.match(workspaceScript, /showAgeRecipientButton\.addEventListener\('click', async \(\) =>/);
+  assert.match(workspaceScript, /deriveProfileRecipient\(identity\)[\s\S]*?agePublicRecipient = recipient;[\s\S]*?ageRecipientShort\.textContent = recipient\.length/);
+  assert.match(workspaceScript, /copyAgeRecipientButton\.addEventListener\('click', async \(\) =>/);
+  assert.match(workspaceScript, /navigator\.clipboard\.writeText\(recipient\)/);
+  assert.match(workspaceScript, /Age public ID copied\./);
+  assert.match(workspaceScript, /agePublicRecipient = '';\s*ageRecipientShort\.textContent = '';/);
   assert.match(workspaceScript, /arrDirectRequest\('\/settings\/age'/);
   assert.doesNotMatch(workspaceScript, /localStorage\.(?:getItem|setItem)\([^)]*(?:root|signing)/i);
   assert.match(workspaceScript, /document\.getElementById\('sign-out'\)\.addEventListener[\s\S]*?clearAgeIdentity\(\)/);
@@ -193,10 +269,19 @@ test('device approvals use a volatile browser form and root-signed exact node re
   assert.match(workspace, /id="approve-node-age-id" type="password"/);
   assert.match(workspace, /id="approve-node-root-backup"/);
   assert.match(workspace, /id="approve-node-root-fingerprint"/);
-  assert.match(workspaceScript, /signDeviceApproval\(encryptedBackup, ageIdentity, savedFingerprint/);
+  assert.match(workspaceScript, /const sign = decision === 'reject' \? signDeviceRejection : signDeviceApproval/);
   assert.match(workspaceScript, /signedPayload: approval\.signedPayload/);
   assert.match(workspaceScript, /approveNodeDialog\.addEventListener\('close'/);
   assert.match(workspaceScript, /approveNodeDialog\.close\(\)/);
+  assert.match(workspace, /id="approve-node-attestation"/);
+  assert.match(workspaceScript, /You are signing off on this device/);
+  assert.match(workspaceScript, /Your root signature authorizes the exact device key and role below/);
+  assert.match(workspaceScript, /signDeviceRejection/);
+  assert.match(signingClient, /rawrarr-device-rejection-v1/);
+  assert.match(workspaceScript, /permanently rejecting this device identity/);
+  assert.match(coordinator, /rawrarr_rejected_nodes WHERE node_id=\$1 OR signing_fingerprint=\$2/);
+  assert.match(coordinator, /rawrarr-device-rejection-v1/);
+  assert.match(coordinator, /INSERT INTO rawrarr_rejected_nodes/);
   assert.match(signingClient, /secretKey\?\.fill\(0\)/);
   assert.match(onboarding, /id="root-fingerprint-confirm"/);
   assert.match(onboarding, /Re-enter the root fingerprint you saved separately/);
@@ -209,7 +294,7 @@ test('device approvals use a volatile browser form and root-signed exact node re
 
 test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from the public age ID', () => {
   assert.match(coordinator, /\.route\("\/api\/workspace\/profile", get\(workspace_profile\)\)/);
-  assert.match(coordinator, /SELECT id FROM rawrarr_users WHERE id=\$1/);
+  assert.match(coordinator, /SELECT id, to_char\(trial_started_at AT TIME ZONE 'UTC'[\s\S]*?trial_started_at \+ interval '3 days'[\s\S]*?WHERE id=\$1/);
   assert.match(coordinator, /display_name: crate::auth::generated_account_name\(user_id\)/);
   assert.match(coordinator, /account_id: user_id/);
   assert.match(workspace, /id="profile-picture"/);
@@ -267,10 +352,23 @@ test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from th
   assert.match(coordinatorAvatar, /if wings\.is_empty\(\)/);
   assert.match(coordinatorAvatar, /encodes_generated_avatar_as_a_jpeg_xl_codestream/);
   assert.match(coordinator, /private, max-age=31536000, immutable/);
+  assert.match(coordinator, /avatar_cache: Arc<RwLock<HashMap<String, Arc<Vec<u8>>>>/);
+  assert.match(coordinator, /async fn cached_workspace_avatar/);
+  assert.match(coordinator, /profile:jxl:v1:\{seed\}/);
+  assert.match(coordinator, /profile:png:v1:\{seed\}/);
+  assert.match(coordinator, /device:jxl:v1:\{seed\}/);
+  assert.match(coordinator, /device:png:v1:\{seed\}/);
+  assert.match(coordinator, /cache\.len\(\) >= 256/);
   assert.match(workspaceScript, /Generated dinosaur profile picture/);
   assert.doesNotMatch(workspaceScript, /Generated in this browser from your public age ID\. No image is uploaded\./);
   assert.match(workspaceScript, /profile-avatar-status'\)\.textContent = ''/);
   assert.doesNotMatch(coordinator, /SELECT\s+(?:profile_picture|avatar_seed)/i);
+});
+
+test('profile retries a temporary 404 and preserves a loaded username through later profile errors', () => {
+  assert.match(workspaceScript, /for \(let attempt = 0; attempt < 3; attempt \+= 1\)[\s\S]*?error\.status !== 404 \|\| attempt === 2[\s\S]*?setTimeout\(resolve, 250 \* \(attempt \+ 1\)\)/);
+  assert.match(workspaceScript, /error\.status = response\.status/);
+  assert.match(workspaceScript, /if \(!profileBaseName\) \{\s*document\.getElementById\('profile-name'\)\.textContent = error\.message/);
 });
 
 test('device pictures use the deterministic fossil renderer while profile pictures retain dinosaurs', () => {

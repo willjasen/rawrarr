@@ -1,0 +1,22 @@
+# Internal-only Caddy front for the Tailscale Serve endpoint.
+# Tailscale Serve sends HTTPS 443 to 127.0.0.1:8081 in the shared namespace.
+services:
+  umami:
+    image: rawrarr-umami:559e3c607c23-basepath-analytics
+    pull_policy: never
+
+  analytics-caddy:
+    image: caddy:2-alpine
+    container_name: rawrarr-internal-do3-analytics-caddy
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    volumes:
+      - ./analytics-dashboard-internal.Caddyfile:/etc/caddy/Caddyfile:ro
+    network_mode: service:tailscale
+    depends_on:
+      tailscale:
+        condition: service_started
+      roarlay:
+        condition: service_started
+      umami:
+        condition: service_started
+    restart: unless-stopped

@@ -75,13 +75,13 @@ The Movies page prompts for a connection when Radarr is not configured. The TV p
 3. After a successful check, Rawrarr saves the settings into `/shared/config.aged` and applies the connection immediately; a Rawrarr restart is not required. In the local Compose environment, it also keeps a mode-`0600` plaintext copy at `/data/radarr-config.json` so local tools can inspect the setup without passkey or age handling. Changes saved through Rawrarr update both copies. When the age vault is unlocked, the shared encrypted file is authoritative and refreshes the local copy.
 4. Use the connection status or **Movies** view to read Radarr's current movie inventory. The artwork source column reports shared-cache availability or Radarr fallback; it is not proof that a cached file decrypted successfully. The load-time column measures browser-observed poster load time, not isolated Radarr response time. Failed image requests show as unavailable.
 
-Movie text records are stored at `/shared/metadata/movies/text/` and encrypted artwork at `/shared/metadata/movies/artwork/`. Posters use shared encrypted artwork when available and the vault is unlocked, with live Radarr fallback. Missing movie details and posters are cached on demand rather than scraping the entire library at once.
+Movie text records are stored at `/shared/in/metadata/movies/text/` and encrypted artwork at `/shared/in/metadata/movies/artwork/`. On vault unlock, Rawrarr copies missing legacy files from `/shared/metadata` without deleting or overwriting files. Posters use shared encrypted artwork when available and the vault is unlocked, with live Radarr fallback. Missing movie details and posters are cached on demand rather than scraping the entire library at once.
 
 For Arr services using a private certificate authority, set `RAWARR_ARR_CA_CERT_FILE` on each subscriber to the PEM-encoded CA certificate. Rawrarr adds that CA to its existing trusted roots for Radarr and Sonarr HTTPS requests; it does not allow HTTP or disable certificate verification. Mount only the CA certificate into the subscriber. The CA private key stays with the service that issues certificates and is never needed by Rawrarr.
 
 ## Recover Radarr on a chosen node
 
-When a Radarr connection is configured and the age vault is unlocked, Rawrarr asks Radarr to create a native backup on startup and every six hours. It age-encrypts the latest backup to `/shared/metadata/radarr/recovery.zip.aged`; Syncthing replicates that ciphertext to the other approved nodes. The archive contains Radarr's database and settings, including any credentials stored by Radarr. Rawrarr's scraped movie metadata and artwork are already stored separately in the shared, age-encrypted `movies/text/` and `movies/artwork/` folders, and remain available independently of the Radarr restore. If capture fails, the previous snapshot is retained and the failure is written to the node log.
+When a Radarr connection is configured and the age vault is unlocked, Rawrarr asks Radarr to create a native backup on startup and every six hours. It age-encrypts the latest backup to `/shared/in/metadata/radarr/recovery.zip.aged`; Syncthing replicates that ciphertext to the other approved nodes. The archive contains Radarr's database and settings, including any credentials stored by Radarr. Rawrarr's scraped movie metadata and artwork are stored separately in the shared, age-encrypted `movies/text/` and `movies/artwork/` folders, and remain available independently of the Radarr restore. If capture fails, the previous snapshot is retained and the failure is written to the node log.
 
 If Radarr requires a UI login to download its backup ZIP, enter both the optional UI username and password in the Radarr connection settings. They are sent directly to the selected metadata node and stored only inside the age-encrypted shared config; they are never shown again. Leave both blank to keep a saved login, or use **Clear connection** to remove it. These credentials are used only for the configured Radarr HTTPS origin when downloading backups.
 
@@ -89,7 +89,7 @@ To restore, deploy a Radarr container yourself on the metadata or storage node y
 
 ```sh
 python3 scripts/restore_radarr.py \
-  --backup /path/to/shared/metadata/radarr/recovery.zip.aged \
+  --backup /path/to/shared/in/metadata/radarr/recovery.zip.aged \
   --identity-file /path/to/private/age-identity \
   --url https://radarr.example.com
 ```
@@ -100,17 +100,19 @@ The command requires the exact `RESTORE` confirmation and prompts for the new Ra
 
 The Movies and TV pages each show four service-specific summary cards using the same layout. Their counts and disk usage come from Radarr or Sonarr. The metadata-size card shows the encrypted metadata stored for that service's media type—Movies for Radarr and TV for Sonarr—and “All metadata” shows the full shared metadata tree. The total is expected to be the same on both pages; each service-specific subtotal can differ. Sizes count stored files and use binary units (1 GB is 1,024 MB).
 
+These sizes describe Rawrarr's encrypted cache, not Radarr's or Sonarr's own metadata. A missing cache directory counts as empty; storage-read failures make the sizes unavailable rather than displaying 0 B. Subscriber startup initializes the shared metadata directory on fresh volumes. Unlocking the node's age vault wakes its metadata workers; the Movies rescan action requests a Rawrarr cache refresh, not a Radarr library or disk scan.
+
 On TV, the Sonarr artwork progress message and successful series-load message disappear after every eligible poster has been saved. The metadata worker may continue checking for newly added series without showing a completed-cache message. If posters are still missing, progress remains visible while work continues.
 
 The local plaintext copy stays in node-local `/data`; it is never synchronized. Production deployments must set `RAWARR_LOCAL_PLAINTEXT_CONFIG=false` (the application default) so the configuration exists only as age ciphertext in `/shared/config.aged`. Treat the Radarr key as a secret and do not paste it into logs or documentation.
 
 ## Use the roarlay workspace
 
-After signing in at the tailnet URL, use **Overview** for library and shared-folder summaries, **Devices** for approved nodes, routes, peer state, and boneyard scan actions, and **Movies** and **TV** for the selected fossil node's Radarr and Sonarr libraries. The browser prefers a healthy direct Tailscale node route and falls back to roarlay's scoped relay. Its route status reflects a browser probe; a green node or web health page alone does not verify Arr connectivity or synchronization.
+After signing in at the tailnet URL, use **Overview** for library and shared-folder summaries, **Fossils** for enrolled nodes, routes, peer state, and boneyard scan actions, and **Movies** and **TV** for the selected fossil node's Radarr and Sonarr libraries. The page is available at `/#fossils`; existing `/#devices` bookmarks redirect there. The browser prefers a healthy direct Tailscale node route and falls back to roarlay's scoped relay. Its route status reflects a browser probe; a green node or web health page alone does not verify Arr connectivity or synchronization.
 
 Movies and TV offer **Rescan** to request an on-demand metadata refresh on the selected fossil node. This starts its worker; it does not mean every record is already refreshed. The Settings **Export metadata** action downloads a browser-built ZIP of all indexed encrypted movie text records and matching available artwork. It needs the age private ID in the browser, and the ZIP contains decrypted data, so store it privately. The current export builds the archive in browser memory and covers movie metadata only; other media classes, cancellation, and a partial-failure report remain planned. See the [export plan](metadata-export-plan.md).
 
-On an enrolled storage node, scheduled media scans default to daily at 04:00 in the configured `RAWARR_STORAGE_SCAN_TIMEZONE` (UTC if unset). In Devices, each online storage card shows the next scheduled run and live scheduled-scan progress. Owners can change the local time and choose a daily or weekly cadence; the schedule is saved on that node in `/data`. The owner can also request an immediate full scan or bounded movie sample. The scanner reads its node-local `/media` mount and writes encrypted sidecars to `/shared`; a successful scan does not establish a combined cross-node catalog. The Mac mini's first unattended scheduled run was observed writing 403 sidecars before it was intentionally stopped; its fuller scan is scheduled daily at 04:00 EDT. Completion and full-library coverage remain unverified; see the [observation runbook](../runbooks/2026-10-19-observe-unattended-storage-scan.md).
+On an enrolled storage node, scheduled media scans default to daily at 04:00 in the configured `RAWARR_STORAGE_SCAN_TIMEZONE` (UTC if unset). In Fossils, each online storage card shows the next scheduled run and live scheduled-scan progress. Owners can change the local time and choose a daily or weekly cadence; the schedule is saved on that node in `/data`. The owner can also request an immediate full scan or bounded movie sample. The scanner reads its node-local `/media` mount and writes encrypted sidecars to `/shared`; a successful scan does not establish a combined cross-node catalog. The Mac mini's first unattended scheduled run was observed writing 403 sidecars before it was intentionally stopped; its fuller scan is scheduled daily at 04:00 EDT. Completion and full-library coverage remain unverified; see the [observation runbook](../runbooks/2026-10-19-observe-unattended-storage-scan.md).
 
 ## Scan a local media folder
 
@@ -122,23 +124,38 @@ export RAWARR_LIBRARY_NAME="My library"
 docker compose -p rawrarr-local -f docker-compose.yml -f docker-compose.media.yml up -d --build
 ```
 
-Then unlock the age vault, open the dashboard, and choose **Scan folder**. The scanner reads files only; it does not move or rename them. A scan can write age-encrypted metadata sidecars below `/shared/metadata/library/text/` when the shared public recipient is available. Metadata matching uses the configured Radarr integration.
+Then unlock the age vault, open the dashboard, and choose **Scan folder**. The scanner reads files only; it does not move or rename them. A scan can write age-encrypted metadata sidecars below `/shared/in/metadata/library/text/` when the shared public recipient is available. Metadata matching uses the configured Radarr integration.
 
 ## Configure Syncthing sharing
 
-The Devices panel can use local and remote Syncthing REST APIs to add peers and configure the Rawrarr folder. Keep the local Syncthing API behind a trusted network and provide API keys through protected settings or files. The remote peer API key entered in the form is transient and is cleared after the request.
+The Fossils panel can use local and remote Syncthing REST APIs to add peers and configure the Rawrarr folder. Keep the local Syncthing API behind a trusted network and provide API keys through protected settings or files. The remote peer API key entered in the form is transient and is cleared after the request.
 
 This form configures the app-data folder; it does not implement user invitations, selective per-user trust, or shared passkey accounts. Back up or test with disposable folders before pointing it at an existing Syncthing folder.
 
+### Publish a selected file collection under `/shared/out`
+
+Use `scripts/publish_shared_output.py` when you want a selected media or file collection included in the existing Syncthing `/shared` folder. The source stays in place under `/media`; the script copies it under `/shared/out/<name>`. Every device already sharing this `/shared` Syncthing folder will receive the files, so confirm every peer is approved and has enough space. Syncthing encrypts traffic in transit but does not encrypt these copied files at rest.
+
+Run a preview first, using the host path configured by `RAWARR_SHARED_DATA_PATH` (the default is `~/Library/Application Support/rawrarr/shared-data` in local Compose):
+
+```sh
+python3 scripts/publish_shared_output.py \
+  --source "$RAWARR_HOST_MEDIA_PATH/music/Selected Artist" \
+  --shared-dir "$RAWARR_SHARED_DATA_PATH" \
+  --name selected-artist
+```
+
+Review the file count and byte total, then add `--apply` to copy. The tool refuses overlapping source/shared paths, symlinks, conflicting files, and insufficient space. It does not configure Syncthing peers, delete files, or mirror the complete `/media` tree.
+
 ### Replicate a boneyard node's media folder
 
-Media replication is an explicit, separate Syncthing share between two approved boneyard nodes. Mount the verified source media directory into its Syncthing companion at `/media` read-only, and mount an empty destination directory into the second companion at `/media` writable. `docker-compose.syncthing-media.yml` adds this bind to each host's existing Syncthing service; use that host's existing Compose file, `-p rawrarr-local`, and its verified `RAWARR_HOST_MEDIA_PATH`. The Rawrarr storage worker itself keeps `/media` read-only. Never mount media into roarlay or `/shared`.
+The existing music replication setup uses an explicit, separate Syncthing share between two approved boneyard nodes. Mount the verified source media directory into its Syncthing companion at `/media` read-only, and mount an empty destination directory into the second companion at `/media` writable. `docker-compose.syncthing-media.yml` adds this bind to each host's existing Syncthing service; use that host's existing Compose file, `-p rawrarr-local`, and its verified `RAWARR_HOST_MEDIA_PATH`. The Rawrarr storage worker itself keeps `/media` read-only. For new collections, use the `/shared/out` publishing flow above when the intended peers already share the Rawrarr `/shared` folder. Never mount media into roarlay.
 
 Choose a source directory whose contents fit on the destination and verify the two Syncthing device IDs with `scripts/share_storage_media.py --docker-container CONTAINER --show-id` on each host. For the current music share, mount the Mini's music directory and the MacBook's `media.ev/music` directory as `/media`. Install the same `.stignore` at each mount root before pairing: `!/[Aa]*`, `!/[Aa]*/**`, then `*`, one pattern per line. This limits the current music tree to its A/a top-level entries; inspect those entries and confirm they are directories before enabling the share. The Mini's read-only bind also needs an existing `.stfolder` directory at its root. Use one matching folder ID, `rawrarr-media`, and `--path /media --include-a-folders` on each host. Run the default dry-run first, then `--apply` on the Mini with `--role source` and `--apply --confirm-empty-destination` on a new MacBook destination with `--role destination`. The source is send-only and the destination receive-only. Existing app-data peer and folder configuration is preserved. The script refuses an existing or overlapping media folder.
 
 The current share also includes three exact album paths: `Mike Jourgensen/Rainy Landfill Music`, `DU Records/Noise Tent 2K Spring Sampler`, and `Longmont Potion Castle/Longmont Potion Castle 15`. To add another album later, run `scripts/add_music_sync_albums.py --root HOST_MUSIC_DIR --album 'Artist/Album'` on both hosts, adding `--source` on the Mini. Review each dry-run and use `--apply` on each host, then scan and verify the bounded transfer. The script adds one exact directory pattern per album before the final `*`; an artist-level allow pattern would include all of that artist's albums.
 
-Check `--status --folder-id ID` on both hosts until they are idle with zero needed files, bytes, and errors. `scripts/hash_media_tree.py` prints a path/content fingerprint for each host folder; compare those outputs before claiming a successful copy. Syncthing sessions are encrypted in transit, but replicated media files are ordinary media bytes on both hosts. Deletions can propagate, so keep separate backups. Adding a Syncthing share does not itself enroll the second Rawrarr boneyard worker; approve that worker in Devices before expecting its media scan or catalog entry.
+Check `--status --folder-id ID` on both hosts until they are idle with zero needed files, bytes, and errors. `scripts/hash_media_tree.py` prints a path/content fingerprint for each host folder; compare those outputs before claiming a successful copy. Syncthing sessions are encrypted in transit, but replicated media files are ordinary media bytes on both hosts. Deletions can propagate, so keep separate backups. Adding a Syncthing share does not itself enroll the second Rawrarr boneyard worker; approve that worker in Fossils before expecting its media scan or catalog entry.
 
 The current Syncthing connection uses the existing Tailscale sidecars' TCP 22000 Serve forwards and SOCKS5 proxy. The separately enrolled Swarmsail Headscale clients do not use Serve and are not yet attached to Syncthing. Replacing the current path requires a direct Tailscale networking mode for those app containers; preserve the old sidecars until that path and the browser passkey origin have been migrated. [Syncthing proxy settings](https://docs.syncthing.net/users/proxying.html) and [Tailscale userspace networking](https://tailscale.com/docs/concepts/userspace-networking) describe the existing transport behavior.
 

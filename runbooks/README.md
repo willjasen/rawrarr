@@ -1,4 +1,9 @@
-- [Deploy the rawrs voice Talk fix](2026-10-27-deploy-voice-talk-fix.md) — Build the published revision locally on both internal Macs and verify the coordinator and MacBook subscriber deployments (issue [#195](https://github.com/willjasen/rawrarr/issues/195)).
+- [Restore Rawrarr on do3](2026-10-27-restore-rawrarr-do3.md) — Stop Synkpieces and run published Rawrarr `main` on a clean database while preserving the previous database volume and backup (issue [#199](https://github.com/willjasen/rawrarr/issues/199)).
+- [Show per-device Merkle metadata freshness](2026-10-27-device-merkle-freshness.md) — Report verified config revision Merkle agreement for each metadata device in the coordinator Devices view (issue [#100](https://github.com/willjasen/rawrarr/issues/100)).
+- [Fix Merkle peer status counts](2026-10-27-fix-merkle-peer-status-counts.md) — Exclude the local node from the configured-peer denominator so self entries do not produce a false incomplete badge (issue [#231](https://github.com/willjasen/rawrarr/issues/231)).
+- [Repair stale coordinator routes for internal devices](2026-10-27-repair-stale-device-routes.md) — Update direct and relay targets for the current internal node IDs and verify coordinator/device routes (issue [#204](https://github.com/willjasen/rawrarr/issues/204)).
+- [Add a three-day public trial](2026-10-27-three-day-public-trial.md) — Record public-only three-day account trials, internal deployment exclusion, profile status reporting, and current enforcement limits (issue [#160](https://github.com/willjasen/rawrarr/issues/160)).
+- [Create local architecture-specific internal base images](2026-10-27-local-internal-base-images.md) — Document and prepare reusable native-architecture Rawrarr images for the internal Macs, preserving per-service deployment boundaries (issue [#198](https://github.com/willjasen/rawrarr/issues/198)).
 - [Remove build dead-code warnings](2026-10-26-remove-build-dead-code-warnings.md) — Remove two unused Rust functions reported in ARM64 and AMD64 release builds (issue [#191](https://github.com/willjasen/rawrarr/issues/191)).
 - [Keep the age ID after a mobile page refresh](2026-10-26-persist-mobile-age-id.md) — Persist the locally validated ID before slower node requests and report browser storage failures (issue [#179](https://github.com/willjasen/rawrarr/issues/179)).
 - [Fix unavailable Syncthing health on online device cards](2026-10-26-fix-syncthing-health-unavailable.md) — Diagnose and restore shared-folder Syncthing health for online configured subscriber nodes (issue [#135](https://github.com/willjasen/rawrarr/issues/135)).
@@ -47,6 +52,10 @@
 
 # Rawrarr runbooks
 
+- [ETH donations, ENS sign-in, and subscription tiers](2026-10-27-eth-donations-ens-subscriptions.md) — Add voluntary ETH donations, SIWE wallet login by ENS name, manual Ethereum mainnet subscriptions, and a one-fossil free tier (issue [#208](https://github.com/willjasen/rawrarr/issues/208)).
+- [Refresh linked regression test clones](2026-10-27-refresh-test-clone-dependencies.md) — Prepare each isolated OrbStack test clone with current lockfile dependencies and architecture-correct tools before running the offline suites (issue [#208](https://github.com/willjasen/rawrarr/issues/208)).
+- [Fix linked regression suite failures](2026-10-27-fix-regression-suite-failures.md) — Copy Stripe test fixtures into each clone, correct service configuration fixtures, and expose configured Radarr/Sonarr connection controls (issue [#223](https://github.com/willjasen/rawrarr/issues/223)).
+- [Document the “eventually” app-data direction](2026-10-27-document-eventually-app-data-direction.md) — Define `/shared/in` for app data and `/shared/out` for selected large files as the target Syncthing layout, while distinguishing it from current paths.
 - [Restore the current MacBook fossil route](2026-10-26-restore-current-macbook-fossil-route.md) — Map the live MacBook node ID to its verified tailnet relay and direct API endpoints so the Devices card can report a usable route (issue [#181](https://github.com/willjasen/rawrarr/issues/181)).
 
 - [Check coordinator UI releases every five minutes](2026-10-26-coordinator-ui-update-five-minute-poll.md) — Restore five-minute polling for the coordinator-only UI bundle updater (issue [#169](https://github.com/willjasen/rawrarr/issues/169)).
@@ -246,6 +255,7 @@
 - [Browse the Sonarr library on TV](2026-10-18-browse-sonarr-library.md) — Load the configured Sonarr series list directly from metadata and show TV library statistics and refresh controls.
 
 - [Add suggested account words](2026-10-18-add-suggested-account-words.md) — Expand generated names with the previously suggested eras, settings, and creatures.
+- [Add short Mesozoic creature words](2026-10-27-add-short-mesozoic-creature-words.md) — Expand generated profile names with approved short dinosaur words.
 - [Expand generated account vocabulary](2026-10-18-expand-generated-account-vocabulary.md) — Add the supplied prehistoric word pools while preserving username limits.
 
 - [Display the generated account name](2026-10-18-display-generated-account-name.md) — Show the generated dinosaur-themed label in the workspace profile for existing and new accounts.
@@ -626,6 +636,7 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Import the age ID while nodes are offline](2026-10-25-import-age-id-offline.md) — Validate an age private ID locally and save it in the browser without requiring an online fossil.
 # Rawrarr runbooks
 
+- [Give Rawrarr's voice agent a warm, playful personality](2026-10-27-rawr-personality.md) — Make Rawr a helpful, innocent, curious, gently upbeat dino helper while keeping answers grounded (issue [#233](https://github.com/willjasen/rawrarr/issues/233)).
 - [Keep the coordinator workspace pending while it reconnects](2026-10-25-coordinator-reconnect-pending.md) — Show a blocking reconnect state after repeated coordinator health failures and restore the current workspace after recovery (issue [#98](https://github.com/willjasen/rawrarr/issues/98)).
 - [Remove the roarlay label from coordinator page headers](2026-10-25-remove-roarlay-header-label.md) — Remove the top-right coordinator header label while preserving sign-out (issue [#89](https://github.com/willjasen/rawrarr/issues/89)).
 - [Temporarily disable UI signature enforcement](2026-10-26-temporarily-disable-ui-signature.md) — Remove the UI signature badge and release-signature requirement while retaining checksum/archive validation; deploy and verify the coordinator update (issue [#107](https://github.com/willjasen/rawrarr/issues/107)).
@@ -642,3 +653,16 @@ Task records and operational procedures for this Rawrarr repository. Each entry 
 - [Report accurate age settings unlock errors](2026-10-26-age-settings-unlock-errors.md) — Distinguish a wrong or mismatched user age ID from node age-tool, storage, and encrypted-config failures (issue [#164](https://github.com/willjasen/rawrarr/issues/164)).
 - [Publish private subscriber images and route the current Mac mini fossil](2026-10-26-private-ghcr-current-fossil-route.md) — Build private GHCR images per architecture, assemble multi-architecture tags, and deploy coordinator/fossil independently (issue [#176](https://github.com/willjasen/rawrarr/issues/176)).
 - [Keep node avatars visible and route health truthful](2026-10-26-fix-node-avatar-and-route-state.md) — Remove the route dependency from node avatar loading and visually distinguish a live heartbeat from unavailable routes (issue [#181](https://github.com/willjasen/rawrarr/issues/181)).
+- [Deploy the Stripe webhook service on do3](2026-10-27-deploy-stripe-service-do3.md) — Publish and configure the private Stripe webhook service on `rawrarr-roarlay`; install its test-mode signing secret and verify the public route and signature checks (issue [#160](https://github.com/willjasen/rawrarr/issues/160)).
+- [Add test-mode account checkout for Stripe](2026-10-27-stripe-account-checkout.md) — Let an authenticated account start a temporary Stripe test subscription and view webhook-backed status without enabling entitlements (issue [#160](https://github.com/willjasen/rawrarr/issues/160)).
+- [Rename Devices to Fossils](2026-10-27-devices-to-fossils.md) — Rename the coordinator page, bookmark route, and newly generated subscriber node ID prefix; issue [#215](https://github.com/willjasen/rawrarr/issues/215).
+- [Finish the Fossils UI rename](2026-10-27-finish-fossils-ui-rename.md) — Replace remaining landing-page copy referring to connected nodes as devices; issue [#225](https://github.com/willjasen/rawrarr/issues/225).
+- [Fix the config peer status route build](2026-10-27-fix-peer-status-handler-build.md) — Rename the status handler to avoid shadowing by a local value and restore the Rust release build (issue [#217](https://github.com/willjasen/rawrarr/issues/217)).
+- [Restore the MacBook fossil Valkey service](2026-10-27-restore-macbook-fossil-valkey.md) — Add the missing local Valkey ciphertext cache to the MacBook subscriber project and verify fossil connectivity (issue [#100](https://github.com/willjasen/rawrarr/issues/100)).
+- [Move rawrs Talk to a floating voice control](2026-10-27-rawrs-floating-talk.md) — Keep the voice agent available in a dismissible bottom-left panel across coordinator workspace pages (issue [#218](https://github.com/willjasen/rawrarr/issues/218)).
+- [Configure OpenAI for internal roarlay](2026-10-27-configure-openai-internal-roarlay.md) — Install the owner-provided OpenAI key as a host-local Compose secret and enable the optional coordinator overlay (issue [#230](https://github.com/willjasen/rawrarr/issues/230)).
+- [Fix failing Playwright browser tests](2026-10-26-fix-playwright-tests.md) — Restore library browser tests with current configured-service fixtures and align the setup assertions with the current visible flow (issue [#194](https://github.com/willjasen/rawrarr/issues/194)).
+- [Reuse generated Fossil avatars after refresh](2026-10-27-fossil-avatar-refresh-cache.md) — Keep rendered profile and device avatar bytes in a bounded coordinator cache so Fossils-page refreshes do not rerender stable pictures (issue [#248](https://github.com/willjasen/rawrarr/issues/248)).
+- [Move the internal coordinator to do3](2026-10-27-move-internal-coordinator-to-do3.md) — Run the internal coordinator beside the public Rawrarr service on do3, preserve its tailnet identity and state, and verify private routing (issue [#246](https://github.com/willjasen/rawrarr/issues/246)).
+
+- [Disable the public Funnel on do3](2026-11-02-disable-do3-funnel.md) — Turn off public HTTPS Funnel while retaining tailnet-only Serve and the existing private TCP routes (issue [#307](https://github.com/willjasen/rawrarr/issues/307)).

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#101514">
   <link rel="icon" type="image/svg+xml" href="/assets/rawrarr-favicon.svg">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <title>rawrarr — Movies</title>
   <style>
     :root {
@@ -210,7 +211,7 @@
           <article class="card"><div class="card-head"><span>Shared metadata</span></div><div class="card-value" id="metadata-size">—</div><div class="card-sub">Encrypted metadata and artwork</div></article>
         </section>
         <article class="panel">
-          <div class="panel-head"><h2>Radarr movie library</h2><div style="display:flex;gap:8px"><button id="refresh-movies" class="refresh" type="button">Refresh movies ↻</button></div></div>
+          <div class="panel-head"><h2>Radarr movie library</h2><div style="display:flex;gap:8px"><button id="edit-radarr-connection" class="refresh" type="button">Connection settings</button><button id="refresh-movies" class="refresh" type="button">Refresh movies ↻</button></div></div>
           <div id="movies-message" class="scan-summary" role="status">Select refresh to load your Radarr library.</div>
           <div id="artwork-backfill" class="artwork-backfill" hidden>
             <div id="artwork-backfill-label" role="status" aria-live="polite">Artwork backfill status</div>
@@ -239,7 +240,7 @@
           <article class="card"><div class="card-head"><span>Disk usage</span></div><div class="card-value" id="series-size">—</div><div class="card-sub">Size reported by Sonarr</div></article>
         </section>
         <article class="panel">
-          <div class="panel-head"><h2>Sonarr series library</h2><button id="refresh-series" class="refresh" type="button">Refresh series ↻</button></div>
+          <div class="panel-head"><h2>Sonarr series library</h2><div style="display:flex;gap:8px"><button id="edit-sonarr-connection" class="refresh" type="button">Connection settings</button><button id="refresh-series" class="refresh" type="button">Refresh series ↻</button></div></div>
           <div id="series-message" class="scan-summary" role="status">Select refresh to load your Sonarr library.</div>
           <div class="table-wrap"><table><thead><tr></tr></thead><tbody id="sonarr-series-rows"></tbody></table></div>
         </article>
@@ -365,6 +366,14 @@
     window.addEventListener('hashchange', restoreView);
     moviesNav.addEventListener('click', () => showView('movies'));
     document.getElementById('series-nav').addEventListener('click', () => showView('series'));
+    document.getElementById('edit-radarr-connection').addEventListener('click', () => {
+      document.getElementById('radarr-settings-panel').hidden = false;
+      document.getElementById('radarr-settings-panel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    document.getElementById('edit-sonarr-connection').addEventListener('click', () => {
+      document.getElementById('sonarr-settings-panel').hidden = false;
+      document.getElementById('sonarr-settings-panel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
     configurationNav.addEventListener('click', () => showView('configuration'));
     document.getElementById('about-nav').addEventListener('click', () => showView('about'));
     overviewNav.addEventListener('click', () => showView('overview'));

@@ -29,8 +29,8 @@ fn tv_metadata_and_artwork_use_separate_opaque_age_encrypted_paths() {
     let artwork = vault.tv_artwork_path(123456).unwrap();
     assert!(vault.tv_metadata_exists(123456));
     assert!(vault.tv_artwork_exists(123456));
-    assert!(metadata.starts_with(root.join("shared/metadata/tv/text")));
-    assert!(artwork.starts_with(root.join("shared/metadata/tv/artwork")));
+    assert!(metadata.starts_with(root.join("shared/in/metadata/tv/text")));
+    assert!(artwork.starts_with(root.join("shared/in/metadata/tv/artwork")));
     assert!(!metadata.to_string_lossy().contains("123456"));
     assert!(!artwork.to_string_lossy().contains("123456"));
     assert_ne!(metadata.file_name(), artwork.file_name());

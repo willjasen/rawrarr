@@ -8,6 +8,14 @@ const status = document.getElementById('status');
 const nodesPanel = document.getElementById('nodes');
 const pendingPanel = document.getElementById('pending');
 const approveNodeDialog = document.getElementById('approve-node-dialog');
+const deviceEditDialog = document.getElementById('device-edit-dialog');
+const deviceEditForm = document.getElementById('device-edit-form');
+const deviceEditName = document.getElementById('device-edit-name');
+const deviceEditDescription = document.getElementById('device-edit-description');
+const deviceEditStatus = document.getElementById('device-edit-status');
+const deviceEditDelete = document.getElementById('device-edit-delete');
+const deviceEditCancel = document.getElementById('device-edit-cancel');
+let deviceEditContext = null;
 const approveNodeForm = document.getElementById('approve-node-form');
 const approveNodeIdentity = document.getElementById('approve-node-age-id');
 const approveNodeBackup = document.getElementById('approve-node-root-backup');
@@ -15,6 +23,7 @@ const approveNodeFingerprint = document.getElementById('approve-node-root-finger
 const approveNodeStatus = document.getElementById('approve-node-status');
 const approveNodeCancel = document.getElementById('approve-node-cancel');
 let pendingNodeToApprove = null;
+let pendingNodeDecision = 'approve';
 const contentPanel = document.getElementById('content');
 const contentStatus = document.getElementById('content-status');
 const moviesPanel = document.getElementById('movies');
@@ -113,13 +122,24 @@ const ageStorageStatus = document.getElementById('age-storage-status');
 const ageStorageMessage = document.getElementById('age-storage-message');
 const settingsAgeIdInput = document.getElementById('settings-age-id');
 const saveAgeIdButton = document.getElementById('save-age-id');
+const showAgeRecipientButton = document.getElementById('show-age-recipient');
 const removeAgeIdButton = document.getElementById('remove-age-id');
-const views = Object.fromEntries(['overview', 'devices', 'movies', 'series', 'assistant', 'configuration', 'settings', 'about'].map(name => [name, document.getElementById(`${name}-view`)]));
+const ageRecipientDisplay = document.getElementById('age-recipient-display');
+const ageRecipientShort = document.getElementById('age-recipient-short');
+const copyAgeRecipientButton = document.getElementById('copy-age-recipient');
+const ageRecipientMessage = document.getElementById('age-recipient-message');
+let ageRecipientVisible = false;
+let agePublicRecipient = '';
+const views = Object.fromEntries(['overview', 'roarlay', 'fossils', 'movies', 'series', 'assistant', 'configuration', 'settings', 'about'].map(name => [name, document.getElementById(`${name}-view`)]));
+const roarlayHealthState = document.getElementById('roarlay-health-state');
+const roarlayHealthLabel = document.getElementById('roarlay-health-label');
+const roarlayHealthDetail = document.getElementById('roarlay-health-detail');
+document.getElementById('roarlay-address').textContent = location.origin;
 function roleLabel(role) {
   return role === 'coordinator' ? 'roarlay' : role === 'storage' ? 'boneyard' : 'fossil';
 }
 function showView(name, updateHash = true) {
-  const requestedView = name === 'tv' ? 'series' : name;
+  const requestedView = name === 'tv' ? 'series' : name === 'devices' ? 'fossils' : name;
   const view = views[requestedView] ? requestedView : 'overview';
   for (const [key, element] of Object.entries(views)) element.hidden = key !== view;
   for (const button of document.querySelectorAll('.nav-item[data-view]')) {
@@ -134,6 +154,7 @@ function showView(name, updateHash = true) {
     updateAgeIdControls();
     if (selectedNode) renderCachedMovies(selectedNode);
     if (ageIdentityInMemory && selectedNode) void unlockMetadata();
+    else if (!ageIdentityInMemory) contentStatus.textContent = 'Enter your age private ID to unlock. It will be saved in this browser after validation.';
   }
   if (view === 'series' && updateHash) {
     const cachedSeries = ageIdentityInMemory ? readLibraryTextCache(selectedNode, 'tv') : null;
@@ -156,13 +177,36 @@ function showView(name, updateHash = true) {
     }
   }
   if (view === 'assistant') void aiChat.refresh();
+  if (view === 'roarlay') void checkRoarlayHealth();
   if ((view === 'movies' || view === 'series') && updateHash) void loadMetadataSizes();
 }
-window.addEventListener('hashchange', () => showView(location.hash.slice(1) || 'overview', false));
+window.addEventListener('hashchange', () => showView(location.hash.slice(1) || 'overview'));
 document.querySelectorAll('.nav-item[data-view]').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
 document.getElementById('configure-sonarr')?.addEventListener('click', () => showView('settings'));
 showView(location.hash.slice(1) || 'overview', false);
+if (location.hash === '#devices') history.replaceState(null, '', `${location.pathname}${location.search}#fossils`);
 if (location.hash === '#series') history.replaceState(null, '', `${location.pathname}${location.search}#tv`);
+async function checkRoarlayHealth() {
+  const button = document.getElementById('roarlay-health-refresh');
+  button.disabled = true;
+  roarlayHealthLabel.textContent = 'Checking…';
+  roarlayHealthState.classList.remove('online');
+  roarlayHealthState.classList.add('offline');
+  try {
+    const response = await fetch('/health', { cache: 'no-store', headers: { Accept: 'text/html' } });
+    if (!response.ok) throw new Error(`Health check returned HTTP ${response.status}.`);
+    roarlayHealthState.classList.remove('offline');
+    roarlayHealthState.classList.add('online');
+    roarlayHealthLabel.textContent = 'Responding';
+    roarlayHealthDetail.textContent = `Roarlay responded at ${new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(new Date())}.`;
+  } catch (error) {
+    roarlayHealthDetail.textContent = error.message || 'Could not reach the Roarlay health endpoint.';
+    roarlayHealthLabel.textContent = 'Unavailable';
+  } finally {
+    button.disabled = false;
+  }
+}
+document.getElementById('roarlay-health-refresh').addEventListener('click', () => void checkRoarlayHealth());
 let profileAvatarSeed = '';
 let profileBaseName = '';
 let profileAccountId = '';
@@ -226,18 +270,69 @@ async function loadNodeAvatar(node, pictureSource, image) {
 }
 async function loadProfile() {
   try {
-    const profile = await jsonRequest('/api/workspace/profile');
+    let profile;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        profile = await jsonRequest('/api/workspace/profile');
+        break;
+      } catch (error) {
+        if (error.status !== 404 || attempt === 2) throw error;
+        await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)));
+      }
+    }
     profileAccountId = profile.accountId || '';
     profileBaseName = profile.displayName || 'Rawrarr user';
     document.getElementById('profile-name').textContent = profileBaseName;
     document.getElementById('sidebar-profile-name').textContent = profileBaseName;
+    const trialStatus = document.getElementById('trial-status');
+    if (profile.trialStartedAt && profile.trialEndsAt) {
+      const endsAt = new Date(profile.trialEndsAt.replace(' ', 'T'));
+      trialStatus.hidden = false;
+      trialStatus.textContent = endsAt.getTime() > Date.now()
+        ? `Three-day trial · ends ${endsAt.toLocaleString()}`
+        : `Three-day trial ended ${endsAt.toLocaleString()}`;
+    }
+    const [access, wallet] = await Promise.all([
+      jsonRequest('/api/crypto/access'),
+      jsonRequest('/api/auth/eth/link')
+    ]);
+    document.getElementById('crypto-access-status').textContent = access.tier === 'free'
+      ? `Free tier · ${access.fossilNodes} of ${access.fossilNodeLimit} fossil nodes`
+      : `${access.tier[0].toUpperCase()}${access.tier.slice(1)} tier${access.paidThrough ? ` · paid through ${new Date(access.paidThrough).toLocaleDateString()}` : ''}`;
+    const walletName = wallet.wallets?.[0]?.ensName;
+    document.getElementById('crypto-wallet-status').textContent = walletName ? `Linked wallet · ${walletName}` : 'No ENS wallet linked';
+    if (walletName) document.getElementById('crypto-ens-name').value = walletName;
     await loadProfileAvatar();
   } catch (error) {
-    document.getElementById('profile-name').textContent = error.message;
-    document.getElementById('sidebar-profile-name').textContent = 'Profile unavailable';
+    if (!profileBaseName) {
+      document.getElementById('profile-name').textContent = error.message;
+      document.getElementById('sidebar-profile-name').textContent = 'Profile unavailable';
+    }
   }
 }
 void loadProfile();
+const cryptoLinkForm = document.getElementById('crypto-wallet-link-form');
+cryptoLinkForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = document.getElementById('crypto-link-wallet');
+  const message = document.getElementById('crypto-link-message');
+  button.disabled = true;
+  try {
+    const provider = window.ethereum;
+    if (!provider || typeof provider.request !== 'function') throw new Error('Install an Ethereum wallet extension to link an ENS wallet.');
+    const start = await jsonRequest('/api/auth/eth/link/start', { method: 'POST', body: JSON.stringify({ ensName: document.getElementById('crypto-ens-name').value.trim() }) });
+    const accounts = await provider.request({ method: 'eth_requestAccounts' });
+    const account = Array.isArray(accounts) ? accounts.find(value => value.toLowerCase() === start.address.toLowerCase()) : null;
+    if (!account) throw new Error('Select the wallet currently resolved by this ENS name, then try again.');
+    const hexMessage = `0x${Array.from(new TextEncoder().encode(start.message), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+    const signature = await provider.request({ method: 'personal_sign', params: [hexMessage, account] });
+    await jsonRequest('/api/auth/eth/link/finish', { method: 'POST', body: JSON.stringify({ challengeId: start.challengeId, signature }) });
+    message.textContent = 'ENS wallet linked.';
+    await loadProfile();
+  } catch (error) {
+    message.textContent = error.message || 'Could not link this wallet.';
+  } finally { button.disabled = false; }
+});
 let selectedNode = null;
 let selectedNodeDetails = null;
 let selectedRoute = null;
@@ -245,17 +340,57 @@ let selectedRoutePromise = null;
 let selectedRoutePromiseNode = null;
 let deviceNames = {};
 let savingDeviceName = false;
+let deviceNamesRevision = 0;
 let workspaceNodes = [];
+fetch('/api/version', { cache: 'no-store' }).then(response => response.ok ? response.json() : null).then(version => {
+  if (!version?.deployedAt) return;
+  const updated = new Date(version.deployedAt);
+  const label = document.getElementById('coordinator-last-updated');
+  if (label && !Number.isNaN(updated.valueOf())) label.textContent = `Last updated on ${updated.toLocaleString()}`;
+}).catch(() => {});
 const storageScanStatusByNode = new Map();
 const storageScansActive = new Set();
 const storageScheduleDrafts = new Map();
 const syncthingHealthCache = new Map();
+const configPeerStatusCache = new Map();
 const nodeAvatarSeeds = new Map();
 let deviceRouteStatusByNode = new Map();
 function deviceNameTokens(value) {
   return new Set(String(value || '').toLowerCase().split(/[^a-z0-9]+/).filter(token => token.length >= 4));
 }
-function renderDeviceTopology(nodes, observedPeers, deviceNames) {
+function renderSigningKeyTopology(nodes) {
+  const panel = document.getElementById('signing-topology-content');
+  const rootFingerprint = nodes.find(node => node.signingRootFingerprint)?.signingRootFingerprint;
+  const root = document.createElement('div');
+  root.className = 'signing-root-card';
+  const title = document.createElement('strong');
+  title.textContent = 'You · instance signing root';
+  const detail = document.createElement('small');
+  detail.textContent = `ML-DSA-65 · user-held authority${rootFingerprint ? ` · fingerprint ${rootFingerprint}` : ''}`;
+  root.append(title, detail);
+  const stem = document.createElement('div');
+  stem.className = 'signing-tree-stem';
+  const devices = document.createElement('div');
+  devices.className = 'signing-device-list';
+  for (const node of nodes) {
+    const card = document.createElement('article');
+    const verified = Boolean(node.signingFingerprint);
+    card.className = `signing-device-card ${verified ? 'verified' : 'legacy'}`;
+    const name = document.createElement('strong');
+    name.textContent = deviceNames[node.nodeId] || (node.displayName && node.displayName !== node.nodeId ? node.displayName : roleLabel(node.role));
+    const state = document.createElement('small');
+    state.textContent = `${roleLabel(node.role)} · ${verified ? 'root-authorized signing key' : 'legacy · no root-signed key'}`;
+    card.append(name, state);
+    if (verified) {
+      const fingerprint = document.createElement('small');
+      fingerprint.textContent = `Device key · ${node.signingFingerprint}`;
+      card.append(fingerprint);
+    }
+    devices.append(card);
+  }
+  panel.replaceChildren(root, stem, devices);
+}
+function renderDeviceTopology(nodes, observedPeers, deviceNames, peerStatuses) {
   const panel = document.getElementById('device-topology-content');
   const graph = document.createElement('div');
   graph.className = 'topology-graph';
@@ -299,13 +434,19 @@ function renderDeviceTopology(nodes, observedPeers, deviceNames) {
   for (let leftIndex = 0; leftIndex < count; leftIndex += 1) {
     for (let rightIndex = leftIndex + 1; rightIndex < count; rightIndex += 1) {
       const pair = [nodes[leftIndex].nodeId, nodes[rightIndex].nodeId].sort();
-      const observed = observedEdges.get(`${pair[0]}\u0000${pair[1]}`);
+      const key = `${pair[0]}\u0000${pair[1]}`;
+      const observed = observedEdges.get(key);
+      const leftStatus = peerStatuses.get(pair[0]);
+      const rightStatus = peerStatuses.get(pair[1]);
+      const leftCanReachRight = leftStatus?.state !== 'stale' && (leftStatus?.reachablePeers || []).includes(pair[1]);
+      const rightCanReachLeft = rightStatus?.state !== 'stale' && (rightStatus?.reachablePeers || []).includes(pair[0]);
+      const tailnetReachable = leftCanReachRight || rightCanReachLeft;
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       line.setAttribute('x1', String(points[leftIndex].x));
       line.setAttribute('y1', String(points[leftIndex].y));
       line.setAttribute('x2', String(points[rightIndex].x));
       line.setAttribute('y2', String(points[rightIndex].y));
-      line.setAttribute('class', `topology-edge${observed ? observed.connected ? ' connected' : ' disconnected' : ''}`);
+      line.setAttribute('class', `topology-edge${tailnetReachable ? ' connected' : observed ? observed.connected ? ' connected' : ' disconnected' : ''}`);
       svg.append(line);
     }
   }
@@ -325,7 +466,7 @@ function renderDeviceTopology(nodes, observedPeers, deviceNames) {
 
   const legend = document.createElement('div');
   legend.className = 'topology-legend';
-  legend.innerHTML = '<span><i class="connected-line"></i>Connected</span><span><i class="disconnected-line"></i>Reported disconnected</span><span><i></i>No live peer report</span>';
+  legend.innerHTML = '<span><i class="connected-line"></i>Reachable over tailnet</span><span><i class="disconnected-line"></i>Syncthing reports disconnected</span><span><i></i>No live peer report</span>';
   if (nodes.length < 2) {
     const empty = document.createElement('p');
     empty.className = 'topology-empty';
@@ -339,6 +480,9 @@ const canOpenNode = node => node.relayAvailable || Boolean(node.directUrl);
 const selectedNodeStorageKey = 'rawrarr.coordinator.selected-node';
 const initialUrl = new URL(window.location.href);
 const requestedNode = initialUrl.searchParams.get('node') || sessionStorage.getItem(selectedNodeStorageKey);
+// Restore the previous node selection immediately so its browser-cached movie
+// list can render before node health and route checks finish.
+selectedNode = requestedNode;
 if (initialUrl.searchParams.has('node')) {
   initialUrl.searchParams.delete('node');
   window.history.replaceState(null, '', initialUrl);
@@ -404,11 +548,20 @@ metadataExportForm?.addEventListener('submit', async event => {
 let ageIdentityInMemory = rememberedAgeIdentity;
 let ageIdentityStored = Boolean(rememberedAgeIdentity);
 ageInput.value = '';
+if (location.hash === '#movies' && ageIdentityInMemory && selectedNode && readLibraryTextCache(selectedNode, 'movies')) {
+  contentPanel.hidden = false;
+  renderCachedMovies(selectedNode);
+}
 
 function updateAgeIdControls() {
   const hasIdentity = Boolean(ageIdentityInMemory);
   ageIdEntry.hidden = hasIdentity;
   clearKeyButton.hidden = !hasIdentity;
+  if (hasIdentity && contentStatus.textContent.trim() === 'Enter your age private ID to unlock. It will be saved in this browser after validation.') {
+    contentStatus.textContent = ageIdentityStored
+      ? 'Age private ID is saved in this browser and ready to unlock your encrypted movies.'
+      : 'Age private ID is available in this page and ready to unlock your encrypted movies.';
+  }
   updateAgeStorageSettings();
 }
 function rememberAgeIdentity(identity) {
@@ -422,6 +575,35 @@ function rememberAgeIdentity(identity) {
     return false;
   }
 }
+window.addEventListener('storage', event => {
+  if (event.key !== ageSessionKey) return;
+  const nextIdentity = event.newValue || '';
+  const identityChanged = ageIdentityInMemory !== nextIdentity;
+  ageIdentityInMemory = nextIdentity;
+  ageIdentityStored = Boolean(event.newValue);
+  if (identityChanged) {
+    ageRecipientVisible = false;
+    agePublicRecipient = '';
+    ageRecipientShort.textContent = '';
+    ageRecipientDisplay.hidden = true;
+    ageRecipientMessage.textContent = '';
+    ageRecipientMessage.hidden = true;
+    ageRecipientMessage.dataset.state = '';
+    showAgeRecipientButton.textContent = 'Show age public ID';
+  }
+  if (!nextIdentity) {
+    aiMovies = null;
+    aiSeries = null;
+    if (identityChanged) ageInput.value = '';
+    if (location.hash === '#movies') {
+      moviesPanel.replaceChildren();
+      resetArrSummary('radarr');
+      contentStatus.textContent = 'Age private ID removed from this browser; metadata is locked.';
+    }
+  }
+  updateAgeIdControls();
+  if (ageIdentityInMemory && location.hash === '#movies' && selectedNode) void unlockMetadata();
+});
 function updateAgeStorageSettings() {
   ageStorageStatus.dataset.state = '';
   ageStorageStatus.textContent = ageIdentityInMemory
@@ -433,14 +615,102 @@ function updateAgeStorageSettings() {
   document.getElementById('settings-age-id-label').hidden = settingsAgeIdInput.hidden;
   saveAgeIdButton.textContent = 'Save age ID in this browser';
   saveAgeIdButton.hidden = Boolean(ageIdentityInMemory);
+  showAgeRecipientButton.hidden = !ageIdentityInMemory;
+  showAgeRecipientButton.textContent = ageRecipientVisible ? 'Hide age public ID' : 'Show age public ID';
   removeAgeIdButton.hidden = !ageIdentityInMemory;
   removeAgeIdButton.textContent = 'Clear saved age ID';
 }
+showAgeRecipientButton.addEventListener('click', async () => {
+  if (ageRecipientVisible) {
+    ageRecipientVisible = false;
+    agePublicRecipient = '';
+    ageRecipientShort.textContent = '';
+    ageRecipientDisplay.hidden = true;
+    ageRecipientMessage.textContent = '';
+    ageRecipientMessage.hidden = true;
+    ageRecipientMessage.dataset.state = '';
+    showAgeRecipientButton.textContent = 'Show age public ID';
+    return;
+  }
+  const identity = ageIdentityInMemory;
+  if (!identity) return;
+  showAgeRecipientButton.disabled = true;
+  ageRecipientShort.textContent = '';
+  ageRecipientDisplay.hidden = true;
+  ageRecipientMessage.hidden = false;
+  ageRecipientMessage.dataset.state = '';
+  ageRecipientMessage.textContent = 'Deriving age public ID in this browser…';
+  try {
+    await import('/assets/metadata-export.js');
+    const recipient = (await window.rawrarrMiniExport.deriveProfileRecipient(identity)).trim();
+    if (!/^age1pq1[a-z0-9]+$/.test(recipient)) throw new Error('The saved age ID did not produce a valid public ID.');
+    if (ageIdentityInMemory !== identity) {
+      ageRecipientVisible = false;
+      agePublicRecipient = '';
+      ageRecipientShort.textContent = '';
+      ageRecipientDisplay.hidden = true;
+      ageRecipientMessage.textContent = '';
+      ageRecipientMessage.hidden = true;
+      showAgeRecipientButton.textContent = 'Show age public ID';
+      return;
+    }
+    ageRecipientVisible = true;
+    agePublicRecipient = recipient;
+    ageRecipientShort.textContent = recipient.length > 24
+      ? `${recipient.slice(0, 12)}…${recipient.slice(-8)}`
+      : `${recipient.slice(0, 8)}…${recipient.slice(-4)}`;
+    ageRecipientDisplay.hidden = false;
+    ageRecipientMessage.textContent = '';
+    ageRecipientMessage.hidden = true;
+    showAgeRecipientButton.textContent = 'Hide age public ID';
+  } catch (error) {
+    agePublicRecipient = '';
+    ageRecipientShort.textContent = '';
+    ageRecipientDisplay.hidden = true;
+    ageRecipientMessage.dataset.state = 'error';
+    ageRecipientMessage.textContent = error instanceof Error ? error.message : 'Could not derive the age public ID.';
+  } finally {
+    showAgeRecipientButton.disabled = false;
+    if (!ageIdentityInMemory) {
+      agePublicRecipient = '';
+      ageRecipientShort.textContent = '';
+      ageRecipientDisplay.hidden = true;
+      ageRecipientMessage.textContent = '';
+      ageRecipientMessage.hidden = true;
+    }
+  }
+});
+copyAgeRecipientButton.addEventListener('click', async () => {
+  const recipient = agePublicRecipient;
+  if (!ageRecipientVisible || !recipient) return;
+  copyAgeRecipientButton.disabled = true;
+  ageRecipientMessage.dataset.state = '';
+  ageRecipientMessage.hidden = false;
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard access is unavailable. Allow clipboard access, then try again.');
+    await navigator.clipboard.writeText(recipient);
+    if (ageRecipientVisible && agePublicRecipient === recipient) ageRecipientMessage.textContent = 'Age public ID copied.';
+  } catch {
+    if (ageRecipientVisible && agePublicRecipient === recipient) {
+      ageRecipientMessage.dataset.state = 'error';
+      ageRecipientMessage.textContent = 'Could not copy the age public ID. Check browser clipboard access and try again.';
+    }
+  } finally {
+    copyAgeRecipientButton.disabled = false;
+  }
+});
 function clearAgeIdentity() {
   aiMovies = null;
   aiSeries = null;
   ageIdentityInMemory = '';
   ageIdentityStored = false;
+  ageRecipientVisible = false;
+  agePublicRecipient = '';
+  ageRecipientShort.textContent = '';
+  ageRecipientDisplay.hidden = true;
+  ageRecipientMessage.textContent = '';
+  ageRecipientMessage.hidden = true;
+  ageRecipientMessage.dataset.state = '';
   try { localStorage.removeItem(ageSessionKey); } catch { /* Keep the page usable when storage is disabled. */ }
   ageInput.value = '';
   updateAgeIdControls();
@@ -448,6 +718,12 @@ function clearAgeIdentity() {
 updateAgeIdControls();
 window.addEventListener('pagehide', () => {
   ageIdentityInMemory = '';
+  ageRecipientVisible = false;
+  agePublicRecipient = '';
+  ageRecipientShort.textContent = '';
+  ageRecipientDisplay.hidden = true;
+  ageRecipientMessage.textContent = '';
+  ageRecipientMessage.hidden = true;
   ageInput.value = '';
   settingsAgeIdInput.value = '';
   metadataExportInput.value = '';
@@ -455,6 +731,21 @@ window.addEventListener('pagehide', () => {
   approveNodeIdentity.value = '';
   approveNodeBackup.value = '';
   approveNodeFingerprint.value = '';
+});
+window.addEventListener('pageshow', event => {
+  if (!event.persisted) return;
+  try { ageIdentityInMemory = localStorage.getItem(ageSessionKey) || ''; } catch { /* Storage can be disabled by browser policy. */ }
+  ageIdentityStored = Boolean(ageIdentityInMemory);
+  if (!ageIdentityInMemory) {
+    aiMovies = null;
+    aiSeries = null;
+    moviesPanel.replaceChildren();
+    document.getElementById('sonarr-series').replaceChildren();
+    resetArrSummary('radarr');
+    resetArrSummary('sonarr');
+  }
+  updateAgeIdControls();
+  showView(location.hash.slice(1) || 'overview');
 });
 
 document.getElementById('age-storage-form').addEventListener('submit', async event => {
@@ -480,6 +771,7 @@ document.getElementById('age-storage-form').addEventListener('submit', async eve
     settingsAgeIdInput.value = '';
     contentStatus.textContent = ageStorageMessage.textContent;
     updateAgeIdControls();
+    if (location.hash === '#movies' && selectedNode) void unlockMetadata();
   } catch (error) {
     ageStorageMessage.dataset.state = 'error';
     ageStorageMessage.textContent = error.message || 'Could not validate or save the age private ID.';
@@ -525,7 +817,7 @@ function clearConfigStrings(value) {
 async function arrDirectUrl() {
   const node = selectedNodeDetails;
   if (!node || node.role !== 'metadata' || !node.online || !node.directUrl) {
-    throw new Error('Select an online fossil node with a direct Tailscale route in Devices.');
+    throw new Error('Select an online fossil node with a direct Tailscale route in Fossils.');
   }
   const route = await chooseNodeRoute(node, true);
   if (!route.direct) {
@@ -644,6 +936,7 @@ const arrSettings = {
       { url: 'settings-radarr-url', key: 'settings-radarr-key', uiUsername: 'settings-radarr-ui-username', uiPassword: 'settings-radarr-ui-password', uiNote: 'settings-radarr-ui-auth-note', form: 'settings-radarr-settings', note: 'settings-radarr-key-note', message: 'settings-radarr-settings-message', button: 'settings-save-radarr', clear: 'settings-clear-radarr', nodeNote: 'settings-radarr-node-note' },
     ],
     mediaCard: 'radarr-connection-card', saved: 'settings-radarr-saved', savedUrl: 'settings-radarr-saved-url', endpoint: '/settings/radarr', label: 'Radarr',
+    dialog: 'settings-radarr-dialog', configure: 'settings-configure-radarr', test: 'settings-test-radarr',
   },
   sonarr: {
     overviewCards: ['overview-sonarr-card', 'overview-sonarr-genres-card'],
@@ -652,6 +945,7 @@ const arrSettings = {
       { url: 'settings-sonarr-url', key: 'settings-sonarr-key', form: 'settings-sonarr-settings', note: 'settings-sonarr-key-note', message: 'settings-sonarr-settings-message', button: 'settings-save-sonarr', clear: 'settings-clear-sonarr', nodeNote: 'settings-sonarr-node-note' },
     ],
     mediaCard: 'sonarr-connection-card', saved: 'settings-sonarr-saved', savedUrl: 'settings-sonarr-saved-url', endpoint: '/settings/sonarr', label: 'Sonarr',
+    dialog: 'settings-sonarr-dialog', configure: 'settings-configure-sonarr', test: 'settings-test-sonarr',
   },
 };
 
@@ -676,7 +970,7 @@ async function loadArrSettings(service) {
       key.value = '';
       key.required = !settings.configured;
       document.getElementById(copy.note).textContent = settings.configured
-        ? 'Leave blank to keep the saved API key.'
+        ? 'Enter the API key to test; leave blank when saving to keep the saved key.'
         : 'Required for the first encrypted save.';
       if (service === 'radarr') {
         document.getElementById(copy.uiUsername).value = '';
@@ -685,9 +979,14 @@ async function loadArrSettings(service) {
           ? 'Leave both blank to keep the encrypted login. Enter both to replace it; clear connection removes it.'
           : 'Optional. Enter both only if Radarr requires a UI login to download backups; saved in the age-encrypted config.';
       }
+      const isSettingsCopy = copy.form === `settings-${service}-settings`;
       document.getElementById(copy.nodeNote).textContent = settings.configured
-        ? `Connected to ${fields.label} on ${selectedNodeDetails.nodeId}. Settings are sent directly from this browser to the node; roarlay does not receive the ${service === 'radarr' ? 'API key or UI login' : 'API key'}.`
-        : `${fields.label} is not configured on ${selectedNodeDetails.nodeId}. Add it here when ready. Credentials go directly from this browser to the node; roarlay never receives them.`;
+        ? isSettingsCopy
+          ? `Connected on ${selectedNodeLabel()}. Credentials stay encrypted on this node.`
+          : `Connected to ${fields.label} on ${selectedNodeLabel()}. Settings are sent directly from this browser to the node; roarlay does not receive the ${service === 'radarr' ? 'API key or UI login' : 'API key'}.`
+        : isSettingsCopy
+          ? `Not configured on ${selectedNodeLabel()}. Add the connection when ready.`
+          : `${fields.label} is not configured on ${selectedNodeLabel()}. Add it here when ready. Credentials go directly from this browser to the node; roarlay never receives them.`;
       const message = document.getElementById(copy.message);
       message.textContent = settings.configured ? `Saved ${fields.label} settings loaded from the age-encrypted config.` : `Enter your ${fields.label} HTTPS URL and API key.`;
       message.dataset.state = '';
@@ -696,6 +995,7 @@ async function loadArrSettings(service) {
     const savedCard = document.getElementById(fields.saved);
     savedCard.hidden = !settings.configured;
     document.getElementById(fields.savedUrl).textContent = settings.url || '';
+    document.getElementById(fields.configure).textContent = settings.configured ? `Change ${fields.label} settings` : `Configure ${fields.label}`;
     if (service === 'sonarr') {
       const tvLibrary = document.getElementById('tv-library');
       tvLibrary.hidden = !settings.configured;
@@ -725,10 +1025,40 @@ async function loadArrSettings(service) {
 }
 
 for (const [service, fields] of Object.entries(arrSettings)) {
+  const dialog = document.getElementById(fields.dialog);
+  document.getElementById(fields.configure).addEventListener('click', () => dialog.showModal());
+  dialog.querySelector('.arr-dialog-close').addEventListener('click', () => dialog.close());
   for (const copy of fields.copies) {
     const form = document.getElementById(copy.form);
     const button = document.getElementById(copy.button);
     const message = document.getElementById(copy.message);
+    if (copy.form === `settings-${service}-settings`) {
+      document.getElementById(fields.test).addEventListener('click', async () => {
+        const testButton = document.getElementById(fields.test);
+        testButton.disabled = true;
+        message.dataset.state = '';
+        message.textContent = `Testing ${fields.label} from the selected node…`;
+        try {
+          const payload = {
+            url: document.getElementById(copy.url).value,
+            apiKey: document.getElementById(copy.key).value,
+            ...(service === 'radarr' ? {
+              uiUsername: document.getElementById(copy.uiUsername).value,
+              uiPassword: document.getElementById(copy.uiPassword).value,
+            } : {}),
+          };
+          const result = await arrDirectRequest(fields.endpoint, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+          });
+          message.textContent = `${fields.label} connection succeeded${result.version ? ` (version ${result.version})` : ''}.`;
+        } catch (error) {
+          message.dataset.state = 'error';
+          message.textContent = error.message || `Could not connect to ${fields.label}.`;
+        } finally {
+          testButton.disabled = false;
+        }
+      });
+    }
     form.addEventListener('submit', async event => {
       event.preventDefault();
       button.disabled = true;
@@ -756,6 +1086,7 @@ for (const [service, fields] of Object.entries(arrSettings)) {
         }
         await loadArrSettings(service);
         message.textContent = `Connected to ${fields.label}. Settings saved encrypted.`;
+        if (copy.form === `settings-${service}-settings`) dialog.close();
       } catch (error) {
         message.dataset.state = 'error';
         message.textContent = error.message || `Could not save ${fields.label} settings.`;
@@ -783,6 +1114,8 @@ for (const [service, fields] of Object.entries(arrSettings)) {
         }
         document.getElementById(fields.mediaCard).hidden = false;
         document.getElementById(fields.saved).hidden = true;
+        document.getElementById(fields.configure).textContent = `Configure ${fields.label}`;
+        if (copy.form === `settings-${service}-settings`) dialog.close();
         if (service === 'sonarr') document.getElementById('tv-library').hidden = true;
       } catch (error) {
         message.dataset.state = 'error';
@@ -824,10 +1157,13 @@ async function jsonRequest(path, options = {}) {
   const response = await fetch(path, { headers: { Accept: 'application/json', ...(options.headers || {}) }, cache: 'no-store', ...options });
   if (!response.ok) {
     if (response.status === 401) {
-      clearAgeIdentity();
-      throw new Error('Your roarlay sign-in expired. Sign in again.');
+      throw new Error(path.startsWith('/nodes/')
+        ? 'The node rejected this request (HTTP 401). Check its connection and try again.'
+        : 'Your roarlay sign-in expired. Sign in again.');
     }
-    throw new Error(`Request failed (HTTP ${response.status}).`);
+    const error = new Error(`Request failed (HTTP ${response.status}).`);
+    error.status = response.status;
+    throw error;
   }
   return response.status === 204 ? null : response.json();
 }
@@ -881,6 +1217,14 @@ function openNode(node) {
       void loadArrSettings('sonarr');
     }
   }
+}
+
+function selectedNodeLabel() {
+  const node = selectedNodeDetails;
+  if (!node) return 'selected node';
+  return deviceNames[node.nodeId]
+    || (node.displayName && node.displayName !== node.nodeId ? node.displayName : '')
+    || roleLabel(node.role);
 }
 
 function renderStorageScanStatus(nodeId, message) {
@@ -1223,8 +1567,8 @@ async function loadOverviewMetadata() {
     const onlineMetadata = workspaceNodes.some(candidate => candidate.role === 'metadata' && candidate.online);
     state.textContent = onlineMetadata ? 'Fossil node not selected' : 'No online fossil node';
     detail.textContent = onlineMetadata
-      ? 'An online fossil node is available in Devices, but it is not selected for this overview.'
-      : 'Connect an online fossil node in Devices to see shared-folder details.';
+      ? 'An online fossil node is available in Fossils, but it is not selected for this overview.'
+      : 'Connect an online fossil node in Fossils to see shared-folder details.';
     document.getElementById('overview-metadata-size').textContent = '—';
     return;
   }
@@ -1525,27 +1869,154 @@ clearKeyButton.addEventListener('click', () => {
   contentStatus.textContent = 'Private ID cleared from this browser.';
 });
 
-async function loadNodes() {
-  if (savingDeviceName || document.activeElement?.classList.contains('device-name-input')) return;
+deviceEditCancel.addEventListener('click', () => deviceEditDialog.close());
+deviceEditDialog.addEventListener('close', () => { deviceEditContext = null; });
+deviceEditForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const context = deviceEditContext;
+  if (!context?.ageIdentity || !context.configNode) return;
+  const { node, ageIdentity, configNode } = context;
+  const cleaned = deviceEditName.value.trim();
+  if (!cleaned || cleaned.length > 80 || /[\u0000-\u001f\u007f]/.test(cleaned)) {
+    deviceEditStatus.textContent = 'Enter a name of 1 to 80 printable characters.';
+    deviceEditName.focus();
+    return;
+  }
+  const stored = deviceNames[node.nodeId] || '';
+  if (cleaned === (stored || node.nodeId)) {
+    deviceEditDialog.close();
+    return;
+  }
+  document.getElementById('device-edit-save').disabled = true;
+  deviceEditName.disabled = true;
+  savingDeviceName = true;
+  deviceNamesRevision += 1;
+  deviceEditStatus.textContent = 'Saving device name into the age-encrypted config…';
   try {
-    const nodes = await jsonRequest('/api/workspace/nodes');
+    await import('/assets/metadata-export.js');
+    await window.rawrarrMiniExport.saveDeviceName(ageIdentity, `/nodes/${encodeURIComponent(configNode.nodeId)}`, node.nodeId, cleaned === node.nodeId ? '' : cleaned);
+    deviceNames[node.nodeId] = cleaned === node.nodeId ? '' : cleaned;
+    document.getElementById('device-name-status').textContent = 'Device name saved in the shared age-encrypted config.';
+    savingDeviceName = false;
+    deviceEditDialog.close();
+    await loadNodes(true);
+  } catch (error) {
+    savingDeviceName = false;
+    deviceEditStatus.textContent = error.message || 'Could not save this device name.';
+    deviceEditName.disabled = false;
+    document.getElementById('device-edit-save').disabled = false;
+    deviceEditName.focus();
+  }
+});
+deviceEditDelete.addEventListener('click', async () => {
+  const context = deviceEditContext;
+  if (!context) return;
+  const { node } = context;
+  const displayName = deviceNames[node.nodeId] || node.displayName || node.nodeId;
+  if (!window.confirm(`Remove ${displayName} from Rawrarr? This revokes coordinator access but does not delete data on the device.`)) return;
+  deviceEditDelete.disabled = true;
+  deviceEditStatus.textContent = 'Removing device access…';
+  try {
+    await jsonRequest(`/api/workspace/nodes/${encodeURIComponent(node.nodeId)}`, { method: 'DELETE' });
+    if (selectedNode === node.nodeId) {
+      selectedNode = null;
+      selectedNodeDetails = null;
+      selectedRoute = null;
+      contentPanel.hidden = true;
+    }
+    delete deviceNames[node.nodeId];
+    deviceNamesRevision += 1;
+    deviceEditDialog.close();
+    await loadNodes(true);
+  } catch (error) {
+    deviceEditDelete.disabled = false;
+    deviceEditStatus.textContent = error.message || 'Could not delete this device.';
+  }
+});
+
+let nodeRefreshInFlight = null;
+function loadNodes(refresh = false) {
+  if (savingDeviceName) return;
+  if (refresh && nodeRefreshInFlight) return nodeRefreshInFlight.then(() => loadNodes());
+  if (!nodeRefreshInFlight) {
+    nodeRefreshInFlight = refreshNodes().finally(() => { nodeRefreshInFlight = null; });
+  }
+  return nodeRefreshInFlight;
+}
+
+async function refreshNodes() {
+  try {
+    const nodes = await jsonRequest('/api/workspace/nodes', { signal: AbortSignal.timeout(5000) });
     workspaceNodes = nodes;
+    renderSigningKeyTopology(nodes);
     void loadProfileAvatar();
-    const healthByNode = new Map(await Promise.all(nodes.map(async node => {
+    const ageIdentity = ageIdentityInMemory;
+    const namesRevision = deviceNamesRevision;
+    const metadataNodes = nodes.filter(node => node.role === 'metadata' && (node.relayAvailable || node.directUrl));
+    const configNode = metadataNodes.find(node => node.online && node.directUrl)
+      || metadataNodes.find(node => node.online)
+      || metadataNodes[0];
+    renderNodes(nodes, new Map(), new Map(), configNode, false);
+    if (location.hash === '' || location.hash === '#overview') void loadOverviewMetadata();
+    const routesPromise = checkDeviceRoutes(nodes).then(routes => {
+      deviceRouteStatusByNode = routes;
+      if (!savingDeviceName) renderNodes(nodes, new Map(), new Map(), configNode);
+      return routes;
+    });
+    const healthPromise = Promise.all(nodes.map(async node => {
       if (!node.online || !node.relayAvailable) return [node.nodeId, null];
       const cached = syncthingHealthCache.get(node.nodeId);
       if (cached && Date.now() - cached.checkedAt < 30000) return [node.nodeId, cached.value];
       try {
-        const value = await jsonRequest(`/nodes/${encodeURIComponent(node.nodeId)}/api/syncthing/shared-health`);
+        const value = await jsonRequest(`/nodes/${encodeURIComponent(node.nodeId)}/api/syncthing/shared-health`, { signal: AbortSignal.timeout(5000) });
         syncthingHealthCache.set(node.nodeId, { checkedAt: Date.now(), value });
         return [node.nodeId, value];
       } catch (_) {
         syncthingHealthCache.set(node.nodeId, { checkedAt: Date.now(), value: null });
         return [node.nodeId, null];
       }
-    })));
-    if (location.hash === '' || location.hash === '#overview') void loadOverviewMetadata();
-    deviceRouteStatusByNode = await checkDeviceRoutes(nodes);
+    }));
+    const peerStatusPromise = Promise.all(nodes.filter(node => node.role === 'metadata').map(async node => {
+      if (!node.online || !node.relayAvailable) return [node.nodeId, { state: 'unreachable' }];
+      const cached = configPeerStatusCache.get(node.nodeId);
+      if (cached && Date.now() - cached.checkedAt < 15000) return [node.nodeId, cached.value];
+      try {
+        const value = await jsonRequest(`/nodes/${encodeURIComponent(node.nodeId)}/api/config-peer/status`, { signal: AbortSignal.timeout(5000) });
+        configPeerStatusCache.set(node.nodeId, { checkedAt: Date.now(), value });
+        return [node.nodeId, value];
+      } catch (_) {
+        configPeerStatusCache.set(node.nodeId, { checkedAt: Date.now(), value: { state: 'unreachable' } });
+        return [node.nodeId, { state: 'unreachable' }];
+      }
+    }));
+    const namesPromise = (async () => {
+      if (!ageIdentity || !configNode) return;
+      try {
+        await import('/assets/metadata-export.js');
+        return await window.rawrarrMiniExport.loadDeviceNames(ageIdentity, `/nodes/${encodeURIComponent(configNode.nodeId)}`, { signal: AbortSignal.timeout(5000) });
+      } catch (error) {
+        console.warn('Could not refresh encrypted device names; keeping existing labels.', error);
+      }
+    })();
+    const [healthEntries, peerEntries, routes] = await Promise.all([
+      healthPromise, peerStatusPromise, routesPromise,
+    ]);
+    deviceRouteStatusByNode = routes;
+    if (!savingDeviceName) renderNodes(nodes, new Map(healthEntries), new Map(peerEntries), configNode);
+    void namesPromise.then(names => {
+      if (names && workspaceNodes === nodes && !savingDeviceName && namesRevision === deviceNamesRevision && ageIdentity === ageIdentityInMemory) {
+        deviceNames = names;
+        renderNodes(nodes, new Map(healthEntries), new Map(peerEntries), configNode);
+      }
+    }).catch(error => {
+      console.error('Could not render refreshed device names.', error);
+    });
+  } catch (error) {
+    status.textContent = error.message || 'Could not load connected nodes.';
+  }
+}
+
+function renderNodes(nodes, healthByNode, configPeerStatusByNode, configNode, selectDefault = true) {
     const observedSyncthingPeers = nodes.flatMap(source => {
       const report = healthByNode.get(source.nodeId);
       return (report?.folders || []).flatMap(folder => {
@@ -1560,16 +2031,6 @@ async function loadNodes() {
       });
     });
     const ageIdentity = ageIdentityInMemory;
-    const metadataNodes = nodes.filter(node => node.role === 'metadata' && (node.relayAvailable || node.directUrl));
-    const configNode = metadataNodes.find(node => node.online && node.directUrl)
-      || metadataNodes.find(node => node.online)
-      || metadataNodes[0];
-    if (ageIdentity && configNode) {
-      try {
-        await import('/assets/metadata-export.js');
-        deviceNames = await window.rawrarrMiniExport.loadDeviceNames(ageIdentity, `/nodes/${encodeURIComponent(configNode.nodeId)}`);
-      } catch (_) { /* Names remain editable when the encrypted config is unavailable. */ }
-    }
     nodesPanel.replaceChildren();
     const emptyDevices = document.getElementById('empty-devices');
     const topologySection = document.getElementById('device-topology');
@@ -1594,8 +2055,9 @@ async function loadNodes() {
       const routeLabel = {
         direct: 'Direct',
         relay: 'Relay',
+        checking: 'Checking route',
         offline: node.online ? 'Route unavailable' : 'Not checking in',
-      }[route?.status || 'offline'];
+      }[route?.status || (node.online ? 'checking' : 'offline')];
       const nodeStateLabel = node.online ? `Online · ${routeLabel}` : routeLabel;
       const latencyLabel = route?.status === 'direct' && route.directRoute
         ? `${route.directRoute.latencyMs.toFixed(0)} ms`
@@ -1612,33 +2074,15 @@ async function loadNodes() {
       stateLabel.className = 'node-state-label';
       stateLabel.textContent = latencyLabel || nodeStateLabel;
       state.append(indicator, stateLabel);
-      const nameInput = document.createElement('input');
-      nameInput.className = 'device-name-input';
-      nameInput.type = 'text';
-      nameInput.value = deviceNames[node.nodeId] || (node.displayName && node.displayName !== node.nodeId ? node.displayName : roleLabel(node.role));
-      nameInput.maxLength = 80;
-      nameInput.setAttribute('aria-label', `Name for ${node.nodeId}`);
-      nameInput.title = 'Device name';
-      nameInput.readOnly = true;
-      nameInput.disabled = !ageIdentity || !configNode;
-      const editNameButton = document.createElement('button');
-      editNameButton.type = 'button';
-      editNameButton.className = 'device-name-edit-button';
-      editNameButton.textContent = 'Edit';
-      editNameButton.setAttribute('aria-label', `Edit name for ${node.nodeId}`);
-      editNameButton.disabled = !ageIdentity || !configNode;
-      editNameButton.title = ageIdentity && configNode ? 'Edit this device name.' : 'Unlock the age identity to edit device names.';
-      editNameButton.addEventListener('click', event => {
-        event.stopPropagation();
-        nameInput.readOnly = false;
-        nameInput.focus();
-        nameInput.select();
-      });
+      const currentDeviceName = deviceNames[node.nodeId] || (node.displayName && node.displayName !== node.nodeId ? node.displayName : roleLabel(node.role));
+      const nameLabel = document.createElement('strong');
+      nameLabel.className = 'device-name';
+      nameLabel.textContent = currentDeviceName;
       const heading = document.createElement('div');
       heading.className = 'device-heading';
       const nameGroup = document.createElement('div');
       nameGroup.className = 'device-name-group';
-      nameGroup.append(nameInput, editNameButton);
+      nameGroup.append(nameLabel);
       heading.append(nameGroup, state);
       const detail = document.createElement('small');
       detail.className = 'device-detail';
@@ -1656,30 +2100,22 @@ async function loadNodes() {
       identityRow.append(avatarPicture, heading);
       card.append(identityRow, detail);
       void loadNodeAvatar(node, avatarSource, avatar);
-      const deleteButton = document.createElement('button');
-      deleteButton.type = 'button';
-      deleteButton.className = 'device-delete-button';
-      deleteButton.textContent = 'Delete device';
-      deleteButton.setAttribute('aria-label', `Delete ${deviceNames[node.nodeId] || node.displayName || node.nodeId}`);
-      deleteButton.addEventListener('click', async event => {
+      const editButton = document.createElement('button');
+      editButton.type = 'button';
+      editButton.className = 'device-edit-button';
+      editButton.textContent = 'Edit';
+      editButton.setAttribute('aria-label', `Edit ${currentDeviceName}`);
+      editButton.addEventListener('click', event => {
         event.stopPropagation();
-        const displayName = deviceNames[node.nodeId] || node.displayName || node.nodeId;
-        if (!window.confirm(`Remove ${displayName} from Rawrarr? This revokes coordinator access but does not delete data on the device.`)) return;
-        deleteButton.disabled = true;
-        try {
-          await jsonRequest(`/api/workspace/nodes/${encodeURIComponent(node.nodeId)}`, { method: 'DELETE' });
-          if (selectedNode === node.nodeId) {
-            selectedNode = null;
-            selectedNodeDetails = null;
-            selectedRoute = null;
-            contentPanel.hidden = true;
-          }
-          delete deviceNames[node.nodeId];
-          await loadNodes();
-        } catch (error) {
-          deleteButton.disabled = false;
-          status.textContent = error.message || 'Could not delete this device.';
-        }
+        deviceEditContext = { node, ageIdentity, configNode };
+        deviceEditName.value = currentDeviceName;
+        deviceEditName.disabled = !ageIdentity || !configNode;
+        document.getElementById('device-edit-save').disabled = !ageIdentity || !configNode;
+        deviceEditStatus.textContent = ageIdentity && configNode ? '' : 'Unlock the age identity to change device names. Deletion remains available.';
+        deviceEditDescription.textContent = `${roleLabel(node.role)} · ${node.nodeId}`;
+        deviceEditDelete.disabled = false;
+        deviceEditDialog.showModal();
+        if (ageIdentity && configNode) deviceEditName.focus();
       });
       const syncHealth = document.createElement('small');
       syncHealth.className = 'device-detail device-sync-health';
@@ -1722,7 +2158,25 @@ async function loadNodes() {
         setSyncHealth(['No shared folders configured']);
       }
       card.append(syncHealth);
-      card.append(deleteButton);
+      if (node.role === 'metadata') {
+        const merkleStatus = configPeerStatusByNode.get(node.nodeId) || { state: 'checking' };
+        const merkleBadge = document.createElement('small');
+        merkleBadge.className = `device-detail device-sync-health merkle-status merkle-${merkleStatus.state}`;
+        const icon = document.createElement('span');
+        icon.className = 'merkle-status-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = ({ current: '✓', partial: '↻', stale: '◷', unreachable: '!', checking: '◌' })[merkleStatus.state] || '?';
+        const label = document.createElement('span');
+        label.className = 'sync-health-state';
+        label.textContent = ({ current: 'Merkle up to date', partial: 'Merkle sync incomplete', stale: 'Merkle status stale', unreachable: 'Merkle peers unreachable', checking: 'Checking Merkle status' })[merkleStatus.state] || 'Merkle status unknown';
+        const detail = document.createElement('span');
+        detail.className = 'sync-health-detail';
+        if (Number.isFinite(merkleStatus.matchingPeers) && Number.isFinite(merkleStatus.configuredPeers)) detail.textContent = `${merkleStatus.matchingPeers}/${merkleStatus.configuredPeers} peers match`;
+        merkleBadge.append(icon, label, ...(detail.textContent ? [detail] : []));
+        merkleBadge.setAttribute('role', 'status');
+        merkleBadge.setAttribute('aria-label', detail.textContent ? `${label.textContent}; ${detail.textContent}.` : `${label.textContent}.`);
+        card.append(merkleBadge);
+      }
       if (node.role === 'storage') {
         const scanActions = document.createElement('div');
         scanActions.className = 'storage-scan-actions';
@@ -1847,48 +2301,14 @@ async function loadNodes() {
         card.append(scanActions, scanStatus, scheduleForm);
         void refreshStorageSchedule(node, scheduleForm, scheduleSummary, scanMessage);
       }
+      card.append(editButton);
       card.addEventListener('click', event => {
-        if (event.target !== nameInput) openNode(node);
+        if (!event.target.closest('button')) openNode(node);
       });
       card.addEventListener('keydown', event => {
         if (event.target === card && (event.key === 'Enter' || event.key === ' ')) {
           event.preventDefault();
           openNode(node);
-        }
-      });
-      nameInput.addEventListener('keydown', event => {
-        if (event.key === 'Enter') { event.preventDefault(); nameInput.blur(); }
-        if (event.key === 'Escape') {
-          nameInput.value = deviceNames[node.nodeId] || node.displayName || node.nodeId;
-          nameInput.readOnly = true;
-          nameInput.blur();
-        }
-      });
-      nameInput.addEventListener('change', async () => {
-        nameInput.readOnly = true;
-        const cleaned = nameInput.value.trim();
-        if (!cleaned || cleaned.length > 80 || /[\u0000-\u001f\u007f]/.test(cleaned)) {
-          nameInput.value = deviceNames[node.nodeId] || node.displayName || node.nodeId;
-          document.getElementById('device-name-status').textContent = 'Enter a name of 1 to 80 printable characters.';
-          return;
-        }
-        const stored = deviceNames[node.nodeId] || '';
-        if (cleaned === (stored || node.nodeId)) return;
-        nameInput.disabled = true;
-        savingDeviceName = true;
-        document.getElementById('device-name-status').textContent = 'Saving device name into the age-encrypted config…';
-        try {
-          await window.rawrarrMiniExport.saveDeviceName(ageIdentity, `/nodes/${encodeURIComponent(configNode.nodeId)}`, node.nodeId, cleaned === node.nodeId ? '' : cleaned);
-          deviceNames[node.nodeId] = cleaned === node.nodeId ? '' : cleaned;
-          document.getElementById('device-name-status').textContent = 'Device name saved in the shared age-encrypted config.';
-          savingDeviceName = false;
-          await loadNodes();
-        } catch (error) {
-          savingDeviceName = false;
-          document.getElementById('device-name-status').textContent = error.message || 'Could not save this device name.';
-          nameInput.disabled = false;
-          nameInput.readOnly = false;
-          nameInput.focus();
         }
       });
       nodesPanel.append(card);
@@ -1897,9 +2317,10 @@ async function loadNodes() {
       }
     }
     if (nodes.some(node => node.online === true)) {
-      renderDeviceTopology(nodes, observedSyncthingPeers, deviceNames);
+      renderDeviceTopology(nodes, observedSyncthingPeers, deviceNames, configPeerStatusByNode);
     }
     status.textContent = 'Choose a connected fossil or boneyard node to open its Rawrarr page.';
+    if (!selectDefault) return;
     const canOpen = canOpenNode;
     const requested = requestedNode && nodes.find(node => node.nodeId === requestedNode && canOpen(node));
     // Node status polling must not reset the active workspace or refetch its
@@ -1908,7 +2329,8 @@ async function loadNodes() {
     if (selectedNode) {
       const current = nodes.find(node => node.nodeId === selectedNode && canOpen(node));
       if (current) {
-        selectedNodeDetails = current;
+        if (!selectedNodeDetails) openNode(current);
+        else selectedNodeDetails = current;
         for (const card of nodesPanel.querySelectorAll('.device-card')) {
           card.dataset.selected = String(card.dataset.nodeId === selectedNode);
         }
@@ -1952,14 +2374,11 @@ async function loadNodes() {
         openNode(defaultNode);
       }
     }
-  } catch (error) {
-    status.textContent = error.message || 'Could not load connected nodes.';
-  }
 }
 
 async function loadPending() {
   try {
-    const pending = await jsonRequest('/api/workspace/pending');
+    const pending = await jsonRequest('/api/workspace/pending', { signal: AbortSignal.timeout(5000) });
     pendingPanel.hidden = pending.length === 0;
     pendingPanel.classList.toggle('has-pending', pending.length > 0);
     pendingPanel.replaceChildren();
@@ -1986,10 +2405,12 @@ async function loadPending() {
       approve.textContent = 'Approve';
       approve.addEventListener('click', () => {
         pendingNodeToApprove = node;
+        pendingNodeDecision = 'approve';
         approveNodeIdentity.value = '';
         approveNodeBackup.value = '';
         approveNodeFingerprint.value = '';
         approveNodeStatus.textContent = `${node.displayName} · ${roleLabel(node.role)} · ${node.nodeId}`;
+        document.getElementById('approve-node-attestation').replaceChildren();
         approveNodeDialog.showModal();
         approveNodeIdentity.focus();
       });
@@ -1998,16 +2419,18 @@ async function loadPending() {
       reject.className = 'reject-button';
       reject.textContent = 'Reject';
       reject.addEventListener('click', async () => {
-        approve.disabled = true;
-        reject.disabled = true;
-        try {
-          await jsonRequest('/api/workspace/reject', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: node.requestId }) });
-          await loadPending();
-        } catch (error) {
-          approve.disabled = false;
-          reject.disabled = false;
-          status.textContent = error.message || 'Could not reject this node request.';
-        }
+        pendingNodeToApprove = node;
+        pendingNodeDecision = 'reject';
+        approveNodeIdentity.value = '';
+        approveNodeBackup.value = '';
+        approveNodeFingerprint.value = '';
+        approveNodeStatus.textContent = `${node.displayName} · ${roleLabel(node.role)} · ${node.nodeId}`;
+        document.getElementById('approve-node-attestation').replaceChildren();
+        const title = approveNodeForm.querySelector('h2');
+        title.textContent = 'Reject and sign device revocation';
+        approveNodeForm.querySelector('[type="submit"]').textContent = 'Sign revocation';
+        approveNodeDialog.showModal();
+        approveNodeIdentity.focus();
       });
       const actions = document.createElement('div');
       actions.className = 'pending-actions';
@@ -2025,7 +2448,11 @@ approveNodeDialog.addEventListener('close', () => {
   approveNodeIdentity.value = '';
   approveNodeBackup.value = '';
   approveNodeFingerprint.value = '';
+  document.getElementById('approve-node-attestation').replaceChildren();
   pendingNodeToApprove = null;
+  pendingNodeDecision = 'approve';
+  approveNodeForm.querySelector('h2').textContent = 'Approve with the instance root key';
+  approveNodeForm.querySelector('[type="submit"]').textContent = 'Sign and approve';
 });
 approveNodeForm.addEventListener('submit', async event => {
   event.preventDefault();
@@ -2033,22 +2460,39 @@ approveNodeForm.addEventListener('submit', async event => {
   if (!node) return;
   const submit = approveNodeForm.querySelector('[type="submit"]');
   submit.disabled = true;
-  approveNodeStatus.textContent = 'Unlocking the encrypted root backup and signing this exact node request in this tab…';
+  approveNodeStatus.textContent = pendingNodeDecision === 'reject'
+    ? 'Unlocking the encrypted root backup and signing this rejection in this tab…'
+    : 'Unlocking the encrypted root backup and signing this exact node request in this tab…';
   try {
     const ageIdentity = approveNodeIdentity.value.trim();
     const encryptedBackup = approveNodeBackup.value.trim();
     const savedFingerprint = approveNodeFingerprint.value.trim().toLowerCase();
-    const { inspectEncryptedRootBackup, signDeviceApproval } = await import('/assets/device-signing-client.js');
+    const { inspectEncryptedRootBackup, signDeviceApproval, signDeviceRejection } = await import('/assets/device-signing-client.js');
     const root = await inspectEncryptedRootBackup(encryptedBackup, ageIdentity);
     if (root.fingerprint !== savedFingerprint) throw new Error('The backup fingerprint does not match the fingerprint you saved independently.');
-    const approval = await signDeviceApproval(encryptedBackup, ageIdentity, savedFingerprint, {
+    const decision = pendingNodeDecision;
+    const attestation = document.getElementById('approve-node-attestation');
+    attestation.replaceChildren();
+    const heading = document.createElement('strong');
+    heading.textContent = decision === 'reject' ? 'You are permanently rejecting this device identity' : 'You are signing off on this device';
+    const description = document.createElement('p');
+    description.textContent = decision === 'reject'
+      ? 'Your root signature records this device key as rejected. The coordinator will retain the revocation and refuse future enrollment requests for this device identity.'
+      : 'Your root signature authorizes the exact device key and role below. Only continue if you initiated this setup and recognize this device.';
+    const request = document.createElement('p');
+    request.textContent = `${node.displayName} · ${roleLabel(node.role)} · ${node.nodeId}`;
+    const key = document.createElement('p');
+    key.textContent = `Device signing key · ${node.signingFingerprint || 'fingerprint unavailable'}`;
+    attestation.append(heading, description, request, key);
+    const sign = decision === 'reject' ? signDeviceRejection : signDeviceApproval;
+    const approval = await sign(encryptedBackup, ageIdentity, savedFingerprint, {
       requestId: node.requestId,
-      nodeId: node.nodeId,
+      nodeId: decision === 'reject' ? (node.requestedNodeId || node.nodeId) : node.nodeId,
       role: node.role,
       displayName: node.displayName,
       publicKeyHex: node.signingPublicKeyHex,
     });
-    await jsonRequest('/api/workspace/approve', {
+    await jsonRequest(decision === 'reject' ? '/api/workspace/reject' : '/api/workspace/approve', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         requestId: node.requestId,
@@ -2060,7 +2504,7 @@ approveNodeForm.addEventListener('submit', async event => {
     });
     approveNodeDialog.close();
     await loadPending();
-    await loadNodes();
+    if (decision === 'approve') await loadNodes(true);
   } catch (error) {
     approveNodeStatus.textContent = error.message || 'Could not approve this node.';
   } finally {

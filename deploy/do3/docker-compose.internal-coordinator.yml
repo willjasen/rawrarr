@@ -1,0 +1,100 @@
+# Private internal coordinator, isolated from the public Rawrarr project.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: rawrarr-internal-do3-postgres
+    environment:
+      POSTGRES_DB: rawrarr
+      POSTGRES_USER: rawrarr
+      POSTGRES_PASSWORD_FILE: /run/secrets/rawrarr_postgres_password
+    secrets:
+      - rawrarr_postgres_password
+    volumes:
+      - rawrarr-internal-do3-postgres-data:/var/lib/postgresql/data
+    networks:
+      - control
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rawrarr -d rawrarr"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  tailscale:
+    image: tailscale/tailscale:stable
+    container_name: rawrarr-internal-do3-tailscale
+    hostname: rawrarr
+    environment:
+      TS_HOSTNAME: rawrarr
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "true"
+    volumes:
+      - rawrarr-internal-do3-tailscale-state:/var/lib/tailscale
+    ports:
+      - "127.0.0.1:7299:8080"
+    networks:
+      - control
+      - egress
+    restart: unless-stopped
+
+  roarlay:
+    image: ${RAWARR_INTERNAL_IMAGE:?Set RAWARR_INTERNAL_IMAGE to a verified immutable image tag}
+    container_name: rawrarr-internal-do3-roarlay
+    pull_policy: never
+    environment:
+      RAWARR_ROLE: coordinator
+      RAWARR_BILLING_AUDIENCE: internal
+      RAWARR_UI_GITHUB_REPO: willjasen/rawrarr
+      RAWARR_UI_GITHUB_TOKEN_FILE: /run/secrets/rawrarr_ui_github_token
+      RAWARR_OPENAI_API_KEY_FILE: /run/secrets/rawrarr_openai_api_key
+      RAWARR_OPENAI_MODEL: ${RAWARR_OPENAI_MODEL:-gpt-4o-mini}
+      RUST_ARR_LISTEN_ADDR: 0.0.0.0:8080
+      RAWARR_PG_HOST: postgres
+      RAWARR_PG_PORT: 5432
+      RAWARR_PG_USER: rawrarr
+      RAWARR_PG_DATABASE: rawrarr
+      RAWARR_PG_PASSWORD_FILE: /run/secrets/rawrarr_postgres_password
+      RAWARR_APPROVED_NODES_FILE: /run/secrets/rawrarr_approved_nodes
+      RAWARR_COORDINATOR_WEB_RP_ID: risk-mermaid.ts.net
+      RAWARR_COORDINATOR_WEB_ORIGIN: https://rawrarr.risk-mermaid.ts.net
+      RAWARR_NODE_RELAY_TARGETS: '{"device-9288eb3b039608d16a9102a5":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/","device-d3ee53b1d561fb349955b199":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/","device-398f0ce833b6d7e2b9e8f760":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/","device-8de78fadda6400a45ca1a30b":"https://rawrarr-mac-mini.risk-mermaid.ts.net/"}'
+      RAWARR_NODE_DIRECT_TARGETS: '{"device-9288eb3b039608d16a9102a5":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/direct-api/","device-d3ee53b1d561fb349955b199":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/direct-api/","device-398f0ce833b6d7e2b9e8f760":"https://rawrarr-macbook-pro.risk-mermaid.ts.net/direct-api/","device-8de78fadda6400a45ca1a30b":"https://rawrarr-mac-mini.risk-mermaid.ts.net/direct-api/"}'
+    secrets:
+      - rawrarr_approved_nodes
+      - rawrarr_openai_api_key
+      - rawrarr_postgres_password
+      - rawrarr_ui_github_token
+    volumes:
+      - rawrarr-internal-do3-ui:/ui
+    network_mode: service:tailscale
+    depends_on:
+      postgres:
+        condition: service_healthy
+      tailscale:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  rawrarr-internal-do3-postgres-data:
+    name: rawrarr-internal-do3-postgres-data
+  rawrarr-internal-do3-tailscale-state:
+    name: rawrarr-internal-do3-tailscale-state
+  rawrarr-internal-do3-ui:
+    name: rawrarr-internal-do3-ui
+
+secrets:
+  rawrarr_approved_nodes:
+    file: ${RAWARR_APPROVED_NODES_PATH:-/opt/rawrarr-internal-do3/secrets/approved-nodes.json}
+  rawrarr_openai_api_key:
+    file: ${RAWARR_OPENAI_API_KEY_PATH:-/opt/rawrarr-internal-do3/secrets/openai-api-key}
+  rawrarr_postgres_password:
+    file: ${RAWARR_POSTGRES_PASSWORD_FILE:-/opt/rawrarr-internal-do3/secrets/postgres-password}
+  rawrarr_ui_github_token:
+    file: ${RAWARR_UI_GITHUB_TOKEN_PATH:-/root/gh-token}
+
+networks:
+  control:
+    name: rawrarr-internal-do3-control
+    internal: true
+  egress:
+    name: rawrarr-internal-do3-egress

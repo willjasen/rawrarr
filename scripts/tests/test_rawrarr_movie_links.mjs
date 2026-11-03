@@ -27,7 +27,7 @@ for (const scenario of ['reachable', 'blocked', 'timeout', 'missing-slug']) {
     await page.route('http://rawrarr.test/**', async route => {
       const path = new URL(route.request().url()).pathname;
       if (path === '/') return route.fulfill({ body: html, contentType: 'text/html' });
-      if (path === '/api/settings/radarr') return route.fulfill({ json: { url: 'https://radarr.test/radarr/' } });
+      if (path === '/api/settings/radarr') return route.fulfill({ json: { configured: true, persisted: true, url: 'https://radarr.test/radarr/' } });
       if (path === '/api/radarr/movies') return route.fulfill({ json: [{
         title: 'Test Movie', titleSlug: scenario === 'missing-slug' ? null : 'test movie/#1',
         posterUrl: '/poster.svg', tmdbId: 42

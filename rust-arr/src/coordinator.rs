@@ -1,6 +1,8 @@
 //! Central passkey authentication and owner-approved node enrollment.
 #[path = "coordinator_ai.rs"]
 mod ai;
+#[path = "coordinator_stripe.rs"]
+mod stripe;
 use crate::{auth::AuthState, node_role::NodeRole};
 use axum::{
     Extension, Json, Router,
@@ -43,7 +45,7 @@ struct ApprovedAuth {
 }
 
 #[derive(Clone)]
-struct CoordinatorState {
+pub(super) struct CoordinatorState {
     pool: PgPool,
     approved: Arc<RwLock<Vec<ApprovedAuth>>>,
     webauthn: webauthn_rs::prelude::Webauthn,
@@ -52,6 +54,8 @@ struct CoordinatorState {
     relay_targets: HashMap<String, reqwest::Url>,
     direct_targets: HashMap<String, reqwest::Url>,
     relay_client: reqwest::Client,
+    stripe_billing: stripe::BillingState,
+    avatar_cache: Arc<RwLock<HashMap<String, Arc<Vec<u8>>>>>,
 }
 
 #[derive(Deserialize)]
@@ -97,6 +101,16 @@ struct PendingNode {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ApproveRequest {
+    request_id: Uuid,
+    root_public_key: String,
+    root_fingerprint: String,
+    signature: String,
+    signed_payload: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RejectRequest {
     request_id: Uuid,
     root_public_key: String,
     root_fingerprint: String,
@@ -247,6 +261,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         let url = validate_direct_target(&web_origin.origin().ascii_serialization(), &target)?;
         direct_targets.insert(node_id, url);
     }
+    let stripe_billing = stripe::BillingState::from_env()?;
     let state = CoordinatorState {
         pool,
         approved: Arc::new(RwLock::new(approved)),
@@ -256,14 +271,20 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         relay_targets,
         direct_targets,
         relay_client,
+        stripe_billing,
+        avatar_cache: Arc::new(RwLock::new(HashMap::new())),
     };
     let public = Router::new()
         .route("/", get(coordinator_home))
+        .route("/analytics/{*path}", any(coordinator_analytics_proxy))
         .route("/auth", get(coordinator_auth_page))
+        .route("/billing", get(coordinator_billing_page))
         .route("/health", get(coordinator_health))
+        .route("/api/version", get(coordinator_version))
         .route("/assets/rawrarr-logo.png", get(coordinator_rawrarr_logo))
         .route("/assets/rawrarr-logo.jxl", get(coordinator_rawrarr_logo_jxl))
         .route("/assets/coordinator-workspace.mjs", get(coordinator_workspace_script))
+        .route("/assets/coordinator-billing.mjs", get(coordinator_billing_script))
         .route("/assets/coordinator-availability.mjs", get(coordinator_availability_script))
         .route("/assets/coordinator-node-avatar.mjs", get(coordinator_node_avatar_script))
         .route("/assets/coordinator-ai.mjs", get(coordinator_ai_script))
@@ -296,7 +317,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/api/nodes/enroll/status", post(enrollment_status))
         .route("/api/nodes/signing-root", get(instance_signing_root))
         .with_state(state.clone());
-    let coordinator_browser = Router::new()
+    let mut coordinator_browser = Router::new()
         .route("/setup/node", get(coordinator_subscriber_onboarding_page))
         .route("/api/auth/status", get(crate::auth::status))
         .route(
@@ -320,6 +341,9 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/api/workspace/nodes", get(workspace_nodes))
         .route("/api/workspace/nodes/{node_id}", delete(delete_workspace_node))
         .route("/api/workspace/profile", get(workspace_profile))
+        .route("/api/workspace/billing", get(stripe::status))
+        .route("/api/workspace/billing/checkout", post(stripe::checkout))
+        .route("/api/workspace/billing/portal", post(stripe::portal))
         .route("/api/workspace/profile-picture/{seed}/jxl", get(workspace_profile_picture_jxl))
         .route("/api/workspace/profile-picture/{seed}/png", get(workspace_profile_picture_png))
         .route("/api/workspace/device-picture/{seed}/jxl", get(workspace_device_picture_jxl))
@@ -336,6 +360,12 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
             coordinator_auth_context,
         ))
         .with_state(state.clone());
+    let crypto_state = crate::coordinator_crypto::CoordinatorCryptoState::new(
+        state.pool.clone(),
+        state.web_origin.clone(),
+        state.coordinator_auth.clone(),
+    )?;
+    coordinator_browser = coordinator_browser.merge(crate::coordinator_crypto::router(crypto_state));
     let authenticated = Router::new()
         .route("/api/nodes/auth/status", get(crate::auth::status))
         .route(
@@ -511,6 +541,20 @@ async fn request_enrollment(
         Ok(id) => id,
         Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
+    // Serialize every enrollment identity check and upsert against approval
+    // and rejection, including storage nodes without tier enforcement.
+    if sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
+        .bind(owner_user_id).execute(&mut *tx).await.is_err()
+    {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    }
+    if request.role == NodeRole::Metadata {
+        match crate::coordinator_crypto::free_tier_denies_fossil_node(&state.pool, owner_user_id, Some(&request.node_id)).await {
+            Ok(true) => return (StatusCode::PAYMENT_REQUIRED, Json(serde_json::json!({"error":"The free tier includes one fossil node. Upgrade to add another."}))).into_response(),
+            Ok(false) => {},
+            Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+        }
+    }
     let approved =
         sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM rawrarr_nodes WHERE id = $1 AND (token_sha256 IS DISTINCT FROM $2 OR role <> $3))")
             .bind(&request.node_id)
@@ -522,6 +566,9 @@ async fn request_enrollment(
     if approved {
         return StatusCode::CONFLICT.into_response();
     }
+    let rejected = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM rawrarr_rejected_nodes WHERE node_id=$1 OR signing_fingerprint=$2)")
+        .bind(&request.node_id).bind(crate::device_signing::node_fingerprint(&signing_public_key)).fetch_one(&mut *tx).await.unwrap_or(true);
+    if rejected { return StatusCode::GONE.into_response(); }
     let _ = sqlx::query(
         "DELETE FROM rawrarr_node_enrollments WHERE expires_at <= now() AND approved_at IS NULL",
     )
@@ -627,6 +674,13 @@ async fn approve_node(
         Ok(tx) => tx,
         Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
+    // Enrollment requests take the account lock before touching enrollment rows;
+    // approval follows the same order to avoid a row-lock/advisory-lock deadlock.
+    if sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
+        .bind(owner_user_id).execute(&mut *tx).await.is_err()
+    {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    }
     let row = sqlx::query("SELECT node_id, role, display_name, token_sha256, origin, rp_id, user_id, signing_public_key FROM rawrarr_node_enrollments WHERE request_id=$1 AND user_id=$2 AND approved_at IS NULL AND expires_at > now() FOR UPDATE")
         .bind(request.request_id).bind(owner_user_id).fetch_optional(&mut *tx).await;
     let Ok(Some(row)) = row else {
@@ -677,6 +731,13 @@ async fn approve_node(
         Ok(None) => node_id.clone(),
         Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
+    if role == NodeRole::Metadata {
+        match crate::coordinator_crypto::free_tier_denies_fossil_node(&state.pool, owner_user_id, Some(&node_id)).await {
+            Ok(true) => return (StatusCode::PAYMENT_REQUIRED, Json(serde_json::json!({"error":"The free tier includes one fossil node. Upgrade to add another."}))).into_response(),
+            Ok(false) => {},
+            Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+        }
+    }
     let expected_payload = serde_json::json!({
         "domain": "rawrarr-device-approval-v1",
         "requestId": request.request_id.to_string(),
@@ -856,16 +917,141 @@ async fn reject_node(
     State(state): State<CoordinatorState>,
     Extension(auth): Extension<AuthState>,
     headers: HeaderMap,
-    Json(request): Json<ApproveRequest>,
+    Json(request): Json<RejectRequest>,
 ) -> StatusCode {
     let Some(owner_user_id) = crate::auth::authenticated_user_id(&auth, &headers).await else {
         return StatusCode::UNAUTHORIZED;
     };
-    match sqlx::query("DELETE FROM rawrarr_node_enrollments WHERE request_id=$1 AND user_id=$2 AND approved_at IS NULL")
-        .bind(request.request_id).bind(owner_user_id).execute(&state.pool).await
+    let mut tx = match state.pool.begin().await {
+        Ok(tx) => tx,
+        Err(_) => return StatusCode::SERVICE_UNAVAILABLE,
+    };
+    if sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
+        .bind(owner_user_id)
+        .execute(&mut *tx)
+        .await
+        .is_err()
     {
-        Ok(result) if result.rows_affected() == 1 => StatusCode::NO_CONTENT,
-        Ok(_) => StatusCode::NOT_FOUND,
+        return StatusCode::SERVICE_UNAVAILABLE;
+    }
+    let row = match sqlx::query("SELECT node_id, role, display_name, signing_public_key FROM rawrarr_node_enrollments WHERE request_id=$1 AND user_id=$2 AND approved_at IS NULL AND expires_at > now() FOR UPDATE")
+        .bind(request.request_id)
+        .bind(owner_user_id)
+        .fetch_optional(&mut *tx)
+        .await
+    {
+        Ok(Some(row)) => row,
+        Ok(None) => return StatusCode::NOT_FOUND,
+        Err(_) => return StatusCode::SERVICE_UNAVAILABLE,
+    };
+    let (node_id, role_text, display_name, public_key): (String, String, String, Vec<u8>) =
+        match (
+            row.try_get("node_id"),
+            row.try_get("role"),
+            row.try_get("display_name"),
+            row.try_get("signing_public_key"),
+        ) {
+            (Ok(node_id), Ok(role), Ok(display_name), Ok(public_key)) => {
+                (node_id, role, display_name, public_key)
+            }
+            _ => return StatusCode::INTERNAL_SERVER_ERROR,
+        };
+    let Ok(role) = NodeRole::parse(&role_text) else {
+        return StatusCode::BAD_REQUEST;
+    };
+    if public_key.len() != 1952 { return StatusCode::UNAUTHORIZED; }
+    let expected_payload = serde_json::json!({
+        "domain":"rawrarr-device-rejection-v1", "requestId":request.request_id.to_string(),
+        "nodeId":node_id, "role":role_name(role), "displayName":display_name,
+        "publicKeyHex":encode_hex(&public_key),
+    });
+    if request.signed_payload != expected_payload { return StatusCode::BAD_REQUEST; }
+    let (Ok(root_public_key), Ok(signature)) = (
+        BASE64.decode(&request.root_public_key),
+        BASE64.decode(&request.signature),
+    ) else {
+        return StatusCode::BAD_REQUEST;
+    };
+    if root_public_key.len() != 1952 || crate::device_signing::fingerprint(&root_public_key) != request.root_fingerprint { return StatusCode::BAD_REQUEST; }
+    let Ok(message) = crate::device_signing::canonical_json(&request.signed_payload) else { return StatusCode::BAD_REQUEST };
+    if !crate::device_signing::verify(&root_public_key, &signature, &message) { return StatusCode::UNAUTHORIZED; }
+    let root = match sqlx::query("SELECT public_key, fingerprint, owner_user_id FROM rawrarr_instance_signing_root WHERE singleton=TRUE FOR UPDATE")
+        .fetch_optional(&mut *tx)
+        .await
+    {
+        Ok(value) => value,
+        Err(_) => return StatusCode::SERVICE_UNAVAILABLE,
+    };
+    if let Some(root) = root {
+        let (Ok(key), Ok(fingerprint), Ok(owner)) = (
+            root.try_get::<Vec<u8>, _>("public_key"),
+            root.try_get::<String, _>("fingerprint"),
+            root.try_get::<Uuid, _>("owner_user_id"),
+        ) else {
+            return StatusCode::INTERNAL_SERVER_ERROR;
+        };
+        if key != root_public_key
+            || fingerprint != request.root_fingerprint
+            || owner != owner_user_id
+        {
+            return StatusCode::FORBIDDEN;
+        }
+    } else if sqlx::query("INSERT INTO rawrarr_instance_signing_root(singleton, algorithm, public_key, fingerprint, owner_user_id) VALUES (TRUE, 'ML-DSA-65', $1, $2, $3) ON CONFLICT(singleton) DO NOTHING")
+        .bind(&root_public_key)
+        .bind(&request.root_fingerprint)
+        .bind(owner_user_id)
+        .execute(&mut *tx)
+        .await
+        .is_err()
+    {
+        return StatusCode::SERVICE_UNAVAILABLE;
+    }
+    let pinned = match sqlx::query("SELECT public_key, fingerprint, owner_user_id FROM rawrarr_instance_signing_root WHERE singleton=TRUE FOR UPDATE")
+        .fetch_optional(&mut *tx)
+        .await
+    {
+        Ok(Some(row)) => row,
+        _ => return StatusCode::SERVICE_UNAVAILABLE,
+    };
+    let (Ok(pinned_key), Ok(pinned_fingerprint), Ok(pinned_owner)) = (
+        pinned.try_get::<Vec<u8>, _>("public_key"),
+        pinned.try_get::<String, _>("fingerprint"),
+        pinned.try_get::<Uuid, _>("owner_user_id"),
+    ) else {
+        return StatusCode::INTERNAL_SERVER_ERROR;
+    };
+    if pinned_key != root_public_key
+        || pinned_fingerprint != request.root_fingerprint
+        || pinned_owner != owner_user_id
+    {
+        return StatusCode::FORBIDDEN;
+    }
+    let inserted = sqlx::query("INSERT INTO rawrarr_rejected_nodes(node_id,user_id,request_id,role,signing_public_key,signing_fingerprint,root_fingerprint,signed_payload,signature) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(node_id) DO NOTHING")
+        .bind(&node_id)
+        .bind(owner_user_id)
+        .bind(request.request_id)
+        .bind(role_name(role))
+        .bind(&public_key)
+        .bind(crate::device_signing::node_fingerprint(&public_key))
+        .bind(&request.root_fingerprint)
+        .bind(&request.signed_payload)
+        .bind(&signature)
+        .execute(&mut *tx)
+        .await;
+    if !matches!(inserted, Ok(ref result) if result.rows_affected() == 1) {
+        return StatusCode::CONFLICT;
+    }
+    if sqlx::query("DELETE FROM rawrarr_node_enrollments WHERE request_id=$1 AND user_id=$2 AND approved_at IS NULL")
+        .bind(request.request_id)
+        .bind(owner_user_id)
+        .execute(&mut *tx)
+        .await
+        .is_err()
+    {
+        return StatusCode::SERVICE_UNAVAILABLE;
+    }
+    match tx.commit().await {
+        Ok(()) => StatusCode::NO_CONTENT,
         Err(_) => StatusCode::SERVICE_UNAVAILABLE,
     }
 }
@@ -1143,6 +1329,21 @@ mod approved_node_registry_tests {
 }
 
 #[cfg(test)]
+mod coordinator_webauthn_domain_tests {
+    use super::validate_origin;
+
+    #[test]
+    fn rawrarr_net_rp_id_accepts_the_roarlay_app_origin() {
+        let origin = validate_origin("rawrarr.net", "https://roarlay.rawrarr.net/").unwrap();
+        webauthn_rs::prelude::WebauthnBuilder::new("rawrarr.net", &origin)
+            .unwrap()
+            .rp_name("rawrarr")
+            .build()
+            .unwrap();
+    }
+}
+
+#[cfg(test)]
 mod direct_route_tests {
     use super::{storage_scan_relay_allowed, validate_direct_target};
     use axum::http::Method;
@@ -1226,17 +1427,127 @@ async fn coordinator_health() -> axum::response::Html<String> {
     axum::response::Html(crate::ui_assets::text("coordinator_health.html", include_str!("coordinator_health.html")).await)
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CoordinatorVersion {
+    revision: String,
+    deployed_at: Option<String>,
+}
+
+async fn coordinator_version() -> Json<CoordinatorVersion> {
+    let revision = env::var("RAWARR_BUILD_REVISION")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .or_else(|| std::fs::read_to_string("/usr/share/rawrarr/build-revision").ok())
+        .unwrap_or_else(|| "unknown".to_owned());
+    Json(CoordinatorVersion {
+        revision: revision.trim().to_owned(),
+        deployed_at: env::var("RAWARR_DEPLOYED_AT").ok().filter(|value| !value.is_empty()),
+    })
+}
+
+async fn coordinator_billing_page() -> Response {
+    let mut response = axum::response::Html(crate::ui_assets::text("coordinator_billing.html", include_str!("coordinator_billing.html")).await).into_response();
+    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+async fn coordinator_billing_script() -> Response {
+    let mut response = Response::new(Body::from(crate::ui_assets::text("assets/coordinator-billing.mjs", include_str!("coordinator-billing.mjs")).await));
+    response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/javascript; charset=utf-8"));
+    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
 async fn coordinator_home(
     State(state): State<CoordinatorState>,
     headers: HeaderMap,
 ) -> Response {
-    let mut response = if crate::auth::is_authenticated(&state.coordinator_auth, &headers).await {
-        axum::response::Html(crate::ui_assets::text("coordinator_workspace.html", include_str!("coordinator_workspace.html")).await).into_response()
+    let page = if crate::auth::is_authenticated(&state.coordinator_auth, &headers).await {
+        crate::ui_assets::text("coordinator_workspace.html", include_str!("coordinator_workspace.html")).await
     } else {
-        axum::response::Html(crate::ui_assets::text("landing.html", include_str!("landing.html")).await).into_response()
+        return axum::response::Redirect::to("/auth").into_response();
     };
+    let mut response = axum::response::Html(with_analytics_tracker(page, &state.web_origin)).into_response();
     response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
+}
+
+/// Add the optional, deployment-configured Umami tracker to coordinator pages.
+/// Keep automatic URL collection disabled: the app can contain sensitive paths
+/// and query strings, so analytics receives only a fixed page label.
+fn with_analytics_tracker(mut page: String, web_origin: &str) -> String {
+    let Some(site_id) = env::var("RAWARR_ANALYTICS_SITE_ID").ok().filter(|value| {
+        !value.is_empty() && value.len() <= 80 && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"-_".contains(&byte))
+    }) else {
+        return page;
+    };
+    if analytics_upstream().is_none() {
+        return page;
+    }
+    let tracker = format!(
+        r#"<script defer src="/analytics/script.js" data-host-url="{web_origin}/analytics" data-website-id="{site_id}" data-auto-track="false"></script><script>window.addEventListener('load',function(){{if(window.umami)window.umami.track({{website:'{site_id}',url:'/coordinator',title:'Rawrarr coordinator'}})}});</script>"#
+    );
+    if let Some(head_end) = page.to_ascii_lowercase().find("</head>") {
+        page.insert_str(head_end, &tracker);
+    }
+    page
+}
+
+fn analytics_upstream() -> Option<reqwest::Url> {
+    let url = reqwest::Url::parse(&env::var("RAWARR_ANALYTICS_UPSTREAM").ok()?).ok()?;
+    (url.scheme() == "http"
+        && url.host_str() == Some("umami")
+        && url.port() == Some(3000)
+        && url.path() == "/"
+        && url.query().is_none()
+        && url.fragment().is_none())
+    .then_some(url)
+}
+
+async fn coordinator_analytics_proxy(request: Request) -> Response {
+    let path = request.uri().path().strip_prefix("/analytics/").unwrap_or_default();
+    let method = request.method().clone();
+    if !matches!((method.clone(), path), (Method::GET, "script.js") | (Method::POST, "api/send")) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let Some(mut upstream) = analytics_upstream() else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    upstream.set_path(path);
+    let user_agent = request.headers().get(header::USER_AGENT).cloned();
+    let content_type = request.headers().get(header::CONTENT_TYPE).cloned();
+    let client_ip = request.headers().get("true-client-ip")
+        .or_else(|| request.headers().get("x-forwarded-for"))
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(',').next())
+        .map(str::trim)
+        .filter(|value| value.parse::<std::net::IpAddr>().is_ok())
+        .map(str::to_owned);
+    let body = match to_bytes(request.into_body(), 64 * 1024).await {
+        Ok(body) => body,
+        Err(_) => return StatusCode::PAYLOAD_TOO_LARGE.into_response(),
+    };
+    let client = reqwest::Client::new();
+    let mut outbound = client.request(method, upstream).body(body);
+    if let Some(value) = user_agent { outbound = outbound.header(header::USER_AGENT.as_str(), value); }
+    if let Some(value) = content_type { outbound = outbound.header(header::CONTENT_TYPE.as_str(), value); }
+    if let Some(value) = client_ip { outbound = outbound.header("x-forwarded-for", value); }
+    let response = match outbound.send().await {
+        Ok(response) => response,
+        Err(_) => return StatusCode::BAD_GATEWAY.into_response(),
+    };
+    let status = StatusCode::from_u16(response.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+    let response_type = response.headers().get(header::CONTENT_TYPE).cloned();
+    let response_body = match response.bytes().await {
+        Ok(body) if body.len() <= 1024 * 1024 => body,
+        _ => return StatusCode::BAD_GATEWAY.into_response(),
+    };
+    let mut result = Response::new(Body::from(response_body));
+    *result.status_mut() = status;
+    if let Some(value) = response_type { result.headers_mut().insert(header::CONTENT_TYPE, value); }
+    result.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    result
 }
 
 async fn coordinator_auth_page(
@@ -1297,6 +1608,8 @@ struct WorkspaceNode {
     online: bool,
     relay_available: bool,
     direct_url: Option<String>,
+    signing_fingerprint: Option<String>,
+    signing_root_fingerprint: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -1304,6 +1617,8 @@ struct WorkspaceNode {
 struct WorkspaceProfile {
     account_id: Uuid,
     display_name: String,
+    trial_started_at: Option<String>,
+    trial_ends_at: Option<String>,
 }
 
 async fn workspace_profile(
@@ -1314,18 +1629,36 @@ async fn workspace_profile(
     let Some(owner) = crate::auth::authenticated_user_id(&auth, &headers).await else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
-    match sqlx::query_scalar::<_, Uuid>("SELECT id FROM rawrarr_users WHERE id=$1")
+    match sqlx::query("SELECT id, to_char(trial_started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS trial_started_at, to_char((trial_started_at + interval '3 days') AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS trial_ends_at FROM rawrarr_users WHERE id=$1")
         .bind(owner).fetch_optional(&state.pool).await {
-        Ok(Some(user_id)) => axum::Json(WorkspaceProfile {
-            account_id: user_id,
-            display_name: crate::auth::generated_account_name(user_id),
-        }).into_response(),
+        Ok(Some(row)) => {
+            let user_id: Uuid = match row.try_get("id") {
+                Ok(user_id) => user_id,
+                Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+            };
+            let trial_enabled = std::env::var("RAWARR_BILLING_AUDIENCE").is_ok_and(|value| value == "public");
+            let trial_started_at: Option<String> = match row.try_get("trial_started_at") {
+                Ok(value) => value,
+                Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+            };
+            let trial_ends_at: Option<String> = match row.try_get("trial_ends_at") {
+                Ok(value) => value,
+                Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+            };
+            axum::Json(WorkspaceProfile {
+                account_id: user_id,
+                display_name: crate::auth::generated_account_name(user_id),
+                trial_started_at: trial_enabled.then_some(trial_started_at).flatten(),
+                trial_ends_at: trial_enabled.then_some(trial_ends_at).flatten(),
+            }).into_response()
+        }
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(_) => StatusCode::SERVICE_UNAVAILABLE.into_response(),
     }
 }
 
 async fn workspace_profile_picture_jxl(
+    State(state): State<CoordinatorState>,
     Extension(auth): Extension<AuthState>,
     headers: HeaderMap,
     Path(seed): Path<String>,
@@ -1334,14 +1667,15 @@ async fn workspace_profile_picture_jxl(
         return StatusCode::UNAUTHORIZED.into_response();
     }
     if !crate::coordinator_avatar::valid_seed(&seed) { return StatusCode::BAD_REQUEST.into_response(); }
-    let encoded = match tokio::task::spawn_blocking(move || crate::coordinator_avatar::render_jxl(&seed)).await {
-        Ok(Ok(bytes)) => bytes,
+    let encoded = match cached_workspace_avatar(&state, format!("profile:jxl:v1:{seed}"), move || crate::coordinator_avatar::render_jxl(&seed)).await {
+        Ok(bytes) => bytes,
         _ => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
     workspace_profile_picture_response(encoded, "image/jxl")
 }
 
 async fn workspace_profile_picture_png(
+    State(state): State<CoordinatorState>,
     Extension(auth): Extension<AuthState>,
     headers: HeaderMap,
     Path(seed): Path<String>,
@@ -1350,14 +1684,15 @@ async fn workspace_profile_picture_png(
         return StatusCode::UNAUTHORIZED.into_response();
     }
     if !crate::coordinator_avatar::valid_seed(&seed) { return StatusCode::BAD_REQUEST.into_response(); }
-    let encoded = match tokio::task::spawn_blocking(move || crate::coordinator_avatar::render_png(&seed)).await {
-        Ok(Ok(bytes)) => bytes,
+    let encoded = match cached_workspace_avatar(&state, format!("profile:png:v1:{seed}"), move || crate::coordinator_avatar::render_png(&seed)).await {
+        Ok(bytes) => bytes,
         _ => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
     workspace_profile_picture_response(encoded, "image/png")
 }
 
 async fn workspace_device_picture_jxl(
+    State(state): State<CoordinatorState>,
     Extension(auth): Extension<AuthState>,
     headers: HeaderMap,
     Path(seed): Path<String>,
@@ -1366,14 +1701,15 @@ async fn workspace_device_picture_jxl(
         return StatusCode::UNAUTHORIZED.into_response();
     }
     if !crate::coordinator_avatar::valid_seed(&seed) { return StatusCode::BAD_REQUEST.into_response(); }
-    let encoded = match tokio::task::spawn_blocking(move || crate::coordinator_avatar::render_fossil_jxl(&seed)).await {
-        Ok(Ok(bytes)) => bytes,
+    let encoded = match cached_workspace_avatar(&state, format!("device:jxl:v1:{seed}"), move || crate::coordinator_avatar::render_fossil_jxl(&seed)).await {
+        Ok(bytes) => bytes,
         _ => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
     workspace_profile_picture_response(encoded, "image/jxl")
 }
 
 async fn workspace_device_picture_png(
+    State(state): State<CoordinatorState>,
     Extension(auth): Extension<AuthState>,
     headers: HeaderMap,
     Path(seed): Path<String>,
@@ -1382,11 +1718,28 @@ async fn workspace_device_picture_png(
         return StatusCode::UNAUTHORIZED.into_response();
     }
     if !crate::coordinator_avatar::valid_seed(&seed) { return StatusCode::BAD_REQUEST.into_response(); }
-    let encoded = match tokio::task::spawn_blocking(move || crate::coordinator_avatar::render_fossil_png(&seed)).await {
-        Ok(Ok(bytes)) => bytes,
+    let encoded = match cached_workspace_avatar(&state, format!("device:png:v1:{seed}"), move || crate::coordinator_avatar::render_fossil_png(&seed)).await {
+        Ok(bytes) => bytes,
         _ => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
     workspace_profile_picture_response(encoded, "image/png")
+}
+
+async fn cached_workspace_avatar<F>(state: &CoordinatorState, key: String, render: F) -> Result<Vec<u8>, ()>
+where
+    F: FnOnce() -> Result<Vec<u8>, ()> + Send + 'static,
+{
+    if let Some(encoded) = state.avatar_cache.read().await.get(&key) {
+        return Ok(encoded.as_ref().clone());
+    }
+    {
+        let mut cache = state.avatar_cache.write().await;
+        if cache.len() >= 256 { cache.clear(); }
+    }
+    let encoded = tokio::task::spawn_blocking(render).await.map_err(|_| ())??;
+    let encoded = Arc::new(encoded);
+    let mut cache = state.avatar_cache.write().await;
+    Ok(cache.entry(key).or_insert_with(|| encoded.clone()).as_ref().clone())
 }
 
 fn workspace_profile_picture_response(encoded: Vec<u8>, content_type: &'static str) -> Response {
@@ -1407,7 +1760,7 @@ async fn workspace_nodes(
     let Some(owner) = crate::auth::authenticated_user_id(&auth, &headers).await else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
-    let rows = match sqlx::query("SELECT n.id, n.role, n.last_seen::text AS last_seen, n.last_seen > now() - interval '90 seconds' AS online, n.origin, COALESCE(e.display_name, n.id) AS display_name FROM rawrarr_nodes n LEFT JOIN rawrarr_node_enrollments e ON e.node_id=n.id AND e.user_id=n.user_id WHERE n.user_id=$1 ORDER BY CASE n.role WHEN 'metadata' THEN 0 WHEN 'storage' THEN 1 ELSE 2 END, n.id")
+    let rows = match sqlx::query("SELECT n.id, n.role, n.last_seen::text AS last_seen, n.last_seen > now() - interval '90 seconds' AS online, n.origin, n.signing_fingerprint, COALESCE(e.display_name, n.id) AS display_name FROM rawrarr_nodes n LEFT JOIN rawrarr_node_enrollments e ON e.node_id=n.id AND e.user_id=n.user_id WHERE n.user_id=$1 ORDER BY CASE n.role WHEN 'metadata' THEN 0 WHEN 'storage' THEN 1 ELSE 2 END, n.id")
         .bind(owner).fetch_all(&state.pool).await {
             Ok(rows) => rows,
             Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
@@ -1432,9 +1785,16 @@ async fn workspace_nodes(
             role,
             last_seen: row.try_get("last_seen").unwrap_or_default(),
             online: row.try_get("online").unwrap_or(false),
+            signing_fingerprint: row.try_get("signing_fingerprint").ok().flatten(),
+            signing_root_fingerprint: None,
         })
     }).collect::<Vec<_>>();
-    Json(nodes).into_response()
+    let root_fingerprint = sqlx::query_scalar::<_, String>("SELECT fingerprint FROM rawrarr_instance_signing_root WHERE singleton=TRUE AND owner_user_id=$1")
+        .bind(owner).fetch_optional(&state.pool).await.unwrap_or(None);
+    Json(nodes.into_iter().map(|mut node| {
+        node.signing_root_fingerprint = node.signing_fingerprint.as_ref().and(root_fingerprint.clone());
+        node
+    }).collect::<Vec<_>>()).into_response()
 }
 
 const DIRECT_SESSION_SECONDS: i64 = 300;
@@ -1598,6 +1958,13 @@ async fn proxy_node_request(
     if !matches!(role.as_str(), "metadata" | "storage") {
         return StatusCode::FORBIDDEN.into_response();
     }
+    if role == "metadata" {
+        match crate::coordinator_crypto::free_tier_allows_existing_fossil(&state.pool, owner_user_id, &node_id).await {
+            Ok(true) => {},
+            Ok(false) => return (StatusCode::PAYMENT_REQUIRED, Json(serde_json::json!({"error":"The free tier includes access to one fossil node. Upgrade to access additional nodes."}))).into_response(),
+            Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+        }
+    }
     let Some(target) = state.relay_targets.get(&node_id) else {
         return (StatusCode::SERVICE_UNAVAILABLE, "No coordinator relay route is configured for this node").into_response();
     };
@@ -1626,7 +1993,7 @@ async fn proxy_node_request(
         parts.method == Method::GET && request_body.is_empty()
     } else {
         parts.method == Method::GET
-            && (ciphertext_export_path(&path) || path == "api/syncthing/shared-health")
+            && (ciphertext_export_path(&path) || path == "api/syncthing/shared-health" || path == "api/config-peer/status")
             && request_body.is_empty()
     };
     if !method_allowed {
