@@ -28,6 +28,26 @@ test('Rawrarr image builds its Rust binary for the requested container architect
   assert.match(dockerfile, /test "\$\(cat \/usr\/share\/rawrarr\/target-arch\)" = "\$TARGETARCH"/);
 });
 
+test('Rawrarr image compiles locked dependencies before copying application sources', () => {
+  const manifestCopy = dockerfile.indexOf('COPY Cargo.toml Cargo.lock ./');
+  const dependencyBuild = dockerfile.indexOf('cargo build --release --locked --target "$rust_target"');
+  const sourceCopy = dockerfile.indexOf('COPY src ./src');
+  const migrationCopy = dockerfile.indexOf('COPY migrations ./migrations');
+  const appBuild = dockerfile.indexOf('cargo build --release --locked --target "$rust_target"', dependencyBuild + 1);
+
+  assert.ok(manifestCopy >= 0, 'Cargo manifests and lockfile are copied');
+  assert.ok(dependencyBuild > manifestCopy, 'dependencies build from the manifest-only layer');
+  assert.ok(sourceCopy > dependencyBuild, 'application source is copied after dependency compilation');
+  assert.ok(migrationCopy > dependencyBuild, 'SQLx migrations are copied after dependency compilation');
+  assert.ok(appBuild > migrationCopy, 'application is rebuilt after source and migrations are copied');
+  assert.match(dockerfile.slice(0, sourceCopy), /mkdir src migrations[\s\S]*fn main\(\) \{\}/);
+  assert.doesNotMatch(dockerfile.slice(0, sourceCopy), /target=\/src\/target/,
+    'dependency artifacts must be part of the cached image layer, not an ephemeral cache mount');
+  assert.match(dockerfile, /--mount=type=cache,target=\/usr\/local\/cargo\/registry,sharing=locked/);
+  assert.match(dockerfile, /--mount=type=cache,target=\/usr\/local\/cargo\/git\/db,sharing=locked/);
+  assert.match(dockerfile, /printf '%s\\n' 'fn main\(\) \{\}' > src\/main\.rs/);
+});
+
 test('test base installs age for the native target architecture', () => {
   assert.match(testDockerfile, /ARG TARGETARCH/);
   assert.match(testDockerfile, /amd64\) age_arch=amd64/);
