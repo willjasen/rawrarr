@@ -37,9 +37,12 @@
     .brand-logo { display: block; width: 180px; height: 60px; object-fit: contain; padding: 2px; border-radius: 8px; background: #dff4bd; }
     .section-label { color: #75837a; font-size: 10px; text-transform: uppercase; letter-spacing: .14em; font-weight: 700; padding: 0 12px 9px; }
     .nav-item { min-height: 42px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-radius: 9px; color: var(--muted); font-size: 13px; margin: 3px 0; }
+    .nav-item { width: 100%; border: 0; background: transparent; text-align: left; cursor: pointer; font: inherit; font-size: 13px; }
     .nav-item.active { color: var(--text); background: hsl(var(--theme-hue) 20% 17%); box-shadow: inset 2px 0 var(--green); }
     .nav-icon { width: 17px; text-align: center; font-size: 15px; }
     .nav-soon { margin-left: auto; font-size: 9px; color: #829087; border: 1px solid #354139; border-radius: 5px; padding: 2px 5px; }
+    .primary-navigation { display: contents; }
+    .mobile-nav-toggle { display: none; }
     .sidebar-bottom { position: fixed; bottom: 20px; width: 202px; border-top: 1px solid var(--line); padding: 16px 10px 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
     main { width: min(1180px, 100%); margin: 0 auto; padding: 38px 46px 64px; }
     .topline { display: flex; align-items: center; justify-content: space-between; margin-bottom: 34px; }
@@ -122,20 +125,43 @@
     .artwork-backfill.complete { padding: 5px 18px; color: var(--muted); font-size: 11px; }
     .artwork-backfill progress { display: block; width: 100%; height: 9px; margin-top: 8px; accent-color: var(--green); }
     @media (max-width: 850px) { .app { grid-template-columns: 70px minmax(0, 1fr); } aside { padding: 22px 10px; } .brand { justify-content: center; padding: 0 0 32px; } .brand-logo { width: 42px; height: 42px; object-fit: cover; object-position: left center; padding: 1px; } .section-label, .nav-text, .nav-soon, .sidebar-bottom { display: none; } .nav-item { justify-content: center; padding: 0; } main { padding: 30px 24px 50px; } .grid { grid-template-columns: 1fr 1fr; } .grid .card:last-child { grid-column: span 2; } .movies-summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } .movies-summary-grid .card:last-child { grid-column: auto; } }
-    @media (max-width: 580px) { .app { display: block; } aside { position: sticky; z-index: 2; top: 0; height: 60px; display: flex; align-items: center; border-right: 0; border-bottom: 1px solid var(--line); padding: 0 14px; } .brand { padding: 0; margin-right: auto; } .brand-copy { display: block; } .nav-item { width: 40px; height: 40px; margin: 0 3px; } .nav-item.active { box-shadow: inset 0 -2px var(--green); } main { padding: 26px 16px 42px; } .topline { align-items: flex-start; margin-bottom: 22px; } .live-pill { font-size: 0; padding: 9px; } .welcome { align-items: flex-start; flex-direction: column; padding: 19px; } .grid { gap: 9px; } .card { padding: 14px; min-height: 116px; } .columns { grid-template-columns: 1fr; } }
+    @media (max-width: 580px) {
+      .app { display: block; }
+      aside { position: sticky; z-index: 2; top: 0; height: 60px; display: flex; align-items: center; border-right: 0; border-bottom: 1px solid var(--line); padding: 0 14px; }
+      .brand { padding: 0; margin-right: auto; }
+      .brand-copy { display: block; }
+      .primary-navigation { display: none; }
+      .primary-navigation[data-open="true"] { position: fixed; z-index: 4; right: calc(20px + env(safe-area-inset-right)); bottom: calc(96px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; width: min(230px, calc(100vw - 32px)); max-height: min(60vh, 420px); overflow-y: auto; padding: 8px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel-raised); box-shadow: 0 12px 40px #0009; }
+      .primary-navigation .section-label { display: block; padding: 8px 12px; }
+      .primary-navigation .nav-item { width: 100%; min-height: 42px; height: auto; justify-content: flex-start; margin: 0; padding: 0 12px; }
+      .primary-navigation .nav-item.active { box-shadow: inset 2px 0 var(--green); }
+      .primary-navigation .nav-text { display: block; }
+      .mobile-nav-toggle { position: fixed; z-index: 5; right: calc(20px + env(safe-area-inset-right)); bottom: calc(20px + env(safe-area-inset-bottom)); display: grid; width: 64px; height: 64px; place-items: center; border: 1px solid hsl(var(--theme-hue) 22% 38%); border-radius: 50%; background: var(--green); color: #101514; box-shadow: 0 5px 18px #0008; font-size: 23px; cursor: pointer; }
+      .mobile-nav-toggle:focus-visible { outline: 3px solid var(--text); outline-offset: 3px; }
+      main { padding: 26px 16px calc(108px + env(safe-area-inset-bottom)); }
+      .topline { align-items: flex-start; margin-bottom: 22px; }
+      .live-pill { font-size: 0; padding: 9px; }
+      .welcome { align-items: flex-start; flex-direction: column; padding: 19px; }
+      .grid { gap: 9px; }
+      .card { padding: 14px; min-height: 116px; }
+      .columns { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
   <div class="app">
-    <aside aria-label="Main navigation">
+    <aside>
       <div class="brand"><picture><source srcset="/assets/rawrarr-logo.jxl" type="image/jxl"><img class="brand-logo" src="/assets/rawrarr-logo.png" alt="rawrarr" width="180" height="60"></picture></div>
-      <div class="section-label">rawrchive</div>
-      <div class="nav-item active"><span class="nav-icon">⌂</span><span class="nav-text">Overview</span></div>
-      <button class="nav-item" id="movies-nav" type="button" style="width:100%;border:0;background:transparent;text-align:left;cursor:pointer"><span class="nav-icon">▧</span><span class="nav-text">Movies</span></button>
-      <button class="nav-item" id="series-nav" type="button" style="width:100%;border:0;background:transparent;text-align:left;cursor:pointer"><span class="nav-icon">▧</span><span class="nav-text">TV</span></button>
-      <button class="nav-item" id="configuration-nav" type="button" style="width:100%;border:0;background:transparent;text-align:left;cursor:pointer"><span class="nav-icon">◇</span><span class="nav-text">Configuration</span></button>
-      <button class="nav-item" id="settings-nav" type="button" style="width:100%;border:0;background:transparent;text-align:left;cursor:pointer"><span class="nav-icon">⚙</span><span class="nav-text">Settings</span></button>
-      <button class="nav-item" id="about-nav" type="button" style="width:100%;border:0;background:transparent;text-align:left;cursor:pointer"><span class="nav-icon">ⓘ</span><span class="nav-text">About</span></button>
+      <button class="mobile-nav-toggle" id="mobile-nav-toggle" type="button" aria-controls="primary-navigation" aria-expanded="false" aria-label="Open navigation menu"><span aria-hidden="true">☰</span></button>
+      <nav class="primary-navigation" id="primary-navigation" aria-label="Main navigation">
+        <div class="section-label">rawrchive</div>
+        <button class="nav-item active" id="overview-nav" type="button"><span class="nav-icon">⌂</span><span class="nav-text">Overview</span></button>
+        <button class="nav-item" id="movies-nav" type="button"><span class="nav-icon">▧</span><span class="nav-text">Movies</span></button>
+        <button class="nav-item" id="series-nav" type="button"><span class="nav-icon">▧</span><span class="nav-text">TV</span></button>
+        <button class="nav-item" id="configuration-nav" type="button"><span class="nav-icon">◇</span><span class="nav-text">Configuration</span></button>
+        <button class="nav-item" id="settings-nav" type="button"><span class="nav-icon">⚙</span><span class="nav-text">Settings</span></button>
+        <button class="nav-item" id="about-nav" type="button"><span class="nav-icon">ⓘ</span><span class="nav-text">About</span></button>
+      </nav>
       <div class="sidebar-bottom">Discovery, libraries, and fulfillment.<br>Early access · Radarr first</div>
     </aside>
     <main>
@@ -319,7 +345,47 @@
     const scanButton = document.getElementById('scan');
     const moviesNav = document.getElementById('movies-nav');
     const configurationNav = document.getElementById('configuration-nav');
-    const overviewNav = document.querySelector('.nav-item.active');
+    const overviewNav = document.getElementById('overview-nav');
+    const primaryNavigation = document.getElementById('primary-navigation');
+    const mobileNavToggle = document.getElementById('mobile-nav-toggle');
+    const mobileNavigationQuery = window.matchMedia('(max-width: 580px)');
+    function syncMobileNavigation() {
+      const mobile = mobileNavigationQuery.matches;
+      const open = mobile && mobileNavToggle.getAttribute('aria-expanded') === 'true';
+      primaryNavigation.dataset.open = String(open);
+      primaryNavigation.setAttribute('aria-hidden', String(mobile && !open));
+      primaryNavigation.toggleAttribute('inert', mobile && !open);
+    }
+    function closeMobileNavigation(restoreFocus = false) {
+      mobileNavToggle.setAttribute('aria-expanded', 'false');
+      mobileNavToggle.setAttribute('aria-label', 'Open navigation menu');
+      syncMobileNavigation();
+      if (restoreFocus) mobileNavToggle.focus();
+    }
+    mobileNavToggle.addEventListener('click', () => {
+      const open = mobileNavToggle.getAttribute('aria-expanded') !== 'true';
+      mobileNavToggle.setAttribute('aria-expanded', String(open));
+      mobileNavToggle.setAttribute('aria-label', open ? 'Close navigation menu' : 'Open navigation menu');
+      syncMobileNavigation();
+    });
+    primaryNavigation.addEventListener('click', event => {
+      if (event.target instanceof Element && event.target.closest('.nav-item')) closeMobileNavigation();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && mobileNavToggle.getAttribute('aria-expanded') === 'true') {
+        closeMobileNavigation(true);
+      }
+    });
+    document.addEventListener('pointerdown', event => {
+      if (mobileNavToggle.getAttribute('aria-expanded') === 'true'
+        && event.target instanceof Node
+        && !primaryNavigation.contains(event.target)
+        && !mobileNavToggle.contains(event.target)) {
+        closeMobileNavigation();
+      }
+    });
+    mobileNavigationQuery.addEventListener('change', () => closeMobileNavigation());
+    syncMobileNavigation();
     function showView(view, updateUrl = true) {
       if (!['overview', 'movies', 'series', 'configuration', 'about'].includes(view)) view = 'overview';
       if (updateUrl && window.location.hash !== `#${view}`) {

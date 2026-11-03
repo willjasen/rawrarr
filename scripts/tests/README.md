@@ -105,7 +105,7 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 
 - `run_rawrarr_tests_in_docker.py` — the final container summary includes test start time, stop time, and elapsed seconds. Each invocation checks whether cleanup is due; at most once per hour it removes only stopped `tests-*` containers in the `rawrarr-test-regression` project that were created more than one hour ago. Preview candidates without deleting them with `python3 scripts/tests/run_rawrarr_tests_in_docker.py --cleanup-dry-run`.
 
-- `test_rawrarr_navigation.mjs` — Chromium regression coverage for Movies/Configuration reload, in-page refresh, history, direct links, fallback, and reopening configured Radarr settings from Movies. Uses the existing isolated test image with Playwright and Chromium; run `node --test /workspace/scripts/tests/test_rawrarr_navigation.mjs` inside it.
+- `test_rawrarr_navigation.mjs` — Chromium regression coverage for Movies/Configuration reload, in-page refresh, history, direct links, fallback, reopening configured Radarr settings from Movies, and the bottom-right mobile menu at 375×812 alongside desktop navigation at 1280×800. Uses the existing isolated test image with Playwright and Chromium; run `node --test /workspace/scripts/tests/test_rawrarr_navigation.mjs` inside it.
 
 - `test_rawrarr_movie_links.mjs` — Chromium checks for reachable, blocked, timed-out, missing-slug and reverse-proxy movie links, including poster/title clicks. Run in the existing isolated test image with Node.js, Playwright, and Chromium.
 
