@@ -62,7 +62,7 @@
 
 - `test_rawrarr_trial.mjs` — checks that public account registration records a three-day trial, internal Compose audiences do not, legacy accounts are not backfilled, and the authenticated profile reports local-time trial status. Run with `node --test scripts/tests/test_rawrarr_trial.mjs` or through the OrbStack regression runner.
 
-- `test_publish_container_workflow.py` — checks that AMD64/ARM64 build as separate jobs, each writes a unique architecture tag, and the manifest job publishes `main` and commit tags only after both succeed; run `python3 scripts/tests/test_publish_container_workflow.py`.
+- `test_publish_container_workflow.py` — checks that AMD64/ARM64 build as separate jobs on native x64/ARM64 runners, each writes a unique architecture tag, and the manifest job publishes `main` and commit tags only after both succeed; run `python3 scripts/tests/test_publish_container_workflow.py`.
 
 - `test_rawrarr_devices_add_button.mjs` — checks the coordinator Fossils heading has a right-aligned “Add a fossil” link to `/setup/node`, wraps responsively, and preserves the first-node setup link; run with `node --test scripts/tests/test_rawrarr_devices_add_button.mjs`.
 
