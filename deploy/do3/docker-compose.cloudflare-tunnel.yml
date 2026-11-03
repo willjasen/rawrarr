@@ -1,0 +1,34 @@
+services:
+  cloudflared:
+    image: cloudflare/cloudflared@sha256:faa8e0a1475f137c910be6025f43c8e4092fdd35461b31e19fd1390657a1ff39
+    container_name: rawrarr-roarlay-prod-cloudflared
+    pull_policy: never
+    user: "0:0"
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 64
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    command:
+      - tunnel
+      - --no-autoupdate
+      - --protocol
+      - http2
+      - run
+      - --token-file
+      - /run/secrets/rawrarr_cloudflared_token
+    secrets:
+      - rawrarr_cloudflared_token
+    depends_on:
+      tailscale:
+        condition: service_started
+    networks:
+      - control
+
+secrets:
+  rawrarr_cloudflared_token:
+    file: /opt/rawrarr-roarlay-prod/secrets/cloudflared-rawrarr-net-token
