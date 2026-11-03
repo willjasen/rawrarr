@@ -21,7 +21,10 @@ distinct. Compose cleanup proceeds in caller-traced groups, preserving explicit
 project/resource names and data-domain boundaries rather than hiding incompatible
 topologies behind one universal stack. The first implemented group lives under
 `deploy/testing/`; the former Mini coordinator and empty Serve definitions are
-retired, with current regression coverage pointed at do3. Other role-base
+retired, with current regression coverage pointed at do3. The MacBook coordinator
+overlay and obsolete staged Headscale clients are retired too; the admin preview
+is a standalone localhost-only container. The internal coordinator stays on do3,
+not either Mac. Other role-base
 consolidation remains planned under
 [#154](https://github.com/willjasen/rawrarr/issues/154). See the
 [Compose inventory and adoption guidance](compose-layout.md).
@@ -170,7 +173,16 @@ Revoking a member must stop future access but cannot claw back data already rece
 
 The cluster root signing key is a distinct authority and remains private to its creator, ideally offline or in protected owner-controlled storage. It must never be shared as an invitation credential. Shared mode needs a defined multi-owner governance model: member-scoped signing keys and signed grants under the root, with explicit approval and revocation rules. Root-key loss/recovery, owner succession, and recovery from a compromised root must be designed before implementation; do not imply a passkey or age identity can recover it. Until those rules exist, shared mode is a product direction, not an implemented capability.
 
-Use **coordinator node** for the subscriber's primary UI/API, passkeys, PostgreSQL, account ownership, catalog, and task coordination; **fossil node** (`metadata`) for Radarr and shared metadata services; and **boneyard node** (`storage`) for a read-only media worker without user passkeys or PostgreSQL. A **dino** is a node deployed by a user: it may run fossil, and may run either boneyard or the planned **tarpit** encrypted-media role, but never both boneyard and tarpit. Fossil may coexist with either media role. Tarpit is not implemented. The coordinator UI should show and manage deployed dinos, including their running roles. Coordinator and fossil capabilities may coexist on one machine. The operator **service node** remains separate. During the current transition, the MacBook fossil UI is still served on `localhost:7297`, while the coordinator owns passkeys and enrollment; the target is to open the coordinator URL and see the MacBook fossil node there. The Mac mini runs as boneyard. Mixed and distributed libraries contribute to the coordinator catalog while media paths and bytes remain local. Show these roles without requiring users to understand container internals.
+Use **coordinator node** for the primary UI/API, passkeys, PostgreSQL, account
+ownership, catalog, and coordination; **fossil node** (`metadata`) for Arr and shared
+metadata services; and **boneyard node** (`storage`) for read-only local media
+access without user passkeys or PostgreSQL. A **dino** is a user-deployed node:
+it may run fossil and either boneyard or the planned **tarpit** encrypted-media
+role, never both media roles. Tarpit is not implemented. The internal coordinator
+stays on do3, and both Macs host fossil subscribers, not coordinator deployments.
+The public environment remains separate. Users open the coordinator URL to
+manage their nodes; media paths and bytes remain node-local. Show these roles
+without requiring users to understand container internals.
 
 The first deployment starts a coordinator and its initial, pre-approved fossil node together. The first passkey registration creates the owner account for that coordinator instance. Later nodes do not select a user: the coordinator associates each pending request with its sole account and shows it only to that account's signed-in owner for explicit approval. Enrollment is rejected until the first account exists and while multiple accounts are unsupported. A future multi-account coordinator must use a short-lived owner-issued invitation to bind a new node to one account; it must not trust a user ID supplied by the joining node.
 
@@ -183,7 +195,14 @@ A device being online or connected through Syncthing or Tailscale does not mean 
 For two owner-approved boneyard nodes, the target layout publishes a selected media collection under `/shared/out` for Syncthing replication. Keep the original `/media` source mount read-only and do not mirror it automatically. The current workflow still uses a separate Syncthing media share rooted at `/media`; moving it into `/shared/out` requires a planned migration. Syncthing transport encryption does not encrypt replicated files at rest. Use explicit folder authorization, matching ignore rules when only part of a collection should transfer, an empty destination for a new share, capacity checks, and file-hash verification. Node enrollment and Syncthing folder authorization remain separate owner actions.
 The user-facing node names are **fossil** for metadata nodes and **boneyard** for storage nodes. **Tarpit** is the planned name for a future untrusted Syncthing destination that receives selected media from a boneyard and stores it encrypted at rest. The name evokes a dark, difficult-to-escape place, fitting data that the destination cannot view. This is distinct from the trusted two-boneyard replication described above. Tarpit is not implemented, and no implementation work has started; Syncthing transport encryption alone is not destination-at-rest encryption.
 
-For the current MacBook deployment, keep the coordinator HTTPS and Syncthing peer paths distinct. The coordinator shares the Tailscale container's network namespace, so Tailscale Serve terminates HTTPS and proxies directly to the coordinator on loopback; no Caddy proxy container is needed. The existing Mini/MacBook Syncthing pair uses Tailscale Serve TCP 22000 and each host's userspace SOCKS5 proxy with direct fallback disabled; its peer addresses are static tailnet IPv4 addresses, and public discovery/relays are disabled. Configure Syncthing peers and folders only after the owner approves the joining node; network presence or enrollment alone does not authorize sharing. PostgreSQL remains on the coordinator's private Docker network and is never exposed through Tailscale. The Syncthing GUI stays local to the MacBook unless an owner deliberately adds a private GUI route. See [Tailscale integration](tailscale-integration-plan.md).
+The internal coordinator stays on do3, separate from Mac fossil subscribers.
+Keep coordinator HTTPS and subscriber/Syncthing paths distinct. The coordinator
+shares its dedicated Tailscale namespace; Serve proxies HTTPS to coordinator
+loopback. Configure Syncthing peers/folders only after owner approval and verify
+their actual current routes, rather than replaying retired Mac coordinator
+instructions. PostgreSQL stays on the coordinator's private Docker network,
+never through Tailscale. Subscriber identity state remains node-local.
+See [Tailscale integration](tailscale-integration-plan.md).
 
 Show synchronization states in user terms: up to date, syncing, waiting for device, conflict needs review, or error. Do not label a node healthy just because its network connection is online.
 

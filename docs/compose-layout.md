@@ -21,8 +21,9 @@ Lack of a repository caller is not evidence that a deployed overlay is unused.
 
 ## Root-file inventory
 
-There were 22 root Compose files before the first increment; 19 remain after
-the second increment retired the former Mini coordinator and empty Serve overlay.
+There were 22 root Compose files before the first increment; 16 remain after
+retiring the former Mac coordinator overlays and both obsolete staged Headscale
+clients. Generic self-hosting templates are not internal Mac deployment recipes.
 Paths in the caller column are relative to the repository. Test names are under
 `scripts/tests/`. Historical runbooks record past usage, not current deployment
 authority. All root `docker-compose*.yml` files are also copied into regression
@@ -35,20 +36,20 @@ containers by `scripts/tests/run_rawrarr_tests_in_docker.py`.
 | `docker-compose.metadata.yml` | Standalone fossil plus private Valkey cache, against an existing coordinator. | Deployment guide; deploy classifier and its test; node-network-isolation test; metadata/cache runbooks. |
 | `docker-compose.storage.yml` | Standalone boneyard using an existing Tailscale container namespace; not a coordinator stack. | Deployment guide; deploy classifier; workspace, direct-route, and network-isolation tests. |
 | `docker-compose.internal-mini.yml` | Retired: former private Mac mini coordinator/PostgreSQL/Tailscale topology, superseded internally by do3. | Former analytics/workspace/trial callers now cover the do3 definition. October 22-27 runbooks remain historical; deployment classifiers ignore the retired path. |
-| `docker-compose.tailscale-macbook.yml` | Transport/cache overlay for the old combined MacBook base; modifies roarlay and fossil networking. | Deployment/admin guides; deploy classifier; workspace, direct-route, and isolation tests; October 18 and 25 runbooks. |
+| `docker-compose.tailscale-macbook.yml` | Retired: former shared MacBook coordinator/fossil transport/cache overlay. | Admin preview is standalone; workspace/direct-route coverage uses do3, isolation/cache coverage uses retained subscriber/test definitions. Historical runbooks remain records. |
 | `docker-compose.tailscale-mini.yml` | Separate Mac mini Tailscale companion used by storage/relay definitions. | Deployment guide. Requires inspection of host-local active files before consolidation. |
 | `docker-compose.macbook-storage.yml` | Additional MacBook boneyard using an existing namespace and protected node-local mounts. | Deploy classifier; `runbooks/2026-10-18-storage-media-replication.md`. |
 | `docker-compose.media.yml` | Changes the base fossil into a storage-role node with a read-only media bind. | Deployment/user guides; `rust-arr/README.md`; local-library-scan runbook. |
 | `docker-compose.age-identity.yml` | Optional fossil private identity secret mount; never a coordinator overlay. | `docs/user-guide.md`. |
-| `docker-compose.admin.yml` | Private sample admin preview, combined with base + MacBook Tailscale overlay. | `docs/admin-console.md`; admin-preview test; admin-preview runbook. |
+| `docker-compose.admin.yml` | Standalone localhost-only sample admin preview; no coordinator or transport dependency. | `docs/admin-console.md`; admin-preview test; original preview runbook is historical. |
 | `docker-compose.analytics.yml` | Coordinator settings overlay only; starts no Umami services. | `docs/coordinator-analytics.md`; analytics test. |
 | `docker-compose.analytics-services.yml` | Explicit opt-in Umami/PostgreSQL services on the coordinator's existing private control network. | Analytics guide/test; analytics opt-in runbook. Not equivalent to the settings-only overlay. |
 | `docker-compose.openai.yml` | Optional coordinator OpenAI file-secret integration. | October 18 OpenAI implementation and October 27 internal OpenAI configuration runbooks. No current script caller found. |
 | `docker-compose.syncthing.yml` | Separate Syncthing companion for approved subscribers; no app or PostgreSQL recreation. | `scripts/README.md`; deploy classifier; MacBook Syncthing runbook. |
 | `docker-compose.syncthing-media.yml` | Adds a node-local media bind to an existing Syncthing service. | User guide; deploy classifier; storage-media-replication runbook. |
 | `docker-compose.syncthing-tailnet.yml` | Syncthing SOCKS/tailnet routing overlay; requires established TCP forwarding. | `scripts/README.md`; deploy classifier; storage-media-replication runbook. |
-| `docker-compose.headscale-macbook.yml` | Separate staged MacBook Headscale client; not a replacement for the app's transport. | Deployment guide; deploy classifier. |
-| `docker-compose.headscale-mini.yml` | Separate staged Mac mini Headscale client. | Deployment guide. |
+| `docker-compose.headscale-macbook.yml` | Retired: obsolete staged MacBook Headscale client, confirmed by operator. | Deployment-guide/classifier callers retired; staging runbook remains historical. |
+| `docker-compose.headscale-mini.yml` | Retired: obsolete staged Mac mini Headscale client, confirmed by operator. | Deployment-guide instructions retired; staging runbook remains historical. |
 | `docker-compose.mini-relays.yml` | Caddy storage relay in the existing Mini Tailscale namespace. | Node-network-isolation test; mounts root `storage-proxy.Caddyfile`. No current script caller found. |
 | `docker-compose.tailscale-serve.yml` | Retired: empty compatibility overlay after removing the TCP proxy. | `runbooks/2026-10-18-remove-syncthing-proxy.md` is historical. No executable caller found; deployment classifiers ignore the retired path. |
 
@@ -68,8 +69,13 @@ Implemented: separate the isolated test environment first. Keep its explicit
 paths, listeners, and image settings. Rebase relative paths, not runtime data.
 
 Implemented next: retire the former Mini coordinator and empty Serve overlay
-using the operator's confirmation and the audit evidence below. Keep the
-MacBook transport overlay for its still-documented admin preview dependency.
+using the operator's confirmation and the audit evidence below.
+
+Implemented third: the operator confirmed both staged Headscale clients obsolete
+and clarified that coordinator deployment on either Mac is no longer needed.
+Removed both staged templates and the MacBook coordinator overlay. The admin
+preview is now independently localhost-only, as selected by the operator.
+The internal coordinator stays on do3; the Macs are subscriber hosts.
 
 Planned, not yet implemented:
 
@@ -80,13 +86,12 @@ Planned, not yet implemented:
    equivalent volumes, ports, enrollment, or transport behavior.
 2. Group optional app and transport companions with documented base/overlay
    combinations. Keep analytics opt-in and private identity mounts role-specific.
-   The two staged Headscale clients may share a template only if their hostname
-   and persistent-state differences remain explicit.
-3. Retire remaining obsolete Mac coordinator/transport definitions only
-   after comparing host-local Compose labels, persistent resource names, and
-   remaining tests/docs. Do not retain obsolete examples as the default install
-   path. Decide whether the root combined stack remains a development entry point
-   in that increment, rather than silently changing the default deployment.
+   The obsolete staged Headscale clients have been retired without a replacement.
+3. Keep the generic combined stack as a self-hosting/development entry point for
+   now, not a way to recreate the internal environment on a Mac. Further
+   consolidation must preserve its callers/resources or provide an explicit
+   compatibility path. Mac coordinator deployment is no longer a supported
+   internal operational workflow.
 
 Every group must update scripts, tests, documentation, regression snapshot
 fixtures, and deployment-path classifiers together. Moving a file changes
@@ -145,9 +150,11 @@ that gap, not an assertion that all hosts were independently verified.
 The analytics, billing-audience, and relay/direct-route tests now inspect the
 do3 coordinator definition instead of keeping a duplicate obsolete stack alive
 as a test fixture. Current coordinator/subscriber templates remain supported;
-`docker-compose.yml` is not retired. The MacBook transport overlay remains
-because `docs/admin-console.md` still combines it with the private admin preview.
-Its replacement needs a separate caller migration before removal.
+`docker-compose.yml` is not retired. The MacBook coordinator overlay was
+subsequently retired when the operator ruled out Mac coordinator deployment;
+the admin preview no longer depends on it. It publishes only host loopback
+from its own namespace. Existing previews are not automatically migrated;
+see [admin adoption and rollback](admin-console.md#local-preview).
 
 Existing do3 services and Mac subscriber deployments require no adoption action.
 There is no persistent-state or protocol migration and no container recreation.
@@ -159,3 +166,31 @@ If an unexpected host still relies on the retired stack, stop the cleanup there
 and inspect its labels and state before making a deployment change. Recover the
 prior definition from Git commit `26c2a3f` if necessary; preserve all databases,
 volumes, credentials, and tailnet identities. Do not run `down` or remove data.
+
+The removed MacBook overlay must not simply be dropped from an old combined
+stack's command: that changes networking and listeners for more than the admin.
+If an unexpected caller still relies on it, pause and plan migration separately.
+The old overlay is recoverable from `5286e30`; source retirement never authorizes
+teardown of an existing container or subscriber transport.
+
+## Retired staged Headscale clients
+
+The operator explicitly confirmed both old staged clients obsolete on
+2026-11-03 and chose retirement instead of combining duplicate definitions.
+Removed `docker-compose.headscale-macbook.yml` and
+`docker-compose.headscale-mini.yml`; there is no replacement template.
+The earlier audit's remote-Mac access limitations still apply: this relies on
+operator confirmation, not a new successful live-state check.
+
+No current do3 or subscriber adoption action is required. Do not replay old
+`rawrarr-headscale` enrollment instructions or substitute an app sidecar into
+that project's file list. This does not retire subscriber transport, do3 public
+Headscale, or the test environment's isolated Headscale. No runtime state,
+credentials, peer enrollment, or native host networking changes.
+
+For an unexpected external caller, pause and inspect its project labels and
+identity mounts; the old filename now fails explicitly. Recover either definition
+from Git commit `5286e30` if needed, preserving its original project, hostname,
+container name, and state path. Do not create a replacement identity, revoke a
+key, stop a container, or remove state as part of this source cleanup.
+There is no data/protocol migration or automatic deployment.

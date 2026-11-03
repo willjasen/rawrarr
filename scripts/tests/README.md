@@ -43,6 +43,9 @@
   select live deployments or coordinator rebuilds. They also cover retired
   Mini coordinator/empty Serve filenames; `test_compose_layout.py` guards their
   retirement while retaining the supported generic and do3 definitions.
+- The same Python checks guard retirement of both staged Headscale clients and
+  the MacBook coordinator overlay while preserving subscriber/test inputs.
+  Mixed-path checks ensure real runtime updates remain selected.
 
 - `test_rawrarr_movie_artwork_stability.mjs` — Chromium checks loaded and in-flight movie posters survive cached-to-live library updates and filtering without duplicate requests, while metadata, explicit artwork changes, additions, and removals still update; verifies the shared Movies/TV poster grid shows six desktop columns and two mobile columns without horizontal overflow. Run through `python3 scripts/tests/run_rawrarr_tests_in_docker.py`.
 
@@ -105,7 +108,7 @@
 - `test_rawrarr_device_routes.mjs` — checks the shared all-device route-status helper for Direct, Relay, and Offline states, Redis cache reachability in measured node latency, cached probes, and explicit refresh. Run with `node --test scripts/tests/test_rawrarr_device_routes.mjs`.
 - `test_rawrarr_device_routes.mjs` — checks the shared all-device route-status helper for Direct, Relay, and Offline states, Redis cache reachability in measured node latency, probe caching, and explicit refresh. Run with `node --test scripts/tests/test_rawrarr_device_routes.mjs`.
 
-- `test_rawrarr_node_network_isolation.mjs` — checks subscriber service blocks in base, metadata, storage, and the two-node OrbStack test Compose have no host-published ports; metadata shares its Tailscale namespace with loopback-only listeners; and both metadata Compose variants use Valkey with bounded, non-persistent cache settings, health checks, and the opt-in default disabled. Requires Node.js; run `node --test scripts/tests/test_rawrarr_node_network_isolation.mjs`.
+- `test_rawrarr_node_network_isolation.mjs` — checks subscriber service blocks in base, metadata, storage, and the two-node OrbStack test Compose have no host-published ports; test subscribers bind loopback in their own Tailscale namespaces; standalone metadata uses bounded, disposable, opt-in Valkey. Run through `python3 scripts/tests/run_rawrarr_tests_in_docker.py`.
 
 - `test_rawrarr_mini_export.mjs` — headless Chromium mini-export test using real post-quantum ciphertext from the `age` CLI; verifies browser decryption through a user-wrapped group envelope with age-keygen comment lines, published-recipient matching, device provisioning, HMAC filename matching, local ZIP contents, wrong-key handling, and that the private ID is never sent. Run in the isolated Playwright test image.
 

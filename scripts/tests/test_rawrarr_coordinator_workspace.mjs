@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 const root = new URL('../../', import.meta.url);
 const read = path => readFile(new URL(path, root), 'utf8');
-const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, metadataUi, compose, metadataExport, mainRs, tailscaleCompose, boneyardCompose, coordinatorAvatar, internalDo3Compose] = await Promise.all([
+const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, metadataUi, compose, metadataExport, mainRs, boneyardCompose, coordinatorAvatar, internalDo3Compose] = await Promise.all([
   read('rust-arr/src/coordinator.rs'),
   read('rust-arr/src/auth.rs'),
   read('rust-arr/src/node_auth.rs'),
@@ -15,7 +15,6 @@ const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, me
   read('docker-compose.yml'),
   read('rust-arr/web-export/metadata-export.js'),
   read('rust-arr/src/main.rs'),
-  read('docker-compose.tailscale-macbook.yml'),
   read('docker-compose.storage.yml'),
   read('rust-arr/src/coordinator_avatar.rs'),
   read('deploy/do3/docker-compose.internal-coordinator.yml'),
@@ -446,7 +445,7 @@ test('coordinator workspace selects nodes, reads Radarr directly, and keeps conf
   assert.match(compose, /  roarlay:\n/);
   assert.doesNotMatch(compose, /  coordinator:\n/);
   assert.match(boneyardCompose, /  boneyard:\n/);
-  assert.match(tailscaleCompose, /aliases:\n          - coordinator/);
+  assert.match(internalDo3Compose, /network_mode: service:tailscale/);
   assert.match(workspaceScript, /ageIdentityInMemory = identity/);
   assert.match(workspaceScript, /arrDirectRequest\('\/radarr\/live-library'\)/);
   assert.doesNotMatch(workspaceScript, /window\.rawrarrMiniExport\.loadRadarrLibrary/);

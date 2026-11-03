@@ -1,5 +1,10 @@
 # Admin console preview
 
+> Historical deployment wiring. The sample preview is now standalone and
+> localhost-only; the MacBook coordinator overlay has been retired. Use the
+> [current admin guide](../docs/admin-console.md#local-preview), not the old
+> shared-namespace command below.
+
 ## Scope
 
 Add a separate, static admin-console container to preview account, trial, subscription, and operations reporting. The page uses fictional sample data only. It does not access production PostgreSQL, the coordinator API, subscriber data, or any billing provider. Admin login is planned but intentionally not implemented for this preview; it is a required gate before any live account data is connected.

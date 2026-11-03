@@ -9,8 +9,16 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ComposeLayoutTests(unittest.TestCase):
+    def test_retired_staged_headscale_clients_are_not_installation_inputs(self):
+        for name in ("docker-compose.headscale-macbook.yml", "docker-compose.headscale-mini.yml"):
+            with self.subTest(name=name):
+                self.assertFalse((ROOT / name).exists())
+        self.assertTrue((ROOT / "deploy" / "testing" / "headscale" / "config.yaml").is_file())
+        self.assertTrue((ROOT / "docker-compose.tailscale-mini.yml").is_file())
+        self.assertFalse((ROOT / "docker-compose.tailscale-macbook.yml").exists())
+
     def test_retired_mac_coordinator_definitions_are_not_installation_inputs(self):
-        for name in ("docker-compose.internal-mini.yml", "docker-compose.tailscale-serve.yml"):
+        for name in ("docker-compose.internal-mini.yml", "docker-compose.tailscale-serve.yml", "docker-compose.tailscale-macbook.yml"):
             with self.subTest(name=name):
                 self.assertFalse((ROOT / name).exists())
         for name in (
@@ -18,7 +26,6 @@ class ComposeLayoutTests(unittest.TestCase):
             "docker-compose.coordinator.yml",
             "docker-compose.metadata.yml",
             "docker-compose.storage.yml",
-            "docker-compose.tailscale-macbook.yml",
             "deploy/do3/docker-compose.internal-coordinator.yml",
         ):
             with self.subTest(name=name):

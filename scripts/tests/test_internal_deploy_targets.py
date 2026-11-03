@@ -51,9 +51,18 @@ class InternalDeployTargetTests(unittest.TestCase):
         self.assertEqual(result["targets"], [])
 
     def test_retired_mac_coordinator_files_do_not_trigger_live_deploys(self):
-        for path in ("docker-compose.internal-mini.yml", "docker-compose.tailscale-serve.yml"):
+        for path in ("docker-compose.internal-mini.yml", "docker-compose.tailscale-serve.yml", "docker-compose.tailscale-macbook.yml"):
             with self.subTest(path=path):
                 self.assertEqual(classify_paths([path])["targets"], [])
+
+    def test_retired_staged_clients_do_not_trigger_live_deploys(self):
+        for path in ("docker-compose.headscale-macbook.yml", "docker-compose.headscale-mini.yml"):
+            with self.subTest(path=path):
+                self.assertEqual(classify_paths([path])["targets"], [])
+                self.assertEqual(
+                    classify_paths([path, "rust-arr/src/library.rs"])["targets"],
+                    ["nodes"],
+                )
 
 
 if __name__ == "__main__":

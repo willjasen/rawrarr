@@ -46,8 +46,6 @@ NODE_FILES = {
     "docker-compose.syncthing.yml",
     "docker-compose.syncthing-media.yml",
     "docker-compose.syncthing-tailnet.yml",
-    "docker-compose.tailscale-macbook.yml",
-    "docker-compose.headscale-macbook.yml",
 }
 
 COORDINATOR_PREFIXES = ("rust-arr/migrations/",)
@@ -76,6 +74,9 @@ NON_RUNTIME_FILES = {
     "docker-compose.orbstack-test.yml",
     "docker-compose.internal-mini.yml",
     "docker-compose.tailscale-serve.yml",
+    "docker-compose.headscale-macbook.yml",
+    "docker-compose.headscale-mini.yml",
+    "docker-compose.tailscale-macbook.yml",
 }
 
 

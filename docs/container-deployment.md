@@ -50,7 +50,7 @@ UI publisher-signature enforcement and its workspace status badge are temporaril
 
 The [one-line node deployment plan](one-line-node-deployment-plan.md) proposes a copied curl command that downloads a script containing this generated Compose definition, checks or helps install Docker and Compose, and starts the subscriber node. It remains planned, depends on published images, and does not replace owner approval or the manual Compose path.
 
-User-facing names are roarlay (coordinator), fossil (metadata), and boneyard (storage). Compose services use `roarlay`, `fossil`, and `boneyard`; Docker generates names as `<project>-<service>-1`. The `RAWARR_ROLE` values and database records retain `coordinator`, `metadata`, and `storage` for compatibility. The MacBook Tailscale sidecar retains the DNS alias `coordinator`.
+User-facing names are roarlay (coordinator), fossil (metadata), and boneyard (storage). Compose services use `roarlay`, `fossil`, and `boneyard`; Docker generates names as `<project>-<service>-1`. The `RAWARR_ROLE` values and database records retain `coordinator`, `metadata`, and `storage` for compatibility. The internal coordinator stays on do3; neither Mac is a coordinator deployment target.
 
 | Capability | Roarlay (`coordinator`) | Fossil (`metadata`) | Boneyard (`storage`) |
 | --- | --- | --- | --- |
@@ -64,11 +64,19 @@ User-facing names are roarlay (coordinator), fossil (metadata), and boneyard (st
 
 “Subscriber” describes ownership, not a role. Metadata replaces shard. The former service role is superseded by the central coordinator; subscription eligibility and automatic Headscale provisioning remain future integrations. The coordinator does not hold media or private age identities. After roarlay-origin passkey sign-in, its workspace lists owner-authorized fossil and boneyard nodes, displays pending approvals, and shows a selected node's page through `/nodes/{node-id}/`. `localhost:7297` remains available for direct local access.
 
-## Swarmsail Headscale staging
+## Retired Swarmsail Headscale staging
 
-As of 2026-10-18, Swarmsail manages the private Headscale control plane at `https://rawrarr.willjasen.net` and Caddy routes `https://swarmsail.willjasen.net` to the MacBook coordinator over the LAN. Two separate Docker Tailscale clients in Compose project `rawrarr-headscale` are registered under the existing Rawrarr account user. Their state is kept in the node-local `tailscale/headscale-macbook` and `tailscale/headscale-mini` directories. The existing Rawrarr app sidecars remain on the prior Tailscale tailnet while their passkey origin and Syncthing TCP paths are migrated. The native Tailscale clients on both Macs are unchanged. The staged Headscale clients are not yet the transport used by Rawrarr app services.
+The October 18 MacBook/Mini Headscale staging definitions were retired on
+2026-11-03 with explicit operator confirmation that both are obsolete.
+`docker-compose.headscale-macbook.yml` and `docker-compose.headscale-mini.yml`
+are no longer installation inputs. The old LAN coordinator/control-plane routes
+in the [staging runbook](../runbooks/2026-10-18-headscale-container-client-staging.md)
+describe that historical experiment, not the current internal environment.
 
-The companion definitions are `docker-compose.headscale-macbook.yml` and `docker-compose.headscale-mini.yml`. Enroll them with the focused procedure in [the Headscale client staging runbook](../runbooks/2026-10-18-headscale-container-client-staging.md). Passkeys remain scoped to the current `rawrarr.risk-mermaid.ts.net` relying-party ID; browser login at the new `swarmsail.willjasen.net` origin requires a separate passkey migration before the old route is retired.
+This removes repository templates only; it does not stop sidecars, revoke
+enrollment, or delete node-local identity state. App Tailscale companions,
+do3 public Headscale services, and the isolated test Headscale fixture are
+unchanged. See [retirement and recovery guidance](compose-layout.md#retired-staged-headscale-clients).
 
 ## Authentication and current trust scope
 
@@ -80,24 +88,24 @@ A joining node registers on startup. If it has no approved credential, it create
 
 Standalone node browsing continues to use the node's origin. Existing `localhost:7297` passkeys remain compatible on that origin. The roarlay workspace uses a separate passkey explicitly linked to the existing account for `rawrarr.risk-mermaid.ts.net`; a localhost credential cannot sign in to that hostname. Within the signed-in workspace, roarlay grants a separate expiring session scoped to the selected node. Roarlay transport must use HTTPS outside the explicitly enabled local Docker development network. Redirects are not followed.
 
-Roarlay relays only to configured targets from `RAWARR_NODE_RELAY_TARGETS`, a JSON object mapping registered node IDs to trusted HTTP(S) base URLs. The browser cannot supply an upstream URL. The default local Compose targets map `macbook-metadata` to `http://fossil:8080` and `mac-mini-storage` to `https://rawrarr-mini.risk-mermaid.ts.net`; the MacBook Tailscale overlay changes its local fossil target to `http://127.0.0.1:8081`. `RAWARR_NODE_DIRECT_TARGETS` advertises separate, narrow `/direct-api/` endpoints for browser use. The browser probes a direct target and uses the scoped relay if direct access fails. Both Tailscale containers provide local SOCKS5 proxies for cross-node traffic. The Mini Serve endpoint forwards to a loopback Caddy bridge, which reaches boneyard over the Mini's Docker network. Do not route `/media`, private age identities, `/shared`, or node-local data through roarlay. Library responses use per-request browser encryption, and export reads return age ciphertext; review the [blind coordinator content flow](blind-coordinator-content.md) before extending subscriber data routes.
+Roarlay relays only to configured targets from `RAWARR_NODE_RELAY_TARGETS`, a JSON object mapping registered node IDs to trusted HTTP(S) base URLs. The browser cannot supply an upstream URL. The do3 internal definition maps the Mac subscribers to their own HTTPS tailnet hostnames. `RAWARR_NODE_DIRECT_TARGETS` advertises separate, narrow `/direct-api/` endpoints for browser use. The browser probes a direct target and uses the scoped relay if direct access fails. Subscriber transport must reach the coordinator over its configured HTTPS endpoint; no Mac-local coordinator is needed. Do not route `/media`, private age identities, `/shared`, or node-local data through roarlay. Library responses use per-request browser encryption, and export reads return age ciphertext; review the [blind coordinator content flow](blind-coordinator-content.md) before extending subscriber data routes.
 
-## Local MacBook deployment
+## Mac subscribers, not coordinators
 
-`docker-compose.yml` runs the already-established central `roarlay` + PostgreSQL and the seeded **fossil** participant. It preserves the existing `rawrarr-data`, `rawrarr-postgres-data`, shared bind mount and loopback port **7297**; the `fossil` service mounts the same existing `rawrarr-data` named volume. Roarlay's diagnostic/API port is loopback **7298**; it mounts only the PostgreSQL secret and approved-node registry, never `/data`, `/shared`, `/media` or the age identity. Syncthing remains its separate companion.
+The MacBook and Mac mini are subscriber hosts. Their internal fossil deployments
+use each host's established `rawrarr-node-internal` project and host-local Compose
+files; inspect container labels before maintenance and preserve volumes,
+credentials, identities, and `/shared`. Coordinator deployment on either Mac is
+retired. The internal coordinator remains on do3 at
+`https://rawrarr.risk-mermaid.ts.net/`.
 
-The MacBook tailnet routes have different backends by protocol. Roarlay shares the Tailscale container's network namespace, so HTTPS 443 `/` proxies directly to `http://127.0.0.1:8080`; no Caddy roarlay-proxy container is needed. A narrow `/direct-api/` Serve handler can reach the fossil listener at `http://127.0.0.1:8082`. Host diagnostics remain available only at `http://127.0.0.1:7298/`. Syncthing peer traffic uses a separate TCP 22000 forward directly to the Syncthing container when configured; its GUI is loopback-only at `http://127.0.0.1:8385/` and has no Serve web handler. Confirm the live Serve JSON before changing or claiming any handler.
-
-Provision once (default is a dry run):
-
-```sh
-python3 scripts/provision_node.py --node-id macbook-metadata --role metadata
-python3 scripts/provision_node.py --node-id macbook-metadata --role metadata --apply
-RAWARR_POSTGRES_PASSWORD_FILE="$HOME/Library/Application Support/rawrarr/orbstack-postgres-password" \
-  docker compose -p rawrarr-local -f docker-compose.yml -f docker-compose.tailscale-macbook.yml config --quiet
-```
-
-Before updating the persistent project, read each running service's `com.docker.compose.project.config_files` label and use its existing file set with `-p rawrarr-local`; the roarlay and metadata containers can record different sets. The MacBook overlay supplies the 7297 loopback listener and namespace sharing; base Compose alone does not. Follow the per-container deployment locks in [project instructions](../AGENTS.md), check port ownership, and preserve existing volumes. The additive migration scopes existing sessions/ceremonies to `macbook-metadata`; passkey records and encrypted shared data are unchanged. Do not rerun provisioning for an existing ID or replace its token. Never use `down -v`.
+The generic root `docker-compose.yml` and `docker-compose.coordinator.yml` remain
+self-hosting/development templates, not instructions to recreate the internal
+environment on a Mac. Their defaults and volumes are not a migration mechanism.
+The former `docker-compose.tailscale-macbook.yml` is removed; the admin preview
+now has its own localhost-only definition without a coordinator dependency.
+See [admin preview adoption](admin-console.md#local-preview) and the
+[retirement record](compose-layout.md#retired-mac-coordinator-definitions).
 
 ## Prepare the Mac mini
 
