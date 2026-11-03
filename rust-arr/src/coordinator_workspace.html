@@ -264,6 +264,19 @@
     .about-privacy { display:flex; align-items:flex-start; gap:12px; margin-top:14px; padding:15px 18px; border:1px solid #344239; border-radius:13px; background:#151c17 }
     .about-privacy-mark { display:grid; place-items:center; width:28px; height:28px; flex:none; border-radius:9px; color:var(--green); background:#a6e3a112; font-size:14px }
     .about-privacy p { margin:1px 0 0; color:#b5c1b6; font-size:12px; line-height:1.65 }
+    .about-identities { margin-top:30px }
+    .about-identities-heading { display:flex; flex-wrap:wrap; align-items:end; justify-content:space-between; gap:8px 20px; margin-bottom:14px }
+    .about-identities-heading h2 { margin:0; font-size:22px; letter-spacing:-.025em }
+    .about-identities-heading p { max-width:650px; margin:0; color:var(--muted); font-size:12px; line-height:1.6 }
+    .about-identity-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px }
+    .about-identity-card { min-width:0; padding:18px; border:1px solid var(--line); border-radius:14px; background:linear-gradient(155deg,#1a211c,#151a16 76%) }
+    .about-identity-card header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px }
+    .about-identity-card h3 { margin:0; font-size:15px }
+    .about-identity-card p { margin:0; color:var(--muted); font-size:12px; line-height:1.7 }
+    .about-identity-status { padding:4px 8px; border:1px solid #a6e3a144; border-radius:999px; color:#c5efbf; background:#a6e3a10d; font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase }
+    .about-identity-status.planned { border-color:#d5b56b55; color:#f0d89e; background:#d5b56b0d }
+    .about-crypto-note { margin-top:12px }
+    @media(max-width:560px) { .about-identity-grid { grid-template-columns:1fr } .about-identity-card { padding:16px } }
     @media(max-width:760px) { .about-steps { grid-template-columns:1fr } .about-step { padding:17px } .about-step-index { margin-bottom:12px } }
     @media(max-width:560px) { .about-hero { padding:24px 20px; border-radius:16px } .about-hero::after { right:-180px } .about-privacy { padding:13px } }
     .settings-connections { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr)); gap:16px; margin-top:18px }
@@ -456,6 +469,31 @@
         <article class="about-step"><span class="about-step-index" aria-hidden="true">03</span><h3>Browse your library</h3><p>Open Movies or TV to load that node’s library. Enter your age private ID in this browser to unlock encrypted metadata.</p></article>
       </div>
       <aside class="about-privacy"><span class="about-privacy-mark" aria-hidden="true">↗</span><p>Roarlay handles sign-in and coordinates access to your nodes. The browser connects directly when it can, with a scoped roarlay relay available when needed. Radarr and Sonarr credentials stay between your browser and the selected fossil.</p></aside>
+      <section class="about-identities" aria-labelledby="about-identities-title">
+        <div class="about-identities-heading">
+          <h2 id="about-identities-title">Four identity domains</h2>
+          <p>Rawrarr keeps sign-in, encryption, and signing separate. The group and app-key lifecycle is planned; these cards label what exists today.</p>
+        </div>
+        <div class="about-identity-grid">
+          <article class="about-identity-card">
+            <header><h3>User</h3><span class="about-identity-status">Current</span></header>
+            <p>Your age ID unlocks the current shared configuration and metadata. Your passkey signs you in; it is not an encryption key. Planned replies to you will be age-encrypted to your public recipient.</p>
+          </article>
+          <article class="about-identity-card">
+            <header><h3>Device</h3><span class="about-identity-status">Current</span></header>
+            <p>Each subscriber has its own age ID and separate ML-DSA signing key. Owner approval is implemented. Signatures cover coordination and supported operational records; general metadata signing and encrypted messaging are still being built.</p>
+          </article>
+          <article class="about-identity-card">
+            <header><h3>Group</h3><span class="about-identity-status planned">Planned</span></header>
+            <p>Approved nodes will share a group age ID, and <code>config.aged</code> will be encrypted to it. New nodes receive the current key after approval. Revoking a node rotates the group key and app keys, distributing replacements only to remaining nodes.</p>
+          </article>
+          <article class="about-identity-card">
+            <header><h3>App</h3><span class="about-identity-status planned">Planned</span></header>
+            <p>Rawrarr will create a separate age ID for each connected Radarr or Sonarr instance. It is used only for that app’s metadata. Every approved group node can access app IDs for now, so moving an app between fossil nodes preserves its metadata identity. You will not need to enter or manage these IDs.</p>
+          </article>
+        </div>
+        <aside class="about-privacy about-crypto-note"><span class="about-privacy-mark" aria-hidden="true">⌁</span><p>Age encrypts data; ML-DSA verifies supported signatures. Planned user-to-node and node-to-node messages will always be age-encrypted separately to each recipient. Tailscale Serve can route node messages, but it carries ciphertext only.</p></aside>
+      </section>
     </section>
     <section id="settings-view" hidden><h1 class="page-title">Settings</h1>
       <div class="settings-identity">

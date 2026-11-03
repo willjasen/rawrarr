@@ -52,6 +52,7 @@
 
 # Rawrarr runbooks
 
+- [Show identity domains in the coordinator About page](2026-10-26-identity-domains-about.md) — Explain user, device, group, and app identity purposes and current/planned behavior in the app (issue [#95](https://github.com/willjasen/rawrarr/issues/95)).
 - [ETH donations, ENS sign-in, and subscription tiers](2026-10-27-eth-donations-ens-subscriptions.md) — Add voluntary ETH donations, SIWE wallet login by ENS name, manual Ethereum mainnet subscriptions, and a one-fossil free tier (issue [#208](https://github.com/willjasen/rawrarr/issues/208)).
 - [Refresh linked regression test clones](2026-10-27-refresh-test-clone-dependencies.md) — Prepare each isolated OrbStack test clone with current lockfile dependencies and architecture-correct tools before running the offline suites (issue [#208](https://github.com/willjasen/rawrarr/issues/208)).
 - [Fix linked regression suite failures](2026-10-27-fix-regression-suite-failures.md) — Copy Stripe test fixtures into each clone, correct service configuration fixtures, and expose configured Radarr/Sonarr connection controls (issue [#223](https://github.com/willjasen/rawrarr/issues/223)).
