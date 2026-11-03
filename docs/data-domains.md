@@ -18,6 +18,8 @@ The shared tree separates app configuration data, app metadata, and published fi
 
 ## Placement rules
 
+- The coordinator's environment-owner record stores only the authenticated account reference, pinned personal age public recipient, source fossil ID, and provisioning timestamp in PostgreSQL. It is separate from the ML-DSA instance-signing root. The private user age identity stays on a subscriber or owner recovery device; group/device recipients are not substitutes. See the [backup owner-recipient runbook](../runbooks/2026-11-03-environment-owner-backup-recipient.md).
+
 - The coordinator owns the user-facing web/auth stack and PostgreSQL. Storage and shard nodes can hold authorized shared ciphertext without those services; `/metadata` remains an alias inside `/shared`.
 - Only storage capability mounts local source media read-only under `/media`. A selected copy may be deliberately published under `/shared/out` for Syncthing replication after owner approval; it is not an automatic mirror. A coordinator can optionally also have storage capability. A shard has no media mount; multi-library/cross-node catalog behavior remains planned.
 - `/metadata` is a classification and access path, not a separate Syncthing folder. It aliases `/shared/in/metadata`; legacy files under `/shared/metadata` are copied to the new location when the vault unlocks and are left in place for recovery. Both remain part of the same configured `/shared` Syncthing folder.

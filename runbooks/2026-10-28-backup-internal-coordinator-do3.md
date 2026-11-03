@@ -10,7 +10,9 @@ The backup script is [`scripts/backup_internal_coordinator_do3.py`](../scripts/b
 
 ## Personal age recipient
 
-The recipient must be Will's personal operator key, separate from any Rawrarr node or group recipient. The script does not read, accept, or copy a private identity. Derive the public `age1pq1…` recipient locally with `age-keygen -y /path/to/personal-age-identity`, then install only that one-line public recipient on do3 at `/opt/rawrarr-internal-do3/backup-age-recipient`, owned by root with mode `0600`. Do not use `/shared/age-recipient` or `/shared/group-age-recipient` for this purpose.
+The recipient is the environment owner's existing personal age public recipient, separate from any Rawrarr node or group recipient. Provision it through the authenticated coordinator action described in the [owner-recipient continuation runbook](2026-11-03-environment-owner-backup-recipient.md). That action fetches only the derived public `age1pq1…` recipient from an online, account-owned fossil and pins it alongside the owner's account ID in PostgreSQL. The private identity stays on the fossil. No recipient file needs to be installed on do3, and `--recipient-file` is no longer supported. Never use `/shared/age-recipient`, `/shared/group-age-recipient`, a device recipient, or an ML-DSA signing-root key for this purpose.
+
+The script reads the pin with a read-only query against only the internal coordinator database. A missing migration, absent owner pin, database failure, or invalid recipient stops the backup before collection. Once pinned, the recipient remains usable when fossils are offline or the source node has been removed. Re-provisioning with another recipient fails without changing the existing pin; ownership transfer and recipient rotation require a separate recovery procedure.
 
 The script validates the recipient, stages plaintext only under `/run` tmpfs, streams a compressed tar archive through the `age` binary bundled in the running internal roarlay image, and writes ciphertext atomically to disk. The manifest is inside the encrypted archive and records only a SHA-256 fingerprint of the public recipient. No plaintext snapshot directory or tar file is left on disk by a new run. Age v1.3.2 in the Rawrarr image supports the project's post-quantum recipients. The private identity never enters the server or container.
 
@@ -33,7 +35,7 @@ tailscale ssh root@rawrarr-roarlay.risk-mermaid.ts.net 'docker context show; df 
 tailscale ssh root@rawrarr-roarlay.risk-mermaid.ts.net 'python3 -' < scripts/backup_internal_coordinator_do3.py
 ```
 
-Run both commands from the Rawrarr checkout containing the reviewed script. The backup command refuses to run until the personal recipient is installed. It prints only the encrypted archive path. Verify the ciphertext decryption and the inner `SHA256SUMS` on Will's personal device, where the matching private ID stays:
+Run both commands from the Rawrarr checkout containing the reviewed script, only after backup execution is separately authorized. The backup command refuses to run until the environment owner recipient is provisioned in the internal database. It prints the encrypted archive path and a decryption reminder, not the recipient or private identity. Verify the ciphertext decryption and the inner `SHA256SUMS` on Will's personal device, where the matching private ID stays:
 
 ```sh
 age --decrypt --identity /path/to/personal-age-identity /path/to/internal-coordinator-<UTC timestamp>.tar.gz.age | tar -tzf - >/dev/null
@@ -41,7 +43,7 @@ age --decrypt --identity /path/to/personal-age-identity /path/to/internal-coordi
 
 For full content verification, decrypt into a `0700` directory on the personal device, run `sha256sum --check SHA256SUMS`, inspect both PostgreSQL archives with `pg_restore --list`, inspect both volume archives with `tar -tzf`, then remove the plaintext staging copy. Do not decrypt on do3. Never copy backup contents into the repository or print secret contents.
 
-For the already-created plaintext snapshot, first configure the personal public recipient file, then create an encrypted copy without modifying the original:
+For the already-created plaintext snapshot, first provision the environment owner public recipient, then create an encrypted copy without modifying the original:
 
 ```sh
 tailscale ssh root@rawrarr-roarlay.risk-mermaid.ts.net 'python3 - --encrypt-existing /opt/rawrarr-internal-do3/backups/internal-coordinator-20261028T104535Z' < scripts/backup_internal_coordinator_do3.py
@@ -57,8 +59,10 @@ Start the internal project, verify both database services, roarlay and Umami hea
 
 ## Compatibility and adoption
 
-This is an operator backup procedure; it changes no database schema, synchronized files, node protocol, or running service configuration. Existing deployments adopt it by running the script on do3. No migration is required. Logical dumps are intended to restore into PostgreSQL 17 or a compatible newer version; restoring into an older major version is unsupported.
+The owner-recipient continuation adds embedded SQLx migration `0012_environment_owner.sql`, a dedicated fossil public endpoint, and an authenticated coordinator provisioning API. Existing deployments remain unprovisioned until the owner deliberately selects an upgraded online fossil; no key is inferred or generated. Upgrade coordinator and fossil backend images from a published, merged release before provisioning. Old fossils remain compatible for existing operations but cannot provide the new endpoint. The script has no old-file fallback. No synchronized files or existing node heartbeat protocol change. See the continuation runbook for adoption and rollback limits. Logical dumps are intended to restore into PostgreSQL 17 or a compatible newer version; restoring into an older major version is unsupported.
 
 ## Execution record
+
+The following is a historical record, not verification of the new owner-recipient flow or current deployment state. The continuation has not deployed code, registered a live owner recipient, or made a production backup.
 
 Completed 2026-10-28. The plaintext snapshot is `/opt/rawrarr-internal-do3/backups/internal-coordinator-20261028T104535Z` (about 2.4 MiB). All 18 listed payload files passed `sha256sum --check`; both custom-format PostgreSQL archives passed `pg_restore --list` inside their respective PostgreSQL containers; both volume archives passed `tar -tzf`; required secrets including the mounted UI updater token are present; all files are mode `0600` and directories mode `0700`. The internal HTTPS health route returned the Roarlay health page. `tailscale serve status --json` confirmed `rawrarr.risk-mermaid.ts.net:443` proxies to `http://127.0.0.1:8081`. No containers were stopped or recreated. A first backup created at `10:45:03Z` is preserved but superseded because it predates inclusion of the mounted UI updater token; use the `10:45:35Z` snapshot. Age-encrypted output is not yet created because the personal operator public recipient has not been supplied or installed; the node/group recipient is intentionally not substituted.

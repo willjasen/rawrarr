@@ -19,7 +19,6 @@ from pathlib import Path
 
 ROOT = Path("/opt/rawrarr-internal-do3")
 BACKUP_ROOT = ROOT / "backups"
-RECIPIENT_FILE = ROOT / "backup-age-recipient"
 STAGING_ROOT = Path("/run")
 AGE_HEADER = b"age-encryption.org/v1\n"
 CONTAINERS = {
@@ -90,15 +89,17 @@ def require_tmpfs_staging() -> None:
         raise RuntimeError("less than 512 MiB is free in /run tmpfs for plaintext staging")
 
 
-def load_recipient(path: Path) -> tuple[str, str]:
-    if path.is_symlink() or not path.is_file():
-        raise RuntimeError(f"missing age recipient file: {path}")
-    stat = path.stat()
-    if (os.geteuid() == 0 and stat.st_uid != 0) or stat.st_mode & 0o077:
-        raise RuntimeError("age recipient file must be root-owned with mode 0600 or stricter")
-    value = path.read_text(encoding="ascii").strip()
+def load_recipient() -> tuple[str, str]:
+    result = run([
+        "docker", "exec", CONTAINERS["postgres"], "psql", "-X", "-qAt",
+        "--set", "ON_ERROR_STOP=1", "--username", "rawrarr", "--dbname", "rawrarr",
+        "--command",
+        "BEGIN READ ONLY; SELECT age_recipient FROM rawrarr_environment_owner "
+        "WHERE singleton=TRUE; COMMIT;",
+    ])
+    value = result.stdout.strip()
     if not re.fullmatch(r"age1pq1[a-z0-9]{13,4089}", value):
-        raise RuntimeError("age recipient file must contain one post-quantum age recipient")
+        raise RuntimeError("provision one valid environment owner public age recipient in the internal coordinator database")
     return value, hashlib.sha256(value.encode("ascii")).hexdigest()
 
 
@@ -316,7 +317,7 @@ def write_checksums(destination: Path) -> None:
     os.chmod(checksums, 0o600)
 
 
-def create_backup(output_root: Path, recipient_file: Path) -> Path:
+def create_backup(output_root: Path) -> Path:
     if os.geteuid() != 0:
         raise RuntimeError("run this command as root on do3")
     if not output_root.is_absolute() or output_root.resolve() != BACKUP_ROOT.resolve():
@@ -328,7 +329,7 @@ def create_backup(output_root: Path, recipient_file: Path) -> Path:
     if shutil.disk_usage(output_root).free < 512 * 1024 * 1024:
         raise RuntimeError("less than 512 MiB is free on the backup filesystem")
     require_tmpfs_staging()
-    recipient, recipient_digest = load_recipient(recipient_file)
+    recipient, recipient_digest = load_recipient()
     age_version = validate_age_recipient(recipient)
 
     lock = output_root / ".internal-coordinator-backup.lock"
@@ -400,7 +401,7 @@ def create_backup(output_root: Path, recipient_file: Path) -> Path:
         lock.unlink(missing_ok=True)
 
 
-def encrypt_existing_backup(source: Path, output_root: Path, recipient_file: Path) -> Path:
+def encrypt_existing_backup(source: Path, output_root: Path) -> Path:
     if os.geteuid() != 0:
         raise RuntimeError("run this command as root on do3")
     if source.is_symlink() or not source.is_dir() or source.parent.resolve() != output_root.resolve():
@@ -416,7 +417,7 @@ def encrypt_existing_backup(source: Path, output_root: Path, recipient_file: Pat
     if shutil.disk_usage(output_root).free < 512 * 1024 * 1024:
         raise RuntimeError("less than 512 MiB is free on the backup filesystem")
     require_tmpfs_staging()
-    recipient, recipient_digest = load_recipient(recipient_file)
+    recipient, recipient_digest = load_recipient()
     age_version = validate_age_recipient(recipient)
     verify_plain_backup(source)
     lock = output_root / ".internal-coordinator-backup.lock"
@@ -458,14 +459,13 @@ def encrypt_existing_backup(source: Path, output_root: Path, recipient_file: Pat
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=BACKUP_ROOT)
-    parser.add_argument("--recipient-file", type=Path, default=RECIPIENT_FILE)
     parser.add_argument("--encrypt-existing", type=Path, help="make an encrypted copy of an existing plaintext backup directory")
     args = parser.parse_args()
     try:
         if args.encrypt_existing:
-            result = encrypt_existing_backup(args.encrypt_existing, args.output_dir, args.recipient_file)
+            result = encrypt_existing_backup(args.encrypt_existing, args.output_dir)
         else:
-            result = create_backup(args.output_dir, args.recipient_file)
+            result = create_backup(args.output_dir)
     except (OSError, RuntimeError, UnicodeError, subprocess.CalledProcessError, json.JSONDecodeError) as exc:
         detail = exc.stderr.strip() if isinstance(exc, subprocess.CalledProcessError) and exc.stderr else str(exc)
         print(f"backup failed: {detail}", file=sys.stderr)

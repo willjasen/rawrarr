@@ -1,5 +1,7 @@
 import importlib.util
 import hashlib
+import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,18 +16,91 @@ SPEC.loader.exec_module(backup)
 
 
 class InternalCoordinatorBackupTests(unittest.TestCase):
-    def test_loads_only_a_restricted_post_quantum_recipient(self):
-        with tempfile.TemporaryDirectory() as temp:
-            recipient_file = Path(temp) / "recipient"
-            recipient = "age1pq1" + "a" * 32
-            recipient_file.write_text(recipient + "\n")
-            recipient_file.chmod(0o600)
-            value, digest = backup.load_recipient(recipient_file)
+    @unittest.skipUnless(os.environ.get("RAWARR_TEST_BACKUP_POSTGRES_CONTAINER"),
+                         "requires an explicitly named disposable PostgreSQL container")
+    def test_real_postgres_resolves_an_offline_fossil_pin(self):
+        container = os.environ["RAWARR_TEST_BACKUP_POSTGRES_CONTAINER"]
+        if not container.startswith("rawrarr-test-regression-owner-postgres-"):
+            self.fail("refusing a container outside the owner regression-test namespace")
+        import uuid
+        schema = "backup_owner_" + uuid.uuid4().hex
+
+        def query(sql):
+            return subprocess.run(
+                ["docker", "exec", container, "psql", "-X", "-qAt",
+                 "--set", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "rawrarr_owner_test",
+                 "-c", sql], check=True, capture_output=True, text=True,
+            )
+
+        def isolated_run(args, **kwargs):
+            self.assertEqual(args[:4], ["docker", "exec", backup.CONTAINERS["postgres"], "psql"])
+            return query(f"SET search_path TO {schema}; " + args[-1])
+
+        query(f"CREATE SCHEMA {schema}; CREATE TABLE {schema}.rawrarr_users(id UUID PRIMARY KEY);")
+        try:
+            migration = SCRIPT.parent.parent / "rust-arr/migrations/0012_environment_owner.sql"
+            query(f"SET search_path TO {schema}; " + migration.read_text())
+            with patch.object(backup, "run", side_effect=isolated_run):
+                with self.assertRaisesRegex(RuntimeError, "provision one valid"):
+                    backup.load_recipient()
+                recipient = "age1pq1" + "a" * 32
+                owner = str(uuid.uuid4())
+                query(f"SET search_path TO {schema}; INSERT INTO rawrarr_users VALUES('{owner}'); "
+                      "INSERT INTO rawrarr_environment_owner(singleton,owner_user_id,age_recipient,source_node_id) "
+                      f"VALUES(TRUE,'{owner}','{recipient}','offline-and-removed-fossil');")
+                self.assertEqual(backup.load_recipient(),
+                                 (recipient, hashlib.sha256(recipient.encode()).hexdigest()))
+        finally:
+            query(f"DROP SCHEMA {schema} CASCADE;")
+
+    def test_loads_only_the_pinned_internal_database_public_recipient(self):
+        recipient = "age1pq1" + "a" * 32
+        with patch.object(backup, "run", return_value=CompletedProcess([], 0, recipient + "\n", "")) as mocked:
+            value, digest = backup.load_recipient()
             self.assertEqual(value, recipient)
             self.assertEqual(digest, hashlib.sha256(recipient.encode()).hexdigest())
-            recipient_file.write_text("AGE-SECRET-KEY-PQ-1private\n")
-            with self.assertRaisesRegex(RuntimeError, "post-quantum age recipient"):
-                backup.load_recipient(recipient_file)
+        args = mocked.call_args.args[0]
+        self.assertEqual(args[:4], ["docker", "exec", backup.CONTAINERS["postgres"], "psql"])
+        self.assertIn("BEGIN READ ONLY;", args[-1])
+        self.assertIn("rawrarr_environment_owner", args[-1])
+        self.assertNotIn("signing", args[-1])
+
+    def test_rejects_missing_private_group_marker_and_ambiguous_values(self):
+        recipient = "age1pq1" + "a" * 32
+        for value in ["", "AGE-SECRET-KEY-PQ-1private", "/shared/group-age-recipient",
+                      recipient + "\n" + recipient, "age1" + "a" * 40]:
+            with self.subTest(value=value), patch.object(
+                backup, "run", return_value=CompletedProcess([], 0, value, "")
+            ):
+                with self.assertRaisesRegex(RuntimeError, "provision one valid"):
+                    backup.load_recipient()
+
+    def test_database_failure_has_no_recipient_fallback(self):
+        from subprocess import CalledProcessError
+        with patch.object(backup, "run", side_effect=CalledProcessError(1, ["psql"])):
+            with self.assertRaises(CalledProcessError):
+                backup.load_recipient()
+
+    def test_both_backup_paths_stop_before_collection_without_a_pin(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            root.chmod(0o700)
+            source = root / "internal-coordinator-test"
+            source.mkdir(mode=0o700)
+            with patch.object(backup, "BACKUP_ROOT", root), \
+                 patch.object(backup.os, "geteuid", return_value=0), \
+                 patch.object(backup, "require_tmpfs_staging"), \
+                 patch.object(backup, "load_recipient", side_effect=RuntimeError("missing pin")) as resolver, \
+                 patch.object(backup, "dump_database") as dump, \
+                 patch.object(backup, "encrypt_directory") as encrypt:
+                with self.assertRaisesRegex(RuntimeError, "missing pin"):
+                    backup.create_backup(root)
+                with self.assertRaisesRegex(RuntimeError, "missing pin"):
+                    backup.encrypt_existing_backup(source, root)
+                self.assertEqual(resolver.call_count, 2)
+                dump.assert_not_called()
+                encrypt.assert_not_called()
+                self.assertEqual(list(root.iterdir()), [source])
 
     def test_encrypts_a_tar_archive_to_age_file_without_leaving_plaintext_tar(self):
         with tempfile.TemporaryDirectory() as temp:

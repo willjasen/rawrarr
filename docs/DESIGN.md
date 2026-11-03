@@ -47,6 +47,21 @@ The operator admin console is a separate, private service, not a coordinator pag
 
 The shortened display is an explicit privacy decision: partial forms are for recognition; they are not a substitute for the complete identity and must not be expandable inline.
 
+### Environment ownership and coordinator backups
+
+An environment owner is an explicitly authenticated existing Rawrarr account,
+not an age group or device identity. A deliberate owner API action selects an
+owned online fossil and obtains only the public recipient derived from its
+existing user age identity. PostgreSQL pins that recipient with the account and
+source provenance independently of ML-DSA signing-root material. Identical retries
+are safe; conflicting keys or owners are rejected, never silently replaced.
+Subsequent internal coordinator backups use the public pin even when fossils are
+offline. The private identity remains on the fossil or owner-controlled recovery
+device. This does not add a settings UI or automatic key rotation. See the
+[owner-recipient runbook](../runbooks/2026-11-03-environment-owner-backup-recipient.md)
+for adoption prerequisites and the distinction between implemented code and
+deployed behavior.
+
 ### Account tiers, ENS sign-in, and voluntary ETH
 
 Public accounts have three access states: a three-day trial, a permanent free tier limited to one fossil node, and a paid subscription tier. The trial begins after account setup, as it does today. After the trial ends, the account falls back to free unless a verified subscription is active. Sign-in, account recovery, data export, and deletion remain available at every tier, and a tier change never deletes subscriber data. The coordinator must enforce node limits on the server when accepting enrollment and again when approving a node; hiding an action in the browser is not enforcement. Internal deployments remain outside public trial and payment behavior.
