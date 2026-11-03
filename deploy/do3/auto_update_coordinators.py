@@ -162,7 +162,13 @@ def compose_files(container: str, override: Path) -> tuple[str, Path, str, list[
 
 
 def compose_command(project: str, project_dir: Path, files: list[Path], service: str) -> list[str]:
-    args = ["docker", "compose", "--project-directory", str(project_dir), "-p", project]
+    env_file = project_dir / "secrets" / "analytics.env"
+    if not env_file.is_file():
+        raise RuntimeError(f"Coordinator Compose env file is missing: {env_file}")
+    args = [
+        "docker", "compose", "--project-directory", str(project_dir),
+        "--env-file", str(env_file), "-p", project,
+    ]
     for compose_file in files:
         args.extend(("-f", str(compose_file)))
     args.extend(("up", "-d", "--no-deps", "--pull", "never", service))

@@ -53,12 +53,26 @@ class CoordinatorAutoUpdaterTests(unittest.TestCase):
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
 
     def test_compose_command_recreates_only_selected_service_without_pulling(self):
-        args = UPDATER.compose_command(
-            "rawrarr-internal-do3", Path("/opt/rawrarr-internal-do3"),
-            [Path("base.yml"), Path("override.yml")], "roarlay",
-        )
+        with tempfile.TemporaryDirectory() as temporary:
+            project_dir = Path(temporary)
+            env_file = project_dir / "secrets" / "analytics.env"
+            env_file.parent.mkdir()
+            env_file.write_text("RAWARR_ANALYTICS_DB_PASSWORD=test-only\n", encoding="utf-8")
+            args = UPDATER.compose_command(
+                "rawrarr-internal-do3", project_dir,
+                [Path("base.yml"), Path("override.yml")], "roarlay",
+            )
+        self.assertEqual(args[args.index("--env-file") + 1], str(env_file))
         self.assertEqual(args[-6:], ["up", "-d", "--no-deps", "--pull", "never", "roarlay"])
         self.assertEqual(args.count("-f"), 2)
+
+    def test_compose_command_requires_the_project_analytics_env_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            with self.assertRaisesRegex(RuntimeError, "Coordinator Compose env file is missing"):
+                UPDATER.compose_command(
+                    "rawrarr-internal-do3", Path(temporary),
+                    [Path("base.yml"), Path("override.yml")], "roarlay",
+                )
 
     def test_deployment_lock_is_released_after_the_guarded_work(self):
         with tempfile.TemporaryDirectory() as temporary:
