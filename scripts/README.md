@@ -6,7 +6,7 @@ This project keeps a local Radarr inspection helper and repeatable checks under 
 
 - `tests/test_orbstack_arr_connectivity.py` — Verify both fossil nodes and Tailscale sidecars have no host-published ports (`--ports-only` checks an existing environment), then check fossil unlocks its age vault, saves and reads back encrypted HTTPS connections, and loads Radarr/Sonarr status and library APIs through a private test CA. `--start` builds and starts the isolated `rawrarr-test-environment`; it requires Node.js and installed `rust-arr/web-export` modules. See the [test runbook](../runbooks/2026-10-26-fossil-port-forward-tests.md).
 
-- `classify_internal_deploy_targets.py` — Compare two Git refs and emit JSON identifying whether internal coordinator, node, both, or neither targets need deployment. Known coordinator/node paths are mapped explicitly; unknown Rawrarr runtime paths conservatively target both. Requires Python 3. Run `python3 scripts/classify_internal_deploy_targets.py --base origin/main --head HEAD`.
+- `classify_internal_deploy_targets.py` — Compare two Git refs and emit JSON identifying whether internal coordinator, node, both, or neither targets need deployment. Coordinator SQLx migrations and coordinator-served signing source/assets are mapped explicitly; unknown Rawrarr runtime paths conservatively target both. Requires Python 3. Run `python3 scripts/classify_internal_deploy_targets.py --base origin/main --head HEAD`.
 
 - `local_radarr.py` — read Radarr status and library totals using the node-local plaintext mirror in the local Docker container; never prints the API key or movie paths. Requires Python 3 and Docker access. Run `python3 scripts/local_radarr.py`.
 

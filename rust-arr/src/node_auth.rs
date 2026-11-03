@@ -113,9 +113,6 @@ impl NodeAuth {
             .json(&payload)
             .send()
             .await?;
-        if request.status() == StatusCode::GONE {
-            return Err("this device identity was rejected by the owner; it will not be submitted for approval again".into());
-        }
         if request.status() != StatusCode::CREATED {
             return Err(
                 format!("node enrollment request failed (HTTP {})", request.status()).into(),
