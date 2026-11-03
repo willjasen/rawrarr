@@ -54,9 +54,10 @@ HEALTH_TIMEOUT_SECONDS = 180
 LOCK_RETRY_SECONDS = 60
 
 
-def command(args: list[str], *, cwd: Path | None = None, capture: bool = True) -> subprocess.CompletedProcess:
+def command(args: list[str], *, cwd: Path | None = None, capture: bool = True,
+            env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(
-        args, cwd=cwd, check=True, text=True,
+        args, cwd=cwd, env=env, check=True, text=True,
         stdout=subprocess.PIPE if capture else None,
         stderr=subprocess.PIPE if capture else None,
     )
@@ -97,6 +98,17 @@ def compose_args(project: str, project_dir: Path, files: list[Path], action: lis
         args.extend(("-f", str(compose_file)))
     args.extend(action)
     return args
+
+
+def compose_environment(project: str) -> dict[str, str]:
+    environment = os.environ.copy()
+    if project == "rawrarr-internal-do3":
+        app = docker_container(PROJECTS[project]["health_container"])
+        image = app.get("Config", {}).get("Image", "")
+        if not image.startswith("rawrarr:"):
+            raise RuntimeError("Cannot determine the active internal coordinator image")
+        environment["RAWARR_INTERNAL_IMAGE"] = image
+    return environment
 
 
 @contextlib.contextmanager
@@ -196,8 +208,9 @@ def refresh_one(source_root: Path, target: tuple[str, str, str, str]) -> bool:
 
     with deployment_lock(lock, container):
         project_dir, files = compose_context(project, container, service, override)
+        environment = compose_environment(project)
         config = compose_args(project, project_dir, files, ["config", "--format", "json"])
-        configured = json.loads(command(config, cwd=project_dir).stdout)
+        configured = json.loads(command(config, cwd=project_dir, env=environment).stdout)
         service_config = configured.get("services", {}).get(service, {})
         configured_image = service_config.get("image")
         if configured_image != image:
@@ -205,7 +218,7 @@ def refresh_one(source_root: Path, target: tuple[str, str, str, str]) -> bool:
         if service_config.get("pull_policy") != "always":
             raise RuntimeError(f"{project}/{service} support overlay does not allow the requested pull")
         command(compose_args(project, project_dir, files, ["pull", service]),
-                cwd=project_dir, capture=False)
+                cwd=project_dir, capture=False, env=environment)
         pulled_id = image_id(image)
         running_id = docker_container(container).get("Image")
         if not running_id:
@@ -225,7 +238,7 @@ def refresh_one(source_root: Path, target: tuple[str, str, str, str]) -> bool:
         up = compose_args(project, project_dir, update_files,
                           ["up", "-d", "--no-deps", "--pull", "never", service])
         try:
-            command(up, cwd=project_dir, capture=False)
+            command(up, cwd=project_dir, capture=False, env=environment)
             wait_running(container)
             if docker_container(container).get("Image") != pulled_id:
                 raise RuntimeError(f"{container} did not start the pulled image")
@@ -238,7 +251,7 @@ def refresh_one(source_root: Path, target: tuple[str, str, str, str]) -> bool:
             command(compose_args(
                 project, project_dir, rollback_files,
                 ["up", "-d", "--no-deps", "--pull", "never", service],
-            ), cwd=project_dir, capture=False)
+            ), cwd=project_dir, capture=False, env=environment)
             wait_running(container)
             if docker_container(container).get("Image") != running_id:
                 raise RuntimeError(f"Rollback verification failed for {container}")

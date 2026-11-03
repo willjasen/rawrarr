@@ -68,6 +68,19 @@ class SupportImageUpdaterTests(unittest.TestCase):
         self.assertEqual(args[-6:], ["up", "-d", "--no-deps", "--pull", "never", "postgres"])
         self.assertEqual(args.count("-f"), 2)
 
+    def test_internal_compose_environment_uses_the_running_app_image(self):
+        app = {"Config": {"Image": "rawrarr:published-revision-amd64"}}
+        with patch.object(UPDATER, "docker_container", return_value=app), \
+                patch.dict(UPDATER.os.environ, {"RAWARR_INTERNAL_IMAGE": "rawrarr:stale"}):
+            environment = UPDATER.compose_environment("rawrarr-internal-do3")
+        self.assertEqual(environment["RAWARR_INTERNAL_IMAGE"], "rawrarr:published-revision-amd64")
+
+    def test_internal_compose_environment_fails_without_a_rawrarr_image(self):
+        app = {"Config": {"Image": "postgres:17-alpine"}}
+        with patch.object(UPDATER, "docker_container", return_value=app):
+            with self.assertRaisesRegex(RuntimeError, "active internal coordinator image"):
+                UPDATER.compose_environment("rawrarr-internal-do3")
+
     def test_override_is_private_and_never_pulls_during_up(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "support.override.yml"
