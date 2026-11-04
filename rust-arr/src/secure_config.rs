@@ -52,6 +52,27 @@ pub struct PersistedConfig {
     pub metadata_filename_key: Option<String>,
 }
 
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PreparedAppIdentityRegistry {
+    schema_version: u32,
+    apps: std::collections::BTreeMap<String, PreparedAppIdentity>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PreparedAppIdentity {
+    instance_id: String,
+    identity: String,
+    recipient: String,
+}
+
+impl Drop for PreparedAppIdentity {
+    fn drop(&mut self) {
+        self.identity.zeroize();
+    }
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 pub struct ServiceConfig {
     #[serde(rename = "type")]
@@ -241,6 +262,137 @@ impl std::fmt::Display for VaultError {
 impl std::error::Error for VaultError {}
 
 impl AgeVault {
+    const PREPARED_APP_IDENTITIES_FILE: &'static str = "app-identities.aged";
+    const MAX_PREPARED_APP_IDENTITIES_BYTES: u64 = 64 * 1024;
+
+    fn prepared_app_identities_path(&self) -> PathBuf {
+        self.shared_dir.join(Self::PREPARED_APP_IDENTITIES_FILE)
+    }
+
+    fn read_prepared_app_identities(
+        &self,
+    ) -> Result<Option<PreparedAppIdentityRegistry>, VaultError> {
+        self.read_prepared_app_identities_at(&self.prepared_app_identities_path())
+    }
+
+    fn read_prepared_app_identities_at(
+        &self,
+        path: &Path,
+    ) -> Result<Option<PreparedAppIdentityRegistry>, VaultError> {
+        let metadata = match fs::symlink_metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(_) => return Err(VaultError::StorageFailed),
+        };
+        if !metadata.file_type().is_file()
+            || metadata.len() > Self::MAX_PREPARED_APP_IDENTITIES_BYTES
+        {
+            return Err(VaultError::InvalidConfig);
+        }
+        let ciphertext = fs::read(&path).map_err(|_| VaultError::StorageFailed)?;
+        if !ciphertext.starts_with(b"age-encryption.org/v1\n") {
+            return Err(VaultError::InvalidConfig);
+        }
+        let output = run_with_input_data(
+            "age",
+            &["--decrypt", "--identity"],
+            self.group_identity.as_bytes(),
+            &ciphertext,
+        )?;
+        if !output.status.success() {
+            return Err(VaultError::DecryptionFailed);
+        }
+        let plaintext = Zeroizing::new(output.stdout);
+        if plaintext.len() as u64 > Self::MAX_PREPARED_APP_IDENTITIES_BYTES {
+            return Err(VaultError::InvalidConfig);
+        }
+        let registry: PreparedAppIdentityRegistry =
+            serde_json::from_slice(plaintext.as_slice()).map_err(|_| VaultError::InvalidConfig)?;
+        Self::validate_prepared_app_identities(&registry)?;
+        Ok(Some(registry))
+    }
+
+    fn validate_prepared_app_identities(
+        registry: &PreparedAppIdentityRegistry,
+    ) -> Result<(), VaultError> {
+        if registry.schema_version != 1 || registry.apps.len() > 2 {
+            return Err(VaultError::InvalidConfig);
+        }
+        let mut instance_ids = std::collections::HashSet::new();
+        for (service_type, app) in &registry.apps {
+            if !matches!(service_type.as_str(), "radarr" | "sonarr")
+                || uuid::Uuid::parse_str(&app.instance_id)
+                    .map_or(true, |id| id.to_string() != app.instance_id)
+                || !instance_ids.insert(app.instance_id.as_str())
+                || !is_post_quantum_recipient(&app.recipient)
+                || !has_single_post_quantum_identity(&app.identity)
+                || identity_to_recipient(&app.identity)
+                    .map_or(true, |recipient| recipient != app.recipient)
+            {
+                return Err(VaultError::InvalidConfig);
+            }
+        }
+        Ok(())
+    }
+
+    fn prepare_app_identities(&self, config: &PersistedConfig) -> Result<(), VaultError> {
+        let mut registry = self
+            .read_prepared_app_identities()?
+            .unwrap_or_else(|| PreparedAppIdentityRegistry {
+                schema_version: 1,
+                apps: std::collections::BTreeMap::new(),
+            });
+        let configured = [
+            (!config.radarr_url.is_empty() && !config.radarr_api_key.is_empty()).then_some("radarr"),
+            config.sonarr.as_ref().map(|_| "sonarr"),
+        ];
+        let mut changed = false;
+        for service_type in configured.into_iter().flatten() {
+            if registry.apps.contains_key(service_type) {
+                continue;
+            }
+            let (identity, recipient) = Self::generate_identity()?;
+            registry.apps.insert(
+                service_type.to_owned(),
+                PreparedAppIdentity {
+                    instance_id: uuid::Uuid::new_v4().to_string(),
+                    identity,
+                    recipient,
+                },
+            );
+            changed = true;
+        }
+        if changed {
+            let plaintext = Zeroizing::new(
+                serde_json::to_vec(&registry).map_err(|_| VaultError::InvalidConfig)?,
+            );
+            let path = self.prepared_app_identities_path();
+            let staging = temporary_path(&path);
+            encrypt_shared_file(&self.recipient, &staging, plaintext.as_slice())?;
+            let verification = (|| {
+                let verified = self
+                    .read_prepared_app_identities_at(&staging)?
+                    .ok_or(VaultError::InvalidConfig)?;
+                let verified_plaintext = Zeroizing::new(
+                    serde_json::to_vec(&verified).map_err(|_| VaultError::InvalidConfig)?,
+                );
+                if verified_plaintext.as_slice() != plaintext.as_slice() {
+                    return Err(VaultError::InvalidConfig);
+                }
+                Ok(())
+            })();
+            if verification.is_err() {
+                let _ = fs::remove_file(&staging);
+            }
+            verification?;
+            fs::rename(&staging, &path).map_err(|_| {
+                let _ = fs::remove_file(&staging);
+                VaultError::StorageFailed
+            })?;
+        }
+        Ok(())
+    }
+
     pub fn shared_dir() -> PathBuf {
         env::var_os("RAWARR_SHARED_DATA_DIR")
             .map(PathBuf::from)
@@ -1220,6 +1372,7 @@ impl AgeVault {
             needs_migration: false,
         };
         ensure_filename_key(&mut updated)?;
+        self.prepare_app_identities(&updated)?;
         self.write_config(&updated)
     }
 
@@ -1325,6 +1478,7 @@ impl AgeVault {
             }
         }
         ensure_filename_key(&mut config)?;
+        self.prepare_app_identities(&config)?;
         self.write_config(&config)
     }
 
@@ -1408,6 +1562,18 @@ fn remembered_user_recipient_at(path: &Path) -> Result<Option<String>, VaultErro
     }
     let identity = Zeroizing::new(fs::read_to_string(path).map_err(|_| VaultError::StorageFailed)?);
     identity_to_recipient(&identity).map(Some)
+}
+
+fn has_single_post_quantum_identity(identity: &str) -> bool {
+    let mut identity_count = 0;
+    for line in identity.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        if line.starts_with("AGE-SECRET-KEY-PQ-1") {
+            identity_count += 1;
+        } else if !line.starts_with('#') {
+            return false;
+        }
+    }
+    identity_count == 1
 }
 
 fn persist_private_identity(path: &Path, identity: &str) -> Result<(), VaultError> {
@@ -2302,6 +2468,256 @@ mod tests {
         assert_eq!(fs::read(legacy.join("movies/text/movie.aged")).unwrap(), b"ciphertext");
         assert_eq!(fs::read(target.join("movies/text/movie.aged")).unwrap(), b"different ciphertext");
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn prepared_app_identities_are_group_encrypted_without_changing_config_or_metadata() {
+        let keygen = Command::new("age-keygen")
+            .arg("-pq")
+            .output()
+            .expect("age-keygen must be installed for this test");
+        assert!(keygen.status.success());
+        let user_identity = String::from_utf8(keygen.stdout).expect("identity is UTF-8");
+        let unique = uuid::Uuid::new_v4();
+        let root = env::temp_dir().join(format!("rawrarr-app-identity-test-{unique}"));
+        let shared_dir = root.join("shared");
+        fs::create_dir_all(&shared_dir).expect("create isolated shared directory");
+        let vault = AgeVault::from_identity_in_dirs(
+            user_identity.clone(),
+            shared_dir.clone(),
+            root.join("radarr-config.json"),
+            false,
+        )
+        .expect("open isolated age vault");
+        let empty_config = PersistedConfig {
+            device_names: std::collections::HashMap::new(),
+            sonarr: None,
+            radarr_url: String::new(),
+            radarr_api_key: String::new(),
+            radarr_ui_username: String::new(),
+            radarr_ui_password: String::new(),
+            additional_services: Vec::new(),
+            needs_migration: false,
+            metadata_filename_key: Some("11".repeat(32)),
+        };
+        vault.save(&empty_config).expect("save empty config");
+        vault
+            .store_movie_metadata(12345, br#"{"schemaVersion":1,"title":"Existing"}"#)
+            .expect("write existing group-encrypted metadata");
+        let metadata_path = vault.movie_metadata_path(12345).expect("metadata path");
+        let existing_metadata_ciphertext =
+            fs::read(&metadata_path).expect("existing metadata ciphertext");
+
+        let legacy_config_path = shared_dir.join("config.aged");
+        let existing_radarr_config = serde_json::json!({
+            "schema_version": 1,
+            "device_names": {},
+            "services": [{
+                "type": "radarr",
+                "url": "http://radarr.example:7878",
+                "api_key": "disposable Radarr fixture"
+            }],
+            "metadata_filename_key": "11".repeat(32)
+        });
+        encrypt_shared_file(
+            &vault.recipient,
+            &legacy_config_path,
+            &serde_json::to_vec(&existing_radarr_config).unwrap(),
+        )
+        .expect("write pre-identity v1 config");
+        vault.load().expect("load existing v1 config");
+        assert!(
+            !vault.prepared_app_identities_path().exists(),
+            "unlocking an old config must not initialize shared identities"
+        );
+
+        let radarr_config = PersistedConfig {
+            device_names: std::collections::HashMap::new(),
+            sonarr: None,
+            radarr_url: "http://radarr.example:7878".into(),
+            radarr_api_key: "disposable Radarr fixture".into(),
+            radarr_ui_username: String::new(),
+            radarr_ui_password: String::new(),
+            additional_services: Vec::new(),
+            needs_migration: false,
+            metadata_filename_key: Some("11".repeat(32)),
+        };
+        vault.save(&radarr_config).expect("save Radarr settings");
+        vault
+            .save_sonarr(Some(ArrConnection {
+                url: "http://sonarr.example:8989".into(),
+                api_key: "disposable Sonarr fixture".into(),
+            }))
+            .expect("save Sonarr settings");
+
+        let registry = vault
+            .read_prepared_app_identities()
+            .expect("read prepared identities")
+            .expect("identity registry exists");
+        let radarr = registry.apps.get("radarr").expect("Radarr identity");
+        let sonarr = registry.apps.get("sonarr").expect("Sonarr identity");
+        assert_ne!(radarr.instance_id, sonarr.instance_id);
+        assert_ne!(radarr.recipient, sonarr.recipient);
+        assert_ne!(radarr.recipient, vault.recipient);
+        assert_ne!(sonarr.recipient, vault.recipient);
+        let radarr_id = radarr.instance_id.clone();
+        let sonarr_id = sonarr.instance_id.clone();
+        let radarr_identity = Zeroizing::new(radarr.identity.clone());
+        let sonarr_identity = Zeroizing::new(sonarr.identity.clone());
+        let registry_ciphertext = fs::read(vault.prepared_app_identities_path())
+            .expect("read encrypted app identity registry");
+        assert!(registry_ciphertext.starts_with(b"age-encryption.org/v1\n"));
+        assert!(!registry_ciphertext
+            .windows(radarr.identity.len())
+            .any(|window| window == radarr.identity.as_bytes()));
+        assert!(!registry_ciphertext
+            .windows(sonarr.identity.len())
+            .any(|window| window == sonarr.identity.as_bytes()));
+        drop(registry);
+
+        let group_opened = run_with_input_data(
+            "age",
+            &["--decrypt", "--identity"],
+            vault.group_identity.as_bytes(),
+            &registry_ciphertext,
+        )
+        .expect("decrypt app identities with group identity");
+        assert!(group_opened.status.success());
+        let user_opened = run_with_input_data(
+            "age",
+            &["--decrypt", "--identity"],
+            user_identity.as_bytes(),
+            &registry_ciphertext,
+        )
+        .expect("try user identity against group-encrypted app identities");
+        assert!(!user_opened.status.success());
+
+        let radarr_opened = run_with_input_data(
+            "age",
+            &["--decrypt", "--identity"],
+            radarr_identity.as_bytes(),
+            &existing_metadata_ciphertext,
+        )
+        .expect("try app identity against legacy metadata");
+        let sonarr_opened = run_with_input_data(
+            "age",
+            &["--decrypt", "--identity"],
+            sonarr_identity.as_bytes(),
+            &existing_metadata_ciphertext,
+        )
+        .expect("try second app identity against legacy metadata");
+        assert!(!radarr_opened.status.success());
+        assert!(!sonarr_opened.status.success());
+        assert_eq!(
+            fs::read(&metadata_path).expect("metadata ciphertext after preparation"),
+            existing_metadata_ciphertext,
+            "preparation must not rewrite existing metadata"
+        );
+        assert_eq!(
+            vault
+                .load_movie_metadata(12345)
+                .expect("read unchanged group-encrypted metadata")
+                .expect("existing metadata remains readable")["title"],
+            "Existing"
+        );
+
+        let config_path = shared_dir.join("config.aged");
+        let encrypted_config = fs::read(&config_path).expect("read v1 config ciphertext");
+        let opened_config = run_with_input(
+            "age",
+            &["--decrypt", "--identity", "-", path_arg(&config_path).unwrap()],
+            vault.group_identity.as_bytes(),
+        )
+        .expect("decrypt v1 config");
+        assert!(opened_config.status.success());
+        serde_json::from_slice::<PersistedConfig>(&opened_config.stdout)
+            .expect("the existing v1 reader accepts config after preparation");
+        let config_json: serde_json::Value =
+            serde_json::from_slice(&opened_config.stdout).expect("parse v1 config");
+        assert_eq!(config_json["schema_version"], 1);
+        assert!(config_json.get("appIdentities").is_none());
+        assert!(!encrypted_config.is_empty());
+
+        vault.save(&radarr_config).expect("repeat Radarr save");
+        vault
+            .save_sonarr(Some(ArrConnection {
+                url: "http://sonarr.example:8989".into(),
+                api_key: "disposable Sonarr fixture".into(),
+            }))
+            .expect("repeat Sonarr save");
+        vault.save_sonarr(None).expect("clear Sonarr connection");
+        vault.clear().expect("clear Radarr connection");
+        let retained = vault
+            .read_prepared_app_identities()
+            .expect("read retained app identities")
+            .expect("retained registry exists");
+        assert_eq!(retained.apps["radarr"].instance_id, radarr_id);
+        assert_eq!(retained.apps["sonarr"].instance_id, sonarr_id);
+        fs::remove_dir_all(root).expect("remove isolated test data");
+    }
+
+    #[test]
+    fn malformed_prepared_app_identity_registry_is_not_replaced() {
+        let keygen = Command::new("age-keygen")
+            .arg("-pq")
+            .output()
+            .expect("age-keygen must be installed for this test");
+        assert!(keygen.status.success());
+        let identity = String::from_utf8(keygen.stdout).expect("identity is UTF-8");
+        let root = env::temp_dir().join(format!(
+            "rawrarr-invalid-app-identity-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let shared_dir = root.join("shared");
+        fs::create_dir_all(&shared_dir).expect("create isolated shared directory");
+        let vault = AgeVault::from_identity_in_dirs(
+            identity,
+            shared_dir.clone(),
+            root.join("radarr-config.json"),
+            false,
+        )
+        .expect("open isolated age vault");
+        let invalid_identity_registry = PreparedAppIdentityRegistry {
+            schema_version: 1,
+            apps: [(
+                "radarr".to_owned(),
+                PreparedAppIdentity {
+                    instance_id: uuid::Uuid::new_v4().to_string(),
+                    identity: "not an age identity".to_owned(),
+                    recipient: vault.recipient.clone(),
+                },
+            )]
+            .into_iter()
+            .collect(),
+        };
+        assert!(matches!(
+            AgeVault::validate_prepared_app_identities(&invalid_identity_registry),
+            Err(VaultError::InvalidConfig)
+        ));
+        let path = vault.prepared_app_identities_path();
+        encrypt_shared_file(&vault.recipient, &path, br#"{"schemaVersion":99,"apps":{}}"#)
+            .expect("write unsupported registry");
+        let original_ciphertext = fs::read(&path).expect("read malformed registry ciphertext");
+        let config = PersistedConfig {
+            device_names: std::collections::HashMap::new(),
+            sonarr: None,
+            radarr_url: "http://radarr.example:7878".into(),
+            radarr_api_key: "disposable Radarr fixture".into(),
+            radarr_ui_username: String::new(),
+            radarr_ui_password: String::new(),
+            additional_services: Vec::new(),
+            needs_migration: false,
+            metadata_filename_key: None,
+        };
+        assert!(matches!(
+            vault.save(&config),
+            Err(VaultError::InvalidConfig)
+        ));
+        assert_eq!(
+            fs::read(path).expect("read retained malformed registry"),
+            original_ciphertext
+        );
+        fs::remove_dir_all(root).expect("remove isolated test data");
     }
 
     #[test]

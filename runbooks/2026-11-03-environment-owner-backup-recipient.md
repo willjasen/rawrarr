@@ -209,3 +209,12 @@ passed, with no unresolved conflict paths. Full suites, deployment, and producti
 backup execution were not performed. This merge verification does not establish
 that historical host paths/container names in the original backup procedure
 match a current deployment.
+
+During final synchronization, `origin/main` advanced by another three commits to
+`7c92823` (per-app age-identity preparation). Preserved the first tested merge and
+merged that newer base in a second merge commit rather than rewriting history.
+Resolved the adjacent-helper conflict in `secure_config.rs` by retaining both
+`remembered_user_recipient_at` and upstream `has_single_post_quantum_identity`.
+Re-ran the owner filter (6 passed), upstream `prepared_app` filter (2 passed),
+explicit database integration (1 passed), and locked offline `cargo check`
+(passed) against this final source in the same isolated clone.
