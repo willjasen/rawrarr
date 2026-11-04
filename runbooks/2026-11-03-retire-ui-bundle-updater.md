@@ -20,6 +20,10 @@ Make published Rawrarr application images the only distribution path for UI asse
 - `git diff --check` — passed.
 - `test_rawrarr_favicon.mjs` could not start because Playwright is not installed in this host checkout; its documented isolated Playwright environment was not available in this pass.
 - Rust formatting/checking could not run: the local LLVM toolchain cannot load `libz3.5.1.dylib`, preventing `cargo fmt` and standalone `rustfmt` from starting. GitHub's image build will compile the changed Rust module after merge; this local compile remains unverified.
+- PR [#437](https://github.com/willjasen/rawrarr/pull/437) merged as `b3e61aa80182baefc88962d4974aaa9a563b819e`. The merged-main workflow [41741490296](https://github.com/willjasen/rawrarr/actions/runs/41741490296) completed successfully.
+- The published multi-architecture image workflow [41741490203](https://github.com/willjasen/rawrarr/actions/runs/41741490203) succeeded: native ARM64 build 2m37s, AMD64 build 2m56s, and manifest publication 21s.
+- On do3, the host-native AMD64 image was built from the exact merge commit and both internal and public coordinator containers now run that image. Both report revision `b3e61aa80182baefc88962d4974aaa9a563b819e` and are healthy. The internal HTTPS `/health` endpoint returned successfully, and internal Tailscale Serve status maps `/` to `http://127.0.0.1:8080`. The public edge health check returned HTTP 403, while the local public service remained healthy; this matches the updater's existing warning behavior.
+- Mac Fossil adoption was not verified: SSH to the Mac mini stopped at strict host-key verification because no ED25519 host key is known. No key checking was bypassed and no Mac container was changed.
 
 ## Rollback and adoption
 
