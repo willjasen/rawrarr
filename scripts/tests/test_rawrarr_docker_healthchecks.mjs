@@ -33,12 +33,15 @@ test('Rawrarr image compiles locked dependencies before copying application sour
   const dependencyBuild = dockerfile.indexOf('cargo build --release --locked --target "$rust_target"');
   const sourceCopy = dockerfile.indexOf('COPY src ./src');
   const migrationCopy = dockerfile.indexOf('COPY migrations ./migrations');
+  const refreshSourceTimestamps = dockerfile.indexOf('find src migrations -type f -exec touch {} +');
   const appBuild = dockerfile.indexOf('cargo build --release --locked --target "$rust_target"', dependencyBuild + 1);
 
   assert.ok(manifestCopy >= 0, 'Cargo manifests and lockfile are copied');
   assert.ok(dependencyBuild > manifestCopy, 'dependencies build from the manifest-only layer');
   assert.ok(sourceCopy > dependencyBuild, 'application source is copied after dependency compilation');
   assert.ok(migrationCopy > dependencyBuild, 'SQLx migrations are copied after dependency compilation');
+  assert.ok(refreshSourceTimestamps > migrationCopy, 'copied sources are newer than the placeholder build artifacts');
+  assert.ok(refreshSourceTimestamps < appBuild, 'Cargo refreshes the application target after copied source timestamps advance');
   assert.ok(appBuild > migrationCopy, 'application is rebuilt after source and migrations are copied');
   assert.match(dockerfile.slice(0, sourceCopy), /mkdir src migrations[\s\S]*fn main\(\) \{\}/);
   assert.doesNotMatch(dockerfile.slice(0, sourceCopy), /target=\/src\/target/,

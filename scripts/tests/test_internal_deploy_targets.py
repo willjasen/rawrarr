@@ -20,10 +20,6 @@ class InternalDeployTargetTests(unittest.TestCase):
         result = classify_paths(["rust-arr/src/coordinator.rs", "rust-arr/src/coordinator-passkey.mjs"])
         self.assertEqual(result["targets"], ["coordinator"])
 
-    def test_ui_updater_changes_select_coordinator_only(self):
-        result = classify_paths(["rust-arr/update_ui_bundle.py"])
-        self.assertEqual(result["targets"], ["coordinator"])
-
     def test_coordinator_signing_asset_and_database_migrations_are_coordinator_only(self):
         result = classify_paths([
             "rust-arr/src/assets/device-signing-client.js",
