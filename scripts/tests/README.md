@@ -6,6 +6,8 @@
 - `test_rawrarr_subscriber_compose.mjs` — checks subscriber role Compose generation, fossil-prefixed generated IDs, and private GHCR image/auth guidance; run `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
 # Rawrarr tests
 
+- `test_internal_coordinator_backup.py` — checks fixed read-only internal database recipient resolution, missing/private/ambiguous-value rejection without fallback, age archive creation, protected secret copying, symlink refusal, safe volume archive validation, and nested SHA-256 manifests. Run `python3 scripts/tests/test_internal_coordinator_backup.py`.
+- `test_rawrarr_owner_recipient.rs` and `test_rawrarr_environment_owner.rs` — user-only public derivation without identity creation/group-state changes, protected-file checks, strict provisioning input, and disposable PostgreSQL migration/authenticated-handler/fossil HTTP integration covering idempotency, conflicts, concurrent pins, wrong owners/roles, old/locked/invalid fossils, and offline readback. Run `cargo test --locked --offline --manifest-path rust-arr/Cargo.toml owner` in the native isolated clone. Explicitly run the ignored database test with `RAWARR_TEST_DATABASE_URL=postgres://postgres@127.0.0.1/rawrarr_owner_test cargo test --locked --offline --manifest-path rust-arr/Cargo.toml environment_owner_database_and_api -- --ignored`; see [the runbook](../../runbooks/2026-11-03-environment-owner-backup-recipient.md).
 - `browser_enrollment_docker.py` and `helpers/browser_enrollment_export.mjs` --
   opt-in real-service Chromium enrollment/decryption tier for #390. Invoke
   `python3 scripts/tests/run_rawrarr_tests_in_docker.py --browser-enrollment-export`.

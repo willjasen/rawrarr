@@ -819,6 +819,10 @@ impl AgeVault {
         &self.user_recipient
     }
 
+    pub fn remembered_user_recipient() -> Result<Option<String>, VaultError> {
+        remembered_user_recipient_at(&local_data_dir().join("age-identity"))
+    }
+
     fn public_recipient_path_for(shared_dir: &Path) -> PathBuf {
         shared_dir.join("age-recipient")
     }
@@ -1542,6 +1546,22 @@ fn identity_to_recipient(identity: &str) -> Result<String, VaultError> {
         .find(|line| is_post_quantum_recipient(line))
         .map(str::to_owned)
         .ok_or(VaultError::InvalidIdentity)
+}
+
+fn remembered_user_recipient_at(path: &Path) -> Result<Option<String>, VaultError> {
+    use std::os::unix::fs::PermissionsExt;
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err(VaultError::StorageFailed),
+    };
+    if !metadata.is_file() || metadata.len() > 64 * 1024
+        || metadata.permissions().mode() & 0o077 != 0
+    {
+        return Err(VaultError::StorageFailed);
+    }
+    let identity = Zeroizing::new(fs::read_to_string(path).map_err(|_| VaultError::StorageFailed)?);
+    identity_to_recipient(&identity).map(Some)
 }
 
 fn has_single_post_quantum_identity(identity: &str) -> bool {
@@ -3173,3 +3193,7 @@ mod sonarr_metadata_tests;
 #[cfg(test)]
 #[path = "../../scripts/tests/test_rawrarr_config_schema.rs"]
 mod config_schema_tests;
+
+#[cfg(test)]
+#[path = "../../scripts/tests/test_rawrarr_owner_recipient.rs"]
+mod owner_recipient_tests;

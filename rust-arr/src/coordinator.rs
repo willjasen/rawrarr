@@ -3,6 +3,8 @@
 mod ai;
 #[path = "coordinator_stripe.rs"]
 mod stripe;
+#[path = "coordinator_owner.rs"]
+mod owner;
 use crate::{auth::AuthState, node_role::NodeRole};
 use axum::{
     Extension, Json, Router,
@@ -341,6 +343,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/api/workspace/nodes", get(workspace_nodes))
         .route("/api/workspace/nodes/{node_id}", delete(delete_workspace_node))
         .route("/api/workspace/profile", get(workspace_profile))
+        .route("/api/workspace/environment-owner", get(owner::get).post(owner::provision))
         .route("/api/workspace/billing", get(stripe::status))
         .route("/api/workspace/billing/checkout", post(stripe::checkout))
         .route("/api/workspace/billing/portal", post(stripe::portal))

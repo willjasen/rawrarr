@@ -966,9 +966,8 @@ mod dashboard_event_tests {
     use futures_util::StreamExt;
     use serde_json::Value;
 
-    #[tokio::test]
-    async fn dashboard_stream_emits_named_json_snapshot_events_and_keepalive() {
-        let state = Arc::new(AppState {
+    pub(crate) fn fixture_state() -> Arc<AppState> {
+        Arc::new(AppState {
             auth: node_auth::NodeAuth::test_fixture(),
             role: node_role::NodeRole::Metadata,
             radarr: Arc::new(RwLock::new(None)),
@@ -990,7 +989,21 @@ mod dashboard_event_tests {
             config_mirror: Arc::new(config_repair::CiphertextMirror::from_env()),
             config_peer: config_repair::PeerRpc::from_env("fixture"),
             config_peer_status: config_repair::PeerSyncStatus::default(),
-        });
+        })
+    }
+
+    #[tokio::test]
+    async fn owner_recipient_endpoint_rejects_non_fossils() {
+        for role in [node_role::NodeRole::Storage, node_role::NodeRole::Coordinator] {
+            let mut state = fixture_state();
+            Arc::get_mut(&mut state).unwrap().role = role;
+            assert_eq!(export_owner_age_recipient(State(state)).await.unwrap_err().0, StatusCode::NOT_FOUND);
+        }
+    }
+
+    #[tokio::test]
+    async fn dashboard_stream_emits_named_json_snapshot_events_and_keepalive() {
+        let state = fixture_state();
         let response = dashboard_events(State(state)).await.into_response();
         assert_eq!(response.headers()[header::CONTENT_TYPE], "text/event-stream");
         assert_eq!(response.headers()[header::CACHE_CONTROL], "no-cache");
@@ -2044,6 +2057,31 @@ async fn export_age_recipient() -> Result<Response<Body>, StatusCode> {
         .body(Body::from(recipient.trim().to_owned())).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
+async fn export_owner_age_recipient(
+    State(state): State<Arc<AppState>>,
+) -> Result<Response<Body>, (StatusCode, &'static str)> {
+    if state.role != node_role::NodeRole::Metadata {
+        return Err((StatusCode::NOT_FOUND, "Owner public recipients are available only on fossils"));
+    }
+    let recipient = if let Some(vault) = state.vault.read().await.as_ref() {
+        vault.user_recipient().to_owned()
+    } else {
+        tokio::task::spawn_blocking(secure_config::AgeVault::remembered_user_recipient)
+            .await
+            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Could not derive the owner public recipient"))?
+            .map_err(|_| (StatusCode::SERVICE_UNAVAILABLE, "Could not read the protected remembered owner identity"))?
+            .ok_or((StatusCode::LOCKED, "Unlock this fossil with the existing owner age identity before provisioning the environment owner"))?
+    };
+    if !secure_config::is_post_quantum_recipient(&recipient) {
+        return Err((StatusCode::SERVICE_UNAVAILABLE, "Invalid owner public recipient"));
+    }
+    Response::builder()
+        .header(header::CONTENT_TYPE, "text/plain; charset=utf-8")
+        .header(header::CACHE_CONTROL, "private, no-store")
+        .body(Body::from(recipient))
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Could not return the owner public recipient"))
+}
+
 async fn export_group_user_envelope() -> Result<Response<Body>, StatusCode> {
     let path = secure_config::AgeVault::group_user_envelope_path();
     let bytes = tokio::task::spawn_blocking(move || std::fs::read(path))
@@ -2946,6 +2984,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/metadata/export/recipient", get(export_age_recipient))
         .route("/api/metadata/export/group-user-envelope", get(export_group_user_envelope))
         .route("/api/metadata/export/node-recipient", get(export_node_age_recipient))
+        .route("/api/metadata/export/owner-recipient", get(export_owner_age_recipient))
         .route("/api/metadata/export/ciphertext/{kind}/{filename}", get(export_ciphertext))
         .route("/api/metadata/storage", get(metadata_storage_status))
         .route("/api/metadata/artwork/backfill", get(metadata_artwork_backfill_status))
@@ -3017,6 +3056,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/metadata/export/recipient", get(export_age_recipient))
         .route("/api/metadata/export/group-user-envelope", get(export_group_user_envelope))
         .route("/api/metadata/export/node-recipient", get(export_node_age_recipient))
+        .route("/api/metadata/export/owner-recipient", get(export_owner_age_recipient))
         .route("/api/metadata/export/ciphertext/{kind}/{filename}", get(export_ciphertext))
         .route("/api/settings/age", get(get_age_settings).post(unlock_age_settings))
         .route("/api/settings/age/group-identity", axum::routing::put(install_group_identity_envelope))
