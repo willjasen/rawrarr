@@ -4,6 +4,11 @@ set +e
 echo "rawrarr isolated test runner"
 echo "Rust: $(rustc --version)"
 echo "Node: $(node --version)"
+node_major=$(node --version | sed -E 's/^v([0-9]+).*/\1/')
+if [ "$node_major" != 26 ]; then
+    echo "ERROR: regression suites require Node.js 26; found $(node --version)." >&2
+    exit 1
+fi
 test_started_epoch=$(date +%s)
 test_started_at=$(date '+%Y-%m-%d %H:%M:%S %z')
 
@@ -15,6 +20,20 @@ if [ ! -e "$web_export_modules" ]; then
     fi
     mkdir -p /workspace/rust-arr/web-export
     ln -s /opt/rawrarr-web-export/node_modules "$web_export_modules"
+fi
+
+playwright_core=/usr/local/lib/node_modules/playwright-core
+playwright_alias=/workspace/scripts/tests/node_modules/playwright
+if [ ! -f "$playwright_core/index.mjs" ]; then
+    echo "ERROR: Playwright Core is missing from the test image."
+    exit 1
+fi
+mkdir -p /workspace/scripts/tests/node_modules
+if [ ! -e "$playwright_alias" ] && [ ! -L "$playwright_alias" ]; then
+    ln -s "$playwright_core" "$playwright_alias"
+elif [ "$(readlink "$playwright_alias" 2>/dev/null)" != "$playwright_core" ]; then
+    echo "ERROR: the test workspace Playwright alias conflicts with the installed Playwright Core package."
+    exit 1
 fi
 
 node_log="/tmp/rawrarr-node-tests.$$.log"

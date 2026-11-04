@@ -1,13 +1,17 @@
-# Internal-only Caddy front for the Tailscale Serve endpoint.
-# Tailscale Serve sends HTTPS 443 to 127.0.0.1:8081 in the shared namespace.
+# Internal-only Caddy front for the Tailscale Serve /analytics mount.
+# Serve maps /analytics to 127.0.0.1:8081/analytics; / remains on roarlay at 8080.
 services:
   umami:
     image: rawrarr-umami:559e3c607c23-basepath-analytics
     pull_policy: never
+    container_name: rawrarr-int-umami
+
+  umami-postgres:
+    container_name: rawrarr-int-umami-postgres
 
   analytics-caddy:
     image: caddy:2-alpine
-    container_name: rawrarr-internal-do3-analytics-caddy
+    container_name: rawrarr-int-caddy
     command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
     volumes:
       - ./analytics-dashboard-internal.Caddyfile:/etc/caddy/Caddyfile:ro

@@ -23,7 +23,7 @@ test("admin preview is explicitly sample-only and has no production data connect
   assert.doesNotMatch(nginx, /\bproxy_pass\b/);
   assert.match(nginx, /connect-src 'none'/);
   assert.match(compose, /127\.0\.0\.1:7299:8090/);
-  assert.match(compose, /network_mode:\s*["']service:tailscale["']/);
+  assert.doesNotMatch(compose, /network_mode:|depends_on:|^  tailscale:/m);
   assert.doesNotMatch(compose, /\b(postgres|DATABASE_URL|RAWARR_PG_)\b/i);
   assert.match(architecture, /require administrator authentication and authorization in the service/);
   assert.match(architecture, /do not enable Funnel/i);

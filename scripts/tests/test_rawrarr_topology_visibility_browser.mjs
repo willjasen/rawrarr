@@ -90,6 +90,34 @@ for (const [name, devices, expectedVisible] of [
   });
 }
 
+test('Overview omits node setup and keeps its remaining content within desktop and mobile viewports', async t => {
+  const server = await serveWorkspace([]);
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+
+  for (const viewport of [
+    { name: 'desktop', width: 1280, height: 800 },
+    { name: 'narrow mobile', width: 375, height: 812 },
+  ]) {
+    const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/#overview`);
+    await page.locator('#overview-view').waitFor({ state: 'visible' });
+
+    assert.equal(await page.getByRole('heading', { name: 'Set up another node' }).count(), 0, `${viewport.name}: node setup is not promoted on Overview`);
+    assert.equal(await page.getByRole('heading', { name: 'Shared folder' }).isVisible(), true, `${viewport.name}: overview content remains visible`);
+    assert.equal(await page.getByRole('heading', { name: 'Shared metadata' }).isVisible(), true, `${viewport.name}: overview content remains visible`);
+    const layout = await page.evaluate(() => ({
+      viewportWidth: window.innerWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      overview: document.querySelector('.overview-grid').getBoundingClientRect().toJSON(),
+    }));
+    assert.ok(layout.documentWidth <= layout.viewportWidth, `${viewport.name}: page should not overflow horizontally`);
+    assert.ok(layout.overview.x >= 0 && layout.overview.right <= layout.viewportWidth, `${viewport.name}: overview cards should fit the viewport`);
+    await page.close();
+  }
+});
+
 test('Fossils fits desktop and narrow mobile viewports with long labels and reachable actions', async t => {
   const devices = [
     { nodeId: 'device-alpha', role: 'metadata', online: true, relayAvailable: false, displayName: 'Brandon workstation with an exceptionally long display name' },
@@ -156,6 +184,89 @@ test('Fossils fits desktop and narrow mobile viewports with long labels and reac
     const deleteBounds = await deleteButton.boundingBox();
     assert.ok(deleteBounds && deleteBounds.x >= 0 && deleteBounds.x + deleteBounds.width <= viewport.width && deleteBounds.y >= 0 && deleteBounds.y + deleteBounds.height <= viewport.height, `${viewport.name}: Delete action should fit within the viewport`);
     await page.locator('#device-edit-cancel').click();
+    await page.close();
+  }
+});
+
+test('Fossils renders before stalled diagnostics and recovers on a later poll', async t => {
+  const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const devices = [
+    { nodeId: 'slow-fossil', role: 'metadata', online: true, relayAvailable: true, displayName: 'Workstation with a deliberately long fossil display name' },
+  ];
+  const server = await serveWorkspace(devices);
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  devices[0].directUrl = `${base}/direct/`;
+
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 375, height: 812 }]) {
+    const page = await browser.newPage({ viewport });
+    const pageErrors = [];
+    page.on('pageerror', error => pageErrors.push(error.message));
+    let stalled = true;
+    let releaseDiagnostics;
+    const diagnosticsGate = new Promise(resolve => { releaseDiagnostics = resolve; });
+    const requestedDiagnostics = new Set();
+    let nodeRequests = 0;
+    await page.addInitScript(() => {
+      localStorage.setItem('rawrarr.browser.age-id', 'AGE-SECRET-KEY-PQ-1test-fixture');
+    });
+    await page.route('**/api/workspace/nodes', route => {
+      nodeRequests += 1;
+      return route.fulfill({ json: devices });
+    });
+    await page.route('**/assets/metadata-export.js', route => route.fulfill({
+      contentType: 'text/javascript',
+      body: `window.rawrarrMiniExport = {
+        deriveProfileRecipient: async () => 'age1pq1fixture',
+        loadDeviceNames: async (identity, base, { signal }) => {
+          if (window.namesRecovered) return { 'slow-fossil': 'Recovered encrypted fossil name' };
+          window.nameRequests = (window.nameRequests || 0) + 1;
+          await new Promise((resolve, reject) => signal.addEventListener('abort', () => {
+            window.namesAborted = true;
+            reject(signal.reason);
+          }, { once: true }));
+        }
+      };`,
+    }));
+    await page.route(/\/(?:direct\/health|api\/syncthing\/shared-health|api\/config-peer\/status)$/, async route => {
+      const path = new URL(route.request().url()).pathname;
+      requestedDiagnostics.add(path);
+      if (stalled) await diagnosticsGate;
+      return route.fulfill({ json: path.endsWith('status')
+        ? { state: 'current', matchingPeers: 1, configuredPeers: 1 }
+        : { configured: false } });
+    });
+    await page.goto(`${base}/#fossils`);
+    await page.locator('#nodes .device-card').waitFor({ state: 'visible', timeout: 1500 });
+    assert.match(await page.locator('.merkle-status').textContent(), /Checking Merkle status/);
+    await page.waitForFunction(() => window.nameRequests === 1, null, { timeout: 1500 });
+    assert.equal(requestedDiagnostics.size, 3, 'all diagnostics start concurrently after cards are visible');
+    const layout = await page.evaluate(() => ({
+      width: innerWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      edit: document.querySelector('.device-edit-button').getBoundingClientRect().toJSON(),
+    }));
+    assert.ok(layout.documentWidth <= layout.width, `stalled page fits ${viewport.width}px`);
+    assert.ok(layout.edit.width > 0 && layout.edit.left >= 0 && layout.edit.right <= viewport.width, 'Edit stays reachable while checking');
+    await page.locator('.device-edit-button').click();
+    assert.equal(await page.getByRole('dialog', { name: 'Edit device' }).isVisible(), true);
+    await page.locator('#device-edit-cancel').click();
+    await page.waitForFunction(() => window.namesAborted, null, { timeout: 7000 });
+    await page.waitForFunction(() => document.querySelector('.merkle-status')?.textContent.includes('Merkle peers unreachable'));
+    assert.equal(await page.locator('#nodes .device-card').count(), 1, 'timeouts do not discard enrolled devices');
+    assert.equal(nodeRequests, 1, 'stalled diagnostics do not create overlapping list refreshes');
+    stalled = false;
+    releaseDiagnostics();
+    await page.evaluate(() => {
+      window.namesRecovered = true;
+      const now = Date.now.bind(Date);
+      Date.now = () => now() + 31000;
+    });
+    await page.waitForFunction(() => document.querySelector('.merkle-status')?.textContent.includes('Merkle up to date'), null, { timeout: 15000 });
+    await page.waitForFunction(() => document.querySelector('.device-name')?.textContent === 'Recovered encrypted fossil name');
+    assert.equal(await page.locator('#nodes .device-card').getAttribute('data-selected'), 'true', 'diagnostic recovery preserves selection');
+    assert.deepEqual(pageErrors, []);
     await page.close();
   }
 });

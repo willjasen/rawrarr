@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
+  <link rel="icon" type="image/svg+xml" href="/assets/rawrarr-favicon.svg">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <title>Set up your node · rawrarr</title>
   <style>
     :root { color-scheme:dark; --bg:#101411; --panel:#171d19; --line:#344136; --text:#edf3ec; --muted:#a9b6aa; --green:#a6e3a1 }
@@ -107,7 +109,7 @@
     <pre id="compose-preview" hidden></pre>
     <ol id="deploy-instructions" hidden>
       <li>Install Docker Desktop on macOS or Windows, or Docker Engine with the Compose plugin on Debian.</li>
-      <li>Subscriber nodes do not need a GitHub token. The coordinator retrieves and verifies publisher-signed UI releases.</li>
+      <li>UI assets are included in the application image and update with the published container revision.</li>
       <li>Make the <code>rawrarr:local</code> image available on this computer. Confirm with <code>docker image inspect rawrarr:local</code>.</li>
       <li id="auth-key-instruction">For internal Tailscale, Compose contains the auth key; restrict the file to your user (for example, <code>chmod 600 compose.yaml</code>) and remove the key after the node joins. Headscale mode uses a separate local secret file.</li>
       <li>Check the media path if you selected boneyard. Keep <code>/shared</code> on a separate Syncthing setup; it is not exposed as a Tailscale share.</li>

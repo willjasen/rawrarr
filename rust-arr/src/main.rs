@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod movie_snapshot;
+mod prowlarr;
 mod sonarr;
 
 pub mod auth;
@@ -290,6 +291,17 @@ impl std::error::Error for RadarrConfigError {}
 
 type RadarrClient = ArrClient;
 
+fn is_loopback_host(host: &str) -> bool {
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    host.strip_prefix('[')
+        .and_then(|host| host.strip_suffix(']'))
+        .unwrap_or(host)
+        .parse::<std::net::IpAddr>()
+        .is_ok_and(|address| address.is_loopback())
+}
+
 impl ArrClient {
     fn new(base_url: String, api_key: String) -> Result<Self, RadarrConfigError> {
         Self::new_with_ui_auth(base_url, Zeroizing::new(api_key), None, None)
@@ -306,7 +318,9 @@ impl ArrClient {
         }
         let parsed =
             reqwest::Url::parse(base_url.trim()).map_err(|_| RadarrConfigError::InvalidUrl)?;
-        if parsed.scheme() != "https"
+        let loopback_http = parsed.scheme() == "http"
+            && parsed.host_str().is_some_and(is_loopback_host);
+        if (parsed.scheme() != "https" && !loopback_http)
             || parsed.host_str().is_none()
             || !parsed.username().is_empty()
             || parsed.password().is_some()
@@ -752,7 +766,7 @@ fn poster_image(movie: &serde_json::Value) -> Option<&serde_json::Value> {
 async fn health() -> Html<&'static str> {
     Html(
         r##"<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101514"><link rel="icon" type="image/svg+xml" href="/assets/rawrarr-favicon.svg"><title>rawrarr — System health</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101514"><link rel="icon" type="image/svg+xml" href="/assets/rawrarr-favicon.svg"><link rel="icon" type="image/x-icon" href="/favicon.ico"><title>rawrarr — System health</title>
 <style>
 :root{color-scheme:dark;--bg:#101514;--panel:#171e1a;--line:#303b33;--text:#edf3ed;--muted:#9aa89e;--green:#b8f36a;font:16px Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 75% 0,#263322 0,transparent 42%),var(--bg)}main{width:min(760px,100%);margin:auto;padding:64px 24px}.brand{color:var(--green);font-size:13px;letter-spacing:.14em;text-transform:uppercase;font-weight:750}.eyebrow{margin-top:62px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.14em}h1{font-size:clamp(36px,8vw,62px);letter-spacing:-.06em;margin:10px 0 12px}.summary{color:var(--muted);line-height:1.65;max-width:520px}.state{display:inline-flex;align-items:center;gap:9px;margin-top:22px;border:1px solid #435638;background:#202a1b;color:#d5f7aa;border-radius:999px;padding:9px 13px;font-size:13px}.dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 14px #b8f36a99}.panel{margin-top:42px;border:1px solid var(--line);background:var(--panel);border-radius:16px;overflow:hidden}.panel h2{font-size:14px;margin:0;padding:19px 21px;border-bottom:1px solid var(--line)}.check{display:flex;justify-content:space-between;align-items:center;padding:17px 21px;border-bottom:1px solid #27312a}.check:last-child{border:0}.check strong{font-size:14px;font-weight:600}.check span{font-size:12px;color:var(--muted)}.ok{color:var(--green)!important}.foot{margin-top:24px;color:#718076;font-size:12px}a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}@media(max-width:520px){main{padding:36px 20px}.eyebrow{margin-top:48px}.check{gap:12px}.check span{text-align:right}}
 </style></head><body><main><div class="brand">rawrarr</div><div class="eyebrow">System status</div><h1>All systems ready.</h1><p class="summary">The rawrarr service is responding and ready to handle requests. This page checks the web process; connected services are reported separately in the app.</p><div class="state"><i class="dot"></i>Operational</div><section class="panel" aria-label="Health checks"><h2>Service checks</h2><div class="check"><strong>Web service</strong><span class="ok">● &nbsp;Responding</span></div><div class="check"><strong>Health endpoint</strong><span>/health · HTTP 200</span></div><div class="check"><strong>Checked</strong><span id="checked">Just now</span></div></section><p class="foot"><a href="/">Open rawrarr</a> &nbsp;·&nbsp; Auto-refreshes every 30 seconds</p></main><script>const checked=document.getElementById('checked');function update(){checked.textContent=new Intl.DateTimeFormat(undefined,{hour:'numeric',minute:'2-digit',second:'2-digit'}).format(new Date())}update();setInterval(()=>location.reload(),30000)</script></body></html>"##,
@@ -801,7 +815,10 @@ async fn rawrarr_favicon() -> Response<Body> {
 }
 
 async fn rawrarr_favicon_ico() -> Response<Body> {
-    rawrarr_favicon().await
+    static_asset(
+        "image/x-icon",
+        ui_assets::bytes("assets/rawrarr-favicon.ico", include_bytes!("assets/rawrarr-favicon.ico")).await,
+    )
 }
 
 async fn passkey_client_js() -> Response<Body> {
@@ -1430,36 +1447,43 @@ struct MetadataStorageStatus {
     tv_bytes: u64,
 }
 
-async fn metadata_storage_status() -> Json<MetadataStorageStatus> {
+fn directory_size(path: &std::path::Path) -> std::io::Result<u64> {
+    let mut entries = match std::fs::read_dir(path) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(error) => return Err(error),
+    };
+    entries.try_fold(0_u64, |total, entry| {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let bytes = if file_type.is_dir() {
+            directory_size(&entry.path())?
+        } else if file_type.is_file() {
+            entry.metadata()?.len()
+        } else {
+            0
+        };
+        total.checked_add(bytes).ok_or_else(|| std::io::Error::other("Metadata size overflow"))
+    })
+}
+
+async fn metadata_storage_status() -> Result<Json<MetadataStorageStatus>, (StatusCode, Json<ApiError>)> {
     let metadata_dir = secure_config::AgeVault::metadata_dir();
     let bytes = tokio::task::spawn_blocking(move || {
-        fn directory_size(path: &std::path::Path) -> u64 {
-            let Ok(entries) = std::fs::read_dir(path) else {
-                return 0;
-            };
-            entries
-                .filter_map(Result::ok)
-                .map(|entry| {
-                    let Ok(file_type) = entry.file_type() else {
-                        return 0;
-                    };
-                    if file_type.is_dir() {
-                        directory_size(&entry.path())
-                    } else if file_type.is_file() {
-                        entry.metadata().map(|metadata| metadata.len()).unwrap_or(0)
-                    } else {
-                        0
-                    }
-                })
-                .sum()
-        }
-        let movies_bytes = directory_size(&metadata_dir.join("movies"));
-        let tv_bytes = directory_size(&metadata_dir.join("tv"));
-        (directory_size(&metadata_dir), movies_bytes, tv_bytes)
+        let movies_bytes = directory_size(&metadata_dir.join("movies"))?;
+        let tv_bytes = directory_size(&metadata_dir.join("tv"))?;
+        Ok::<_, std::io::Error>((directory_size(&metadata_dir)?, movies_bytes, tv_bytes))
     })
     .await
-    .unwrap_or((0, 0, 0));
-    Json(MetadataStorageStatus { bytes: bytes.0, movies_bytes: bytes.1, tv_bytes: bytes.2 })
+    .map_err(|error| {
+        eprintln!("rawrarr metadata storage task failed: {error}");
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError { error: "Could not read encrypted metadata storage" }))
+    })?
+    .map_err(|error| {
+        eprintln!("rawrarr metadata storage read failed: {error}");
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiError { error: "Could not read encrypted metadata storage" }))
+    })?;
+    Ok(Json(MetadataStorageStatus { bytes: bytes.0, movies_bytes: bytes.1, tv_bytes: bytes.2 }))
 }
 
 async fn run_metadata_artwork_backfill(state: Arc<AppState>) {
@@ -2373,7 +2397,11 @@ fn age_vault_open_error(error: secure_config::VaultError) -> (StatusCode, &'stat
     match error {
         secure_config::VaultError::InvalidIdentity => (
             StatusCode::BAD_REQUEST,
-            "This user age ID is invalid or does not match the group identity for this shared data.",
+            "This is not a valid post-quantum age identity.",
+        ),
+        secure_config::VaultError::GroupIdentityUnavailable => (
+            StatusCode::BAD_REQUEST,
+            "This user age ID could not unlock the shared group identity. Verify it matches the identity used to configure this shared data, or restore the group's wrapped identity file.",
         ),
         secure_config::VaultError::AgeUnavailable => (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -2398,15 +2426,28 @@ fn age_vault_open_error(error: secure_config::VaultError) -> (StatusCode, &'stat
     }
 }
 
+fn age_identity_envelope_error(error: secure_config::VaultError) -> (StatusCode, &'static str) {
+    match error {
+        secure_config::VaultError::AgeUnavailable | secure_config::VaultError::StorageFailed => {
+            age_vault_open_error(error)
+        }
+        _ => (
+            StatusCode::BAD_REQUEST,
+            "The age-wrapped user identity could not be opened by this device.",
+        ),
+    }
+}
+
 async fn unlock_age_settings(
     State(state): State<Arc<AppState>>,
     Json(request): Json<AgeIdentityRequest>,
 ) -> Result<Json<AgeSettingsInfo>, (StatusCode, Json<ApiError>)> {
-    let identity = secure_config::AgeVault::decrypt_user_identity_envelope(&request.identity_envelope)
-        .map_err(|_| (
-            StatusCode::BAD_REQUEST,
-            Json(ApiError { error: "The age-wrapped user identity could not be opened by this device" }),
-        ))?;
+    let identity =
+        secure_config::AgeVault::decrypt_user_identity_envelope(&request.identity_envelope)
+            .map_err(|error| {
+                let (status, message) = age_identity_envelope_error(error);
+                (status, Json(ApiError { error: message }))
+            })?;
     let vault = secure_config::AgeVault::from_identity(identity).map_err(|error| {
         let (status, message) = age_vault_open_error(error);
         (status, Json(ApiError { error: message }))
@@ -2460,6 +2501,8 @@ async fn unlock_age_settings(
     let exists = vault.config_exists();
     let theme_seed = age_theme_seed(vault.user_recipient());
     *state.vault.write().await = Some(vault);
+    state.artwork_scrape_notify.notify_one();
+    state.sonarr_scrape_notify.notify_one();
     state.radarr_backup_notify.notify_one();
     Ok(Json(AgeSettingsInfo {
         unlocked: true,
@@ -2539,7 +2582,7 @@ async fn put_radarr_settings(
     )
     .map_err(|error| {
             let message = match error {
-                RadarrConfigError::InvalidUrl => "Enter a valid Radarr HTTPS URL",
+                RadarrConfigError::InvalidUrl => "Enter a valid Radarr HTTPS URL or node-loopback HTTP URL",
                 RadarrConfigError::InvalidApiKey => "Enter a valid Radarr API key",
                 RadarrConfigError::InvalidUiCredentials => "Enter valid Radarr UI credentials",
                 RadarrConfigError::InvalidCaCertificate => "The configured Arr CA certificate could not be loaded",
@@ -2645,7 +2688,7 @@ async fn test_radarr_settings(
         (
             StatusCode::BAD_REQUEST,
             Json(ApiError {
-                error: "Enter a valid Radarr HTTPS URL and credentials",
+                error: "Enter a valid Radarr HTTPS URL or node-loopback HTTP URL and credentials",
             }),
         )
     })?;
@@ -2717,6 +2760,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         axum::serve(listener, app).await?;
         return Ok(());
     }
+    secure_config::AgeVault::initialize_metadata_storage()?;
     secure_config::AgeVault::ensure_node_identity()?;
     secure_config::AgeVault::ensure_node_signing_key()?;
     let device_id = devices::load_or_create_device_id()?;
@@ -2974,6 +3018,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .post(sonarr::test_connection)
                 .delete(sonarr::clear),
         )
+        .route(
+            "/api/settings/prowlarr",
+            get(prowlarr::settings)
+                .put(prowlarr::save)
+                .post(prowlarr::test_connection)
+                .delete(prowlarr::clear),
+        )
+        .route("/api/prowlarr/indexers", get(prowlarr::indexers))
+        .route("/api/prowlarr/search", post(prowlarr::search))
         .route("/api/radarr/status", get(radarr_status))
         .route("/api/radarr/movies", get(radarr_movies))
         .route("/api/radarr/movies/snapshot", get(movie_snapshot::get))
@@ -3021,6 +3074,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .post(sonarr::test_connection)
                 .delete(sonarr::clear),
         )
+        .route(
+            "/api/settings/prowlarr",
+            get(prowlarr::settings)
+                .put(prowlarr::save)
+                .post(prowlarr::test_connection)
+                .delete(prowlarr::clear),
+        )
+        .route("/api/prowlarr/indexers", get(prowlarr::indexers))
+        .route("/api/prowlarr/search", post(prowlarr::search))
         .route("/api/sonarr/status", get(sonarr::status))
         .route("/api/sonarr/series", get(sonarr::series))
         .route("/api/sonarr/series/{tvdb_id}/poster", get(get_sonarr_poster))
@@ -3183,10 +3245,26 @@ mod metadata_image_tests {
     }
 
     #[test]
-    fn arr_connections_require_https() {
+    fn arr_connections_require_https_except_for_loopback_http() {
         assert!(ArrClient::new("https://radarr.example:7878".into(), "test-key".into()).is_ok());
         assert!(ArrClient::new("https://sonarr.example:8989".into(), "test-key".into()).is_ok());
-        for url in ["http://radarr.example:7878", "http://sonarr.example:8989", "ftp://arr.example"] {
+        for url in [
+            "http://localhost:9696",
+            "http://127.0.0.1:9696",
+            "http://127.42.0.2:9696",
+            "http://[::1]:9696",
+        ] {
+            assert!(
+                ArrClient::new(url.into(), "test-key".into()).is_ok(),
+                "rejected node-local URL {url}"
+            );
+        }
+        for url in [
+            "http://radarr.example:7878",
+            "http://192.168.1.10:9696",
+            "http://127.0.0.1.example:9696",
+            "ftp://arr.example",
+        ] {
             assert!(
                 ArrClient::new(url.into(), "test-key".into()).is_err(),
                 "accepted {url}"
@@ -3348,14 +3426,19 @@ mod age_identity_request_tests {
 
 #[cfg(test)]
 mod age_vault_open_error_tests {
-    use super::{age_vault_open_error, secure_config::VaultError};
+    use super::{age_identity_envelope_error, age_vault_open_error, secure_config::VaultError};
     use axum::http::StatusCode;
 
     #[test]
     fn reports_invalid_identity_separately_from_node_setup_failures() {
         let (status, message) = age_vault_open_error(VaultError::InvalidIdentity);
         assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert!(message.contains("invalid or does not match the group identity"));
+        assert!(message.contains("not a valid post-quantum age identity"));
+
+        let (status, message) = age_vault_open_error(VaultError::GroupIdentityUnavailable);
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(message.contains("could not unlock the shared group identity"));
+        assert!(message.contains("restore the group's wrapped identity file"));
 
         let (status, message) = age_vault_open_error(VaultError::AgeUnavailable);
         assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
@@ -3379,6 +3462,21 @@ mod age_vault_open_error_tests {
         let (status, message) = age_vault_open_error(VaultError::InvalidConfig);
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert!(message.contains("invalid format"));
+    }
+
+    #[test]
+    fn reports_device_age_tool_and_storage_failures_during_envelope_open() {
+        let (status, message) = age_identity_envelope_error(VaultError::AgeUnavailable);
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert!(message.contains("age tools are unavailable"));
+
+        let (status, message) = age_identity_envelope_error(VaultError::StorageFailed);
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(message.contains("could not access its local or shared age-key files"));
+
+        let (status, message) = age_identity_envelope_error(VaultError::InvalidIdentity);
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(message.contains("age-wrapped user identity could not be opened"));
     }
 }
 

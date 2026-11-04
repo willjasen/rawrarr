@@ -12,7 +12,7 @@ See the [user guide](docs/user-guide.md) for Docker Compose setup, passkey onboa
 
 ## Development workflow
 
-Code changes are made and verified before updating the persistent `rawrarr-local` environment. Roarlay UI review uses the tailnet workspace at `https://rawrarr.risk-mermaid.ts.net/`; local port 7297 currently forwards to roarlay for diagnostics. Rebuild only the affected service with its recorded Compose files and deployment lock, then verify health and the tailnet route. The application image uses BuildKit Cargo caches to reuse downloaded crates and Rust build artifacts across source changes.
+For local development, the user guide's `rawrarr-local` commands describe an existing generic/legacy local Compose installation; they are not instructions for deploying to the current internal environment. Internal operators should use the current environment names and deployment procedures in [AGENTS.md](AGENTS.md). The internal coordinator UI is available at `https://rawrarr.risk-mermaid.ts.net/`; follow `AGENTS.md` for its deployment and verification workflow.
 
 ## Test
 

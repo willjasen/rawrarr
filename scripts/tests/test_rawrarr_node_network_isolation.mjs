@@ -4,14 +4,11 @@ import { readFile } from 'node:fs/promises';
 
 const root = new URL('../../', import.meta.url);
 const read = path => readFile(new URL(path, root), 'utf8');
-const [base, metadata, storage, macbookTailscale, miniRelays, proxyConfig, orbstackEnvironment] = await Promise.all([
+const [base, metadata, storage, orbstackEnvironment] = await Promise.all([
   read('docker-compose.yml'),
   read('docker-compose.metadata.yml'),
   read('docker-compose.storage.yml'),
-  read('docker-compose.tailscale-macbook.yml'),
-  read('docker-compose.mini-relays.yml'),
-  read('storage-proxy.Caddyfile'),
-  read('docker-compose.orbstack-test.yml'),
+  read('deploy/testing/compose.yml'),
 ]);
 
 function serviceBlock(compose, service) {
@@ -36,11 +33,12 @@ test('metadata and storage have no host-published application ports', () => {
   }
 });
 
-test('MacBook metadata is loopback-only in the coordinator Tailscale namespace', () => {
-  assert.match(macbookTailscale, /fossil:[\s\S]*?network_mode: "service:tailscale"/);
-  assert.match(macbookTailscale, /RUST_ARR_LISTEN_ADDR: 127\.0\.0\.1:8081/);
-  assert.match(macbookTailscale, /RAWARR_NODE_RELAY_TARGETS: .*127\.0\.0\.1:8081/);
-  assert.match(macbookTailscale, /127\.0\.0\.1:8081\/health/);
+test('isolated test subscribers bind loopback in their own Tailscale namespaces', () => {
+  for (const [service, sidecar] of [['metadata-a', 'tailscale-a'], ['metadata-b', 'tailscale-b']]) {
+    const block = serviceBlock(orbstackEnvironment, service);
+    assert.match(block, new RegExp(`network_mode: service:${sidecar}`));
+    assert.match(block, /RUST_ARR_LISTEN_ADDR: 127\.0\.0\.1:8080/);
+  }
 });
 
 test('standalone metadata Compose identifies the service and device as fossil', () => {
@@ -49,7 +47,7 @@ test('standalone metadata Compose identifies the service and device as fossil', 
 });
 
 test('metadata artwork cache uses Valkey with bounded disposable storage and remains opt-in', () => {
-  for (const compose of [metadata, macbookTailscale]) {
+  for (const compose of [metadata]) {
     assert.match(compose, /image: valkey\/valkey:8-alpine/);
     assert.match(compose, /valkey-server/);
     assert.match(compose, /--save", "", "--appendonly", "no"/);
@@ -60,17 +58,11 @@ test('metadata artwork cache uses Valkey with bounded disposable storage and rem
   }
   assert.match(metadata, /RAWARR_ARTWORK_CACHE_ENABLED: \$\{RAWARR_ARTWORK_CACHE_ENABLED:-false\}/);
   assert.match(metadata, /RAWARR_ARTWORK_CACHE_URL: redis:\/\/artwork-cache:6379\//);
-  assert.match(macbookTailscale, /RAWARR_ARTWORK_CACHE_ENABLED: \$\{RAWARR_ARTWORK_CACHE_ENABLED:-false\}/);
-  assert.match(macbookTailscale, /RAWARR_ARTWORK_CACHE_URL: redis:\/\/127\.0\.0\.1:6379\//);
-  assert.match(macbookTailscale, /artwork-cache:[\s\S]*?network_mode: "service:tailscale"/);
 });
 
-test('Mini storage and Serve proxy use only loopback in the Tailscale namespace', () => {
+test('standalone storage uses loopback in an externally managed Tailscale namespace', () => {
   assert.match(storage, /network_mode: "container:\$\{RAWARR_TAILSCALE_CONTAINER:-rawrarr-mini-tailscale\}"/);
   assert.match(storage, /RUST_ARR_LISTEN_ADDR: 127\.0\.0\.1:8080/);
   assert.match(storage, /RUST_ARR_DIRECT_LISTEN_ADDR: 127\.0\.0\.1:8083/);
   assert.match(storage, /RAWARR_DIRECT_ALLOWED_ORIGIN: https:\/\/rawrarr\.risk-mermaid\.ts\.net/);
-  assert.match(miniRelays, /storage-proxy\.Caddyfile/);
-  assert.match(proxyConfig, /bind 127\.0\.0\.1/);
-  assert.match(proxyConfig, /reverse_proxy 127\.0\.0\.1:8080/);
 });

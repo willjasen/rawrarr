@@ -43,7 +43,7 @@ try {
       await signIn.click();
       await page.waitForURL(origin, { timeout: 15000 });
     }
-    await page.locator('[data-view="devices"]').click();
+    await page.locator('[data-view="fossils"]').click();
     const request = page.locator('#pending .pending-item').filter({ hasText: nodeId });
     await request.waitFor({ timeout: 60000 });
     await request.getByRole('button', { name: 'Approve' }).click();
@@ -51,7 +51,12 @@ try {
     await page.locator('#approve-node-root-backup').fill(rootBackup);
     await page.locator('#approve-node-root-fingerprint').fill(rootFingerprint);
     await page.locator('#approve-node-form [type="submit"]').click();
-    await page.locator('#approve-node-dialog').waitFor({ state: 'hidden', timeout: 60000 });
+    try {
+      await page.locator('#approve-node-dialog').waitFor({ state: 'hidden', timeout: 60000 });
+    } catch {
+      const status = await page.locator('#approve-node-status').innerText().catch(() => 'approval dialog did not close');
+      throw new Error(`owner approval failed: ${status}`);
+    }
     await request.waitFor({ state: 'detached', timeout: 30000 });
     console.log(`APPROVED ${nodeId}`);
   }

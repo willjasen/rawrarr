@@ -1,0 +1,66 @@
+services:
+  caddy:
+    image: rawrarr-roarlay-prod-caddy-crowdsec:${RAWRARR_SOURCE_SHA:?RAWRARR_SOURCE_SHA must be the published GitHub main commit SHA}
+    container_name: rawrarr-prod-caddy
+    pull_policy: never
+    ports: !override
+      - "104.248.184.91:443:443"
+    build:
+      context: ${CROWDSEC_SOURCE_ROOT:?CROWDSEC_SOURCE_ROOT must point to the extracted published source}/deploy/do3/crowdsec
+      dockerfile: Dockerfile.caddy
+      labels:
+        org.opencontainers.image.revision: ${RAWRARR_SOURCE_SHA}
+      args:
+        CADDY_VERSION: "2.11.7"
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - >-
+        export CROWDSEC_BOUNCER_KEY="$$(cat /run/secrets/caddy_crowdsec_bouncer)";
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+    volumes:
+      - ${CROWDSEC_SOURCE_ROOT}/deploy/do3/crowdsec/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_access_logs:/var/log/caddy
+    secrets:
+      - caddy_crowdsec_bouncer
+    depends_on:
+      crowdsec:
+        condition: service_healthy
+
+  crowdsec:
+    image: crowdsecurity/crowdsec:v1.8.2
+    container_name: rawrarr-prod-crowdsec
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      COLLECTIONS: crowdsecurity/caddy
+      TZ: UTC
+    healthcheck:
+      test: ["CMD", "cscli", "lapi", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    volumes:
+      - ${CROWDSEC_SOURCE_ROOT}/deploy/do3/crowdsec/acquis.yaml:/etc/crowdsec/acquis.d/caddy.yaml:ro
+      - crowdsec_config:/etc/crowdsec
+      - crowdsec_data:/var/lib/crowdsec/data
+      - caddy_access_logs:/var/log/caddy:ro
+    networks:
+      - public_control
+
+networks:
+  public_control:
+    name: rawrarr-roarlay-prod-control
+    external: true
+
+volumes:
+  crowdsec_config:
+    name: rawrarr-roarlay-prod_crowdsec-config
+  crowdsec_data:
+    name: rawrarr-roarlay-prod_crowdsec-data
+  caddy_access_logs:
+    name: rawrarr-roarlay-prod_caddy-access-logs
+
+secrets:
+  caddy_crowdsec_bouncer:
+    file: ${CROWDSEC_BOUNCER_SECRET_FILE:?CROWDSEC_BOUNCER_SECRET_FILE must point to the root-only do3 secret file}

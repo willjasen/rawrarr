@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    pull_policy: always
+  umami-postgres:
+    image: postgres:17-alpine
+    pull_policy: always
+  tailscale:
+    image: tailscale/tailscale:stable
+    pull_policy: always
+  caddy:
+    image: caddy:2-alpine
+    pull_policy: always
+  cloudflared:
+    image: cloudflare/cloudflared@sha256:faa8e0a1475f137c910be6025f43c8e4092fdd35461b31e19fd1390657a1ff39
+    pull_policy: always
+  crowdsec:
+    image: crowdsecurity/crowdsec:v1.8.2
+    pull_policy: always
+  headscale:
+    image: headscale/headscale:0.29.5
+    pull_policy: always
+  umami:
+    image: ghcr.io/umami-software/umami:3.4.1
+    pull_policy: always

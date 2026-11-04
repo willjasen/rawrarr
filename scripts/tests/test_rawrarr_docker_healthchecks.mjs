@@ -10,6 +10,7 @@ const testDockerfile = await readFile(new URL('./Dockerfile', import.meta.url), 
 const clonePreparation = await readFile(new URL('./prepare-test-clone.sh', import.meta.url), 'utf8');
 const cloneEntrypoint = await readFile(new URL('./wait-for-test-trigger.sh', import.meta.url), 'utf8');
 const syncthingTest = await readFile(new URL('./test_rawrarr_syncthing_orbstack.py', import.meta.url), 'utf8');
+const nodeVersion = await readFile(new URL('../../.nvmrc', import.meta.url), 'utf8');
 
 test('Rawrarr and PostgreSQL containers define readiness health checks', () => {
   assert.match(dockerfile, /apt-get install[^\n]*\bcurl\b/);
@@ -27,12 +28,47 @@ test('Rawrarr image builds its Rust binary for the requested container architect
   assert.match(dockerfile, /test "\$\(cat \/usr\/share\/rawrarr\/target-arch\)" = "\$TARGETARCH"/);
 });
 
+test('Rawrarr image compiles locked dependencies before copying application sources', () => {
+  const manifestCopy = dockerfile.indexOf('COPY Cargo.toml Cargo.lock ./');
+  const dependencyBuild = dockerfile.indexOf('cargo build --release --locked --target "$rust_target"');
+  const sourceCopy = dockerfile.indexOf('COPY src ./src');
+  const migrationCopy = dockerfile.indexOf('COPY migrations ./migrations');
+  const refreshSourceTimestamps = dockerfile.indexOf('find src migrations -type f -exec touch {} +');
+  const appBuild = dockerfile.indexOf('cargo build --release --locked --target "$rust_target"', dependencyBuild + 1);
+
+  assert.ok(manifestCopy >= 0, 'Cargo manifests and lockfile are copied');
+  assert.ok(dependencyBuild > manifestCopy, 'dependencies build from the manifest-only layer');
+  assert.ok(sourceCopy > dependencyBuild, 'application source is copied after dependency compilation');
+  assert.ok(migrationCopy > dependencyBuild, 'SQLx migrations are copied after dependency compilation');
+  assert.ok(refreshSourceTimestamps > migrationCopy, 'copied sources are newer than the placeholder build artifacts');
+  assert.ok(refreshSourceTimestamps < appBuild, 'Cargo refreshes the application target after copied source timestamps advance');
+  assert.ok(appBuild > migrationCopy, 'application is rebuilt after source and migrations are copied');
+  assert.match(dockerfile.slice(0, sourceCopy), /mkdir src migrations[\s\S]*fn main\(\) \{\}/);
+  assert.doesNotMatch(dockerfile.slice(0, sourceCopy), /target=\/src\/target/,
+    'dependency artifacts must be part of the cached image layer, not an ephemeral cache mount');
+  assert.match(dockerfile, /--mount=type=cache,target=\/usr\/local\/cargo\/registry,sharing=locked/);
+  assert.match(dockerfile, /--mount=type=cache,target=\/usr\/local\/cargo\/git\/db,sharing=locked/);
+  assert.match(dockerfile, /printf '%s\\n' 'fn main\(\) \{\}' > src\/main\.rs/);
+});
+
 test('test base installs age for the native target architecture', () => {
   assert.match(testDockerfile, /ARG TARGETARCH/);
   assert.match(testDockerfile, /amd64\) age_arch=amd64/);
   assert.match(testDockerfile, /arm64\) age_arch=arm64/);
   assert.match(testDockerfile, /6b8dc4333c53a5a57c9e5834e3a48f92605d7154014cd07269ff3327db5d37f4/);
   assert.match(testDockerfile, /test "\$\(dpkg --print-architecture\)" = "\$TARGETARCH"/);
+});
+
+test('test base and linked clones use Node.js 26', () => {
+  assert.equal(nodeVersion.trim(), '26');
+  assert.match(testDockerfile, /ARG NODE_MAJOR=26/);
+  assert.match(testDockerfile, /deb\.nodesource\.com\/node_\$\{NODE_MAJOR\}\.x/);
+  assert.match(testDockerfile, /node --version[^\n]*v\$\{NODE_MAJOR\}/);
+  assert.match(testDockerfile, /npm install --global --prefix \/usr\/local playwright-core/);
+  assert.match(clonePreparation, /node_major=26/);
+  assert.match(clonePreparation, /deb\.nodesource\.com\/node_%s\.x/);
+  assert.match(clonePreparation, /expected Node\.js major \$node_major/);
+  assert.match(testEntrypoint, /regression suites require Node\.js 26/);
 });
 
 test('Docker test containers have unique names in the rawrarr-test-regression group', () => {
@@ -54,11 +90,21 @@ test('Docker test containers have unique names in the rawrarr-test-regression gr
   assert.match(cloneEntrypoint, /rawrarr-test-ready/);
   assert.match(testRunner, /shutil\.copytree/);
   assert.doesNotMatch(testRunner, /copytree\([^\n]*web-export/);
-  assert.match(testRunner, /ROOT \/ "docs"/);
-  assert.match(testRunner, /ROOT \/ "\.github"/);
-  assert.match(testRunner, /ROOT \/ "deploy"/);
-  assert.match(testRunner, /ROOT \/ "stripe-service"/);
+  assert.match(testRunner, /ROOT_FIXTURES = \(/);
+  assert.match(testRunner, /"\.nvmrc"/);
+  assert.match(testRunner, /"\.github"/);
+  assert.match(testRunner, /"deploy"/);
+  assert.match(testRunner, /"docs"/);
+  assert.match(testRunner, /"stripe-service"/);
   assert.match(testEntrypoint, /grep -Eq.*playwright-core/);
+  assert.match(testEntrypoint, /playwright_core=\/usr\/local\/lib\/node_modules\/playwright-core/);
+  assert.match(testEntrypoint, /playwright_alias=\/workspace\/scripts\/tests\/node_modules\/playwright/);
+  assert.match(testEntrypoint, /ln -s "\$playwright_core" "\$playwright_alias"/);
+  assert.match(testEntrypoint, /readlink "\$playwright_alias"/);
+  assert.match(testEntrypoint, /playwright_core=\/usr\/local\/lib\/node_modules\/playwright-core/);
+  assert.match(testEntrypoint, /playwright_alias=\/workspace\/scripts\/tests\/node_modules\/playwright/);
+  assert.match(testEntrypoint, /ln -s "\$playwright_core" "\$playwright_alias"/);
+  assert.match(testEntrypoint, /readlink "\$playwright_alias"/);
   assert.match(testEntrypoint, /chromium.*launch/);
   assert.match(testEntrypoint, /puppeteer/);
   assert.match(testRunner, /f"\{rust_source\}\/\."/);

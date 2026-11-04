@@ -186,3 +186,26 @@ handler and remembered-user derivation were tested locally; coordinator fetching
 used a controlled HTTP fossil fixture with a real delegated PostgreSQL session.
 An authorized internal rollout and owner-device decryption check remain required
 before claiming operational recovery readiness.
+
+## Base-branch merge verification
+
+Merged the freshly fetched `origin/main` at `698b9fd` into
+`codex/internal-coordinator-backup` after confirming the local and remote task
+branches were identical at `f96597d`. This incorporates 195 upstream commits
+without rebasing or rewriting branch history. The two content conflicts were in
+`scripts/README.md` and `scripts/tests/README.md`; retained the upstream classifier
+description and all upstream test entries alongside the backup/owner entries.
+Rust source merged automatically, and migration `0012` remains distinct from
+upstream migration `0011`.
+
+Verified the merged source in a new native AMD64 linked test clone, prepared with
+the current lockfile and then disconnected from bridge networking. A disposable
+PostgreSQL 17 sidecar shared only that clone's network namespace, without host
+ports. Re-ran the owner filter (6 passed), explicitly invoked database migration/
+API integration (1 passed), dashboard filter (2 passed), and locked offline
+`cargo check` (passed). Re-ran the Python backup suite with its real PostgreSQL
+resolver fixture enabled (13 passed). `git diff --check` and the staged equivalent
+passed, with no unresolved conflict paths. Full suites, deployment, and production
+backup execution were not performed. This merge verification does not establish
+that historical host paths/container names in the original backup procedure
+match a current deployment.

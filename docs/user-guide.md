@@ -4,43 +4,47 @@
 
 This guide covers features available in the current Docker prototype. For completed and outstanding project work, see the [roadmap](../ROADMAP.md); for data and security constraints, see [technical status](technical-status.md).
 
-## Start Rawrarr with Docker Compose
+## Internal coordinator and Mac subscribers
 
-Requirements: Docker Compose, a local PostgreSQL password file, and a browser with passkey support. OrbStack provides Docker on macOS.
+Requirements: Docker Compose and a browser with passkey support. OrbStack provides
+Docker on macOS. The internal coordinator lives on do3 and stays there; neither
+Mac needs a coordinator or a PostgreSQL deployment. Both Macs are fossil
+subscriber hosts, using their established host-local Compose definitions.
 
-For the existing persistent deployment, reuse Compose project `rawrarr-local` and its protected password file. Do not generate a replacement password for its existing database. Before starting or rebuilding, inspect ownership of port 7297:
-
-```sh
-lsof -nP -iTCP:7297 -sTCP:LISTEN
-docker ps --filter publish=7297 --format 'table {{.Names}}\t{{.Ports}}'
-```
-
-If the port belongs to the existing `rawrarr-local` app, update that project. Resolve any other owner before proceeding; do not choose another port or remove volumes to work around a conflict. From the repository root, identify the Compose file set recorded by each running service before an update:
+Open `https://rawrarr.risk-mermaid.ts.net/` for the internal roarlay workspace.
+Before maintaining a subscriber, inspect its Compose project/file labels and use
+the recorded settings with the per-container deployment locks:
 
 ```sh
-export RAWARR_POSTGRES_PASSWORD_FILE="$HOME/Library/Application Support/rawrarr/orbstack-postgres-password"
-test -f "$RAWARR_POSTGRES_PASSWORD_FILE"
-docker inspect rawrarr-local-roarlay-1 --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}'
-docker inspect rawrarr-local-fossil-1 --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}'
+docker inspect rawrarr-node-internal-fossil-1 \
+  --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}'
+docker ps --filter label=com.docker.compose.project=rawrarr-node-internal \
+  --format 'table {{.Names}}\t{{.Status}}'
 ```
 
-Use the recorded files and project name when updating a service; the MacBook Tailscale overlay supplies the 7297 listener and shared network namespace. The base `docker-compose.yml` alone does not publish port 7297. Follow the [deployment guide](container-deployment.md) and the per-container rebuild locks in [project instructions](../AGENTS.md) before recreating a service. If the password file is missing, inspect the existing Compose secret mount to locate it without reading its contents. For a genuinely new installation, provision a protected random PostgreSQL password file outside the repository first.
+Preserve node identities, credentials, `/data`, and `/shared`. Do not substitute
+the generic root Compose templates for an existing internal deployment or
+replay old Mac coordinator setup commands. Generic self-hosting and standalone
+node examples remain in the [deployment guide](container-deployment.md);
+the [Compose inventory](compose-layout.md) distinguishes them from current
+internal deployment files.
 
-Open `https://rawrarr.risk-mermaid.ts.net/` for the roarlay workspace and its tailnet-origin passkey. In the current MacBook overlay, `127.0.0.1:7297` and `127.0.0.1:7298` both forward to roarlay for local diagnostics; the fossil service listens inside the shared Tailscale namespace on `127.0.0.1:8081`. The tailnet and `localhost` WebAuthn origins use separate credentials linked to the same account. Keep the origin and relying-party hostname aligned when configuring another hostname.
-
-With the password-file variable set, useful commands are:
-
-```sh
-docker compose -p rawrarr-local logs -f fossil
-docker compose -p rawrarr-local ps
-curl --fail http://127.0.0.1:7297/health
-```
-
-The `/health` route returns an HTML web-process status page with a 30-second refresh. On 7297 in the current MacBook overlay it identifies roarlay. HTTP 200 confirms that the web process responds; it does not verify PostgreSQL queries, Radarr, Syncthing, other nodes, or end-to-end readiness. Check the Compose container health and the relevant integration separately.
+HTTP 200 from `/health` confirms web-process liveness, not PostgreSQL queries,
+Arr integrations, synchronization, other nodes, or end-to-end readiness. The
+tailnet and localhost WebAuthn origins use separate credentials; retain the
+configured origin/RP and verify the relevant service and integration separately.
 
 The container logs request method, path, status, and duration by default. Request paths are logged without query parameters, and headers and bodies are never logged. Set `RAWARR_QUIET_LOGS=true` in the Compose environment to suppress routine request lines; server errors remain visible. Successful library scans also log numeric summary counts.
 
-Compose stores the shared Rawrarr data in `~/Library/Application Support/rawrarr/shared-data` by default, outside the source repository. Open it in Finder with:
+## Generic/legacy local Compose data
+
+The `rawrarr-local` examples below describe an existing user-owned local Compose
+installation, not the current internal deployments. Internal operators should
+use the environment-specific guidance in [AGENTS.md](../AGENTS.md). Preserve an
+existing installation's project and protected PostgreSQL password file; do not
+generate a replacement password for its database.
+
+Generic local Compose stores the shared Rawrarr data in `~/Library/Application Support/rawrarr/shared-data` by default, outside the source repository. Open it in Finder with:
 
 ```sh
 open "$HOME/Library/Application Support/rawrarr/shared-data"
@@ -100,13 +104,15 @@ The command requires the exact `RESTORE` confirmation and prompts for the new Ra
 
 The Movies and TV pages each show four service-specific summary cards using the same layout. Their counts and disk usage come from Radarr or Sonarr. The metadata-size card shows the encrypted metadata stored for that service's media type—Movies for Radarr and TV for Sonarr—and “All metadata” shows the full shared metadata tree. The total is expected to be the same on both pages; each service-specific subtotal can differ. Sizes count stored files and use binary units (1 GB is 1,024 MB).
 
+These sizes describe Rawrarr's encrypted cache, not Radarr's or Sonarr's own metadata. A missing cache directory counts as empty; storage-read failures make the sizes unavailable rather than displaying 0 B. Subscriber startup initializes the shared metadata directory on fresh volumes. Unlocking the node's age vault wakes its metadata workers; the Movies rescan action requests a Rawrarr cache refresh, not a Radarr library or disk scan.
+
 On TV, the Sonarr artwork progress message and successful series-load message disappear after every eligible poster has been saved. The metadata worker may continue checking for newly added series without showing a completed-cache message. If posters are still missing, progress remains visible while work continues.
 
 The local plaintext copy stays in node-local `/data`; it is never synchronized. Production deployments must set `RAWARR_LOCAL_PLAINTEXT_CONFIG=false` (the application default) so the configuration exists only as age ciphertext in `/shared/config.aged`. Treat the Radarr key as a secret and do not paste it into logs or documentation.
 
 ## Use the roarlay workspace
 
-After signing in at the tailnet URL, use **Overview** for library and shared-folder summaries, **Fossils** for enrolled nodes, routes, peer state, and boneyard scan actions, and **Movies** and **TV** for the selected fossil node's Radarr and Sonarr libraries. The page is available at `/#fossils`; existing `/#devices` bookmarks redirect there. The browser prefers a healthy direct Tailscale node route and falls back to roarlay's scoped relay. Its route status reflects a browser probe; a green node or web health page alone does not verify Arr connectivity or synchronization.
+After signing in at the tailnet URL, use **Overview** for library and shared-folder summaries, **Fossils** for enrolled nodes, routes, peer state, and boneyard scan actions, **Movies** and **TV** for the selected fossil node's Radarr and Sonarr libraries, and **Discover** for explicit searches through Prowlarr. Configure Prowlarr in Settings; its URL and API key are saved by the selected fossil in the age-encrypted configuration, and the API key is never sent through roarlay. Remote instances require HTTPS; a node-local managed instance may use `http://127.0.0.1:9696`. Discovery shows indexer status and up to 50 normalized search results; it does not expose download links or download content. Settings can download an owner-run Compose overlay for a node-local Prowlarr service. It publishes the setup UI only on the node host's loopback and stores state in a separate local Docker volume; applying it may briefly restart the node's Tailscale sidecar. Keep the existing external instance running during adoption: export a native backup from it, restore into a fresh compatible managed instance, review the target configuration, test its connection before saving it in Rawrarr, and retain the source URL/API key to roll back. The backup may contain credentials; do not put it in roarlay, `/shared`, or logs. Prowlarr settings, indexer status, and search use the direct node route only. A route status reflects a browser probe; a green node or web health page alone does not verify Arr or Prowlarr connectivity or synchronization.
 
 Movies and TV offer **Rescan** to request an on-demand metadata refresh on the selected fossil node. This starts its worker; it does not mean every record is already refreshed. The Settings **Export metadata** action downloads a browser-built ZIP of all indexed encrypted movie text records and matching available artwork. It needs the age private ID in the browser, and the ZIP contains decrypted data, so store it privately. The current export builds the archive in browser memory and covers movie metadata only; other media classes, cancellation, and a partial-failure report remain planned. See the [export plan](metadata-export-plan.md).
 
@@ -147,7 +153,7 @@ Review the file count and byte total, then add `--apply` to copy. The tool refus
 
 ### Replicate a boneyard node's media folder
 
-The existing music replication setup uses an explicit, separate Syncthing share between two approved boneyard nodes. Mount the verified source media directory into its Syncthing companion at `/media` read-only, and mount an empty destination directory into the second companion at `/media` writable. `docker-compose.syncthing-media.yml` adds this bind to each host's existing Syncthing service; use that host's existing Compose file, `-p rawrarr-local`, and its verified `RAWARR_HOST_MEDIA_PATH`. The Rawrarr storage worker itself keeps `/media` read-only. For new collections, use the `/shared/out` publishing flow above when the intended peers already share the Rawrarr `/shared` folder. Never mount media into roarlay.
+The existing music replication setup uses an explicit, separate Syncthing share between two approved boneyard nodes. Mount the verified source media directory into its Syncthing companion at `/media` read-only, and mount an empty destination directory into the second companion at `/media` writable. `docker-compose.syncthing-media.yml` adds this bind to each host's existing Syncthing service; for a generic local Compose installation, use that host's existing Compose file, the example project name `-p rawrarr-local`, and its verified `RAWARR_HOST_MEDIA_PATH`. For current internal deployments, use the environment and stack names in [AGENTS.md](../AGENTS.md), not this local example. The Rawrarr storage worker itself keeps `/media` read-only. For new collections, use the `/shared/out` publishing flow above when the intended peers already share the Rawrarr `/shared` folder. Never mount media into roarlay.
 
 Choose a source directory whose contents fit on the destination and verify the two Syncthing device IDs with `scripts/share_storage_media.py --docker-container CONTAINER --show-id` on each host. For the current music share, mount the Mini's music directory and the MacBook's `media.ev/music` directory as `/media`. Install the same `.stignore` at each mount root before pairing: `!/[Aa]*`, `!/[Aa]*/**`, then `*`, one pattern per line. This limits the current music tree to its A/a top-level entries; inspect those entries and confirm they are directories before enabling the share. The Mini's read-only bind also needs an existing `.stfolder` directory at its root. Use one matching folder ID, `rawrarr-media`, and `--path /media --include-a-folders` on each host. Run the default dry-run first, then `--apply` on the Mini with `--role source` and `--apply --confirm-empty-destination` on a new MacBook destination with `--role destination`. The source is send-only and the destination receive-only. Existing app-data peer and folder configuration is preserved. The script refuses an existing or overlapping media folder.
 

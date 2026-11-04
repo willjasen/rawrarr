@@ -16,6 +16,14 @@ class PublishContainerWorkflowTests(unittest.TestCase):
         self.assertIn("needs: build", source)
         self.assertIn(":sha-${{ github.sha }}-${{ matrix.arch }}", source)
 
+    def test_each_image_build_runs_on_a_native_architecture_runner(self):
+        source = WORKFLOW.read_text()
+        self.assertIn("runs-on: ${{ matrix.runner }}", source)
+        self.assertIn("runner: ubuntu-latest\n            runner_arch: x86_64", source)
+        self.assertIn("runner: ubuntu-24.04-arm\n            runner_arch: aarch64", source)
+        self.assertIn('test "$(uname -m)" = "${{ matrix.runner_arch }}"', source)
+        self.assertNotIn("docker/setup-qemu-action", source)
+
     def test_only_manifest_job_publishes_consumer_tags_after_both_builds(self):
         source = WORKFLOW.read_text()
         self.assertIn("name: Publish multi-architecture main and commit tags", source)

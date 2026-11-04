@@ -23,11 +23,13 @@ const approveNodeFingerprint = document.getElementById('approve-node-root-finger
 const approveNodeStatus = document.getElementById('approve-node-status');
 const approveNodeCancel = document.getElementById('approve-node-cancel');
 let pendingNodeToApprove = null;
+let pendingNodeDecision = 'approve';
 const contentPanel = document.getElementById('content');
 const contentStatus = document.getElementById('content-status');
 const moviesPanel = document.getElementById('movies');
 let aiMovies = null;
 let aiSeries = null;
+const reachableArrBases = new Map();
 const libraryTextCachePrefix = 'rawrarr.library-text.v1';
 function libraryTextCacheKey(nodeId, mediaType) {
   return `${libraryTextCachePrefix}:${encodeURIComponent(nodeId)}:${mediaType}`;
@@ -121,11 +123,19 @@ const ageStorageStatus = document.getElementById('age-storage-status');
 const ageStorageMessage = document.getElementById('age-storage-message');
 const settingsAgeIdInput = document.getElementById('settings-age-id');
 const saveAgeIdButton = document.getElementById('save-age-id');
+const showAgeRecipientButton = document.getElementById('show-age-recipient');
 const removeAgeIdButton = document.getElementById('remove-age-id');
-const views = Object.fromEntries(['overview', 'roarlay', 'fossils', 'movies', 'series', 'assistant', 'configuration', 'settings', 'about'].map(name => [name, document.getElementById(`${name}-view`)]));
+const ageRecipientDisplay = document.getElementById('age-recipient-display');
+const ageRecipientShort = document.getElementById('age-recipient-short');
+const copyAgeRecipientButton = document.getElementById('copy-age-recipient');
+const ageRecipientMessage = document.getElementById('age-recipient-message');
+let ageRecipientVisible = false;
+let agePublicRecipient = '';
+const views = Object.fromEntries(['overview', 'roarlay', 'fossils', 'movies', 'series', 'discovery', 'assistant', 'configuration', 'settings', 'about'].map(name => [name, document.getElementById(`${name}-view`)]));
 const roarlayHealthState = document.getElementById('roarlay-health-state');
 const roarlayHealthLabel = document.getElementById('roarlay-health-label');
 const roarlayHealthDetail = document.getElementById('roarlay-health-detail');
+let prowlarrDiscoveryGeneration = 0;
 document.getElementById('roarlay-address').textContent = location.origin;
 function roleLabel(role) {
   return role === 'coordinator' ? 'roarlay' : role === 'storage' ? 'boneyard' : 'fossil';
@@ -146,6 +156,7 @@ function showView(name, updateHash = true) {
     updateAgeIdControls();
     if (selectedNode) renderCachedMovies(selectedNode);
     if (ageIdentityInMemory && selectedNode) void unlockMetadata();
+    else if (!ageIdentityInMemory) contentStatus.textContent = 'Enter your age private ID to unlock. It will be saved in this browser after validation.';
   }
   if (view === 'series' && updateHash) {
     const cachedSeries = ageIdentityInMemory ? readLibraryTextCache(selectedNode, 'tv') : null;
@@ -159,7 +170,9 @@ function showView(name, updateHash = true) {
   if (view === 'settings' && updateHash) {
     void loadArrSettings('radarr');
     void loadArrSettings('sonarr');
+    void loadArrSettings('prowlarr');
   }
+  if (view === 'discovery') void loadProwlarrDiscovery();
   if (view === 'overview' && updateHash) {
     void loadOverviewMetadata();
     if (selectedNodeDetails?.role === 'metadata') {
@@ -171,7 +184,7 @@ function showView(name, updateHash = true) {
   if (view === 'roarlay') void checkRoarlayHealth();
   if ((view === 'movies' || view === 'series') && updateHash) void loadMetadataSizes();
 }
-window.addEventListener('hashchange', () => showView(location.hash.slice(1) || 'overview', false));
+window.addEventListener('hashchange', () => showView(location.hash.slice(1) || 'overview'));
 document.querySelectorAll('.nav-item[data-view]').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
 document.getElementById('configure-sonarr')?.addEventListener('click', () => showView('settings'));
 showView(location.hash.slice(1) || 'overview', false);
@@ -261,7 +274,16 @@ async function loadNodeAvatar(node, pictureSource, image) {
 }
 async function loadProfile() {
   try {
-    const profile = await jsonRequest('/api/workspace/profile');
+    let profile;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        profile = await jsonRequest('/api/workspace/profile');
+        break;
+      } catch (error) {
+        if (error.status !== 404 || attempt === 2) throw error;
+        await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)));
+      }
+    }
     profileAccountId = profile.accountId || '';
     profileBaseName = profile.displayName || 'Rawrarr user';
     document.getElementById('profile-name').textContent = profileBaseName;
@@ -286,8 +308,10 @@ async function loadProfile() {
     if (walletName) document.getElementById('crypto-ens-name').value = walletName;
     await loadProfileAvatar();
   } catch (error) {
-    document.getElementById('profile-name').textContent = error.message;
-    document.getElementById('sidebar-profile-name').textContent = 'Profile unavailable';
+    if (!profileBaseName) {
+      document.getElementById('profile-name').textContent = error.message;
+      document.getElementById('sidebar-profile-name').textContent = 'Profile unavailable';
+    }
   }
 }
 void loadProfile();
@@ -320,7 +344,14 @@ let selectedRoutePromise = null;
 let selectedRoutePromiseNode = null;
 let deviceNames = {};
 let savingDeviceName = false;
+let deviceNamesRevision = 0;
 let workspaceNodes = [];
+fetch('/api/version', { cache: 'no-store' }).then(response => response.ok ? response.json() : null).then(version => {
+  if (!version?.deployedAt) return;
+  const updated = new Date(version.deployedAt);
+  const label = document.getElementById('coordinator-last-updated');
+  if (label && !Number.isNaN(updated.valueOf())) label.textContent = `Last updated on ${updated.toLocaleString()}`;
+}).catch(() => {});
 const storageScanStatusByNode = new Map();
 const storageScansActive = new Set();
 const storageScheduleDrafts = new Map();
@@ -330,6 +361,38 @@ const nodeAvatarSeeds = new Map();
 let deviceRouteStatusByNode = new Map();
 function deviceNameTokens(value) {
   return new Set(String(value || '').toLowerCase().split(/[^a-z0-9]+/).filter(token => token.length >= 4));
+}
+function renderSigningKeyTopology(nodes) {
+  const panel = document.getElementById('signing-topology-content');
+  const rootFingerprint = nodes.find(node => node.signingRootFingerprint)?.signingRootFingerprint;
+  const root = document.createElement('div');
+  root.className = 'signing-root-card';
+  const title = document.createElement('strong');
+  title.textContent = 'You · instance signing root';
+  const detail = document.createElement('small');
+  detail.textContent = `ML-DSA-65 · user-held authority${rootFingerprint ? ` · fingerprint ${rootFingerprint}` : ''}`;
+  root.append(title, detail);
+  const stem = document.createElement('div');
+  stem.className = 'signing-tree-stem';
+  const devices = document.createElement('div');
+  devices.className = 'signing-device-list';
+  for (const node of nodes) {
+    const card = document.createElement('article');
+    const verified = Boolean(node.signingFingerprint);
+    card.className = `signing-device-card ${verified ? 'verified' : 'legacy'}`;
+    const name = document.createElement('strong');
+    name.textContent = deviceNames[node.nodeId] || (node.displayName && node.displayName !== node.nodeId ? node.displayName : roleLabel(node.role));
+    const state = document.createElement('small');
+    state.textContent = `${roleLabel(node.role)} · ${verified ? 'root-authorized signing key' : 'legacy · no root-signed key'}`;
+    card.append(name, state);
+    if (verified) {
+      const fingerprint = document.createElement('small');
+      fingerprint.textContent = `Device key · ${node.signingFingerprint}`;
+      card.append(fingerprint);
+    }
+    devices.append(card);
+  }
+  panel.replaceChildren(root, stem, devices);
 }
 function renderDeviceTopology(nodes, observedPeers, deviceNames, peerStatuses) {
   const panel = document.getElementById('device-topology-content');
@@ -421,6 +484,9 @@ const canOpenNode = node => node.relayAvailable || Boolean(node.directUrl);
 const selectedNodeStorageKey = 'rawrarr.coordinator.selected-node';
 const initialUrl = new URL(window.location.href);
 const requestedNode = initialUrl.searchParams.get('node') || sessionStorage.getItem(selectedNodeStorageKey);
+// Restore the previous node selection immediately so its browser-cached movie
+// list can render before node health and route checks finish.
+selectedNode = requestedNode;
 if (initialUrl.searchParams.has('node')) {
   initialUrl.searchParams.delete('node');
   window.history.replaceState(null, '', initialUrl);
@@ -437,6 +503,7 @@ const metadataExportInput = document.getElementById('metadata-export-identity');
 const metadataExportDialogStatus = document.getElementById('metadata-export-dialog-status');
 const metadataExportCancel = document.getElementById('metadata-export-cancel');
 async function runMetadataExport(identity) {
+  const identityRevision = ageIdentityRevision;
   const node = selectedNodeDetails;
   if (!node || node.role !== 'metadata') {
     metadataExportStatus.textContent = 'Select a fossil node before exporting.';
@@ -447,7 +514,10 @@ async function runMetadataExport(identity) {
     await import('/assets/metadata-export.js');
     const route = selectedRoute?.nodeId === node.nodeId ? selectedRoute : await chooseNodeRoute(node, true);
     const count = await window.rawrarrMiniExport.runMiniExport(identity, message => { metadataExportStatus.textContent = message; }, route.base);
-    rememberAgeIdentity(identity);
+    if (identityRevision === ageIdentityRevision) {
+      rememberAgeIdentity(identity);
+      updateAgeIdControls();
+    }
     metadataExportStatus.textContent = `Downloaded ${count} movie metadata record(s) and matching available artwork.`;
   } catch (error) {
     metadataExportStatus.textContent = error instanceof Error ? error.message : 'Metadata export failed.';
@@ -485,12 +555,23 @@ metadataExportForm?.addEventListener('submit', async event => {
 // Keep the user's age identity on this browser until sign-out or manual clear.
 let ageIdentityInMemory = rememberedAgeIdentity;
 let ageIdentityStored = Boolean(rememberedAgeIdentity);
+// Invalidate pending consumers before clear, sign-out, or navigation can finish.
+let ageIdentityRevision = 0;
 ageInput.value = '';
+if (location.hash === '#movies' && ageIdentityInMemory && selectedNode && readLibraryTextCache(selectedNode, 'movies')) {
+  contentPanel.hidden = false;
+  renderCachedMovies(selectedNode);
+}
 
 function updateAgeIdControls() {
   const hasIdentity = Boolean(ageIdentityInMemory);
   ageIdEntry.hidden = hasIdentity;
   clearKeyButton.hidden = !hasIdentity;
+  if (hasIdentity && contentStatus.textContent.trim() === 'Enter your age private ID to unlock. It will be saved in this browser after validation.') {
+    contentStatus.textContent = ageIdentityStored
+      ? 'Age private ID is saved in this browser and ready to unlock your encrypted movies.'
+      : 'Age private ID is available in this page and ready to unlock your encrypted movies.';
+  }
   updateAgeStorageSettings();
 }
 function rememberAgeIdentity(identity) {
@@ -504,6 +585,38 @@ function rememberAgeIdentity(identity) {
     return false;
   }
 }
+window.addEventListener('storage', event => {
+  if (event.storageArea !== localStorage || (event.key !== ageSessionKey && event.key !== null)) return;
+  const nextIdentity = event.newValue || '';
+  const identityChanged = ageIdentityInMemory !== nextIdentity;
+  ageIdentityInMemory = nextIdentity;
+  ageIdentityStored = Boolean(event.newValue);
+  if (identityChanged) {
+    ageIdentityRevision += 1;
+    ageRecipientVisible = false;
+    agePublicRecipient = '';
+    ageRecipientShort.textContent = '';
+    ageRecipientDisplay.hidden = true;
+    ageRecipientMessage.textContent = '';
+    ageRecipientMessage.hidden = true;
+    ageRecipientMessage.dataset.state = '';
+    showAgeRecipientButton.textContent = 'Show age public ID';
+  }
+  if (!nextIdentity) {
+    aiMovies = null;
+    aiSeries = null;
+    moviesPanel.replaceChildren();
+    document.getElementById('sonarr-series').replaceChildren();
+    resetArrSummary('radarr');
+    resetArrSummary('sonarr');
+    if (identityChanged) ageInput.value = '';
+    if (location.hash === '#movies') {
+      contentStatus.textContent = 'Age private ID removed from this browser; metadata is locked.';
+    }
+  }
+  updateAgeIdControls();
+  if (ageIdentityInMemory && location.hash === '#movies' && selectedNode) void unlockMetadata();
+});
 function updateAgeStorageSettings() {
   ageStorageStatus.dataset.state = '';
   ageStorageStatus.textContent = ageIdentityInMemory
@@ -515,21 +628,132 @@ function updateAgeStorageSettings() {
   document.getElementById('settings-age-id-label').hidden = settingsAgeIdInput.hidden;
   saveAgeIdButton.textContent = 'Save age ID in this browser';
   saveAgeIdButton.hidden = Boolean(ageIdentityInMemory);
+  showAgeRecipientButton.hidden = !ageIdentityInMemory;
+  showAgeRecipientButton.textContent = ageRecipientVisible ? 'Hide age public ID' : 'Show age public ID';
   removeAgeIdButton.hidden = !ageIdentityInMemory;
   removeAgeIdButton.textContent = 'Clear saved age ID';
 }
+showAgeRecipientButton.addEventListener('click', async () => {
+  if (ageRecipientVisible) {
+    ageRecipientVisible = false;
+    agePublicRecipient = '';
+    ageRecipientShort.textContent = '';
+    ageRecipientDisplay.hidden = true;
+    ageRecipientMessage.textContent = '';
+    ageRecipientMessage.hidden = true;
+    ageRecipientMessage.dataset.state = '';
+    showAgeRecipientButton.textContent = 'Show age public ID';
+    return;
+  }
+  const identity = ageIdentityInMemory;
+  if (!identity) return;
+  showAgeRecipientButton.disabled = true;
+  ageRecipientShort.textContent = '';
+  ageRecipientDisplay.hidden = true;
+  ageRecipientMessage.hidden = false;
+  ageRecipientMessage.dataset.state = '';
+  ageRecipientMessage.textContent = 'Deriving age public ID in this browser…';
+  try {
+    await import('/assets/metadata-export.js');
+    const recipient = (await window.rawrarrMiniExport.deriveProfileRecipient(identity)).trim();
+    if (!/^age1pq1[a-z0-9]+$/.test(recipient)) throw new Error('The saved age ID did not produce a valid public ID.');
+    if (ageIdentityInMemory !== identity) {
+      ageRecipientVisible = false;
+      agePublicRecipient = '';
+      ageRecipientShort.textContent = '';
+      ageRecipientDisplay.hidden = true;
+      ageRecipientMessage.textContent = '';
+      ageRecipientMessage.hidden = true;
+      showAgeRecipientButton.textContent = 'Show age public ID';
+      return;
+    }
+    ageRecipientVisible = true;
+    agePublicRecipient = recipient;
+    ageRecipientShort.textContent = recipient.length > 24
+      ? `${recipient.slice(0, 12)}…${recipient.slice(-8)}`
+      : `${recipient.slice(0, 8)}…${recipient.slice(-4)}`;
+    ageRecipientDisplay.hidden = false;
+    ageRecipientMessage.textContent = '';
+    ageRecipientMessage.hidden = true;
+    showAgeRecipientButton.textContent = 'Hide age public ID';
+  } catch (error) {
+    agePublicRecipient = '';
+    ageRecipientShort.textContent = '';
+    ageRecipientDisplay.hidden = true;
+    ageRecipientMessage.dataset.state = 'error';
+    ageRecipientMessage.textContent = error instanceof Error ? error.message : 'Could not derive the age public ID.';
+  } finally {
+    showAgeRecipientButton.disabled = false;
+    if (!ageIdentityInMemory) {
+      agePublicRecipient = '';
+      ageRecipientShort.textContent = '';
+      ageRecipientDisplay.hidden = true;
+      ageRecipientMessage.textContent = '';
+      ageRecipientMessage.hidden = true;
+    }
+  }
+});
+copyAgeRecipientButton.addEventListener('click', async () => {
+  const recipient = agePublicRecipient;
+  if (!ageRecipientVisible || !recipient) return;
+  copyAgeRecipientButton.disabled = true;
+  ageRecipientMessage.dataset.state = '';
+  ageRecipientMessage.hidden = false;
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard access is unavailable. Allow clipboard access, then try again.');
+    await navigator.clipboard.writeText(recipient);
+    if (ageRecipientVisible && agePublicRecipient === recipient) ageRecipientMessage.textContent = 'Age public ID copied.';
+  } catch {
+    if (ageRecipientVisible && agePublicRecipient === recipient) {
+      ageRecipientMessage.dataset.state = 'error';
+      ageRecipientMessage.textContent = 'Could not copy the age public ID. Check browser clipboard access and try again.';
+    }
+  } finally {
+    copyAgeRecipientButton.disabled = false;
+  }
+});
 function clearAgeIdentity() {
+  try {
+    localStorage.removeItem(ageSessionKey);
+  } catch {
+    ageStorageMessage.dataset.state = 'error';
+    ageStorageMessage.textContent = "Could not remove the saved age ID. Allow browser storage access and try again, or clear this site's browser data before signing out.";
+    contentStatus.textContent = ageStorageMessage.textContent;
+    showView('settings');
+    return false;
+  }
+  ageIdentityRevision += 1;
   aiMovies = null;
   aiSeries = null;
   ageIdentityInMemory = '';
   ageIdentityStored = false;
-  try { localStorage.removeItem(ageSessionKey); } catch { /* Keep the page usable when storage is disabled. */ }
+  ageRecipientVisible = false;
+  agePublicRecipient = '';
+  ageRecipientShort.textContent = '';
+  ageRecipientDisplay.hidden = true;
+  ageRecipientMessage.textContent = '';
+  ageRecipientMessage.hidden = true;
+  ageRecipientMessage.dataset.state = '';
   ageInput.value = '';
+  settingsAgeIdInput.value = '';
+  metadataExportInput.value = '';
+  moviesPanel.replaceChildren();
+  document.getElementById('sonarr-series').replaceChildren();
+  resetArrSummary('radarr');
+  resetArrSummary('sonarr');
   updateAgeIdControls();
+  return true;
 }
 updateAgeIdControls();
 window.addEventListener('pagehide', () => {
+  ageIdentityRevision += 1;
   ageIdentityInMemory = '';
+  ageRecipientVisible = false;
+  agePublicRecipient = '';
+  ageRecipientShort.textContent = '';
+  ageRecipientDisplay.hidden = true;
+  ageRecipientMessage.textContent = '';
+  ageRecipientMessage.hidden = true;
   ageInput.value = '';
   settingsAgeIdInput.value = '';
   metadataExportInput.value = '';
@@ -538,9 +762,25 @@ window.addEventListener('pagehide', () => {
   approveNodeBackup.value = '';
   approveNodeFingerprint.value = '';
 });
+window.addEventListener('pageshow', event => {
+  if (!event.persisted) return;
+  try { ageIdentityInMemory = localStorage.getItem(ageSessionKey) || ''; } catch { /* Storage can be disabled by browser policy. */ }
+  ageIdentityStored = Boolean(ageIdentityInMemory);
+  if (!ageIdentityInMemory) {
+    aiMovies = null;
+    aiSeries = null;
+    moviesPanel.replaceChildren();
+    document.getElementById('sonarr-series').replaceChildren();
+    resetArrSummary('radarr');
+    resetArrSummary('sonarr');
+  }
+  updateAgeIdControls();
+  showView(location.hash.slice(1) || 'overview');
+});
 
 document.getElementById('age-storage-form').addEventListener('submit', async event => {
   event.preventDefault();
+  const identityRevision = ageIdentityRevision;
   const identity = ageIdentityInMemory || settingsAgeIdInput.value.trim();
   ageStorageMessage.dataset.state = '';
   if (!identity) {
@@ -554,6 +794,7 @@ document.getElementById('age-storage-form').addEventListener('submit', async eve
     await import('/assets/metadata-export.js');
     const recipient = (await window.rawrarrMiniExport.deriveProfileRecipient(identity)).trim();
     if (!/^age1pq1[a-z0-9]+$/.test(recipient)) throw new Error('The age private ID is invalid. Check it and try again.');
+    if (identityRevision !== ageIdentityRevision) return;
     if (!rememberAgeIdentity(identity)) {
       ageStorageMessage.textContent = 'Age private ID is valid for this page, but this browser could not save it. Keep this page open or enter it again after refreshing.';
     } else {
@@ -562,6 +803,7 @@ document.getElementById('age-storage-form').addEventListener('submit', async eve
     settingsAgeIdInput.value = '';
     contentStatus.textContent = ageStorageMessage.textContent;
     updateAgeIdControls();
+    if (location.hash === '#movies' && selectedNode) void unlockMetadata();
   } catch (error) {
     ageStorageMessage.dataset.state = 'error';
     ageStorageMessage.textContent = error.message || 'Could not validate or save the age private ID.';
@@ -571,9 +813,7 @@ document.getElementById('age-storage-form').addEventListener('submit', async eve
   }
 });
 removeAgeIdButton.addEventListener('click', () => {
-  clearAgeIdentity();
-  moviesPanel.replaceChildren();
-  resetArrSummary('radarr');
+  if (!clearAgeIdentity()) return;
   contentStatus.textContent = 'Age private ID removed from this browser; metadata is locked.';
   ageStorageMessage.dataset.state = '';
   ageStorageMessage.textContent = 'Age private ID removed from this browser.';
@@ -628,7 +868,6 @@ async function arrDirectRequest(path, options = {}) {
   return result;
 }
 
-const reachableArrBases = new Map();
 async function probeArrBase(service, url) {
   reachableArrBases.delete(service);
   try {
@@ -662,41 +901,75 @@ function renderLibraryBrowser({ containerId, searchId, filterId, countId, items,
   const config = type === 'movie'
     ? { service:'radarr', available:item => item.hasFile, status:item => item.hasFile ? 'Present' : 'Missing', details:item => [item.year || 'Year unknown', item.qualityProfile || 'Quality unknown', item.hasFile ? formatBytes(item.sizeOnDisk) : 'No file'] }
     : { service:'sonarr', art:'TV', available:item => Number(item.episodeFileCount) > 0, status:item => `${Number(item.episodeFileCount) || 0} episodes`, details:item => [item.year || 'Year unknown', `${Number(item.episodeFileCount) || 0} / ${Number(item.episodeCount) || 0} episodes`, item.qualityProfile || 'Quality unknown'] };
+  const existingCards = new Map(container.dataset.libraryNode === selectedNode
+    ? [...container.querySelectorAll('.library-card')].map(card => [card.dataset.libraryId, card]) : []);
+  container.dataset.libraryNode = selectedNode;
+  const cards = items.map(item => {
+    const id = String(type === 'movie' ? item.tmdbId || '' : item.tvdbId || '');
+    const existing = id ? existingCards.get(id) : null;
+    if (existing) existingCards.delete(id);
+    return { item, card: existing?.querySelector('.library-poster') ? existing : null };
+  });
   const paint = () => {
     const query = search.value.trim().toLocaleLowerCase();
     const mode = filter.value;
-    const visible = items.filter(item => {
+    const matches = item => {
       const available = config.available(item);
       if (mode === 'available' && !available || mode === 'missing' && available || mode === 'monitored' && !item.monitored) return false;
       return `${item.title || ''} ${item.year || ''}`.toLocaleLowerCase().includes(query);
-    });
-    container.replaceChildren();
+    };
+    const visible = items.filter(matches);
+    container.querySelector('.library-empty')?.remove();
     count.textContent = `${visible.length.toLocaleString()} of ${items.length.toLocaleString()} ${type === 'movie' ? 'movies' : 'series'}`;
     if (!visible.length) {
       const empty = document.createElement('div'); empty.className = 'library-empty';
       empty.textContent = items.length ? 'No titles match this search or filter.' : `No ${type === 'movie' ? 'movies' : 'series'} in this library yet.`;
-      container.append(empty); return;
+      container.append(empty);
     }
-    for (const item of visible) {
-      const card = document.createElement('article'); card.className = 'library-card';
-      card.dataset.libraryId = String(type === 'movie' ? item.tmdbId || '' : item.tvdbId || '');
-      const art = document.createElement('div'); art.className = 'library-art';
-      const placeholder = document.createElement('span'); placeholder.className = 'library-art-empty'; placeholder.textContent = type === 'movie' ? '▶' : '▤'; placeholder.setAttribute('aria-hidden', 'true'); art.append(placeholder);
-      const poster = document.createElement('img'); poster.className = 'library-poster'; poster.alt = ''; poster.loading = 'lazy'; poster.decoding = 'async'; poster.referrerPolicy = 'no-referrer';
-      if (type === 'movie') { poster.dataset.tmdbId = String(item.tmdbId || ''); if (item.posterUrl) poster.src = item.posterUrl; }
-      else if (Number(item.tvdbId) > 0) poster.dataset.tvdbId = String(item.tvdbId);
-      poster.addEventListener('load', () => { placeholder.hidden = true; }, { once:true });
-      poster.addEventListener('error', () => poster.remove(), { once:true });
-      art.append(poster);
-      const badge = document.createElement('span'); badge.className = 'library-state'; badge.textContent = config.status(item); art.append(badge);
-      const copy = document.createElement('div'); copy.className = 'library-card-copy';
-      const titleRow = document.createElement('div'); titleRow.className = 'library-title-row';
-      const title = document.createElement('span'); title.className = 'library-card-title'; title.textContent = item.title || 'Untitled'; title.title = item.title || 'Untitled'; titleRow.append(title);
+    for (const entry of cards) {
+      const { item } = entry;
+      let card = entry.card;
+      if (!card) {
+        card = document.createElement('article'); card.className = 'library-card';
+        entry.card = card;
+        card.dataset.libraryId = String(type === 'movie' ? item.tmdbId || '' : item.tvdbId || '');
+        const art = document.createElement('div'); art.className = 'library-art';
+        const placeholder = document.createElement('span'); placeholder.className = 'library-art-empty'; placeholder.textContent = type === 'movie' ? '▶' : '▤'; placeholder.setAttribute('aria-hidden', 'true'); art.append(placeholder);
+        const poster = document.createElement('img'); poster.className = 'library-poster'; poster.alt = ''; poster.loading = 'lazy'; poster.decoding = 'async'; poster.referrerPolicy = 'no-referrer';
+        if (type === 'movie') { poster.dataset.tmdbId = String(item.tmdbId || ''); if (item.posterUrl) poster.src = item.posterUrl; }
+        else if (Number(item.tvdbId) > 0) poster.dataset.tvdbId = String(item.tvdbId);
+        poster.addEventListener('load', () => { placeholder.hidden = true; });
+        poster.addEventListener('error', () => poster.remove(), { once:true });
+        art.append(poster);
+        const badge = document.createElement('span'); badge.className = 'library-state'; art.append(badge);
+        const copy = document.createElement('div'); copy.className = 'library-card-copy';
+        const titleRow = document.createElement('div'); titleRow.className = 'library-title-row';
+        const title = document.createElement('span'); title.className = 'library-card-title'; titleRow.append(title);
+        const meta = document.createElement('div'); meta.className = 'library-card-meta';
+        const detail = document.createElement('div'); detail.className = 'library-card-detail';
+        copy.append(titleRow, meta, detail); card.append(art, copy);
+      }
+      card.hidden = !matches(item);
+      card.querySelector('.library-state').textContent = config.status(item);
+      const title = card.querySelector('.library-card-title');
+      title.textContent = item.title || 'Untitled'; title.title = item.title || 'Untitled';
+      const titleRow = card.querySelector('.library-title-row');
+      titleRow.querySelector('.arr-external-link')?.remove();
       appendArrDetailLink(titleRow, config.service, item);
-      const meta = document.createElement('div'); meta.className = 'library-card-meta'; meta.textContent = `${item.year || 'Year unknown'}${item.monitored ? ' · Monitored' : ''}`;
-      const detail = document.createElement('div'); detail.className = 'library-card-detail';
-      for (const value of config.details(item)) { const part = document.createElement('span'); part.textContent = value; detail.append(part); }
-      copy.append(titleRow, meta, detail); card.append(art, copy); container.append(card);
+      card.querySelector('.library-card-meta').textContent = `${item.year || 'Year unknown'}${item.monitored ? ' · Monitored' : ''}`;
+      card.querySelector('.library-card-detail').replaceChildren(...config.details(item).map(value => {
+        const part = document.createElement('span'); part.textContent = value; return part;
+      }));
+      const poster = card.querySelector('.library-poster');
+      if (item.posterUrl && poster && poster.getAttribute('src') !== item.posterUrl) poster.src = item.posterUrl;
+    }
+    const retained = new Set(cards.map(entry => entry.card));
+    for (const card of container.querySelectorAll('.library-card')) {
+      if (!retained.has(card)) card.remove();
+    }
+    for (const [index, { card }] of cards.entries()) {
+      const current = container.children[index];
+      if (current !== card) container.insertBefore(card, current || null);
     }
   };
   search.oninput = paint; filter.onchange = paint; paint();
@@ -737,6 +1010,14 @@ const arrSettings = {
     mediaCard: 'sonarr-connection-card', saved: 'settings-sonarr-saved', savedUrl: 'settings-sonarr-saved-url', endpoint: '/settings/sonarr', label: 'Sonarr',
     dialog: 'settings-sonarr-dialog', configure: 'settings-configure-sonarr', test: 'settings-test-sonarr',
   },
+  prowlarr: {
+    overviewCards: [],
+    copies: [
+      { url: 'settings-prowlarr-url', key: 'settings-prowlarr-key', form: 'settings-prowlarr-settings', note: 'settings-prowlarr-key-note', message: 'settings-prowlarr-settings-message', button: 'settings-save-prowlarr', clear: 'settings-clear-prowlarr', nodeNote: 'settings-prowlarr-node-note' },
+    ],
+    saved: 'settings-prowlarr-saved', savedUrl: 'settings-prowlarr-saved-url', endpoint: '/settings/prowlarr', label: 'Prowlarr',
+    dialog: 'settings-prowlarr-dialog', configure: 'settings-configure-prowlarr', test: 'settings-test-prowlarr',
+  },
 };
 
 async function loadArrSettings(service) {
@@ -752,8 +1033,8 @@ async function loadArrSettings(service) {
     await unlockMetadataVaultForSettings();
     const settings = await arrDirectRequest(fields.endpoint);
     for (const id of fields.overviewCards) document.getElementById(id).hidden = !settings.configured;
-    void probeArrBase(service, settings.url || '');
-    document.getElementById(fields.mediaCard).hidden = Boolean(settings.configured);
+    if (service !== 'prowlarr') void probeArrBase(service, settings.url || '');
+    if (fields.mediaCard) document.getElementById(fields.mediaCard).hidden = Boolean(settings.configured);
     for (const copy of fields.copies) {
       document.getElementById(copy.url).value = settings.url || '';
       const key = document.getElementById(copy.key);
@@ -772,13 +1053,13 @@ async function loadArrSettings(service) {
       const isSettingsCopy = copy.form === `settings-${service}-settings`;
       document.getElementById(copy.nodeNote).textContent = settings.configured
         ? isSettingsCopy
-          ? `Connected on ${selectedNodeDetails.nodeId}. Credentials stay encrypted on this node.`
-          : `Connected to ${fields.label} on ${selectedNodeDetails.nodeId}. Settings are sent directly from this browser to the node; roarlay does not receive the ${service === 'radarr' ? 'API key or UI login' : 'API key'}.`
+          ? `Connected on ${selectedNodeLabel()}. Credentials stay encrypted on this node.`
+          : `Connected to ${fields.label} on ${selectedNodeLabel()}. Settings are sent directly from this browser to the node; roarlay does not receive the ${service === 'radarr' ? 'API key or UI login' : 'API key'}.`
         : isSettingsCopy
-          ? `Not configured on ${selectedNodeDetails.nodeId}. Add the connection when ready.`
-          : `${fields.label} is not configured on ${selectedNodeDetails.nodeId}. Add it here when ready. Credentials go directly from this browser to the node; roarlay never receives them.`;
+          ? `Not configured on ${selectedNodeLabel()}. Add the connection when ready.`
+          : `${fields.label} is not configured on ${selectedNodeLabel()}. Add it here when ready. Credentials go directly from this browser to the node; roarlay never receives them.`;
       const message = document.getElementById(copy.message);
-      message.textContent = settings.configured ? `Saved ${fields.label} settings loaded from the age-encrypted config.` : `Enter your ${fields.label} HTTPS URL and API key.`;
+      message.textContent = settings.configured ? `Saved ${fields.label} settings loaded from the age-encrypted config.` : `Enter your ${fields.label} HTTPS URL or node-loopback HTTP URL and API key.`;
       message.dataset.state = '';
       document.getElementById(copy.button).disabled = false;
     }
@@ -801,8 +1082,8 @@ async function loadArrSettings(service) {
   } catch (error) {
     document.getElementById(fields.saved).hidden = true;
     if (location.hash === '' || location.hash === '#overview') {
-      const id = service === 'radarr' ? 'overview-movie-detail' : 'overview-series-detail';
-      document.getElementById(id).textContent = error.message || `Could not load ${fields.label} statistics.`;
+      const id = fields.overviewDetail || (service === 'radarr' ? 'overview-movie-detail' : service === 'sonarr' ? 'overview-series-detail' : null);
+      if (id) document.getElementById(id).textContent = error.message || `Could not load ${fields.label} statistics.`;
     }
     for (const copy of fields.copies) {
       const message = document.getElementById(copy.message);
@@ -902,11 +1183,18 @@ for (const [service, fields] of Object.entries(arrSettings)) {
           document.getElementById(peer.message).dataset.state = '';
           document.getElementById(peer.message).textContent = `${fields.label} settings cleared from the age-encrypted config.`;
         }
-        document.getElementById(fields.mediaCard).hidden = false;
+        if (fields.mediaCard) document.getElementById(fields.mediaCard).hidden = false;
         document.getElementById(fields.saved).hidden = true;
         document.getElementById(fields.configure).textContent = `Configure ${fields.label}`;
         if (copy.form === `settings-${service}-settings`) dialog.close();
         if (service === 'sonarr') document.getElementById('tv-library').hidden = true;
+        if (service === 'prowlarr') {
+          document.getElementById('prowlarr-discovery-content').hidden = true;
+          document.getElementById('prowlarr-not-configured').hidden = false;
+          document.getElementById('prowlarr-indexers').replaceChildren();
+          document.getElementById('prowlarr-search-results').replaceChildren();
+          document.getElementById('prowlarr-discovery-status').textContent = 'Prowlarr settings cleared from the age-encrypted config.';
+        }
       } catch (error) {
         message.dataset.state = 'error';
         message.textContent = error.message || `Could not clear ${fields.label} settings.`;
@@ -914,6 +1202,159 @@ for (const [service, fields] of Object.entries(arrSettings)) {
     });
   }
 }
+
+function renderProwlarrIndexers(indexers) {
+  const container = document.getElementById('prowlarr-indexers');
+  container.replaceChildren();
+  if (!indexers.length) {
+    const empty = document.createElement('li');
+    empty.className = 'discovery-indexer';
+    empty.textContent = 'No indexers are configured in Prowlarr.';
+    container.append(empty);
+    return;
+  }
+  for (const indexer of indexers) {
+    const item = document.createElement('li');
+    item.className = 'discovery-indexer';
+    const name = document.createElement('strong');
+    name.textContent = indexer.name || 'Unknown indexer';
+    const detail = document.createElement('p');
+    const state = indexer.status === 'temporarily-disabled' ? 'Temporarily disabled'
+      : indexer.enabled ? 'Enabled' : 'Disabled';
+    detail.textContent = `${state} · ${indexer.protocol || 'Unknown protocol'} · ${indexer.supportsSearch ? 'Search supported' : 'Search unavailable'}`;
+    item.append(name, detail);
+    container.append(item);
+  }
+}
+
+function renderProwlarrResults(results) {
+  const container = document.getElementById('prowlarr-search-results');
+  container.replaceChildren();
+  if (!results.length) {
+    const empty = document.createElement('p');
+    empty.className = 'connection-note';
+    empty.textContent = 'No results found.';
+    container.append(empty);
+    return;
+  }
+  for (const result of results) {
+    const card = document.createElement('article');
+    card.className = 'discovery-result';
+    const title = document.createElement('h3');
+    title.textContent = result.title || 'Untitled result';
+    const source = document.createElement('p');
+    const size = Number.isSafeInteger(result.sizeBytes) && result.sizeBytes >= 0
+      ? `${(result.sizeBytes / 1_000_000_000).toFixed(2)} GB`
+      : 'Size unavailable';
+    source.textContent = `${result.indexerName || 'Unknown indexer'} · ${result.protocol || 'Unknown protocol'} · ${size}`;
+    const identity = document.createElement('p');
+    identity.textContent = `Result ID: ${result.id}`;
+    const categories = document.createElement('p');
+    categories.textContent = result.categories?.length ? `Categories: ${result.categories.join(', ')}` : 'Categories unavailable';
+    card.append(title, source, identity, categories);
+    container.append(card);
+  }
+}
+
+async function loadProwlarrDiscovery() {
+  const generation = ++prowlarrDiscoveryGeneration;
+  const status = document.getElementById('prowlarr-discovery-status');
+  const content = document.getElementById('prowlarr-discovery-content');
+  const setup = document.getElementById('prowlarr-not-configured');
+  status.dataset.state = '';
+  status.textContent = 'Checking Prowlarr on the selected fossil node…';
+  content.hidden = true;
+  setup.hidden = true;
+  document.getElementById('prowlarr-search-results').replaceChildren();
+  try {
+    const settings = await arrDirectRequest('/settings/prowlarr');
+    if (generation !== prowlarrDiscoveryGeneration) return;
+    if (!settings.configured) {
+      setup.hidden = false;
+      status.textContent = `Prowlarr is not configured on ${selectedNodeLabel()}.`;
+      document.getElementById('prowlarr-indexers').replaceChildren();
+      return;
+    }
+    const indexers = await arrDirectRequest('/prowlarr/indexers');
+    if (generation !== prowlarrDiscoveryGeneration) return;
+    renderProwlarrIndexers(indexers);
+    content.hidden = false;
+    status.textContent = `Connected to Prowlarr on ${selectedNodeLabel()}.`;
+  } catch (error) {
+    if (generation !== prowlarrDiscoveryGeneration) return;
+    status.dataset.state = 'error';
+    status.textContent = error.message || 'Could not load Prowlarr indexers.';
+  }
+}
+
+document.getElementById('configure-prowlarr-discovery').addEventListener('click', () => showView('settings'));
+document.getElementById('refresh-prowlarr-indexers').addEventListener('click', () => void loadProwlarrDiscovery());
+document.getElementById('download-prowlarr-compose').addEventListener('click', () => {
+  const message = document.getElementById('prowlarr-compose-message');
+  try {
+    if (selectedNodeDetails?.role !== 'metadata') {
+      throw new Error('Select a fossil node before generating its Prowlarr Compose overlay.');
+    }
+    const overlay = [
+      '# Rawrarr Prowlarr overlay. Review before applying beside the existing compose.yaml.',
+      '# Prowlarr state stays in a node-local Docker volume; the external instance is not changed.',
+      'services:',
+      '  tailscale:',
+      '    ports:',
+      '      - "127.0.0.1:9696:9696"',
+      '  prowlarr:',
+      '    image: lscr.io/linuxserver/prowlarr:latest',
+      '    network_mode: service:tailscale',
+      '    depends_on:',
+      '      tailscale:',
+      '        condition: service_started',
+      '    volumes:',
+      '      - prowlarr-config:/config',
+      '    restart: unless-stopped',
+      'volumes:',
+      '  prowlarr-config:',
+      '',
+    ].join('\n');
+    const blob = new Blob([overlay], { type: 'application/yaml' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'prowlarr-compose.yaml';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    message.dataset.state = '';
+    message.textContent = 'Prowlarr Compose overlay downloaded. Review it before applying on the selected fossil host.';
+  } catch (error) {
+    message.dataset.state = 'error';
+    message.textContent = error.message || 'Could not generate the Prowlarr Compose overlay.';
+  }
+});
+document.getElementById('prowlarr-search-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = document.getElementById('prowlarr-search-button');
+  const status = document.getElementById('prowlarr-search-status');
+  const generation = prowlarrDiscoveryGeneration;
+  const nodeId = selectedNode;
+  button.disabled = true;
+  status.dataset.state = '';
+  status.textContent = 'Searching configured indexers…';
+  try {
+    const results = await arrDirectRequest('/prowlarr/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: document.getElementById('prowlarr-search-query').value }),
+    });
+    if (generation !== prowlarrDiscoveryGeneration || nodeId !== selectedNode) return;
+    renderProwlarrResults(results);
+    status.textContent = `${results.length} result${results.length === 1 ? '' : 's'} returned.`;
+  } catch (error) {
+    if (generation !== prowlarrDiscoveryGeneration || nodeId !== selectedNode) return;
+    status.dataset.state = 'error';
+    status.textContent = error.message || 'Prowlarr search failed.';
+  } finally {
+    button.disabled = false;
+  }
+});
 
 async function loadClusterConfiguration() {
   const identity = ageIdentityInMemory;
@@ -947,10 +1388,13 @@ async function jsonRequest(path, options = {}) {
   const response = await fetch(path, { headers: { Accept: 'application/json', ...(options.headers || {}) }, cache: 'no-store', ...options });
   if (!response.ok) {
     if (response.status === 401) {
-      clearAgeIdentity();
-      throw new Error('Your roarlay sign-in expired. Sign in again.');
+      throw new Error(path.startsWith('/nodes/')
+        ? 'The node rejected this request (HTTP 401). Check its connection and try again.'
+        : 'Your roarlay sign-in expired. Sign in again.');
     }
-    throw new Error(`Request failed (HTTP ${response.status}).`);
+    const error = new Error(`Request failed (HTTP ${response.status}).`);
+    error.status = response.status;
+    throw error;
   }
   return response.status === 204 ? null : response.json();
 }
@@ -961,6 +1405,7 @@ function openNode(node) {
     contentPanel.hidden = true;
     return;
   }
+  const nodeChanged = selectedNode !== node.nodeId;
   selectedNode = node.nodeId;
   sessionStorage.setItem(selectedNodeStorageKey, selectedNode);
   selectedNodeDetails = node;
@@ -977,7 +1422,7 @@ function openNode(node) {
   contentPanel.hidden = node.role !== 'metadata';
   aiMovies = null;
   aiSeries = null;
-  moviesPanel.replaceChildren();
+  if (nodeChanged) moviesPanel.replaceChildren();
   resetArrSummary('radarr');
   status.textContent = node.role === 'metadata'
     ? `${node.nodeId} · fossil node`
@@ -1002,8 +1447,18 @@ function openNode(node) {
     if (currentView === 'settings') {
       void loadArrSettings('radarr');
       void loadArrSettings('sonarr');
+      void loadArrSettings('prowlarr');
     }
+    if (currentView === 'discovery') void loadProwlarrDiscovery();
   }
+}
+
+function selectedNodeLabel() {
+  const node = selectedNodeDetails;
+  if (!node) return 'selected node';
+  return deviceNames[node.nodeId]
+    || (node.displayName && node.displayName !== node.nodeId ? node.displayName : '')
+    || roleLabel(node.role);
 }
 
 function renderStorageScanStatus(nodeId, message) {
@@ -1374,6 +1829,7 @@ async function loadOverviewMetadata() {
 
 let sonarrLoadGeneration = 0;
 async function loadSonarrSeries() {
+  const identityRevision = ageIdentityRevision;
   if (!ageIdentityInMemory) {
     const message = document.getElementById('series-message');
     message.hidden = false;
@@ -1398,12 +1854,12 @@ async function loadSonarrSeries() {
   try {
     await unlockMetadataVaultForSettings();
     const series = await arrDirectRequest('/sonarr/series');
-    if (generation !== sonarrLoadGeneration || selectedNode !== nodeId) return;
+    if (generation !== sonarrLoadGeneration || selectedNode !== nodeId || identityRevision !== ageIdentityRevision) return;
     writeLibraryTextCache(nodeId, 'tv', series);
     renderSonarrSeries(series, `Loaded ${series.length} series from Sonarr.`);
     void attachSonarrPosters(rows);
   } catch (error) {
-    if (generation !== sonarrLoadGeneration || selectedNode !== nodeId) return;
+    if (generation !== sonarrLoadGeneration || selectedNode !== nodeId || identityRevision !== ageIdentityRevision) return;
     message.hidden = false;
     message.dataset.state = 'error';
     message.textContent = error.message || 'Could not load the Sonarr series library.';
@@ -1521,7 +1977,6 @@ window.setInterval(() => {
 
 function renderMovies(movies) {
   aiMovies = movies;
-  moviesPanel.replaceChildren();
   const files = movies.filter(movie => movie.hasFile).length;
   setArrSummaryValues('radarr', {
     libraryCount: String(movies.length),
@@ -1567,6 +2022,7 @@ async function loadMetadataSizes() {
 }
 
 async function unlockMetadata() {
+  const identityRevision = ageIdentityRevision;
   const suppliedIdentity = ageInput.value.trim();
   const identity = suppliedIdentity || ageIdentityInMemory;
   if (!selectedNode || !identity) return;
@@ -1584,12 +2040,13 @@ async function unlockMetadata() {
     await import('/assets/metadata-export.js');
     const recipient = (await window.rawrarrMiniExport.deriveProfileRecipient(identity)).trim();
     if (!/^age1pq1[a-z0-9]+$/.test(recipient)) throw new Error('The age private ID is invalid. Check it and try again.');
+    if (identityRevision !== ageIdentityRevision) return;
     const persisted = rememberAgeIdentity(identity);
     updateAgeIdControls();
     if (!persisted) contentStatus.textContent = 'Age ID validated. This browser could not save it, so keep this page open or enter it again after refreshing.';
     await unlockMetadataVaultForSettings();
     const liveMovies = await arrDirectRequest('/radarr/live-library');
-    if (selectedNode !== nodeId) return;
+    if (selectedNode !== nodeId || identityRevision !== ageIdentityRevision) return;
     const movies = liveMovies.map(movie => ({
       ...movie,
       qualityProfile: movie.qualityProfile || '—',
@@ -1602,7 +2059,7 @@ async function unlockMetadata() {
     void attachMoviePosters(movies, nodeId);
     contentStatus.textContent = `${movies.length} Radarr library entries loaded directly from the node.${persisted ? '' : ' This browser could not save the age ID, so enter it again after refreshing.'}`;
   } catch (error) {
-    if (selectedNode !== nodeId) return;
+    if (selectedNode !== nodeId || identityRevision !== ageIdentityRevision) return;
     if (!hasCachedMovies) moviesPanel.replaceChildren();
     updateAgeIdControls();
     contentStatus.textContent = error.message || 'Could not decrypt metadata in this browser.';
@@ -1642,9 +2099,7 @@ document.getElementById('refresh-movies').addEventListener('click', async event 
 });
 ageInput.addEventListener('change', () => { if (selectedNode) void unlockMetadata(); });
 clearKeyButton.addEventListener('click', () => {
-  clearAgeIdentity(); moviesPanel.replaceChildren();
-  updateAgeIdControls();
-  resetArrSummary('radarr');
+  if (!clearAgeIdentity()) return;
   contentStatus.textContent = 'Private ID cleared from this browser.';
 });
 
@@ -1669,14 +2124,16 @@ deviceEditForm.addEventListener('submit', async event => {
   document.getElementById('device-edit-save').disabled = true;
   deviceEditName.disabled = true;
   savingDeviceName = true;
+  deviceNamesRevision += 1;
   deviceEditStatus.textContent = 'Saving device name into the age-encrypted config…';
   try {
+    await import('/assets/metadata-export.js');
     await window.rawrarrMiniExport.saveDeviceName(ageIdentity, `/nodes/${encodeURIComponent(configNode.nodeId)}`, node.nodeId, cleaned === node.nodeId ? '' : cleaned);
     deviceNames[node.nodeId] = cleaned === node.nodeId ? '' : cleaned;
     document.getElementById('device-name-status').textContent = 'Device name saved in the shared age-encrypted config.';
     savingDeviceName = false;
     deviceEditDialog.close();
-    await loadNodes();
+    await loadNodes(true);
   } catch (error) {
     savingDeviceName = false;
     deviceEditStatus.textContent = error.message || 'Could not save this device name.';
@@ -1702,48 +2159,98 @@ deviceEditDelete.addEventListener('click', async () => {
       contentPanel.hidden = true;
     }
     delete deviceNames[node.nodeId];
+    deviceNamesRevision += 1;
     deviceEditDialog.close();
-    await loadNodes();
+    await loadNodes(true);
   } catch (error) {
     deviceEditDelete.disabled = false;
     deviceEditStatus.textContent = error.message || 'Could not delete this device.';
   }
 });
 
-async function loadNodes() {
+let nodeRefreshInFlight = null;
+function loadNodes(refresh = false) {
   if (savingDeviceName) return;
+  if (refresh && nodeRefreshInFlight) return nodeRefreshInFlight.then(() => loadNodes());
+  if (!nodeRefreshInFlight) {
+    nodeRefreshInFlight = refreshNodes().finally(() => { nodeRefreshInFlight = null; });
+  }
+  return nodeRefreshInFlight;
+}
+
+async function refreshNodes() {
   try {
-    const nodes = await jsonRequest('/api/workspace/nodes');
+    const nodes = await jsonRequest('/api/workspace/nodes', { signal: AbortSignal.timeout(5000) });
     workspaceNodes = nodes;
+    renderSigningKeyTopology(nodes);
     void loadProfileAvatar();
-    const healthByNode = new Map(await Promise.all(nodes.map(async node => {
+    const ageIdentity = ageIdentityInMemory;
+    const namesRevision = deviceNamesRevision;
+    const metadataNodes = nodes.filter(node => node.role === 'metadata' && (node.relayAvailable || node.directUrl));
+    const configNode = metadataNodes.find(node => node.online && node.directUrl)
+      || metadataNodes.find(node => node.online)
+      || metadataNodes[0];
+    renderNodes(nodes, new Map(), new Map(), configNode, false);
+    if (location.hash === '' || location.hash === '#overview') void loadOverviewMetadata();
+    const routesPromise = checkDeviceRoutes(nodes).then(routes => {
+      deviceRouteStatusByNode = routes;
+      if (!savingDeviceName) renderNodes(nodes, new Map(), new Map(), configNode);
+      return routes;
+    });
+    const healthPromise = Promise.all(nodes.map(async node => {
       if (!node.online || !node.relayAvailable) return [node.nodeId, null];
       const cached = syncthingHealthCache.get(node.nodeId);
       if (cached && Date.now() - cached.checkedAt < 30000) return [node.nodeId, cached.value];
       try {
-        const value = await jsonRequest(`/nodes/${encodeURIComponent(node.nodeId)}/api/syncthing/shared-health`);
+        const value = await jsonRequest(`/nodes/${encodeURIComponent(node.nodeId)}/api/syncthing/shared-health`, { signal: AbortSignal.timeout(5000) });
         syncthingHealthCache.set(node.nodeId, { checkedAt: Date.now(), value });
         return [node.nodeId, value];
       } catch (_) {
         syncthingHealthCache.set(node.nodeId, { checkedAt: Date.now(), value: null });
         return [node.nodeId, null];
       }
-    })));
-    const configPeerStatusByNode = new Map(await Promise.all(nodes.filter(node => node.role === 'metadata').map(async node => {
+    }));
+    const peerStatusPromise = Promise.all(nodes.filter(node => node.role === 'metadata').map(async node => {
       if (!node.online || !node.relayAvailable) return [node.nodeId, { state: 'unreachable' }];
       const cached = configPeerStatusCache.get(node.nodeId);
       if (cached && Date.now() - cached.checkedAt < 15000) return [node.nodeId, cached.value];
       try {
-        const value = await jsonRequest(`/nodes/${encodeURIComponent(node.nodeId)}/api/config-peer/status`);
+        const value = await jsonRequest(`/nodes/${encodeURIComponent(node.nodeId)}/api/config-peer/status`, { signal: AbortSignal.timeout(5000) });
         configPeerStatusCache.set(node.nodeId, { checkedAt: Date.now(), value });
         return [node.nodeId, value];
       } catch (_) {
         configPeerStatusCache.set(node.nodeId, { checkedAt: Date.now(), value: { state: 'unreachable' } });
         return [node.nodeId, { state: 'unreachable' }];
       }
-    })));
-    if (location.hash === '' || location.hash === '#overview') void loadOverviewMetadata();
-    deviceRouteStatusByNode = await checkDeviceRoutes(nodes);
+    }));
+    const namesPromise = (async () => {
+      if (!ageIdentity || !configNode) return;
+      try {
+        await import('/assets/metadata-export.js');
+        return await window.rawrarrMiniExport.loadDeviceNames(ageIdentity, `/nodes/${encodeURIComponent(configNode.nodeId)}`, { signal: AbortSignal.timeout(5000) });
+      } catch (error) {
+        console.warn('Could not refresh encrypted device names; keeping existing labels.', error);
+      }
+    })();
+    const [healthEntries, peerEntries, routes] = await Promise.all([
+      healthPromise, peerStatusPromise, routesPromise,
+    ]);
+    deviceRouteStatusByNode = routes;
+    if (!savingDeviceName) renderNodes(nodes, new Map(healthEntries), new Map(peerEntries), configNode);
+    void namesPromise.then(names => {
+      if (names && workspaceNodes === nodes && !savingDeviceName && namesRevision === deviceNamesRevision && ageIdentity === ageIdentityInMemory) {
+        deviceNames = names;
+        renderNodes(nodes, new Map(healthEntries), new Map(peerEntries), configNode);
+      }
+    }).catch(error => {
+      console.error('Could not render refreshed device names.', error);
+    });
+  } catch (error) {
+    status.textContent = error.message || 'Could not load connected nodes.';
+  }
+}
+
+function renderNodes(nodes, healthByNode, configPeerStatusByNode, configNode, selectDefault = true) {
     const observedSyncthingPeers = nodes.flatMap(source => {
       const report = healthByNode.get(source.nodeId);
       return (report?.folders || []).flatMap(folder => {
@@ -1758,16 +2265,6 @@ async function loadNodes() {
       });
     });
     const ageIdentity = ageIdentityInMemory;
-    const metadataNodes = nodes.filter(node => node.role === 'metadata' && (node.relayAvailable || node.directUrl));
-    const configNode = metadataNodes.find(node => node.online && node.directUrl)
-      || metadataNodes.find(node => node.online)
-      || metadataNodes[0];
-    if (ageIdentity && configNode) {
-      try {
-        await import('/assets/metadata-export.js');
-        deviceNames = await window.rawrarrMiniExport.loadDeviceNames(ageIdentity, `/nodes/${encodeURIComponent(configNode.nodeId)}`);
-      } catch (_) { /* Names remain editable when the encrypted config is unavailable. */ }
-    }
     nodesPanel.replaceChildren();
     const emptyDevices = document.getElementById('empty-devices');
     const topologySection = document.getElementById('device-topology');
@@ -1792,8 +2289,9 @@ async function loadNodes() {
       const routeLabel = {
         direct: 'Direct',
         relay: 'Relay',
+        checking: 'Checking route',
         offline: node.online ? 'Route unavailable' : 'Not checking in',
-      }[route?.status || 'offline'];
+      }[route?.status || (node.online ? 'checking' : 'offline')];
       const nodeStateLabel = node.online ? `Online · ${routeLabel}` : routeLabel;
       const latencyLabel = route?.status === 'direct' && route.directRoute
         ? `${route.directRoute.latencyMs.toFixed(0)} ms`
@@ -2056,6 +2554,7 @@ async function loadNodes() {
       renderDeviceTopology(nodes, observedSyncthingPeers, deviceNames, configPeerStatusByNode);
     }
     status.textContent = 'Choose a connected fossil or boneyard node to open its Rawrarr page.';
+    if (!selectDefault) return;
     const canOpen = canOpenNode;
     const requested = requestedNode && nodes.find(node => node.nodeId === requestedNode && canOpen(node));
     // Node status polling must not reset the active workspace or refetch its
@@ -2064,7 +2563,8 @@ async function loadNodes() {
     if (selectedNode) {
       const current = nodes.find(node => node.nodeId === selectedNode && canOpen(node));
       if (current) {
-        selectedNodeDetails = current;
+        if (!selectedNodeDetails) openNode(current);
+        else selectedNodeDetails = current;
         for (const card of nodesPanel.querySelectorAll('.device-card')) {
           card.dataset.selected = String(card.dataset.nodeId === selectedNode);
         }
@@ -2108,14 +2608,11 @@ async function loadNodes() {
         openNode(defaultNode);
       }
     }
-  } catch (error) {
-    status.textContent = error.message || 'Could not load connected nodes.';
-  }
 }
 
 async function loadPending() {
   try {
-    const pending = await jsonRequest('/api/workspace/pending');
+    const pending = await jsonRequest('/api/workspace/pending', { signal: AbortSignal.timeout(5000) });
     pendingPanel.hidden = pending.length === 0;
     pendingPanel.classList.toggle('has-pending', pending.length > 0);
     pendingPanel.replaceChildren();
@@ -2142,10 +2639,12 @@ async function loadPending() {
       approve.textContent = 'Approve';
       approve.addEventListener('click', () => {
         pendingNodeToApprove = node;
+        pendingNodeDecision = 'approve';
         approveNodeIdentity.value = '';
         approveNodeBackup.value = '';
         approveNodeFingerprint.value = '';
         approveNodeStatus.textContent = `${node.displayName} · ${roleLabel(node.role)} · ${node.nodeId}`;
+        document.getElementById('approve-node-attestation').replaceChildren();
         approveNodeDialog.showModal();
         approveNodeIdentity.focus();
       });
@@ -2154,16 +2653,18 @@ async function loadPending() {
       reject.className = 'reject-button';
       reject.textContent = 'Reject';
       reject.addEventListener('click', async () => {
-        approve.disabled = true;
-        reject.disabled = true;
-        try {
-          await jsonRequest('/api/workspace/reject', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: node.requestId }) });
-          await loadPending();
-        } catch (error) {
-          approve.disabled = false;
-          reject.disabled = false;
-          status.textContent = error.message || 'Could not reject this node request.';
-        }
+        pendingNodeToApprove = node;
+        pendingNodeDecision = 'reject';
+        approveNodeIdentity.value = '';
+        approveNodeBackup.value = '';
+        approveNodeFingerprint.value = '';
+        approveNodeStatus.textContent = `${node.displayName} · ${roleLabel(node.role)} · ${node.nodeId}`;
+        document.getElementById('approve-node-attestation').replaceChildren();
+        const title = approveNodeForm.querySelector('h2');
+        title.textContent = 'Reject and sign device revocation';
+        approveNodeForm.querySelector('[type="submit"]').textContent = 'Sign revocation';
+        approveNodeDialog.showModal();
+        approveNodeIdentity.focus();
       });
       const actions = document.createElement('div');
       actions.className = 'pending-actions';
@@ -2181,7 +2682,11 @@ approveNodeDialog.addEventListener('close', () => {
   approveNodeIdentity.value = '';
   approveNodeBackup.value = '';
   approveNodeFingerprint.value = '';
+  document.getElementById('approve-node-attestation').replaceChildren();
   pendingNodeToApprove = null;
+  pendingNodeDecision = 'approve';
+  approveNodeForm.querySelector('h2').textContent = 'Approve with the instance root key';
+  approveNodeForm.querySelector('[type="submit"]').textContent = 'Sign and approve';
 });
 approveNodeForm.addEventListener('submit', async event => {
   event.preventDefault();
@@ -2189,22 +2694,39 @@ approveNodeForm.addEventListener('submit', async event => {
   if (!node) return;
   const submit = approveNodeForm.querySelector('[type="submit"]');
   submit.disabled = true;
-  approveNodeStatus.textContent = 'Unlocking the encrypted root backup and signing this exact node request in this tab…';
+  approveNodeStatus.textContent = pendingNodeDecision === 'reject'
+    ? 'Unlocking the encrypted root backup and signing this rejection in this tab…'
+    : 'Unlocking the encrypted root backup and signing this exact node request in this tab…';
   try {
     const ageIdentity = approveNodeIdentity.value.trim();
     const encryptedBackup = approveNodeBackup.value.trim();
     const savedFingerprint = approveNodeFingerprint.value.trim().toLowerCase();
-    const { inspectEncryptedRootBackup, signDeviceApproval } = await import('/assets/device-signing-client.js');
+    const { inspectEncryptedRootBackup, signDeviceApproval, signDeviceRejection } = await import('/assets/device-signing-client.js');
     const root = await inspectEncryptedRootBackup(encryptedBackup, ageIdentity);
     if (root.fingerprint !== savedFingerprint) throw new Error('The backup fingerprint does not match the fingerprint you saved independently.');
-    const approval = await signDeviceApproval(encryptedBackup, ageIdentity, savedFingerprint, {
+    const decision = pendingNodeDecision;
+    const attestation = document.getElementById('approve-node-attestation');
+    attestation.replaceChildren();
+    const heading = document.createElement('strong');
+    heading.textContent = decision === 'reject' ? 'You are permanently rejecting this device identity' : 'You are signing off on this device';
+    const description = document.createElement('p');
+    description.textContent = decision === 'reject'
+      ? 'Your root signature records this device key as rejected. The coordinator will retain the revocation and refuse future enrollment requests for this device identity.'
+      : 'Your root signature authorizes the exact device key and role below. Only continue if you initiated this setup and recognize this device.';
+    const request = document.createElement('p');
+    request.textContent = `${node.displayName} · ${roleLabel(node.role)} · ${node.nodeId}`;
+    const key = document.createElement('p');
+    key.textContent = `Device signing key · ${node.signingFingerprint || 'fingerprint unavailable'}`;
+    attestation.append(heading, description, request, key);
+    const sign = decision === 'reject' ? signDeviceRejection : signDeviceApproval;
+    const approval = await sign(encryptedBackup, ageIdentity, savedFingerprint, {
       requestId: node.requestId,
-      nodeId: node.nodeId,
+      nodeId: decision === 'reject' ? (node.requestedNodeId || node.nodeId) : node.nodeId,
       role: node.role,
       displayName: node.displayName,
       publicKeyHex: node.signingPublicKeyHex,
     });
-    await jsonRequest('/api/workspace/approve', {
+    await jsonRequest(decision === 'reject' ? '/api/workspace/reject' : '/api/workspace/approve', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         requestId: node.requestId,
@@ -2216,7 +2738,7 @@ approveNodeForm.addEventListener('submit', async event => {
     });
     approveNodeDialog.close();
     await loadPending();
-    await loadNodes();
+    if (decision === 'approve') await loadNodes(true);
   } catch (error) {
     approveNodeStatus.textContent = error.message || 'Could not approve this node.';
   } finally {
@@ -2225,7 +2747,7 @@ approveNodeForm.addEventListener('submit', async event => {
 });
 
 document.getElementById('sign-out').addEventListener('click', async () => {
-  clearAgeIdentity();
+  if (!clearAgeIdentity()) return;
   try { await jsonRequest('/api/auth/logout', { method: 'POST' }); } catch (_) {}
   window.location.replace('/auth');
 });

@@ -1,0 +1,25 @@
+rawrarr.willjasen.net {
+	tls /etc/caddy/certs/rawrarr.crt /etc/caddy/certs/rawrarr.key
+
+	@headscale_admin_api path /api/v1* /api/v2*
+	handle @headscale_admin_api {
+		respond "Not Found" 404
+	}
+
+	@headscale path /ts2021 /robots.txt /version /key /register/* /auth/* /oidc/callback /register/confirm/* /apple /apple/* /windows /swagger /swagger/* /verify /derp /derp/* /bootstrap-dns /machine/*
+	handle @headscale {
+		reverse_proxy headscale:8080 {
+			header_up True-Client-IP {remote_host}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	@swarmsail path /swarmsail /swarmsail/*
+	handle @swarmsail {
+		respond "Not Found" 404
+	}
+
+	handle {
+		respond "Not Found" 404
+	}
+}

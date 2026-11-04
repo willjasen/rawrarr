@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 const root = new URL('../../', import.meta.url);
 const read = path => readFile(new URL(path, root), 'utf8');
-const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, metadataUi, compose, metadataExport, mainRs, tailscaleCompose, boneyardCompose, coordinatorAvatar, internalMiniCompose] = await Promise.all([
+const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, metadataUi, compose, metadataExport, mainRs, boneyardCompose, coordinatorAvatar, internalDo3Compose] = await Promise.all([
   read('rust-arr/src/coordinator.rs'),
   read('rust-arr/src/auth.rs'),
   read('rust-arr/src/node_auth.rs'),
@@ -15,11 +15,25 @@ const [coordinator, auth, nodeAuth, workspace, workspaceScript, deviceRoutes, me
   read('docker-compose.yml'),
   read('rust-arr/web-export/metadata-export.js'),
   read('rust-arr/src/main.rs'),
-  read('docker-compose.tailscale-macbook.yml'),
   read('docker-compose.storage.yml'),
   read('rust-arr/src/coordinator_avatar.rs'),
-  read('docker-compose.internal-mini.yml'),
+  read('deploy/do3/docker-compose.internal-coordinator.yml'),
 ]);
+
+test('About explains all four identity domains and marks planned capabilities clearly', () => {
+  const about = workspace.match(/<section id="about-view"[\s\S]*?<\/section>/)?.[0];
+  assert.ok(about, 'About section exists');
+  assert.match(about, /Four identity domains/);
+  assert.match(about, /<h3>User<\/h3><span class="about-identity-status">Current<\/span>/);
+  assert.match(about, /<h3>Device<\/h3><span class="about-identity-status">Current<\/span>/);
+  assert.match(about, /<h3>Group<\/h3><span class="about-identity-status planned">Planned<\/span>/);
+  assert.match(about, /<h3>App<\/h3><span class="about-identity-status planned">Planned<\/span>/);
+  assert.match(about, /config\.aged<\/code> will be encrypted to it/);
+  assert.match(about, /Every approved group node can access app IDs for now/);
+  assert.match(about, /moving an app between fossil nodes preserves its metadata identity/);
+  assert.match(about, /Tailscale Serve can route node messages, but it carries ciphertext only/);
+  assert.doesNotMatch(about, /AGE-SECRET-KEY|PRIVATE KEY|AGE-SECRET-KEY-PQ/);
+});
 
 test('rawrs Talk stays available from a persistent bottom-left voice panel', () => {
   assert.match(workspace, /id="rawrs-launcher" class="rawrs-launcher"[^>]*aria-controls="ai-voice-panel"/);
@@ -65,7 +79,7 @@ test('left navigation renders every visible option in lowercase', () => {
   assert.ok(sidebar, 'main navigation sidebar exists');
   assert.match(workspace, /\.nav-text\s*\{[^}]*text-transform:\s*lowercase/i);
   const labels = [...sidebar.matchAll(/<span class="nav-text">([^<]+)<\/span>/g)].map(([, label]) => label);
-  assert.deepEqual(labels.map(label => label.toLowerCase()), ['overview', 'subscription', 'roarlay', 'fossils', 'movies', 'tv', 'rawrs', 'configuration', 'settings', 'about']);
+  assert.deepEqual(labels.map(label => label.toLowerCase()), ['overview', 'subscription', 'roarlay', 'fossils', 'discover', 'movies', 'tv', 'rawrs', 'configuration', 'settings', 'about']);
   assert.match(sidebar, /<a class="nav-item" href="\/billing" aria-label="Subscription"[\s\S]*?<span class="nav-text">Subscription<\/span><\/a>/);
 });
 
@@ -116,6 +130,12 @@ test('Fossils shows a network diagram with one link for each node pair', () => {
   assert.match(workspace, /<section id="fossils-view"[^>]*><div class="devices-page-heading"><h1 class="page-title">Fossils<\/h1><a class="button-link" href="\/setup\/node">Add a fossil<\/a><\/div>/);
   assert.match(workspace, /<section id="device-topology" class="topology-section" aria-labelledby="device-topology-title" hidden>[\s\S]*?<h2 id="device-topology-title">Topology<\/h2>/);
   assert.match(workspace, /<div id="device-topology-content"><\/div>/);
+  assert.match(workspace, /id="signing-topology-title">Signing key topology<\/h3>/);
+  assert.match(workspace, /You are the authority for this instance/);
+  assert.match(workspaceScript, /function renderSigningKeyTopology\(nodes\)/);
+  assert.match(workspaceScript, /You · instance signing root/);
+  assert.match(workspaceScript, /legacy · no root-signed key/);
+  assert.match(coordinator, /signing_root_fingerprint: Option<String>/);
   assert.match(workspaceScript, /function renderDeviceTopology\(nodes, observedPeers, deviceNames, peerStatuses\)/);
   assert.match(workspaceScript, /deviceNames\[node\.nodeId\] \|\| \(node\.displayName && node\.displayName !== node\.nodeId \? node\.displayName : roleLabel\(node\.role\)\)/);
   assert.match(workspaceScript, /deviceNameTokens\(node\.displayName\)/);
@@ -196,7 +216,7 @@ test('Radarr and Sonarr settings use the configured user-node URL directly from 
 });
 
 test('encrypted metadata fetches include the direct node browser session cookie', () => {
-  assert.match(metadataExport, /async function fetchBytes\(url\)[\s\S]*?credentials: 'include'/);
+  assert.match(metadataExport, /async function fetchBytes\(url, \{ signal \} = \{\}\)[\s\S]*?signal,[\s\S]*?credentials: 'include'/);
 });
 
 test('coordinator serves the profile-color module imported by its workspace script', () => {
@@ -220,7 +240,9 @@ test('coordinator root selects passkey sign-in or an owner workspace while healt
   assert.match(workspace, /id="age-storage-status"/);
   assert.match(workspace, /id="save-age-id"/);
   assert.match(workspace, /id="remove-age-id"/);
-  assert.match(workspace, /User signing keys are never saved in browser storage/);
+  assert.match(workspace, /id="show-age-recipient" type="button" hidden>Show age public ID<\/button>/);
+  assert.match(workspace, /id="age-recipient-display" class="age-recipient-display" hidden/);
+  assert.match(workspace, /id="copy-age-recipient" type="button">Copy age public ID/);
   assert.match(workspace, /id="clear-key" type="button" hidden/);
   assert.match(workspace, /<title>rawrarr<\/title>/);
   assert.match(workspace, /saved in this browser/);
@@ -233,6 +255,12 @@ test('coordinator root selects passkey sign-in or an owner workspace while healt
   assert.match(workspaceScript, /try \{\s*localStorage\.setItem\(ageSessionKey, identity\);[\s\S]*?return false;/);
   assert.match(workspaceScript, /this browser could not save it/);
   assert.match(workspaceScript, /localStorage\.removeItem\(ageSessionKey\)/);
+  assert.match(workspaceScript, /showAgeRecipientButton\.addEventListener\('click', async \(\) =>/);
+  assert.match(workspaceScript, /deriveProfileRecipient\(identity\)[\s\S]*?agePublicRecipient = recipient;[\s\S]*?ageRecipientShort\.textContent = recipient\.length/);
+  assert.match(workspaceScript, /copyAgeRecipientButton\.addEventListener\('click', async \(\) =>/);
+  assert.match(workspaceScript, /navigator\.clipboard\.writeText\(recipient\)/);
+  assert.match(workspaceScript, /Age public ID copied\./);
+  assert.match(workspaceScript, /agePublicRecipient = '';\s*ageRecipientShort\.textContent = '';/);
   assert.match(workspaceScript, /arrDirectRequest\('\/settings\/age'/);
   assert.doesNotMatch(workspaceScript, /localStorage\.(?:getItem|setItem)\([^)]*(?:root|signing)/i);
   assert.match(workspaceScript, /document\.getElementById\('sign-out'\)\.addEventListener[\s\S]*?clearAgeIdentity\(\)/);
@@ -254,10 +282,19 @@ test('device approvals use a volatile browser form and root-signed exact node re
   assert.match(workspace, /id="approve-node-age-id" type="password"/);
   assert.match(workspace, /id="approve-node-root-backup"/);
   assert.match(workspace, /id="approve-node-root-fingerprint"/);
-  assert.match(workspaceScript, /signDeviceApproval\(encryptedBackup, ageIdentity, savedFingerprint/);
+  assert.match(workspaceScript, /const sign = decision === 'reject' \? signDeviceRejection : signDeviceApproval/);
   assert.match(workspaceScript, /signedPayload: approval\.signedPayload/);
   assert.match(workspaceScript, /approveNodeDialog\.addEventListener\('close'/);
   assert.match(workspaceScript, /approveNodeDialog\.close\(\)/);
+  assert.match(workspace, /id="approve-node-attestation"/);
+  assert.match(workspaceScript, /You are signing off on this device/);
+  assert.match(workspaceScript, /Your root signature authorizes the exact device key and role below/);
+  assert.match(workspaceScript, /signDeviceRejection/);
+  assert.match(signingClient, /rawrarr-device-rejection-v1/);
+  assert.match(workspaceScript, /permanently rejecting this device identity/);
+  assert.match(coordinator, /rawrarr_rejected_nodes WHERE node_id=\$1 OR signing_fingerprint=\$2/);
+  assert.match(coordinator, /rawrarr-device-rejection-v1/);
+  assert.match(coordinator, /INSERT INTO rawrarr_rejected_nodes/);
   assert.match(signingClient, /secretKey\?\.fill\(0\)/);
   assert.match(onboarding, /id="root-fingerprint-confirm"/);
   assert.match(onboarding, /Re-enter the root fingerprint you saved separately/);
@@ -341,6 +378,12 @@ test('signed-in profile requests a coordinator-rendered JPEG XL dinosaur from th
   assert.doesNotMatch(coordinator, /SELECT\s+(?:profile_picture|avatar_seed)/i);
 });
 
+test('profile retries a temporary 404 and preserves a loaded username through later profile errors', () => {
+  assert.match(workspaceScript, /for \(let attempt = 0; attempt < 3; attempt \+= 1\)[\s\S]*?error\.status !== 404 \|\| attempt === 2[\s\S]*?setTimeout\(resolve, 250 \* \(attempt \+ 1\)\)/);
+  assert.match(workspaceScript, /error\.status = response\.status/);
+  assert.match(workspaceScript, /if \(!profileBaseName\) \{\s*document\.getElementById\('profile-name'\)\.textContent = error\.message/);
+});
+
 test('device pictures use the deterministic fossil renderer while profile pictures retain dinosaurs', () => {
   assert.match(workspaceScript, /device-picture\/\$\{seed\}\/jxl/);
   assert.match(workspaceScript, /device-picture\/\$\{seed\}\/png/);
@@ -375,13 +418,13 @@ test('node list and relay are restricted to the signed-in owner and trusted conf
 });
 
 test('internal coordinator maps current fossil IDs to their relay and direct Tailscale routes', () => {
-  assert.match(internalMiniCompose, /"device-398f0ce833b6d7e2b9e8f760":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/"/);
-  assert.match(internalMiniCompose, /"device-398f0ce833b6d7e2b9e8f760":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/direct-api\/"/);
-  assert.match(internalMiniCompose, /"device-d3ee53b1d561fb349955b199":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/"/);
-  assert.match(internalMiniCompose, /"device-d3ee53b1d561fb349955b199":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/direct-api\/"/);
-  assert.match(internalMiniCompose, /"device-8de78fadda6400a45ca1a30b":"https:\/\/rawrarr-mac-mini\.risk-mermaid\.ts\.net\/"/);
-  assert.match(internalMiniCompose, /"device-8de78fadda6400a45ca1a30b":"https:\/\/rawrarr-mac-mini\.risk-mermaid\.ts\.net\/direct-api\/"/);
-  assert.match(internalMiniCompose, /"device-9288eb3b039608d16a9102a5"/);
+  assert.match(internalDo3Compose, /"device-398f0ce833b6d7e2b9e8f760":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/"/);
+  assert.match(internalDo3Compose, /"device-398f0ce833b6d7e2b9e8f760":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/direct-api\/"/);
+  assert.match(internalDo3Compose, /"device-d3ee53b1d561fb349955b199":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/"/);
+  assert.match(internalDo3Compose, /"device-d3ee53b1d561fb349955b199":"https:\/\/rawrarr-macbook-pro\.risk-mermaid\.ts\.net\/direct-api\/"/);
+  assert.match(internalDo3Compose, /"device-8de78fadda6400a45ca1a30b":"https:\/\/rawrarr-mac-mini\.risk-mermaid\.ts\.net\/"/);
+  assert.match(internalDo3Compose, /"device-8de78fadda6400a45ca1a30b":"https:\/\/rawrarr-mac-mini\.risk-mermaid\.ts\.net\/direct-api\/"/);
+  assert.match(internalDo3Compose, /"device-9288eb3b039608d16a9102a5"/);
 });
 
 test('coordinator relay can reach tailnet nodes through its Tailscale SOCKS5 sidecar', () => {
@@ -401,7 +444,7 @@ test('coordinator workspace selects nodes, reads Radarr directly, and keeps conf
   assert.match(compose, /  roarlay:\n/);
   assert.doesNotMatch(compose, /  coordinator:\n/);
   assert.match(boneyardCompose, /  boneyard:\n/);
-  assert.match(tailscaleCompose, /aliases:\n          - coordinator/);
+  assert.match(internalDo3Compose, /network_mode: service:tailscale/);
   assert.match(workspaceScript, /ageIdentityInMemory = identity/);
   assert.match(workspaceScript, /arrDirectRequest\('\/radarr\/live-library'\)/);
   assert.doesNotMatch(workspaceScript, /window\.rawrarrMiniExport\.loadRadarrLibrary/);

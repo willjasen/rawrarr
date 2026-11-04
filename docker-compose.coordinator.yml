@@ -24,8 +24,6 @@ services:
     environment:
       RAWARR_ROLE: coordinator
       RAWARR_BILLING_AUDIENCE: ${RAWARR_BILLING_AUDIENCE:-public}
-      RAWARR_UI_GITHUB_REPO: willjasen/rawrarr
-      RAWARR_UI_GITHUB_TOKEN_FILE: /run/secrets/rawrarr_ui_github_token
       RUST_ARR_LISTEN_ADDR: 0.0.0.0:8080
       RAWARR_PG_HOST: postgres
       RAWARR_PG_PORT: 5432
@@ -33,14 +31,13 @@ services:
       RAWARR_PG_DATABASE: rawrarr
       RAWARR_PG_PASSWORD_FILE: /run/secrets/rawrarr_postgres_password
       RAWARR_APPROVED_NODES_FILE: /run/secrets/rawrarr_approved_nodes
-      RAWARR_COORDINATOR_WEB_RP_ID: ${RAWARR_COORDINATOR_WEB_RP_ID:-rawrarr.risk-mermaid.ts.net}
-      RAWARR_COORDINATOR_WEB_ORIGIN: ${RAWARR_COORDINATOR_WEB_ORIGIN:-https://rawrarr.risk-mermaid.ts.net}
+      RAWARR_COORDINATOR_WEB_RP_ID: ${RAWARR_COORDINATOR_WEB_RP_ID:-rawrarr.net}
+      RAWARR_COORDINATOR_WEB_ORIGIN: ${RAWARR_COORDINATOR_WEB_ORIGIN:-https://roarlay.rawrarr.net}
       RAWARR_NODE_RELAY_TARGETS: ${RAWARR_NODE_RELAY_TARGETS:-{"macbook-metadata":"http://fossil:8080","mac-mini-storage":"https://rawrarr-mini.risk-mermaid.ts.net"}}
       RAWARR_NODE_RELAY_SOCKS5_URL: ${RAWARR_NODE_RELAY_SOCKS5_URL:-socks5h://127.0.0.1:1055}
     secrets:
       - rawrarr_postgres_password
       - rawrarr_approved_nodes
-      - rawrarr_ui_github_token
     volumes:
       - rawrarr-ui:/ui
     ports:
@@ -60,5 +57,3 @@ secrets:
     file: ${RAWARR_POSTGRES_PASSWORD_FILE:?Set RAWARR_POSTGRES_PASSWORD_FILE to a protected password file}
   rawrarr_approved_nodes:
     file: "${RAWARR_APPROVED_NODES_PATH:-${HOME}/Library/Application Support/rawrarr/coordinator/approved-nodes.json}"
-  rawrarr_ui_github_token:
-    file: ${RAWARR_UI_GITHUB_TOKEN_PATH:?Set RAWARR_UI_GITHUB_TOKEN_PATH to a fine-grained read-only GitHub token file}

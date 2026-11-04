@@ -1,0 +1,25 @@
+services:
+  caddy:
+    container_name: rawrarr-prod-caddy
+  cloudflared:
+    container_name: rawrarr-prod-cloudflared
+  crowdsec:
+    container_name: rawrarr-prod-crowdsec
+  headscale:
+    container_name: rawrarr-prod-headscale
+  postgres:
+    container_name: rawrarr-prod-postgres
+  roarlay:
+    container_name: rawrarr-prod-roarlay
+  stripe-service:
+    container_name: rawrarr-prod-stripe-service
+  subscriber-provisioner:
+    container_name: rawrarr-prod-subscriber-provisioner
+  swarmsail:
+    container_name: rawrarr-prod-swarmsail
+  tailscale:
+    container_name: rawrarr-prod-tailscale
+  umami:
+    container_name: rawrarr-prod-umami
+  umami-postgres:
+    container_name: rawrarr-prod-umami-postgres

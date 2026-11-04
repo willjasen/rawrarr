@@ -19,7 +19,7 @@ import xml.etree.ElementTree as ET
 
 
 PROJECT = "rawrarr-test-environment"
-COMPOSE = "docker-compose.orbstack-test.yml"
+COMPOSE = str(Path(__file__).resolve().parents[2] / "deploy" / "testing" / "compose.yml")
 TEST_STATE = Path.home() / "Library" / "Application Support" / "rawrarr" / "orbstack-test"
 TLS_STATE = TEST_STATE / "arr-tls"
 FOSSIL = f"{PROJECT}-metadata-a-1"

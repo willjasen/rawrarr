@@ -4,7 +4,11 @@
 
 The operator console is a separate, static container. Its current dashboard uses fictional sample data to preview account, trial, subscription, and operations reporting. It does not connect to PostgreSQL, call an API, load external resources, or contain production account information.
 
-The optional `docker-compose.admin.yml` overlay attaches the container to the existing MacBook Tailscale network namespace. It binds local access only at `http://127.0.0.1:7299`; it does not publish a public host interface. To reach it over the tailnet, configure a separate Tailscale Serve HTTPS port (for example, `https://rawrarr.risk-mermaid.ts.net:8443/`) to proxy to `http://127.0.0.1:8090`. Tailscale Serve must remain Serve-only; do not enable Funnel or add a public reverse-proxy route. Keep the existing coordinator route on HTTPS 443 unchanged.
+`docker-compose.admin.yml` is a standalone localhost-only preview. It publishes
+`http://127.0.0.1:7299` directly from its own container, with no coordinator,
+Tailscale sidecar, database, or secret dependencies. It does not configure tailnet
+access; do not enable Funnel or add a public reverse-proxy route. The internal
+coordinator stays on do3 and is not part of this preview.
 
 The preview intentionally has no sign-in. Before connecting live data, implement and require administrator authentication and authorization in the service, independently of the localhost/Tailscale network boundary. A browser-only gate is not sufficient. Give the reporting service a least-privilege database role and expose only the minimum aggregate/account fields needed; do not reuse the coordinator's write credential. Add audit and access-expiry behavior before production user details are displayed.
 
@@ -16,10 +20,24 @@ The preview has no mutable account controls. Keep future admin actions out of th
 
 ## Local preview
 
-With the existing `rawrarr-local` Compose project and Tailscale overlay configured:
+From the repository root, use a separate project after checking that port 7299
+and container name `rawrarr-admin` are available:
 
 ```sh
-docker compose -p rawrarr-local -f docker-compose.yml -f docker-compose.tailscale-macbook.yml -f docker-compose.admin.yml up -d --build admin
+docker compose -p rawrarr-admin-preview -f docker-compose.admin.yml up -d --build admin
 ```
 
-The local URL is `http://127.0.0.1:7299/`. The Tailscale Serve HTTPS endpoint should use a separate port so the existing `:443` coordinator route is preserved. Verify that the admin port appears only on loopback, the container has no database dependency, and the Serve status has no Funnel/public handler. Do not deploy this preview to a public-facing host until its network path and authentication design are reviewed.
+The local URL is `http://127.0.0.1:7299/`. Verify that the admin port appears only
+on loopback and that no other services are created. Do not deploy this preview
+to a public-facing host until its network path and authentication design are
+reviewed.
+
+Existing previews are not automatically moved between projects or namespaces.
+Inspect their recorded project/file labels before any recreation and keep their
+project name until a separate deliberate migration. A running legacy sidecar
+may still own port 7299: stop and resolve its ownership rather than automatically
+changing a coordinator, subscriber, or Serve route. Tailnet access supplied by
+the old shared namespace is no longer provided by this template. No persistent
+data migration is required; the preview has only sample data and no volumes.
+For recovery, the old definition and transport overlay are available at Git
+published commit `94fda4c`; reverting source alone does not change a running container.

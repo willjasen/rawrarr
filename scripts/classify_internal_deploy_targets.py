@@ -15,14 +15,12 @@ COORDINATOR_FILES = {
     "rust-arr/src/coordinator_avatar.rs",
     "rust-arr/src/coordinator_health.html",
     "rust-arr/src/coordinator_workspace.html",
+    "rust-arr/src/assets/device-signing-client.js",
+    "rust-arr/web-export/device-signing-client.js",
     "rust-arr/src/coordinator-workspace.mjs",
     "rust-arr/src/coordinator-device-routes.mjs",
     "rust-arr/src/coordinator-passkey.mjs",
     "rust-arr/src/profile-color.mjs",
-    # UI release updates run only in the coordinator container, gated by
-    # RAWARR_ROLE=coordinator in rust-arr/container-entrypoint.sh.
-    "rust-arr/update_ui_bundle.py",
-    "docker-compose.internal-mini.yml",
     "docker-compose.coordinator.yml",
 }
 
@@ -39,16 +37,14 @@ NODE_FILES = {
     "rust-arr/src/syncthing.rs",
     "rust-arr/src/subscriber_onboarding.html",
     "rust-arr/src/assets/subscriber-onboarding.js",
-    "rust-arr/src/assets/device-signing-client.js",
     "docker-compose.metadata.yml",
     "docker-compose.storage.yml",
-    "docker-compose.macbook-storage.yml",
     "docker-compose.syncthing.yml",
     "docker-compose.syncthing-media.yml",
     "docker-compose.syncthing-tailnet.yml",
-    "docker-compose.tailscale-macbook.yml",
-    "docker-compose.headscale-macbook.yml",
 }
+
+COORDINATOR_PREFIXES = ("rust-arr/migrations/",)
 
 BOTH_FILES = {
     "rust-arr/src/main.rs",
@@ -63,12 +59,25 @@ BOTH_FILES = {
 }
 
 NON_RUNTIME_PREFIXES = (
+    "deploy/testing/",
     "docs/",
     "runbooks/",
     "scripts/",
     ".github/",
 )
-NON_RUNTIME_FILES = {"AGENTS.md", "README.md", "ROADMAP.md", "TESTING.md"}
+NON_RUNTIME_FILES = {
+    "docker-compose.macbook-storage.yml",
+    "docker-compose.tailscale-mini.yml",
+    "docker-compose.mini-relays.yml",
+    "storage-proxy.Caddyfile",
+    "AGENTS.md", "README.md", "ROADMAP.md", "TESTING.md",
+    "docker-compose.orbstack-test.yml",
+    "docker-compose.internal-mini.yml",
+    "docker-compose.tailscale-serve.yml",
+    "docker-compose.headscale-macbook.yml",
+    "docker-compose.headscale-mini.yml",
+    "docker-compose.tailscale-macbook.yml",
+}
 
 
 def classify_paths(paths: list[str]) -> dict[str, object]:
@@ -78,7 +87,7 @@ def classify_paths(paths: list[str]) -> dict[str, object]:
             continue
         if path in BOTH_FILES:
             targets.update(("coordinator", "nodes"))
-        elif path in COORDINATOR_FILES or path.startswith("rust-arr/src/coordinator_"):
+        elif path in COORDINATOR_FILES or path.startswith("rust-arr/src/coordinator_") or path.startswith(COORDINATOR_PREFIXES):
             targets.add("coordinator")
         elif path in NODE_FILES:
             targets.add("nodes")

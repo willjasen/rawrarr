@@ -100,11 +100,11 @@ test('coordinator saves Radarr and Sonarr settings over the direct metadata rout
   await page.locator('#unlock').click();
   await page.waitForFunction(() => document.getElementById('age-id').value === '');
   assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
-  await page.locator('#radarr-node-note').getByText('Radarr is not configured on metadata-one.').waitFor();
+  await page.locator('#radarr-node-note').getByText('Radarr is not configured on fossil.').waitFor();
   await page.click('[data-view="series"]');
   assert.equal(new URL(page.url()).hash, '#tv');
-  await page.locator('#sonarr-settings-message').getByText('Enter your Sonarr HTTPS URL and API key.').waitFor();
-  await page.locator('#sonarr-node-note').getByText('Sonarr is not configured on metadata-one.').waitFor();
+  await page.locator('#sonarr-settings-message').getByText('Enter your Sonarr HTTPS URL or node-loopback HTTP URL and API key.').waitFor();
+  await page.locator('#sonarr-node-note').getByText('Sonarr is not configured on fossil.').waitFor();
   await page.locator('#sonarr-url').fill('https://sonarr.example.test');
   await page.locator('#sonarr-key').fill('sonarr-secret-api-key');
   await page.click('#save-sonarr');
@@ -144,7 +144,7 @@ test('coordinator saves Radarr and Sonarr settings over the direct metadata rout
   assert.ok(directRequests.some(request => request.path === '/direct-api/api/settings/sonarr' && request.method === 'DELETE'));
 
   await page.click('[data-view="movies"]');
-  await page.locator('#radarr-settings-message').getByText('Enter your Radarr HTTPS URL and API key.').waitFor();
+  await page.locator('#radarr-settings-message').getByText('Enter your Radarr HTTPS URL or node-loopback HTTP URL and API key.').waitFor();
   await page.locator('#radarr-url').fill('https://radarr.example.test');
   await page.locator('#radarr-key').fill('radarr-secret-api-key');
   await page.locator('#radarr-ui-username').fill('radarr-ui-user');
@@ -324,8 +324,13 @@ test('Settings imports an age ID locally without an online node and clears it ma
   t.after(() => browser.close());
   const page = await browser.newPage();
   const identity = 'AGE-SECRET-KEY-PQ-1settings-test-fixture';
+  const publicRecipient = `age1pq1${'a'.repeat(40)}12345678`;
   let unlocked = false;
   let directAgeValidationRequests = 0;
+  await page.addInitScript(() => {
+    window.copiedAgeRecipients = [];
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async value => { window.copiedAgeRecipients.push(value); } } });
+  });
   await page.route('http://rawrarr.test/**', async route => {
     const request = route.request();
     const url = new URL(request.url());
@@ -337,7 +342,7 @@ test('Settings imports an age ID locally without an online node and clears it ma
     if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
     if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-ai.mjs') return route.fulfill({ body: aiModule, contentType: 'text/javascript' });
-    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: "window.rawrarrMiniExport = { loadRadarrLibrary: async () => [], prepareGroupIdentityForDevice: async () => false, encryptIdentityForDevice: async identity => `age-ciphertext:${identity}`, deriveProfileRecipient: async identity => { if (!identity.startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('invalid identity'); return 'age1pq1validrecipient'; } };" });
+    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: `window.rawrarrMiniExport = { loadRadarrLibrary: async () => [], prepareGroupIdentityForDevice: async () => false, encryptIdentityForDevice: async identity => 'age-ciphertext:' + identity, deriveProfileRecipient: async identity => { if (!identity.startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('invalid identity'); return '${publicRecipient}'; } };` });
     if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
     if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [] });
     if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
@@ -368,11 +373,86 @@ test('Settings imports an age ID locally without an online node and clears it ma
   assert.equal(directAgeValidationRequests, 0);
   assert.equal(await page.locator('#settings-age-id').inputValue(), '');
   assert.equal(await page.locator('#remember-age-id').count(), 0);
+  assert.equal(await page.locator('#show-age-recipient').isVisible(), true);
+  assert.equal((await page.locator('body').innerText()).includes(identity), false, 'the private ID is not rendered');
+  await page.getByRole('button', { name: 'Show age public ID' }).click();
+  const shortenedRecipient = `${publicRecipient.slice(0, 12)}…${publicRecipient.slice(-8)}`;
+  await page.locator('#age-recipient-short').getByText(shortenedRecipient).waitFor();
+  assert.equal(await page.locator('#age-recipient-display').isVisible(), true);
+  assert.equal(await page.getByRole('button', { name: 'Copy age public ID' }).isVisible(), true);
+  assert.equal((await page.locator('body').innerText()).includes(publicRecipient), false, 'the complete public ID is not rendered');
+  await page.getByRole('button', { name: 'Copy age public ID' }).click();
+  await page.getByText('Age public ID copied.').waitFor();
+  assert.deepEqual(await page.evaluate(() => window.copiedAgeRecipients), [publicRecipient]);
+  assert.equal((await page.locator('body').innerText()).includes(publicRecipient), false, 'copying does not reveal the complete value in the page');
+
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 375, height: 812 }]) {
+    await page.setViewportSize(viewport);
+    const geometry = await page.evaluate(() => ({ width: innerWidth, documentWidth: document.documentElement.scrollWidth, copy: document.querySelector('#copy-age-recipient').getBoundingClientRect().toJSON() }));
+    assert.ok(geometry.documentWidth <= geometry.width, `settings overflow at ${viewport.width}px`);
+    assert.ok(geometry.copy.width > 0 && geometry.copy.left >= 0 && geometry.copy.right <= viewport.width, `copy button fits at ${viewport.width}px`);
+  }
+  await page.getByRole('button', { name: 'Hide age public ID' }).click();
+  assert.equal(await page.locator('#age-recipient-display').isHidden(), true);
+  assert.equal(await page.locator('#age-recipient-short').textContent(), '');
+  assert.equal(await page.getByRole('button', { name: 'Copy age public ID' }).isHidden(), true);
+  assert.equal(await page.locator('#age-recipient-message').isHidden(), true);
 
   await page.click('#remove-age-id');
   await page.getByText('Age private ID removed from this browser.').waitFor();
   assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
   assert.equal(await page.locator('#remember-age-id').count(), 0);
+});
+
+test('Settings keeps a validated age ID usable when browser storage fails', async t => {
+  const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  const identity = 'AGE-SECRET-KEY-PQ-1storage-failure-test-fixture';
+  await page.addInitScript(() => {
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === 'rawrarr.browser.age-id') throw new DOMException('Storage is unavailable', 'QuotaExceededError');
+      return setItem.call(this, key, value);
+    };
+  });
+  await page.route('http://rawrarr.test/**', async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/health') return route.fulfill({ status: 200, body: 'ok' });
+    if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
+    if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-availability.mjs') return route.fulfill({ body: availabilityModule, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-ai.mjs') return route.fulfill({ body: aiModule, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({
+      contentType: 'text/javascript',
+      body: "window.rawrarrMiniExport = { deriveProfileRecipient: async identity => { if (!identity.startsWith('AGE-SECRET-KEY-PQ-1')) throw new Error('invalid identity'); return 'age1pq1validrecipient'; } };",
+    });
+    if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
+    if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [] });
+    if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
+    if (url.pathname.startsWith('/api/workspace/')) return route.fulfill({ json: {} });
+    return route.fulfill({ status: 404, body: 'not found' });
+  });
+
+  await page.goto('http://rawrarr.test/#settings');
+  await page.getByText('Age private ID is not stored in this browser.').waitFor();
+  await page.locator('#settings-age-id').fill(identity);
+  await page.click('#save-age-id');
+  await page.locator('#age-storage-message').getByText('Age private ID is valid for this page, but this browser could not save it. Keep this page open or enter it again after refreshing.').waitFor();
+
+  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null, 'the failed write must not appear saved');
+  assert.equal(await page.locator('#settings-age-id').inputValue(), '', 'the password field is cleared after validation');
+  assert.equal(await page.locator('#settings-age-id').isHidden(), true, 'the validated ID remains available in page memory');
+  assert.match(await page.locator('#age-storage-status').textContent(), /this browser could not save it/);
+  assert.equal((await page.locator('body').innerText()).includes(identity), false, 'the private ID is not rendered');
+
+  await page.reload();
+  await page.getByText('Age private ID is not stored in this browser.').waitFor();
+  assert.equal(await page.locator('#settings-age-id').isVisible(), true, 'the age ID must be requested again after refresh');
+  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
 });
 
 test('Settings rejects an invalid age ID without persisting it', async t => {
