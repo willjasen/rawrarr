@@ -300,11 +300,15 @@ async function loadProfile() {
       jsonRequest('/api/crypto/access'),
       jsonRequest('/api/auth/eth/link')
     ]);
-    document.getElementById('crypto-access-status').textContent = access.tier === 'free'
+    const accessStatus = document.getElementById('crypto-access-status');
+    const walletStatus = document.getElementById('crypto-wallet-status');
+    accessStatus.hidden = false;
+    walletStatus.hidden = false;
+    accessStatus.textContent = access.tier === 'free'
       ? `Free tier · ${access.fossilNodes} of ${access.fossilNodeLimit} fossil nodes`
       : `${access.tier[0].toUpperCase()}${access.tier.slice(1)} tier${access.paidThrough ? ` · paid through ${new Date(access.paidThrough).toLocaleDateString()}` : ''}`;
     const walletName = wallet.wallets?.[0]?.ensName;
-    document.getElementById('crypto-wallet-status').textContent = walletName ? `Linked wallet · ${walletName}` : 'No ENS wallet linked';
+    walletStatus.textContent = walletName ? `Linked wallet · ${walletName}` : 'No ENS wallet linked';
     if (walletName) document.getElementById('crypto-ens-name').value = walletName;
     await loadProfileAvatar();
   } catch (error) {

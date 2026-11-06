@@ -334,12 +334,20 @@ test('crypto payments browser regressions', async t => {
 
   await t.test('workspace surfaces tier limits, wallet linking, and Subscription navigation', async () => {
     assert.match(workspaceHtml, /crypto-access-status/);
+    assert.match(workspaceHtml, /id="crypto-access-status"[^>]*hidden/);
+    assert.match(workspaceHtml, /id="crypto-wallet-status"[^>]*hidden/);
     assert.match(workspaceHtml, /crypto-wallet-link-form/);
     assert.match(workspaceHtml, /href="\/billing">Manage subscription/);
     assert.doesNotMatch(workspaceHtml, /id="billing-checkout"|id="billing-status"/);
     assert.match(workspaceScript, /Free tier · \$\{access\.fossilNodes\} of \$\{access\.fossilNodeLimit\} fossil nodes/);
     assert.match(workspaceScript, /api\/auth\/eth\/link\/finish/);
     assert.doesNotMatch(workspaceScript, /api\/workspace\/billing/);
+  });
+
+  await t.test('crypto status rows appear only after account tier and ENS wallet load', async () => {
+    assert.match(workspaceScript, /accessStatus\.hidden = false/);
+    assert.match(workspaceScript, /walletStatus\.hidden = false/);
+    assert.match(workspaceScript, /walletStatus\.textContent = walletName \? `Linked wallet/);
   });
 
   await t.test('server makes donations independent and requires exact finalized mainnet subscription transfers', async () => {
