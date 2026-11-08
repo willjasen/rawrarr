@@ -87,11 +87,14 @@ test('public rawrarr.net landing page is static, accurate, and responsive', asyn
   await page.goto(origin);
 
   await page.getByRole('heading', { name: 'Your library. Your devices.' }).waitFor();
-  await page.getByRole('heading', { name: 'Your media stack, in one place.' }).waitFor();
-  await page.getByRole('heading', { name: 'Useful boundaries. Honest limits.' }).waitFor();
-  assert.equal(await page.getByRole('link', { name: 'Open Rawrarr app' }).count(), 1);
-  assert.equal(await page.getByRole('link', { name: 'Open app' }).getAttribute('href'), 'https://roarlay.rawrarr.net/');
-  assert.equal(await page.getByRole('link', { name: 'Open Rawrarr app' }).getAttribute('href'), 'https://roarlay.rawrarr.net/');
+  assert.equal(await page.locator('h1').count(), 1);
+  assert.equal(await page.locator('nav, article, svg').count(), 0, 'no feature cards, diagrams, or duplicate navigation');
+  assert.match(await page.locator('.intro').innerText(), /Radarr and Sonarr libraries, devices, and storage/);
+  assert.match(await page.locator('.how').innerText(), /coordinator[\s\S]*Media files and private keys stay on your devices[\s\S]*designed for age-encrypted synchronization/);
+  const openApp = page.getByRole('link', { name: 'Open app', exact: true });
+  assert.equal(await openApp.count(), 1);
+  assert.equal(await page.locator('a[href="https://roarlay.rawrarr.net/"]').count(), 1, 'one app entry point');
+  assert.equal(await openApp.getAttribute('href'), 'https://roarlay.rawrarr.net/');
   assert.equal(await page.locator('script').count(), 2);
   assert.equal(await page.locator('script[data-auto-track="false"]').getAttribute('data-website-id'), '72da7a2e-fe1b-4058-b07b-912d526c939e');
   const sentAnalyticsRequest = await analyticsRequest;
@@ -114,8 +117,8 @@ test('public rawrarr.net landing page is static, accurate, and responsive', asyn
   assert.match(css, /:root\s*\{\s*color-scheme:\s*dark;[\s\S]*?--paper:\s*#101611;/, 'dark is the stylesheet fallback before the light media override');
   assert.match(css, /@media \(prefers-color-scheme: light\)\s*\{\s*:root\s*\{\s*color-scheme:\s*light;/, 'explicit system light overrides the dark fallback');
   const colorSchemes = [
-    { name: 'light', scheme: 'light', root: 'light', body: 'rgb(245, 246, 241)', text: 'rgb(23, 37, 28)', surface: 'rgb(255, 255, 255)', privacy: 'rgb(34, 58, 42)' },
-    { name: 'dark', scheme: 'dark', root: 'dark', body: 'rgb(16, 22, 17)', text: 'rgb(237, 243, 233)', surface: 'rgb(23, 31, 24)', privacy: 'rgb(26, 42, 29)' },
+    { name: 'light', scheme: 'light', root: 'light', body: 'rgb(245, 246, 241)', text: 'rgb(23, 37, 28)', button: 'rgb(29, 56, 40)', buttonText: 'rgb(255, 255, 255)' },
+    { name: 'dark', scheme: 'dark', root: 'dark', body: 'rgb(16, 22, 17)', text: 'rgb(237, 243, 233)', button: 'rgb(184, 232, 108)', buttonText: 'rgb(23, 37, 28)' },
   ];
 
   for (const colorScheme of colorSchemes) {
@@ -126,26 +129,61 @@ test('public rawrarr.net landing page is static, accurate, and responsive', asyn
         scheme: style(document.documentElement).colorScheme,
         body: style(document.body).backgroundColor,
         text: style(document.body).color,
-        surface: style(document.querySelector('.step-card')).backgroundColor,
-        privacy: style(document.querySelector('.privacy-section')).backgroundColor,
+        button: style(document.querySelector('.open-app')).backgroundColor,
+        buttonText: style(document.querySelector('.open-app')).color,
       };
     });
     assert.deepEqual(palette, {
       scheme: colorScheme.root,
       body: colorScheme.body,
       text: colorScheme.text,
-      surface: colorScheme.surface,
-      privacy: colorScheme.privacy,
+      button: colorScheme.button,
+      buttonText: colorScheme.buttonText,
     }, `${colorScheme.name} palette is applied`);
 
     for (const viewport of [{ width: 1280, height: 800 }, { width: 375, height: 812 }]) {
       await page.setViewportSize(viewport);
+      await page.evaluate(() => window.scrollTo(0, 0));
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${colorScheme.name} ${viewport.width}px layout has no horizontal overflow`);
-      const action = await page.getByRole('link', { name: 'Open Rawrarr app' }).boundingBox();
+      const action = await openApp.boundingBox();
       assert.ok(action, `${colorScheme.name} ${viewport.width}px primary action is rendered`);
       assert.ok(action.width >= 44 && action.height >= 44, `${colorScheme.name} ${viewport.width}px primary action has a usable hit area`);
       assert.ok(action.x >= 0 && action.y >= 0 && action.x + action.width <= viewport.width && action.y + action.height <= viewport.height, `${colorScheme.name} ${viewport.width}px primary action is in the initial viewport`);
+      for (const selector of ['h1', '.intro', '.how']) {
+        const content = await page.locator(selector).boundingBox();
+        assert.ok(content && content.x >= 0 && content.y >= 0 && content.x + content.width <= viewport.width && content.y + content.height <= viewport.height, `${selector} is readable in the initial ${viewport.width}px viewport`);
+      }
+      assert.equal(await page.locator('details').getAttribute('open'), null, 'privacy details start collapsed');
+      await page.locator('summary').focus();
+      assert.notEqual(await page.locator('summary').evaluate(element => getComputedStyle(element).outlineStyle), 'none', 'keyboard focus is visible');
+      await page.keyboard.press('Enter');
+      assert.equal(await page.locator('details').evaluate(element => element.open), true, 'privacy disclosure opens with the keyboard');
+      assert.equal(await page.getByText('Anonymous site analytics.', { exact: true }).isVisible(), true);
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'expanded disclosure does not overflow');
+      await page.keyboard.press('Enter');
+
+      const originalCopy = await page.locator('.how').innerText();
+      await page.locator('.how').evaluate(element => { element.textContent += ' Your approved metadata and storage devices can have longer names while remaining part of the same shared workspace.'; });
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'longer explanatory copy wraps without overflow');
+      await openApp.scrollIntoViewIfNeeded();
+      const wrappedAction = await openApp.boundingBox();
+      assert.ok(wrappedAction && wrappedAction.x >= 0 && wrappedAction.x + wrappedAction.width <= viewport.width && wrappedAction.y >= 0 && wrappedAction.y + wrappedAction.height <= viewport.height, 'primary action stays usable after longer copy wraps');
+      await page.locator('.how').evaluate((element, text) => { element.textContent = text; }, originalCopy);
     }
   }
+
+  await page.goto(origin);
+  await page.keyboard.press('Tab');
+  assert.equal(await page.getByRole('link', { name: 'Skip to content' }).evaluate(element => element === document.activeElement), true);
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Tab');
+  assert.equal(await openApp.evaluate(element => element === document.activeElement), true, 'Open app is the first main-content keyboard action');
+  assert.notEqual(await openApp.evaluate(element => getComputedStyle(element).outlineStyle), 'none');
+  await page.route('https://roarlay.rawrarr.net/', route => route.fulfill({ contentType: 'text/html', body: '<h1>App entry point</h1>' }));
+  await Promise.all([
+    page.waitForURL('https://roarlay.rawrarr.net/'),
+    page.keyboard.press('Enter'),
+  ]);
+  await page.getByRole('heading', { name: 'App entry point' }).waitFor();
 });
