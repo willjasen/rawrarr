@@ -80,6 +80,7 @@ for fixture in \
     test_rawrarr_filename_secret.rs \
     test_rawrarr_hmac_metadata_filenames.rs \
     test_rawrarr_arr_settings.rs \
+    test_rawrarr_lidarr.rs \
     test_rawrarr_sonarr_metadata.rs \
     test_rawrarr_config_schema.rs \
     test_rawrarr_storage_node.rs; do

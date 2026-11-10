@@ -131,7 +131,7 @@ const copyAgeRecipientButton = document.getElementById('copy-age-recipient');
 const ageRecipientMessage = document.getElementById('age-recipient-message');
 let ageRecipientVisible = false;
 let agePublicRecipient = '';
-const views = Object.fromEntries(['overview', 'roarlay', 'fossils', 'movies', 'series', 'discovery', 'assistant', 'configuration', 'settings', 'about'].map(name => [name, document.getElementById(`${name}-view`)]));
+const views = Object.fromEntries(['overview', 'roarlay', 'fossils', 'movies', 'series', 'music', 'discovery', 'assistant', 'configuration', 'settings', 'about'].map(name => [name, document.getElementById(`${name}-view`)]));
 const roarlayHealthState = document.getElementById('roarlay-health-state');
 const roarlayHealthLabel = document.getElementById('roarlay-health-label');
 const roarlayHealthDetail = document.getElementById('roarlay-health-detail');
@@ -167,9 +167,14 @@ function showView(name, updateHash = true) {
     void loadArrSettings('sonarr');
     if (selectedNodeDetails) void chooseNodeRoute(selectedNodeDetails, true);
   }
+  if (view === 'music' && updateHash) {
+    void loadArrSettings('lidarr');
+    if (selectedNodeDetails) void chooseNodeRoute(selectedNodeDetails, true);
+  }
   if (view === 'settings' && updateHash) {
     void loadArrSettings('radarr');
     void loadArrSettings('sonarr');
+    void loadArrSettings('lidarr');
     void loadArrSettings('prowlarr');
   }
   if (view === 'discovery') void loadProwlarrDiscovery();
@@ -178,6 +183,7 @@ function showView(name, updateHash = true) {
     if (selectedNodeDetails?.role === 'metadata') {
       void loadArrSettings('radarr');
       void loadArrSettings('sonarr');
+      void loadArrSettings('lidarr');
     }
   }
   if (view === 'assistant') void aiChat.refresh();
@@ -1010,6 +1016,14 @@ const arrSettings = {
     mediaCard: 'sonarr-connection-card', saved: 'settings-sonarr-saved', savedUrl: 'settings-sonarr-saved-url', endpoint: '/settings/sonarr', label: 'Sonarr',
     dialog: 'settings-sonarr-dialog', configure: 'settings-configure-sonarr', test: 'settings-test-sonarr',
   },
+  lidarr: {
+    overviewCards: [],
+    copies: [
+      { url: 'settings-lidarr-url', key: 'settings-lidarr-key', form: 'settings-lidarr-settings', note: 'settings-lidarr-key-note', message: 'settings-lidarr-settings-message', button: 'settings-save-lidarr', clear: 'settings-clear-lidarr', nodeNote: 'settings-lidarr-node-note' },
+    ],
+    saved: 'settings-lidarr-saved', savedUrl: 'settings-lidarr-saved-url', endpoint: '/settings/lidarr', label: 'Lidarr',
+    dialog: 'settings-lidarr-dialog', configure: 'settings-configure-lidarr', test: 'settings-test-lidarr',
+  },
   prowlarr: {
     overviewCards: [],
     copies: [
@@ -1075,12 +1089,27 @@ async function loadArrSettings(service) {
         document.getElementById('overview-series-count').textContent = 'Not connected';
         document.getElementById('overview-series-detail').textContent = 'Connect Sonarr in Settings to see TV statistics.';
       }
+    } else if (service === 'lidarr') {
+      const content = document.getElementById('lidarr-library-content');
+      content.hidden = !settings.configured;
+      if (!settings.configured) {
+        document.getElementById('lidarr-artists').replaceChildren();
+        document.getElementById('lidarr-releases').replaceChildren();
+        document.getElementById('lidarr-library-status').textContent = `Connect Lidarr in Settings to browse music on ${selectedNodeLabel()}.`;
+      } else if (location.hash === '#music') {
+        await loadLidarrLibrary();
+      }
     } else if (!settings.configured && (location.hash === '' || location.hash === '#overview')) {
       document.getElementById('overview-movie-count').textContent = 'Not connected';
       document.getElementById('overview-movie-detail').textContent = 'Connect Radarr in Settings to see movie statistics.';
     }
   } catch (error) {
     document.getElementById(fields.saved).hidden = true;
+    if (service === 'lidarr') {
+      const status = document.getElementById('lidarr-library-status');
+      status.dataset.state = 'error';
+      status.textContent = error.message || 'Could not load Lidarr settings.';
+    }
     if (location.hash === '' || location.hash === '#overview') {
       const id = fields.overviewDetail || (service === 'radarr' ? 'overview-movie-detail' : service === 'sonarr' ? 'overview-series-detail' : null);
       if (id) document.getElementById(id).textContent = error.message || `Could not load ${fields.label} statistics.`;
@@ -1188,6 +1217,12 @@ for (const [service, fields] of Object.entries(arrSettings)) {
         document.getElementById(fields.configure).textContent = `Configure ${fields.label}`;
         if (copy.form === `settings-${service}-settings`) dialog.close();
         if (service === 'sonarr') document.getElementById('tv-library').hidden = true;
+        if (service === 'lidarr') {
+          document.getElementById('lidarr-library-content').hidden = true;
+          document.getElementById('lidarr-artists').replaceChildren();
+          document.getElementById('lidarr-releases').replaceChildren();
+          document.getElementById('lidarr-library-status').textContent = 'Lidarr settings cleared from the age-encrypted config.';
+        }
         if (service === 'prowlarr') {
           document.getElementById('prowlarr-discovery-content').hidden = true;
           document.getElementById('prowlarr-not-configured').hidden = false;
@@ -1202,6 +1237,65 @@ for (const [service, fields] of Object.entries(arrSettings)) {
     });
   }
 }
+
+let lidarrLibraryGeneration = 0;
+async function loadLidarrLibrary() {
+  const status = document.getElementById('lidarr-library-status');
+  const content = document.getElementById('lidarr-library-content');
+  const generation = ++lidarrLibraryGeneration;
+  const nodeId = selectedNode;
+  const identityRevision = ageIdentityRevision;
+  status.dataset.state = '';
+  status.textContent = 'Loading music library from the selected fossil…';
+  try {
+    await unlockMetadataVaultForSettings();
+    const result = await arrDirectRequest('/lidarr/library');
+    if (generation !== lidarrLibraryGeneration || nodeId !== selectedNode || identityRevision !== ageIdentityRevision) return;
+    const render = (containerId, items, heading, detail) => {
+      const container = document.getElementById(containerId);
+      container.replaceChildren();
+      if (!items.length) {
+        const empty = document.createElement('p');
+        empty.className = 'connection-note';
+        empty.textContent = `No ${heading.toLocaleLowerCase()} found in Lidarr.`;
+        container.append(empty);
+        return;
+      }
+      for (const item of items) {
+        const card = document.createElement('article');
+        card.className = 'library-card';
+        const copy = document.createElement('div');
+        copy.className = 'library-card-copy';
+        const title = document.createElement('h3');
+        title.className = 'library-card-title';
+        title.textContent = item.name || item.title || 'Untitled';
+        const metadata = document.createElement('p');
+        metadata.className = 'library-card-meta';
+        metadata.textContent = detail(item);
+        copy.append(title, metadata);
+        card.append(copy);
+        container.append(card);
+      }
+    };
+    const artists = Array.isArray(result.artists) ? result.artists : [];
+    const releases = Array.isArray(result.releases) ? result.releases : [];
+    render('lidarr-artists', artists, 'artists', artist => {
+      const id = artist.foreignArtistId ? `MusicBrainz ${artist.foreignArtistId}` : 'No MusicBrainz ID';
+      return `${id} · ${Number(artist.albumCount) || 0} releases · ${Number(artist.trackFileCount) || 0} tracks`;
+    });
+    render('lidarr-releases', releases, 'releases', release =>
+      `${release.artistName || 'Unknown artist'} · ${release.releaseDate || 'Release date unknown'} · ${Number(release.trackFileCount) || 0} / ${Number(release.trackCount) || 0} tracks`);
+    content.hidden = false;
+    status.textContent = `Loaded ${artists.length.toLocaleString()} artists and ${releases.length.toLocaleString()} releases from Lidarr on ${selectedNodeLabel()}.`;
+  } catch (error) {
+    if (generation !== lidarrLibraryGeneration || nodeId !== selectedNode || identityRevision !== ageIdentityRevision) return;
+    status.dataset.state = 'error';
+    status.textContent = error.message || 'Could not load the Lidarr music library.';
+  }
+}
+
+document.getElementById('configure-lidarr-from-music').addEventListener('click', () => showView('settings'));
+document.getElementById('refresh-lidarr-library').addEventListener('click', () => void loadLidarrLibrary());
 
 function renderProwlarrIndexers(indexers) {
   const container = document.getElementById('prowlarr-indexers');
@@ -1447,8 +1541,10 @@ function openNode(node) {
     if (currentView === 'settings') {
       void loadArrSettings('radarr');
       void loadArrSettings('sonarr');
+      void loadArrSettings('lidarr');
       void loadArrSettings('prowlarr');
     }
+    if (currentView === 'music') void loadArrSettings('lidarr');
     if (currentView === 'discovery') void loadProwlarrDiscovery();
   }
 }
@@ -2781,4 +2877,5 @@ initialWorkspaceLoadFinished = true;
 if (location.hash === '#configuration') void loadClusterConfiguration();
 if (location.hash === '#movies') void loadArrSettings('radarr');
 if (location.hash === '#tv' || location.hash === '#series') void loadArrSettings('sonarr');
+if (location.hash === '#music') void loadArrSettings('lidarr');
 setInterval(() => { void loadNodes(); void loadPending(); }, 10000);

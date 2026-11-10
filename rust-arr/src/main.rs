@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod movie_snapshot;
+mod lidarr;
 mod prowlarr;
 mod sonarr;
 
@@ -3011,12 +3012,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/sonarr/status", get(sonarr::status))
         .route("/api/sonarr/series", get(sonarr::series))
         .route("/api/sonarr/series/{tvdb_id}/poster", get(get_sonarr_poster))
+        .route("/api/lidarr/status", get(lidarr::status))
+        .route("/api/lidarr/library", get(lidarr::library))
         .route(
             "/api/settings/sonarr",
             get(sonarr::settings)
                 .put(sonarr::save)
                 .post(sonarr::test_connection)
                 .delete(sonarr::clear),
+        )
+        .route(
+            "/api/settings/lidarr",
+            get(lidarr::settings)
+                .put(lidarr::save)
+                .post(lidarr::test_connection)
+                .delete(lidarr::clear),
         )
         .route(
             "/api/settings/prowlarr",
@@ -3075,6 +3085,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .delete(sonarr::clear),
         )
         .route(
+            "/api/settings/lidarr",
+            get(lidarr::settings)
+                .put(lidarr::save)
+                .post(lidarr::test_connection)
+                .delete(lidarr::clear),
+        )
+        .route(
             "/api/settings/prowlarr",
             get(prowlarr::settings)
                 .put(prowlarr::save)
@@ -3086,6 +3103,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/sonarr/status", get(sonarr::status))
         .route("/api/sonarr/series", get(sonarr::series))
         .route("/api/sonarr/series/{tvdb_id}/poster", get(get_sonarr_poster))
+        .route("/api/lidarr/status", get(lidarr::status))
+        .route("/api/lidarr/library", get(lidarr::library))
         .route("/api/radarr/movies", get(radarr_movies))
         .route("/api/radarr/live-library", get(radarr_movies_live))
         .route("/api/radarr/live-movies/{tmdb_id}/poster", get(radarr_movie_poster_live))
