@@ -1,6 +1,6 @@
 use super::*;
 #[test]
-fn sonarr_and_radarr_updates_preserve_each_other_and_filename_key() {
+fn arr_service_updates_preserve_each_other_and_filename_key() {
     let output = Command::new("age-keygen").arg("-pq").output().unwrap();
     assert!(output.status.success());
     let root = env::temp_dir().join(format!(
@@ -36,6 +36,12 @@ fn sonarr_and_radarr_updates_preserve_each_other_and_filename_key() {
             api_key: "sonarr-fixture".into(),
         }))
         .unwrap();
+    vault
+        .save_lidarr(Some(ArrConnection {
+            url: "https://lidarr.test".into(),
+            api_key: "lidarr-fixture".into(),
+        }))
+        .unwrap();
     assert_eq!(
         vault.load().unwrap().unwrap().radarr_api_key,
         "radarr-fixture"
@@ -56,12 +62,19 @@ fn sonarr_and_radarr_updates_preserve_each_other_and_filename_key() {
     let config = vault.load().unwrap().unwrap();
     assert!(config.radarr_api_key.is_empty());
     assert!(config.sonarr.is_some());
+    assert!(config.additional_services.iter().any(|service| {
+        service.service_type == "lidarr"
+            && service.url == "https://lidarr.test"
+            && service.api_key == "lidarr-fixture"
+    }));
     assert_eq!(config.metadata_filename_key, filename_key);
     vault.save(&radarr).unwrap();
     vault.save_sonarr(None).unwrap();
+    vault.save_lidarr(None).unwrap();
     let config = vault.load().unwrap().unwrap();
     assert_eq!(config.radarr_api_key, "radarr-fixture");
     assert!(config.sonarr.is_none());
+    assert!(config.additional_services.iter().all(|service| service.service_type != "lidarr"));
     assert_eq!(config.metadata_filename_key, filename_key);
     fs::remove_dir_all(root).unwrap();
 }

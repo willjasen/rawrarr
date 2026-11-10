@@ -331,6 +331,7 @@
     <button class="nav-item" data-view="discovery"><span class="nav-icon">⌕</span><span class="nav-text">Discover</span></button>
     <button class="nav-item" data-view="movies"><span class="nav-icon">▧</span><span class="nav-text">Movies</span></button>
     <button class="nav-item" data-view="series"><span class="nav-icon">▧</span><span class="nav-text">TV</span></button>
+    <button class="nav-item" data-view="music"><span class="nav-icon">♫</span><span class="nav-text">Music</span></button>
     <button class="nav-item" data-view="assistant"><span class="nav-icon">✦</span><span class="nav-text">rawrs</span></button>
     <button class="nav-item" data-view="configuration"><span class="nav-icon">◇</span><span class="nav-text">Configuration</span></button>
     <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span><span class="nav-text">Settings</span></button>
@@ -457,6 +458,14 @@
           <div id="sonarr-series" class="library-grid" aria-label="TV series"></div>
         </article>
       </section>
+    </section>
+    <section id="music-view" hidden><h1 class="page-title">Music</h1>
+      <p id="lidarr-library-status" class="connection-message" role="status" aria-live="polite">Select an online fossil node to check Lidarr.</p>
+      <div class="connection-actions"><button id="configure-lidarr-from-music" type="button">Configure Lidarr</button><button id="refresh-lidarr-library" type="button">Refresh music library</button></div>
+      <article id="lidarr-library-content" class="panel library-panel" hidden>
+        <h2>Artists</h2><div id="lidarr-artists" class="library-grid" aria-label="Lidarr artists"></div>
+        <h2>Releases</h2><div id="lidarr-releases" class="library-grid" aria-label="Lidarr releases"></div>
+      </article>
     </section>
     <section id="discovery-view" hidden><h1 class="page-title">Discover</h1>
       <p class="connection-intro">Search the configured Prowlarr indexers from the selected fossil node. Searches are owner initiated and read-only; Rawrarr does not download or fulfill results.</p>
@@ -597,6 +606,25 @@
             <p id="settings-sonarr-key-note" class="connection-note">Required for the first save.</p>
             <div class="connection-actions"><button id="settings-test-sonarr" type="button">Test connection</button><button id="settings-save-sonarr" type="submit">Save and connect</button><button id="settings-clear-sonarr" type="button">Clear connection</button><button class="arr-dialog-close" type="button">Cancel</button></div>
             <p id="settings-sonarr-settings-message" class="connection-message" role="status" aria-live="polite"></p>
+          </form>
+          </dialog>
+        </article>
+        <article class="connection-card" aria-labelledby="settings-lidarr-title">
+          <h2 id="settings-lidarr-title">Lidarr</h2>
+          <div id="settings-lidarr-saved" class="connection-saved" hidden role="status" aria-live="polite"><strong>Lidarr details saved</strong><span id="settings-lidarr-saved-url" class="connection-saved-url"></span><span class="connection-saved-note">API key stored in the age-encrypted config on this node.</span></div>
+          <p class="connection-intro" id="settings-lidarr-node-note">Select an online fossil node in Fossils to manage this connection.</p>
+          <button id="settings-configure-lidarr" type="button">Configure Lidarr</button>
+          <dialog class="arr-settings-dialog" id="settings-lidarr-dialog" aria-labelledby="settings-lidarr-dialog-title">
+          <form id="settings-lidarr-settings" class="connection-form">
+            <h2 id="settings-lidarr-dialog-title">Configure Lidarr</h2>
+            <label for="settings-lidarr-url">Lidarr URL</label>
+            <input id="settings-lidarr-url" name="url" type="url" placeholder="https://lidarr.example.com" autocomplete="url" required>
+            <p class="connection-note">Use HTTPS for remote instances. HTTP is accepted only for loopback addresses on this node.</p>
+            <label for="settings-lidarr-key">Lidarr API key</label>
+            <input id="settings-lidarr-key" name="apiKey" type="password" autocomplete="new-password">
+            <p id="settings-lidarr-key-note" class="connection-note">Required for the first save.</p>
+            <div class="connection-actions"><button id="settings-test-lidarr" type="button">Test connection</button><button id="settings-save-lidarr" type="submit">Save and connect</button><button id="settings-clear-lidarr" type="button">Clear connection</button><button class="arr-dialog-close" type="button">Cancel</button></div>
+            <p id="settings-lidarr-settings-message" class="connection-message" role="status" aria-live="polite"></p>
           </form>
           </dialog>
         </article>

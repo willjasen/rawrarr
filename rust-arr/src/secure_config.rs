@@ -1442,6 +1442,11 @@ impl AgeVault {
         self.save_service("prowlarr", connection)
     }
 
+    /// Update only Lidarr while preserving all other service entries.
+    pub fn save_lidarr(&self, connection: Option<ArrConnection>) -> Result<(), VaultError> {
+        self.save_service("lidarr", connection)
+    }
+
     fn save_service(
         &self,
         service_type: &str,
