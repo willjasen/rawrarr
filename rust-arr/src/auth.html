@@ -29,12 +29,12 @@
   <main>
     <div class="brand">rawrarr</div>
     <h1>Sign in</h1>
-    <p id="intro">Use your passkey to continue to your private workspace.</p>
-    <section id="register-panel" hidden>
-      <button id="create-passkey" type="button">Create passkey</button>
-    </section>
+    <p id="intro">Sign in with a passkey or create an account. Wallet sign-in is also available.</p>
     <section id="login-panel" hidden>
       <button id="sign-in" type="button">Sign in with passkey</button>
+    </section>
+    <section id="register-panel">
+      <button id="create-passkey" type="button">Create Passkey</button>
     </section>
     <div class="divider" aria-hidden="true"></div>
     <section id="wallet-login-panel">
@@ -118,16 +118,17 @@
     document.getElementById('sign-in-ens').addEventListener('click', event => run(event.currentTarget, signInWithEns));
     (async () => {
       if (!window.PublicKeyCredential || !navigator.credentials) {
+        document.getElementById('register-panel').hidden = true;
         message.textContent = 'This browser does not support passkeys.';
         return;
       }
       try {
         const response = await fetch('/api/auth/status', { headers: { Accept: 'application/json' } });
         const status = await response.json();
-        document.getElementById(status.userExists ? 'login-panel' : 'register-panel').hidden = false;
+        document.getElementById('login-panel').hidden = !status.userExists;
         document.getElementById('intro').textContent = status.userExists
-          ? 'Sign in with your passkey to continue.'
-          : 'Create your account with a passkey. rawrarr will give it a dinosaur-themed name.';
+          ? 'Sign in with a passkey or create a separate account.'
+          : 'Create an account with a passkey, or sign in with an ENS-linked wallet.';
       } catch (_) { message.textContent = 'Could not connect to the account service.'; }
     })();
   </script>

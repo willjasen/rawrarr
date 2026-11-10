@@ -99,6 +99,7 @@ def main() -> int:
                 [str(binary)], cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
             )
         challenge_id = None
+        challenge_ids = []
         try:
             deadline = time.monotonic() + 15
             while time.monotonic() < deadline:
@@ -115,15 +116,19 @@ def main() -> int:
 
             status, _, page = request(base_url, "/auth")
             assert status == 200 and b"Sign in with passkey" in page
+            assert b'id="create-passkey" type="button">Create Passkey' in page
             assert b'id="username"' not in page and b'id="new-username"' not in page
             assert b'id="display-name"' not in page
-            assert b"status.userExists ? 'login-panel' : 'register-panel'" in page
+            assert b'<section id="register-panel">' in page
+            assert b"document.getElementById('login-panel').hidden = !status.userExists" in page
+            assert b"document.getElementById('register-panel').hidden = true" in page
             status, _, payload = request(base_url, "/api/auth/status")
             assert status == 200 and json.loads(payload) == {"userExists": False}
             status, _, landing_page = request(base_url, "/")
             assert status == 200 and b"Sign in" in landing_page
             status, _, auth_page = request(base_url, "/auth")
             assert status == 200 and b"Sign in with passkey" in auth_page
+            assert b'id="create-passkey" type="button">Create Passkey' in auth_page
             status, _, _ = request(base_url, "/api/radarr/status")
             assert status in (401, 404), "node-only APIs must not serve protected data on the coordinator"
             status, _, _ = request(base_url, "/api/workspace/nodes")
@@ -138,6 +143,7 @@ def main() -> int:
             assert status == 200
             challenge = json.loads(payload)
             challenge_id = challenge["challengeId"]
+            challenge_ids.append(challenge_id)
             assert re.fullmatch(r"[0-9a-f-]{36}", challenge_id)
             assert challenge["options"]["publicKey"]["rp"]["id"] == "localhost"
             assert re.fullmatch(
@@ -162,6 +168,44 @@ def main() -> int:
                 text=True,
             ).stdout.strip()
             assert users == "0", "malformed first registration must not create a database user"
+
+            subprocess.run(
+                [
+                    "psql",
+                    "-v",
+                    "ON_ERROR_STOP=1",
+                    "-c",
+                    "INSERT INTO rawrarr_users (id, username, display_name) "
+                    "VALUES ('00000000-0000-4000-8000-000000000001', 'existing-test-owner', 'Existing Owner')",
+                ],
+                env={**os.environ, "PGDATABASE": args.database_url},
+                check=True,
+                stdout=subprocess.DEVNULL,
+            )
+            status, _, payload = request(base_url, "/api/auth/status")
+            assert status == 200 and json.loads(payload) == {"userExists": True}
+            status, _, payload = request(
+                base_url, "/api/auth/register/start", "POST", {}
+            )
+            assert status == 200, "existing accounts must not block new account registration"
+            second_challenge_id = json.loads(payload)["challengeId"]
+            challenge_ids.append(second_challenge_id)
+            status, _, _ = request(
+                base_url,
+                "/api/auth/register/finish",
+                "POST",
+                {"challengeId": second_challenge_id, "credential": {}},
+            )
+            assert status in (401, 422)
+            status, _, _ = request(
+                base_url,
+                "/api/auth/login/start",
+                "POST",
+                {"username": "existing-test-owner"},
+            )
+            assert status == 422, "passkey sign-in must not accept username-based selection"
+            print("PASS existing accounts do not block additional passkey registration")
+            print("PASS passkey sign-in does not accept a username field")
             print("PASS minimal sign-in page, first-user registration challenge, and protected route")
             print("PASS malformed registration is rejected before creating a user or session")
         finally:
@@ -172,7 +216,7 @@ def main() -> int:
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait(timeout=5)
-            if challenge_id:
+            for challenge_id in challenge_ids:
                 # Challenge IDs are UUID-validated before interpolation; cleanup is confined to the _test database.
                 subprocess.run(
                     ["psql", "-v", "ON_ERROR_STOP=1", "-c",

@@ -142,9 +142,8 @@ pub(super) struct AuthComplete {
 pub(super) struct RegistrationStart {}
 
 #[derive(Deserialize)]
-pub(super) struct AuthenticationStart {
-    username: Option<String>,
-}
+#[serde(deny_unknown_fields)]
+pub(super) struct AuthenticationStart {}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -196,23 +195,6 @@ pub(super) async fn database_pool() -> Result<PgPool, Box<dyn std::error::Error>
     Ok(pool)
 }
 
-fn normalize_username(input: &str) -> Result<String, (StatusCode, Json<AuthError>)> {
-    let username = input.trim().to_ascii_lowercase();
-    if !(3..=32).contains(&username.len())
-        || !username.bytes().all(|byte| {
-            byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"._-".contains(&byte)
-        })
-    {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(AuthError {
-                error: "Choose a username of 3 to 32 letters, numbers, dots, dashes, or underscores",
-            }),
-        ));
-    }
-    Ok(username)
-}
-
 pub(crate) fn generated_account_name(id: Uuid) -> String {
     let bytes = id.as_bytes();
     let word_pairs = ACCOUNT_NAME_PREFIXES
@@ -257,21 +239,30 @@ pub(super) async fn begin_registration(
     Extension(auth): Extension<AuthState>,
     Json(_request): Json<RegistrationStart>,
 ) -> Result<Json<ChallengeResponse<CreationChallengeResponse>>, (StatusCode, Json<AuthError>)> {
-    let exists = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM rawrarr_users)")
-        .fetch_one(&auth.pool)
+    let user_id = Uuid::new_v4();
+    let display_name = generated_account_name(user_id);
+    let mut transaction = auth.pool.begin().await.map_err(|_| invalid_auth())?;
+    sqlx::query("SELECT pg_advisory_xact_lock(8257193821)")
+        .execute(&mut *transaction)
         .await
         .map_err(|_| invalid_auth())?;
-    if exists {
-        return Err((
-            StatusCode::CONFLICT,
-            Json(AuthError {
-                error: "First-user setup is already complete; ask an existing user for an invitation",
-            }),
-        ));
+    let base_username = display_name.clone();
+    let mut username = base_username.clone();
+    let mut suffix = 2_u32;
+    loop {
+        let exists = sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM rawrarr_users WHERE username = $1) OR EXISTS(SELECT 1 FROM rawrarr_auth_challenges WHERE flow = 'registration' AND username = $1 AND expires_at > now())",
+        )
+        .bind(&username)
+        .fetch_one(&mut *transaction)
+        .await
+        .map_err(|_| invalid_auth())?;
+        if !exists {
+            break;
+        }
+        username = format!("{base_username}-{suffix}");
+        suffix += 1;
     }
-    let user_id = Uuid::new_v4();
-    let username = generated_account_name(user_id);
-    let display_name = username.clone();
     let (options, registration) = auth
         .webauthn
         .start_passkey_registration(user_id, &username, &display_name, None)
@@ -288,9 +279,10 @@ pub(super) async fn begin_registration(
     .bind(state)
     .bind(CHALLENGE_SECONDS)
     .bind(&auth.node_id)
-    .execute(&auth.pool)
+    .execute(&mut *transaction)
     .await
     .map_err(|_| invalid_auth())?;
+    transaction.commit().await.map_err(|_| invalid_auth())?;
     Ok(Json(ChallengeResponse {
         challenge_id,
         options,
@@ -319,14 +311,6 @@ pub(super) async fn finish_registration(
         .fetch_one(&mut *transaction)
         .await
         .map_err(|_| invalid_auth())?;
-    if exists {
-        return Err((
-            StatusCode::CONFLICT,
-            Json(AuthError {
-                error: "First-user setup has already been completed",
-            }),
-        ));
-    }
     let user_id: Uuid = challenge.try_get("user_id").map_err(|_| invalid_auth())?;
     let username: String = challenge.try_get("username").map_err(|_| invalid_auth())?;
     let display_name: String = challenge
@@ -349,13 +333,13 @@ pub(super) async fn finish_registration(
         .execute(&mut *transaction)
         .await
         .map_err(|_| invalid_auth())?;
-    // This deployment currently has one Rawrarr account per coordinator
-    // instance. Attach preconfigured nodes to that account at first setup.
-    sqlx::query("UPDATE rawrarr_nodes SET user_id = $1 WHERE user_id IS NULL")
-        .bind(user_id)
-        .execute(&mut *transaction)
-        .await
-        .map_err(|_| invalid_auth())?;
+    if !exists {
+        sqlx::query("UPDATE rawrarr_nodes SET user_id = $1 WHERE user_id IS NULL")
+            .bind(user_id)
+            .execute(&mut *transaction)
+            .await
+            .map_err(|_| invalid_auth())?;
+    }
     sqlx::query(
         "INSERT INTO rawrarr_passkeys (credential_id, user_id, passkey) VALUES ($1, $2, $3)",
     )
@@ -382,30 +366,19 @@ pub(super) async fn finish_registration(
 
 pub(super) async fn begin_authentication(
     Extension(auth): Extension<AuthState>,
-    Json(request): Json<AuthenticationStart>,
+    Json(_request): Json<AuthenticationStart>,
 ) -> Result<Json<ChallengeResponse<RequestChallengeResponse>>, (StatusCode, Json<AuthError>)> {
-    let username = request
-        .username
-        .as_deref()
-        .map(normalize_username)
-        .transpose()?;
-    let user = sqlx::query(
-        "SELECT id, username FROM rawrarr_users WHERE ($1::text IS NULL OR username = $1) ORDER BY created_at LIMIT 1",
+    let rows = sqlx::query(
+        "SELECT u.id AS user_id, u.username, p.passkey FROM rawrarr_users u JOIN rawrarr_passkeys p ON p.user_id = u.id ORDER BY u.created_at, p.created_at",
     )
-        .bind(username.as_deref())
-        .fetch_optional(&auth.pool)
-        .await
-        .map_err(|_| invalid_auth())?
-        .ok_or_else(invalid_auth)?;
-    let user_id: Uuid = user.try_get("id").map_err(|_| invalid_auth())?;
-    let username: String = user.try_get("username").map_err(|_| invalid_auth())?;
-    let rows = sqlx::query("SELECT passkey FROM rawrarr_passkeys WHERE user_id = $1")
-        .bind(user_id)
         .fetch_all(&auth.pool)
         .await
         .map_err(|_| invalid_auth())?;
+    let first = rows.first().ok_or_else(invalid_auth)?;
+    let user_id: Uuid = first.try_get("user_id").map_err(|_| invalid_auth())?;
+    let username: String = first.try_get("username").map_err(|_| invalid_auth())?;
     let passkeys = rows
-        .into_iter()
+        .iter()
         .map(|row| {
             row.try_get::<serde_json::Value, _>("passkey")
                 .map_err(|_| invalid_auth())
@@ -442,7 +415,7 @@ pub(super) async fn finish_authentication(
 ) -> Result<Response, (StatusCode, Json<AuthError>)> {
     let mut transaction = auth.pool.begin().await.map_err(|_| invalid_auth())?;
     let challenge = sqlx::query(
-        "SELECT user_id, state FROM rawrarr_auth_challenges WHERE id = $1 AND flow = 'authentication' AND expires_at > now() AND node_id = $2 FOR UPDATE",
+        "SELECT state FROM rawrarr_auth_challenges WHERE id = $1 AND flow = 'authentication' AND expires_at > now() AND node_id = $2 FOR UPDATE",
     )
     .bind(request.challenge_id)
     .bind(&auth.node_id)
@@ -450,38 +423,34 @@ pub(super) async fn finish_authentication(
     .await
     .map_err(|_| invalid_auth())?
     .ok_or_else(invalid_auth)?;
-    let user_id: Uuid = challenge.try_get("user_id").map_err(|_| invalid_auth())?;
     let state: serde_json::Value = challenge.try_get("state").map_err(|_| invalid_auth())?;
     let state: PasskeyAuthentication = serde_json::from_value(state).map_err(|_| invalid_auth())?;
     let result = auth
         .webauthn
         .finish_passkey_authentication(&request.credential, &state)
         .map_err(|_| invalid_auth())?;
-    let rows =
-        sqlx::query("SELECT credential_id, passkey FROM rawrarr_passkeys WHERE user_id = $1")
-            .bind(user_id)
-            .fetch_all(&mut *transaction)
-            .await
-            .map_err(|_| invalid_auth())?;
-    let mut credential_updated = false;
-    for row in rows {
-        let credential_id: Vec<u8> = row.try_get("credential_id").map_err(|_| invalid_auth())?;
-        let value: serde_json::Value = row.try_get("passkey").map_err(|_| invalid_auth())?;
-        let mut passkey: Passkey = serde_json::from_value(value).map_err(|_| invalid_auth())?;
-        if passkey.update_credential(&result).is_some() {
-            let passkey_json = serde_json::to_value(&passkey).map_err(|_| invalid_auth())?;
-            sqlx::query("UPDATE rawrarr_passkeys SET passkey = $1 WHERE credential_id = $2")
-                .bind(passkey_json)
-                .bind(credential_id)
-                .execute(&mut *transaction)
-                .await
-                .map_err(|_| invalid_auth())?;
-            credential_updated = true;
-        }
-    }
-    if !credential_updated {
+    let credential_id = result.cred_id().as_ref();
+    let passkey_row = sqlx::query(
+        "SELECT user_id, passkey FROM rawrarr_passkeys WHERE credential_id = $1 FOR UPDATE",
+    )
+    .bind(credential_id)
+    .fetch_optional(&mut *transaction)
+    .await
+    .map_err(|_| invalid_auth())?
+    .ok_or_else(invalid_auth)?;
+    let user_id: Uuid = passkey_row.try_get("user_id").map_err(|_| invalid_auth())?;
+    let value: serde_json::Value = passkey_row.try_get("passkey").map_err(|_| invalid_auth())?;
+    let mut passkey: Passkey = serde_json::from_value(value).map_err(|_| invalid_auth())?;
+    if passkey.update_credential(&result).is_none() {
         return Err(invalid_auth());
     }
+    let passkey_json = serde_json::to_value(&passkey).map_err(|_| invalid_auth())?;
+    sqlx::query("UPDATE rawrarr_passkeys SET passkey = $1 WHERE credential_id = $2")
+        .bind(passkey_json)
+        .bind(credential_id)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|_| invalid_auth())?;
     sqlx::query("DELETE FROM rawrarr_auth_challenges WHERE id = $1")
         .bind(request.challenge_id)
         .execute(&mut *transaction)
@@ -595,36 +564,38 @@ pub(super) async fn age_setup_html() -> impl IntoResponse {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        ACCOUNT_NAME_CREATURES, ACCOUNT_NAME_PREFIXES, generated_account_name, normalize_username,
-    };
+    use super::{ACCOUNT_NAME_CREATURES, ACCOUNT_NAME_PREFIXES, generated_account_name};
     use uuid::Uuid;
-
-    #[test]
-    fn usernames_are_normalized_and_restricted() {
-        assert_eq!(normalize_username(" Owner_1 ").unwrap(), "owner_1");
-        assert!(normalize_username("ab").is_err());
-        assert!(normalize_username("contains space").is_err());
-        assert!(normalize_username("contains/slash").is_err());
-    }
 
     #[test]
     fn account_names_are_dinosaur_themed_and_unique_per_account_id() {
         let first = generated_account_name(Uuid::from_u128(1));
         let second = generated_account_name(Uuid::from_u128(2));
-        assert!(ACCOUNT_NAME_PREFIXES
-            .iter()
-            .any(|prefix| first.starts_with(&format!("{prefix}-"))));
-        assert!(ACCOUNT_NAME_CREATURES
-            .iter()
-            .any(|creature| first.contains(creature)));
+        assert!(
+            ACCOUNT_NAME_PREFIXES
+                .iter()
+                .any(|prefix| first.starts_with(&format!("{prefix}-")))
+        );
+        assert!(
+            ACCOUNT_NAME_CREATURES
+                .iter()
+                .any(|creature| first.contains(creature))
+        );
         assert_ne!(first, second);
-        assert!(normalize_username(&first).is_ok());
+        assert!(
+            first
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte == b'-')
+        );
         for prefix in ACCOUNT_NAME_PREFIXES {
             for creature in ACCOUNT_NAME_CREATURES {
                 let candidate = format!("turquoise-wingless-{prefix}-{creature}");
                 if candidate.len() <= 32 {
-                    assert!(normalize_username(&candidate).is_ok());
+                    assert!(
+                        candidate
+                            .bytes()
+                            .all(|byte| byte.is_ascii_lowercase() || byte == b'-')
+                    );
                 }
             }
         }
