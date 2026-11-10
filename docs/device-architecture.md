@@ -1,6 +1,6 @@
 # Device and scanner architecture
 
-> Current user-facing names: **roarlay** (coordinator), **fossil** (metadata), and **boneyard** (storage). Only boneyard reads local media. The coordinator displays a selected node UI through a configured relay; `localhost:7297` remains available for direct local access. See [implemented deployment and Mac mini setup](container-deployment.md). Manual node approval and single-account node ownership are implemented; multi-account invitations and dynamic node channels remain planned.
+> Current user-facing names: **roarlay** (coordinator), **fossil** (metadata), and **boneyard** (storage). Only boneyard reads local media. The coordinator displays a selected node UI through a configured relay; `localhost:7297` remains available for direct local access. See [implemented deployment and Mac mini setup](container-deployment.md). Public passkey account creation and per-account authentication are implemented. Node enrollment is still limited to single-account coordinators; owner-issued multi-account invitations and dynamic node channels remain planned.
 
 The accepted container roles are `coordinator`, `storage`, and `metadata`; their user-facing names are roarlay, boneyard, and fossil respectively. The coordinator runs user authentication, PostgreSQL, account ownership, and node coordination; storage reads its local media mount; metadata serves Radarr and shared application data. Coordinator and subscriber capabilities stay separate. The internal coordinator stays on do3; the MacBook and Mac mini run fossil subscribers, not coordinators. The public deployment remains separate. See [node types](node-types.md) and [coordinator linking](coordinator-linking-plan.md).
 
@@ -15,8 +15,10 @@ The unlocked configuration is saved as age ciphertext in `/shared/config.aged`. 
 This generic local prototype boundary is distinct from the internal deployment.
 The earlier Mac mini boneyard deployment is historical; both internal Macs now
 host fossil subscribers and the coordinator stays on do3. The coordinator-hosted
-workspace is implemented; multi-account invitations, a separate operator service,
-and a cross-node catalog remain planned.
+workspace is implemented. Each account has its own passkeys and sessions, but node
+enrollment remains restricted to a single-account coordinator until owner-issued
+multi-account invitations are implemented. A separate operator service and a
+cross-node catalog also remain planned.
 
 ## Coordinator-hosted node workspace
 
@@ -50,17 +52,18 @@ The Syncthing folder holds shared application records, including age-encrypted c
 Planned change: move only `config.aged` to authenticated peer RPC/Merkle repair, with exact age ciphertext mirrored in node-local Valkey. Exclude root `/config.aged` from each node's Syncthing folder after both nodes run the RPC-capable published release. Keep `/shared/in/metadata`, including app metadata and artwork, on Syncthing. The [config peer-repair protocol](metadata-peer-repair-protocol.md) defines the boundary; this behavior is not implemented yet.
 
 The generic combined template bootstraps roarlay and an initial fossil together;
-it is not the internal Mac deployment procedure. The first passkey creates the
-one owner account for that coordinator instance. Later nodes send only node
-metadata and proof of their node-local token. The coordinator assigns a pending
-request to its sole account and exposes it only to that account's signed-in owner
-for approval. A joining node does not name or choose a user. The current
-implementation rejects enrollment if the coordinator has zero or multiple
-accounts; supporting multiple accounts requires a signed-in owner to create a
-short-lived invitation and deliver it to the joining node. Boneyard-only nodes do
-not need copies of user passkeys or browser sessions. The internal coordinator
-dashboard on do3 is the primary entry point; preserve subscriber-local diagnostic
-access where configured.
+it is not the internal Mac deployment procedure. The first passkey account claims
+preconfigured unowned nodes. Later visitors may create independent passkey
+accounts, but those accounts do not inherit nodes or existing users' data.
+Subsequent nodes send only node metadata and proof of their node-local token. The
+coordinator assigns a pending request to its sole account and exposes it only to
+that account's signed-in owner for approval. A joining node does not name or
+choose a user. Enrollment is rejected if the coordinator has zero or multiple
+accounts; supporting multi-account node enrollment requires a signed-in owner to
+create a short-lived invitation and deliver it to the joining node. Boneyard-only
+nodes do not need copies of user passkeys or browser sessions. The internal
+coordinator dashboard on do3 is the primary entry point; preserve subscriber-local
+diagnostic access where configured.
 
 
 Rawrarr's wider direction is a unified media automation system with a Prowlarr-class discovery role plus library management and fulfillment. See [product direction](product-direction.md) for the intended design and the [roadmap](../ROADMAP.md) for implementation status.
