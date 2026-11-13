@@ -39,6 +39,11 @@ test('Stripe migrations use an independent ledger from the account service', asy
   assert.doesNotMatch(handler, /sqlx::migrate!/);
 });
 
+test('Stripe service locks the patched rustls-webpki release', async () => {
+  const lockfile = await source('stripe-service/Cargo.lock');
+  assert.match(lockfile, /\[\[package\]\]\nname = "rustls-webpki"\nversion = "0\.103\.16"/);
+});
+
 test('do3 webhook service stays private behind Caddy and file-based secrets', async () => {
   const compose = await source('deploy/do3/docker-compose.stripe-service.yml');
   const caddy = await source('deploy/do3/stripe-service.Caddyfile');
