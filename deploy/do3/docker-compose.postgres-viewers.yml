@@ -1,0 +1,31 @@
+# Opt-in viewers only; never include application services in this project.
+services:
+  public-viewer:
+    image: adminer:5.4.1-standalone
+    container_name: rawrarr-prod-postgres-viewer
+    environment:
+      ADMINER_DEFAULT_SERVER: rawrarr-prod-postgres
+    ports:
+      - "127.0.0.1:7300:8080"
+    networks:
+      - public-database
+    restart: unless-stopped
+
+  internal-viewer:
+    image: adminer:5.4.1-standalone
+    container_name: rawrarr-int-postgres-viewer
+    environment:
+      ADMINER_DEFAULT_SERVER: rawrarr-int-postgres
+    ports:
+      - "127.0.0.1:7302:8080"
+    networks:
+      - internal-database
+    restart: unless-stopped
+
+networks:
+  public-database:
+    external: true
+    name: rawrarr-roarlay-prod-control
+  internal-database:
+    external: true
+    name: rawrarr-internal-do3-control
