@@ -14,7 +14,7 @@ historical, not current environments. The runner uses the Docker context
 
 The local image `rawrarr-testing-base:local` is the reusable dependency base. Each run clones it into a newly named container using Docker's copy-on-write image layers, copies the current project source into that container, and then starts the tests. The base contains:
 
-- Rust 1.85.
+- Rust 1.88.
 - Node.js 26 and its bundled npm for the browser-side and source-structure tests.
 - Chromium and `playwright-core` 1.55.0 for the separate browser suite.
 - The locked Cargo crate cache and compiled dependency artifacts used by Rust tests.
