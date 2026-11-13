@@ -56,6 +56,13 @@ The public `https://rawrarr.net/` landing page is a separate static Netlify site
 
 The operator admin console is a separate, private service, not a coordinator page or public product route. Its first preview uses unmistakably labeled sample data and has no connection to production accounts. Localhost and Tailscale reachability are network boundaries, not a substitute for the planned administrator login; require server-enforced admin authorization before showing live user data. See the [admin console architecture](admin-console.md).
 
+Operator PostgreSQL inspection is separate from that sample console. Opt-in
+Adminer containers use distinct public/internal database networks and loopback
+ports reached through SSH tunnels. Each database has its own password for a
+dedicated read-only login; PostgreSQL grants enforce access, not an Adminer
+display setting. No application credentials are mounted in the viewers. See
+[viewer adoption and rollback](../runbooks/2026-11-12-postgres-viewers.md).
+
 1. Check PostgreSQL for an existing passkey account. If one exists, show only **Sign in with passkey** and use the stored account identity. If none exists, then ask for the user's name and offer **Create passkey**; derive the internal username from that name.
 2. After a first passkey is registered, take the user to the age setup screen before the main app.
 3. Let the user create a new age identity or paste an existing one into a masked field. Explain that the identity protects shared configuration and metadata. Keep copy confirmation distinct from unlocking the encrypted vault.
