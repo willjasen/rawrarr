@@ -57,6 +57,8 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           tags: ghcr.io/${{ github.repository }}:sha-${{ github.sha }}-${{ matrix.arch }}
+          build-args: |
+            RAWARR_BUILD_REVISION=${{ github.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}

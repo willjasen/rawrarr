@@ -476,7 +476,7 @@ def main() -> int:
     try:
         return run_once()
     except (OSError, RuntimeError, subprocess.CalledProcessError, urllib.error.URLError,
-            json.JSONDecodeError, KeyError, tarfile.TarError) as error:
+            json.JSONDecodeError, KeyError) as error:
         print(f"coordinator update failed: {error}", file=sys.stderr, flush=True)
         return 1
 
