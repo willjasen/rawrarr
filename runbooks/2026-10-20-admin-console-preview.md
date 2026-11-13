@@ -2,7 +2,7 @@
 
 > Historical deployment wiring. The sample preview is now standalone and
 > localhost-only; the MacBook coordinator overlay has been retired. Use the
-> [current admin guide](../docs/admin-console.md#local-preview), not the old
+> [current admin guide](../docs/admin-console.md#paused-preview), not the old
 > shared-namespace command below.
 
 ## Scope

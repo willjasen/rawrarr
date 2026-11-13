@@ -21,10 +21,11 @@ Lack of a repository caller is not evidence that a deployed overlay is unused.
 
 ## Root-file inventory
 
-There were 22 root Compose files before the first increment; 13 remain after
+There were 22 root Compose files before the first increment; 12 remain after
 retiring the former Mac coordinator overlays and both obsolete staged Headscale
-clients and the confirmed-obsolete host-specific storage/transport/relay setups.
-Generic self-hosting templates are not internal Mac deployment recipes.
+clients, the confirmed-obsolete host-specific storage/transport/relay setups,
+and the paused standalone admin preview. Generic self-hosting templates are not
+internal Mac deployment recipes.
 Paths in the caller column are relative to the repository. Test names are under
 `scripts/tests/`. Historical runbooks record past usage, not current deployment
 authority. All root `docker-compose*.yml` files are also copied into regression
@@ -42,7 +43,6 @@ containers by `scripts/tests/run_rawrarr_tests_in_docker.py`.
 | `docker-compose.macbook-storage.yml` | Retired: operator-confirmed obsolete additional MacBook boneyard. | Historical storage replication record; classifiers ignore the retired path. |
 | `docker-compose.media.yml` | Changes the base fossil into a storage-role node with a read-only media bind. | Deployment/user guides; `rust-arr/README.md`; local-library-scan runbook. |
 | `docker-compose.age-identity.yml` | Optional fossil private identity secret mount; never a coordinator overlay. | `docs/user-guide.md`. |
-| `docker-compose.admin.yml` | Standalone localhost-only sample admin preview; no coordinator or transport dependency. | `docs/admin-console.md`; admin-preview test; original preview runbook is historical. |
 | `docker-compose.analytics.yml` | Coordinator settings overlay only; starts no Umami services. | `docs/coordinator-analytics.md`; analytics test. |
 | `docker-compose.analytics-services.yml` | Explicit opt-in Umami/PostgreSQL services on the coordinator's existing private control network. | Analytics guide/test; analytics opt-in runbook. Not equivalent to the settings-only overlay. |
 | `docker-compose.openai.yml` | Optional coordinator OpenAI file-secret integration. | October 18 OpenAI implementation and October 27 internal OpenAI configuration runbooks. No current script caller found. |
@@ -157,10 +157,10 @@ The analytics, billing-audience, and relay/direct-route tests now inspect the
 do3 coordinator definition instead of keeping a duplicate obsolete stack alive
 as a test fixture. Current coordinator/subscriber templates remain supported;
 `docker-compose.yml` is not retired. The MacBook coordinator overlay was
-subsequently retired when the operator ruled out Mac coordinator deployment;
-the admin preview no longer depends on it. It publishes only host loopback
-from its own namespace. Existing previews are not automatically migrated;
-see [admin adoption and rollback](admin-console.md#local-preview).
+subsequently retired when the operator ruled out Mac coordinator deployment.
+The standalone admin preview was later paused; its Dockerfile and Compose
+launcher are removed, while existing manually-started containers are not stopped
+by a source change. See [admin preview adoption notes](admin-console.md#paused-preview).
 
 Existing do3 services and Mac subscriber deployments require no adoption action.
 There is no persistent-state or protocol migration and no container recreation.

@@ -100,9 +100,9 @@ retired. The internal coordinator remains on do3 at
 The generic root `docker-compose.yml` and `docker-compose.coordinator.yml` remain
 self-hosting/development templates, not instructions to recreate the internal
 environment on a Mac. Their defaults and volumes are not a migration mechanism.
-The former `docker-compose.tailscale-macbook.yml` is removed; the admin preview
-now has its own localhost-only definition without a coordinator dependency.
-See [admin preview adoption](admin-console.md#local-preview) and the
+The former `docker-compose.tailscale-macbook.yml` is removed, and the standalone
+admin preview is paused with its Dockerfile and Compose launcher removed. See the
+[admin preview adoption notes](admin-console.md#paused-preview) and the
 [retirement record](compose-layout.md#retired-mac-coordinator-definitions).
 
 ## Retired Mac-specific storage setups
