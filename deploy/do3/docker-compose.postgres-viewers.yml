@@ -20,6 +20,7 @@ services:
       - "127.0.0.1:7302:8080"
     networks:
       - internal-database
+      - internal-viewer-ingress
     restart: unless-stopped
 
 networks:
@@ -29,3 +30,5 @@ networks:
   internal-database:
     external: true
     name: rawrarr-internal-do3-control
+  internal-viewer-ingress:
+    name: rawrarr-postgres-viewers-internal-ingress

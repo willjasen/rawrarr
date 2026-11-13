@@ -14,7 +14,9 @@
   to additionally check repeatable grants, old/new-table reads, write rejection
   even with the read-only session default disabled, and unsafe-role/function
   rejection in a unique, network-disconnected tmpfs database. It never connects
-  to either live database or pulls an image.
+  to either live database or pulls an image. A separate disposable network check
+  verifies Docker actually publishes a reachable loopback port when a service
+  joins both an internal database network and its viewer-only ingress bridge.
 
 - `test_internal_coordinator_backup.py` — checks fixed read-only internal database recipient resolution, missing/private/ambiguous-value rejection without fallback, age archive creation, protected secret copying, symlink refusal, safe volume archive validation, and nested SHA-256 manifests. Run `python3 scripts/tests/test_internal_coordinator_backup.py`.
 - `test_rawrarr_owner_recipient.rs` and `test_rawrarr_environment_owner.rs` — user-only public derivation without identity creation/group-state changes, protected-file checks, strict provisioning input, and disposable PostgreSQL migration/authenticated-handler/fossil HTTP integration covering idempotency, conflicts, concurrent pins, wrong owners/roles, old/locked/invalid fossils, and offline readback. Run `cargo test --locked --offline --manifest-path rust-arr/Cargo.toml owner` in the native isolated clone. Explicitly run the ignored database test with `RAWARR_TEST_DATABASE_URL=postgres://postgres@127.0.0.1/rawrarr_owner_test cargo test --locked --offline --manifest-path rust-arr/Cargo.toml environment_owner_database_and_api -- --ignored`; see [the runbook](../../runbooks/2026-11-03-environment-owner-backup-recipient.md).
