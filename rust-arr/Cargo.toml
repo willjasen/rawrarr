@@ -27,6 +27,7 @@ hmac = "0.12"
 getrandom = "0.3"
 ml-dsa = { version = "0.1.1", default-features = false, features = ["alloc", "zeroize"] }
 hkdf = "0.12"
+libc = "0.2"
 p256 = { version = "0.13", features = ["ecdh"] }
 sqlx = { version = "0.8.6", default-features = false, features = ["json", "macros", "migrate", "postgres", "runtime-tokio-rustls", "uuid"] }
 tokio = { version = "1", features = ["fs", "macros", "net", "rt-multi-thread", "sync", "time"] }

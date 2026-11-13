@@ -11,6 +11,7 @@ mod coordinator_crypto;
 mod device_signing;
 mod artwork_cache;
 mod config_repair;
+mod safe_fs;
 mod coordinator_avatar;
 pub mod devices;
 pub mod download_clients;

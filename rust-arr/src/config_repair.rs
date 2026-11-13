@@ -323,11 +323,7 @@ pub async fn config_object(State(state): State<std::sync::Arc<crate::AppState>>,
 }
 
 fn read_ciphertext_file(path:&Path)->std::io::Result<Vec<u8>> {
-    let metadata=fs::symlink_metadata(path)?;
-    if !metadata.file_type().is_file() || metadata.len()>MAX_CONFIG_BYTES as u64 {
-        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData,"config ciphertext is not a bounded regular file"));
-    }
-    let bytes=fs::read(path)?;
+    let bytes=crate::safe_fs::read_regular_file(path, MAX_CONFIG_BYTES as u64)?;
     if !valid_ciphertext(&bytes){return Err(std::io::Error::new(std::io::ErrorKind::InvalidData,"invalid age ciphertext"));}
     Ok(bytes)
 }

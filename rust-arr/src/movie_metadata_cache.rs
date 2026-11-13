@@ -2,12 +2,7 @@
 use super::VaultError;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::{
-    collections::HashMap,
-    fs,
-    path::{Path, PathBuf},
-    sync::Mutex,
-};
+use std::{collections::HashMap, path::{Path, PathBuf}, sync::Mutex};
 
 #[derive(Default)]
 pub(super) struct MetadataCache(Mutex<HashMap<PathBuf, ([u8; 32], Value)>>);
@@ -16,9 +11,17 @@ impl MetadataCache {
     pub(super) fn load(
         &self,
         path: &Path,
+        max_bytes: u64,
         decrypt: impl FnOnce() -> Result<Option<Value>, VaultError>,
     ) -> Result<Option<Value>, VaultError> {
-        let ciphertext = fs::read(path).map_err(|_| VaultError::StorageFailed)?;
+        let ciphertext = match crate::safe_fs::read_regular_file(path, max_bytes) {
+            Ok(ciphertext) => ciphertext,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) if error.kind() == std::io::ErrorKind::InvalidData => {
+                return Err(VaultError::InvalidConfig);
+            }
+            Err(_) => return Err(VaultError::StorageFailed),
+        };
         let digest: [u8; 32] = Sha256::digest(&ciphertext).into();
         if let Some((saved_digest, value)) = self
             .0
@@ -33,7 +36,9 @@ impl MetadataCache {
         let value = decrypt()?;
         // A synchronized replacement during decryption must not poison the cache.
         if let Some(value) = &value {
-            if fs::read(path).ok().as_deref() == Some(ciphertext.as_slice()) {
+            if crate::safe_fs::read_regular_file(path, max_bytes).ok().as_deref()
+                == Some(ciphertext.as_slice())
+            {
                 let mut entries = self.0.lock().map_err(|_| VaultError::StorageFailed)?;
                 if entries.len() >= 4096 {
                     entries.clear();

@@ -222,6 +222,35 @@ pub struct EncryptedArtwork {
 }
 
 const MAX_RADARR_BACKUP_BYTES: usize = 512 * 1024 * 1024;
+const MAX_SHARED_CONFIG_BYTES: u64 = 2 * 1024 * 1024;
+
+fn read_shared_file(path: &Path, max_bytes: u64) -> Result<Vec<u8>, VaultError> {
+    crate::safe_fs::read_regular_file(path, max_bytes).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::InvalidData {
+            VaultError::InvalidConfig
+        } else {
+            VaultError::StorageFailed
+        }
+    })
+}
+
+fn read_optional_shared_file(
+    path: &Path,
+    max_bytes: u64,
+) -> Result<Option<Vec<u8>>, VaultError> {
+    match crate::safe_fs::read_regular_file(path, max_bytes) {
+        Ok(bytes) => Ok(Some(bytes)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) if error.kind() == std::io::ErrorKind::InvalidData => {
+            Err(VaultError::InvalidConfig)
+        }
+        Err(_) => Err(VaultError::StorageFailed),
+    }
+}
+
+fn read_shared_text(path: &Path, max_bytes: u64) -> Result<String, VaultError> {
+    String::from_utf8(read_shared_file(path, max_bytes)?).map_err(|_| VaultError::InvalidConfig)
+}
 
 impl Drop for PersistedConfig {
     fn drop(&mut self) {
@@ -279,17 +308,11 @@ impl AgeVault {
         &self,
         path: &Path,
     ) -> Result<Option<PreparedAppIdentityRegistry>, VaultError> {
-        let metadata = match fs::symlink_metadata(&path) {
-            Ok(metadata) => metadata,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(_) => return Err(VaultError::StorageFailed),
+        let Some(ciphertext) =
+            read_optional_shared_file(path, Self::MAX_PREPARED_APP_IDENTITIES_BYTES)?
+        else {
+            return Ok(None);
         };
-        if !metadata.file_type().is_file()
-            || metadata.len() > Self::MAX_PREPARED_APP_IDENTITIES_BYTES
-        {
-            return Err(VaultError::InvalidConfig);
-        }
-        let ciphertext = fs::read(&path).map_err(|_| VaultError::StorageFailed)?;
         if !ciphertext.starts_with(b"age-encryption.org/v1\n") {
             return Err(VaultError::InvalidConfig);
         }
@@ -454,6 +477,23 @@ impl AgeVault {
         Self::shared_dir().join("group-age-user-envelope.aged")
     }
 
+    fn has_safe_metadata_parent(&self, path: &Path) -> Result<bool, VaultError> {
+        let relative = path
+            .strip_prefix(&self.metadata_dir)
+            .map_err(|_| VaultError::InvalidConfig)?;
+        let parent = relative.parent().ok_or(VaultError::InvalidConfig)?;
+        let mut directory = self.metadata_dir.clone();
+        for component in parent.components() {
+            directory.push(component.as_os_str());
+            match crate::safe_fs::ensure_directory(&directory) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+                Err(_) => return Err(VaultError::StorageFailed),
+            }
+        }
+        Ok(true)
+    }
+
     fn artwork_path(&self, tmdb_id: u64) -> Result<PathBuf, VaultError> {
         let opaque = self.opaque_metadata_filename("artwork", "tmdb", tmdb_id, ".aged")?;
         let opaque_path = self.metadata_dir
@@ -512,12 +552,27 @@ impl AgeVault {
         Ok(key)
     }
 
-    /// Copy legacy numeric ciphertext to opaque HMAC paths, verify identical bytes,
-    /// then remove the legacy name. Conflicting opaque files leave the legacy copy intact.
+    /// Copy legacy numeric ciphertext from verified regular files to opaque HMAC paths,
+    /// then remove migrated legacy names. Conflicting opaque files remain untouched.
     pub fn migrate_legacy_movie_filenames(&self) -> Result<usize, VaultError> {
         let mut migrated = 0;
         for kind in ["text", "artwork"] {
             let directory = self.metadata_dir.join("movies").join(kind);
+            let movies_directory = self.metadata_dir.join("movies");
+            let mut missing = false;
+            for path in [&movies_directory, &directory] {
+                match crate::safe_fs::ensure_directory(path) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        missing = true;
+                        break;
+                    }
+                    Err(_) => return Err(VaultError::StorageFailed),
+                }
+            }
+            if missing {
+                continue;
+            }
             let entries = match fs::read_dir(&directory) {
                 Ok(entries) => entries,
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
@@ -526,25 +581,36 @@ impl AgeVault {
             for entry in entries {
                 let entry = entry.map_err(|_| VaultError::StorageFailed)?;
                 let source = entry.path();
-                if !source.is_file() { continue; }
                 let Some(name) = source.file_name().and_then(|name| name.to_str()) else { continue; };
                 let id_text = if kind == "text" { name.strip_suffix(".json.aged") } else { name.strip_suffix(".aged") };
                 let Some(id) = id_text.and_then(|value| value.parse::<u64>().ok()).filter(|id| *id > 0) else { continue; };
+                let (mut source_file, _) = match crate::safe_fs::open_regular_file(&source) {
+                    Ok(file) => file,
+                    Err(error)
+                        if error.kind() == std::io::ErrorKind::NotFound
+                            || error.kind() == std::io::ErrorKind::InvalidData
+                            || error.raw_os_error() == Some(libc::ELOOP) =>
+                    {
+                        continue;
+                    }
+                    Err(_) => return Err(VaultError::StorageFailed),
+                };
                 let destination = self.opaque_path_for(kind, id)?;
                 if destination == source { continue; }
                 if destination.exists() {
-                    if fs::read(&destination).map_err(|_| VaultError::StorageFailed)? == fs::read(&source).map_err(|_| VaultError::StorageFailed)? {
+                    let mut source_bytes = Vec::new();
+                    source_file.read_to_end(&mut source_bytes).map_err(|_| VaultError::StorageFailed)?;
+                    if crate::safe_fs::read_regular_file(&destination, u64::MAX)
+                        .map_err(|_| VaultError::StorageFailed)? == source_bytes
+                    {
                         fs::remove_file(&source).map_err(|_| VaultError::StorageFailed)?;
                         migrated += 1;
                     }
                     continue;
                 }
                 let temporary = temporary_path(&destination);
-                fs::copy(&source, &temporary).map_err(|_| VaultError::StorageFailed)?;
-                if fs::read(&temporary).map_err(|_| VaultError::StorageFailed)? != fs::read(&source).map_err(|_| VaultError::StorageFailed)? {
-                    let _ = fs::remove_file(&temporary);
-                    return Err(VaultError::StorageFailed);
-                }
+                crate::safe_fs::copy_open_file(source_file, &temporary)
+                    .map_err(|_| VaultError::StorageFailed)?;
                 fs::rename(&temporary, &destination).map_err(|_| {
                     let _ = fs::remove_file(&temporary);
                     VaultError::StorageFailed
@@ -626,14 +692,11 @@ impl AgeVault {
     ) -> Result<Option<serde_json::Value>, VaultError> {
         const MAX_CIPHERTEXT_BYTES: u64 = 7 * 1024 * 1024 + 4096;
         let path = self.tv_metadata_path(tvdb_id)?;
-        let Ok(metadata) = fs::metadata(&path) else {
+        if !self.has_safe_metadata_parent(&path)? {
             return Ok(None);
-        };
-        if metadata.len() > MAX_CIPHERTEXT_BYTES {
-            return Err(VaultError::InvalidConfig);
         }
-        self.movie_metadata_cache.load(&path, || {
-            let output = self.decrypt_shared_file(&path)?;
+        self.movie_metadata_cache.load(&path, MAX_CIPHERTEXT_BYTES, || {
+            let output = self.decrypt_shared_file(&path, MAX_CIPHERTEXT_BYTES)?;
             let plaintext = Zeroizing::new(output);
             serde_json::from_slice(plaintext.as_slice())
                 .map(Some)
@@ -641,8 +704,8 @@ impl AgeVault {
         })
     }
 
-    fn decrypt_shared_file(&self, path: &Path) -> Result<Vec<u8>, VaultError> {
-        let ciphertext = fs::read(path).map_err(|_| VaultError::StorageFailed)?;
+    fn decrypt_shared_file(&self, path: &Path, max_bytes: u64) -> Result<Vec<u8>, VaultError> {
+        let ciphertext = read_shared_file(path, max_bytes)?;
         self.decrypt_shared_bytes(&ciphertext)
     }
 
@@ -847,16 +910,21 @@ impl AgeVault {
         const MAX_CIPHERTEXT_BYTES: u64 = 9 * 1024 * 1024;
         const MAX_ARTWORK_BYTES: usize = 8 * 1024 * 1024;
         let path = if is_tv { self.tv_artwork_path(id)? } else { self.artwork_path(id)? };
-        let Ok(metadata) = fs::metadata(&path) else {
+        if !self.has_safe_metadata_parent(&path)? {
             return Ok(None);
-        };
-        if metadata.len() > MAX_CIPHERTEXT_BYTES {
-            return Err(VaultError::InvalidConfig);
         }
-        let ciphertext = if let Some(cache) = cache {
-            cache.read(&path).map_err(|_| VaultError::StorageFailed)?
+        let ciphertext_result = if let Some(cache) = cache {
+            cache.read_bounded(&path, MAX_CIPHERTEXT_BYTES)
         } else {
-            fs::read(&path).map_err(|_| VaultError::StorageFailed)?
+            crate::safe_fs::read_regular_file(&path, MAX_CIPHERTEXT_BYTES)
+        };
+        let ciphertext = match ciphertext_result {
+            Ok(ciphertext) => ciphertext,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) if error.kind() == std::io::ErrorKind::InvalidData => {
+                return Err(VaultError::InvalidConfig);
+            }
+            Err(_) => return Err(VaultError::StorageFailed),
         };
         let plaintext = Zeroizing::new(self.decrypt_shared_bytes(&ciphertext)?);
         let Some(separator) = plaintext.iter().position(|byte| *byte == b'\n') else {
@@ -883,14 +951,11 @@ impl AgeVault {
     ) -> Result<Option<serde_json::Value>, VaultError> {
         const MAX_CIPHERTEXT_BYTES: u64 = 7 * 1024 * 1024 + 4096;
         let path = self.movie_metadata_path(tmdb_id)?;
-        let Ok(metadata) = fs::metadata(&path) else {
+        if !self.has_safe_metadata_parent(&path)? {
             return Ok(None);
-        };
-        if metadata.len() > MAX_CIPHERTEXT_BYTES {
-            return Err(VaultError::InvalidConfig);
         }
-        self.movie_metadata_cache.load(&path, || {
-            let plaintext = Zeroizing::new(self.decrypt_shared_file(&path)?);
+        self.movie_metadata_cache.load(&path, MAX_CIPHERTEXT_BYTES, || {
+            let plaintext = Zeroizing::new(self.decrypt_shared_file(&path, MAX_CIPHERTEXT_BYTES)?);
             serde_json::from_slice(plaintext.as_slice())
                 .map(Some)
                 .map_err(|_| VaultError::InvalidConfig)
@@ -982,33 +1047,31 @@ impl AgeVault {
             && !group_path.is_file()
         {
             let legacy_path = shared_dir.join("age-recipient");
-            if legacy_path.is_file()
-                && fs::read_to_string(&legacy_path)
-                    .map_err(|_| VaultError::StorageFailed)?
-                    .trim() != user_recipient
-            {
-                // `age-recipient` predates the distinct group identity and may
-                // name the key that encrypted the legacy config. Do not treat
-                // that public marker as proof that this user identity is wrong:
-                // accept the migration only when this identity can actually
-                // open a valid config. This check happens before creating any
-                // new group-key files, so a failed attempt leaves shared state
-                // untouched.
-                let config_path = shared_dir.join("config.aged");
-                if !config_path.is_file() {
-                    return Err(VaultError::InvalidIdentity);
-                }
-                let output = run_with_input(
-                    "age",
-                    &["--decrypt", "--identity", "-", path_arg(&config_path)?],
-                    identity.as_bytes(),
-                )?;
-                if !output.status.success() {
-                    return Err(VaultError::DecryptionFailed);
-                }
-                let plaintext = Zeroizing::new(output.stdout);
-                if serde_json::from_slice::<PersistedConfig>(plaintext.as_slice()).is_err() {
-                    return Err(VaultError::InvalidConfig);
+            if let Some(legacy_recipient) = read_optional_shared_file(&legacy_path, 4096)? {
+                let legacy_recipient =
+                    String::from_utf8(legacy_recipient).map_err(|_| VaultError::InvalidConfig)?;
+                if legacy_recipient.trim() != user_recipient {
+                    // `age-recipient` predates the distinct group identity and may
+                    // name the key that encrypted the legacy config. Do not treat
+                    // that public marker as proof that this user identity is wrong:
+                    // accept the migration only when this identity can actually
+                    // open a valid config. This check happens before creating any
+                    // new group-key files, so a failed attempt leaves shared state
+                    // untouched.
+                    let config_path = shared_dir.join("config.aged");
+                    let Some(ciphertext) =
+                        read_optional_shared_file(&config_path, MAX_SHARED_CONFIG_BYTES)?
+                    else {
+                        return Err(VaultError::InvalidIdentity);
+                    };
+                    let output = decrypt_age_input(identity.as_bytes(), &ciphertext)?;
+                    if !output.status.success() {
+                        return Err(VaultError::DecryptionFailed);
+                    }
+                    let plaintext = Zeroizing::new(output.stdout);
+                    if serde_json::from_slice::<PersistedConfig>(plaintext.as_slice()).is_err() {
+                        return Err(VaultError::InvalidConfig);
+                    }
                 }
             }
         }
@@ -1018,9 +1081,9 @@ impl AgeVault {
             let group_recipient = identity_to_recipient(&group_identity)
                 .map_err(|_| VaultError::GroupIdentityUnavailable)?;
             let published_path = shared_dir.join("group-age-recipient");
-            if published_path.is_file() {
+            if let Some(published) = read_optional_shared_file(&published_path, 4096)? {
                 let published =
-                    fs::read_to_string(published_path).map_err(|_| VaultError::StorageFailed)?;
+                    String::from_utf8(published).map_err(|_| VaultError::InvalidConfig)?;
                 if published.trim() != group_recipient {
                     return Err(VaultError::GroupIdentityUnavailable);
                 }
@@ -1032,13 +1095,8 @@ impl AgeVault {
             // identity. Require the user-wrapped envelope; never replace an
             // existing group recipient or encrypted config with a new key.
             let envelope_path = shared_dir.join("group-age-user-envelope.aged");
-            let envelope = fs::read(envelope_path).map_err(|error| {
-                if error.kind() == std::io::ErrorKind::NotFound {
-                    VaultError::GroupIdentityUnavailable
-                } else {
-                    VaultError::StorageFailed
-                }
-            })?;
+            let envelope = read_optional_shared_file(&envelope_path, 16 * 1024)?
+                .ok_or(VaultError::GroupIdentityUnavailable)?;
             let output = decrypt_age_input(identity.as_bytes(), &envelope).map_err(|error| {
                 if matches!(error, VaultError::DecryptionFailed) {
                     VaultError::GroupIdentityUnavailable
@@ -1053,8 +1111,7 @@ impl AgeVault {
                 .map_err(|_| VaultError::GroupIdentityUnavailable)?;
             let group_recipient = identity_to_recipient(&group_identity)
                 .map_err(|_| VaultError::GroupIdentityUnavailable)?;
-            let published =
-                fs::read_to_string(published_path).map_err(|_| VaultError::StorageFailed)?;
+            let published = read_shared_text(&published_path, 4096)?;
             if published.trim() != group_recipient {
                 return Err(VaultError::GroupIdentityUnavailable);
             }
@@ -1066,12 +1123,10 @@ impl AgeVault {
             // Generate a group key only after that proof, then publish its
             // recipient and user envelope for other devices to install.
             let config_path = shared_dir.join("config.aged");
-            if config_path.is_file() {
-                let legacy = run_with_input(
-                    "age",
-                    &["--decrypt", "--identity", "-", path_arg(&config_path)?],
-                    identity.as_bytes(),
-                )?;
+            if let Some(ciphertext) =
+                read_optional_shared_file(&config_path, MAX_SHARED_CONFIG_BYTES)?
+            {
+                let legacy = decrypt_age_input(identity.as_bytes(), &ciphertext)?;
                 if !legacy.status.success() {
                     return Err(VaultError::DecryptionFailed);
                 }
@@ -1097,9 +1152,7 @@ impl AgeVault {
             (group_identity, group_recipient)
         };
         let user_envelope_path = shared_dir.join("group-age-user-envelope.aged");
-        if user_envelope_path.exists() {
-            let ciphertext =
-                fs::read(&user_envelope_path).map_err(|_| VaultError::StorageFailed)?;
+        if let Some(ciphertext) = read_optional_shared_file(&user_envelope_path, 16 * 1024)? {
             let opened = decrypt_age_input(identity.as_bytes(), &ciphertext).map_err(|error| {
                 if matches!(error, VaultError::DecryptionFailed) {
                     VaultError::GroupIdentityUnavailable
@@ -1292,12 +1345,12 @@ impl AgeVault {
     }
 
     pub fn config_exists(&self) -> bool {
-        self.config_path.is_file()
+        crate::safe_fs::open_regular_file(&self.config_path).is_ok()
     }
 
     pub fn ciphertext_format_recognized() -> bool {
         const AGE_CIPHERTEXT_MAGIC: &[u8] = b"age-encryption.org/v1\n";
-        let Ok(mut file) = fs::File::open(Self::config_path()) else {
+        let Ok((mut file, _)) = crate::safe_fs::open_regular_file(&Self::config_path()) else {
             return false;
         };
         let mut prefix = [0; AGE_CIPHERTEXT_MAGIC.len()];
@@ -1323,22 +1376,22 @@ impl AgeVault {
     }
 
     fn read_config(&self) -> Result<Option<PersistedConfig>, VaultError> {
-        if !self.config_exists() {
-            return Ok(None);
-        }
-        let output = run_with_input(
-            "age",
-            &["--decrypt", "--identity", "-", path_arg(&self.config_path)?],
-            self.group_identity.as_bytes(),
-        )?;
+        let ciphertext = match crate::safe_fs::read_regular_file(
+            &self.config_path,
+            MAX_SHARED_CONFIG_BYTES,
+        ) {
+            Ok(ciphertext) => ciphertext,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) if error.kind() == std::io::ErrorKind::InvalidData => {
+                return Err(VaultError::InvalidConfig);
+            }
+            Err(_) => return Err(VaultError::StorageFailed),
+        };
+        let output = decrypt_age_input(self.group_identity.as_bytes(), &ciphertext)?;
         let (plaintext, legacy) = if output.status.success() {
             (Zeroizing::new(output.stdout), false)
         } else {
-            let legacy = run_with_input(
-                "age",
-                &["--decrypt", "--identity", "-", path_arg(&self.config_path)?],
-                self.identity.as_bytes(),
-            )?;
+            let legacy = decrypt_age_input(self.identity.as_bytes(), &ciphertext)?;
             if !legacy.status.success() {
                 return Err(VaultError::DecryptionFailed);
             }
@@ -1893,7 +1946,10 @@ fn copy_missing_shared_tree(source: &Path, target: &Path) -> Result<(), VaultErr
         }
         let temporary = temporary_path(&target_path);
         let copied = (|| {
-            fs::copy(&source_path, &temporary).map_err(|_| VaultError::StorageFailed)?;
+            let (source_file, _) = crate::safe_fs::open_regular_file(&source_path)
+                .map_err(|_| VaultError::StorageFailed)?;
+            crate::safe_fs::copy_open_file(source_file, &temporary)
+                .map_err(|_| VaultError::StorageFailed)?;
             set_shared_ciphertext_permissions(&temporary)?;
             fs::File::open(&temporary)
                 .and_then(|file| file.sync_all())
