@@ -234,6 +234,13 @@ class CoordinatorAutoUpdaterTests(unittest.TestCase):
                 _name, _directory, _service, files = UPDATER.compose_files("service", next_timestamp)
             self.assertEqual(files, [base, image_override, next_timestamp])
 
+    def test_failed_run_reports_error_without_raising(self):
+        with patch.object(UPDATER, "run_once", side_effect=RuntimeError("internal verification failed")), \
+                patch("sys.stderr") as stderr:
+            self.assertEqual(UPDATER.main(), 1)
+        written = "".join(call.args[0] for call in stderr.write.call_args_list)
+        self.assertIn("coordinator update failed: internal verification failed", written)
+
 
 if __name__ == "__main__":
     unittest.main()

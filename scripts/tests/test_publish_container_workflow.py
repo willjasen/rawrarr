@@ -34,6 +34,11 @@ class PublishContainerWorkflowTests(unittest.TestCase):
         self.assertIn("packages: write", source)
         self.assertIn("cancel-in-progress: false", source)
 
+    def test_binary_build_revision_matches_the_oci_revision_label(self):
+        source = WORKFLOW.read_text()
+        self.assertIn("build-args: |\n            RAWARR_BUILD_REVISION=${{ github.sha }}", source)
+        self.assertIn("org.opencontainers.image.revision=${{ github.sha }}", source)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -65,8 +65,32 @@ coordinator/runtime changes remain unpublished. It then pins the validated
 image locally by its immutable SHA tag. This follow-up has not yet been
 installed or deployed.
 
+## Revision verification fix
+
+After PR #462 merged as `6ca8f98e5abd031f7f3a52f9b09c9a1a31b69656`, its updater
+was installed on do3 with the timer still disabled. A controlled internal-first
+run pulled GHCR `main` (OCI revision
+`3c250566dcd6bdf1737db81fdb05e53d97ecd8b8`), recreated the internal
+coordinator, and rolled back because `/api/version` reported `unknown` instead
+of that revision. Public/live was not changed; internal is healthy again on
+`cff88a1384dba852a575ddfd0cd6595b12c00956`.
+
+Root cause: the publish workflow set only the OCI revision label and did not
+pass the Docker build argument `RAWARR_BUILD_REVISION`, so the binary's revision
+file contained `unknown`. The workflow now passes `RAWARR_BUILD_REVISION=<sha>`
+for both architecture builds. Separately, the updater's top-level error handler
+referenced `tarfile.TarError` after the `tarfile` import was removed, turning a
+handled failure into `NameError`; that stale exception type was removed.
+
+Adoption: merging this change triggers a fresh GHCR publish for the merge SHA.
+Deployment resumes only after that image's OCI label and `/api/version` both
+report the merge SHA; internal deploys first, then public/live on the same
+image. The timer stays disabled until both deployments verify. No persistent
+data or protocol migration is involved.
+
 ## Verification
 
 - `python3 scripts/tests/test_do3_coordinator_auto_updater.py` — 18 tests passed.
 - `python3 -m py_compile deploy/do3/auto_update_coordinators.py` — passed.
 - `git diff --check` — passed.
+- Revision fix: `python3 scripts/tests/test_do3_coordinator_auto_updater.py` — 19 tests passed; `python3 scripts/tests/test_publish_container_workflow.py` — 4 tests passed; `py_compile` and `git diff --check` passed. `test_rawrarr_coordinator_build_info.mjs` was not run locally (Node.js unavailable on this host).
