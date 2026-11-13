@@ -8,6 +8,30 @@
 - `test_rawrarr_subscriber_compose.mjs` — checks subscriber role Compose generation, fossil-prefixed generated IDs, and anonymous public GHCR pulls without GitHub credentials; run `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
 # Rawrarr tests
 
+- `test_rayfish_transport.py` -- run `python3 scripts/tests/test_rayfish_transport.py`
+  for strict configuration, closed-network, state, route-selection, Compose and
+  local-liveness checks. After a native build of `deploy/rayfish/Dockerfile` tagged
+  `rawrarr-rayfish:0.5.16`, add `--integration` for real rootless peers in separate
+  Docker namespaces: bidirectional 950,272-byte/hash checks, application HTTP 401s,
+  an admitted-but-unapproved peer, non-app TCP/UDP firewall verdicts, outage,
+  identity-preserving restart and revocation. `--environment` runs beside the
+  already-healthy `rawrarr-test-environment` fossils and verifies authenticated
+  node-specific response hashes plus bidirectional Tailscale pings during a
+  Rayfish outage. Disposable sidecars/volumes and task-created session rows are
+  removed; existing services are not restarted. These use direct LAN discovery
+  and a private signed-record fixture, not NAT/traffic-relay qualification.
+- `test_orbstack_arr_connectivity.py --start --fresh-fixtures` -- current full
+  coordinator/two-fossil/Headscale/Arr environment with valid signed node
+  certificates. Creates fresh uniquely named volumes and reports their generated
+  Compose override; retains all previous volumes. Uses the reusable native
+  `rawrarr-testing-base:local` ML-DSA tooling without installing host Node.js.
+  Test-only signer material never enters coordinator state; browser approval
+  is not exercised by this seeded tier.
+- `test_orbstack_signed_fixture.py` -- checks fresh-volume override selection,
+  preservation of previous names, protected fixture directories and transactional
+  public-only node-certificate seeding. Run
+  `python3 -m unittest discover -s scripts/tests -p test_orbstack_signed_fixture.py`.
+
 - `test_postgres_viewers.py` -- checks separate public/internal Adminer networks,
   loopback ports, and absence of app secrets/mounts. Run
   `python3 scripts/tests/test_postgres_viewers.py`. With a running Docker daemon

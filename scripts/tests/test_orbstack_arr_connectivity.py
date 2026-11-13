@@ -212,7 +212,49 @@ def prepare_headscale_auth_keys() -> tuple[Path, Path]:
     return paths[0], paths[1]
 
 
-def ensure_test_signing_root() -> str:
+def fresh_fixture(compose: list[str]) -> tuple[list[str], dict]:
+    """Select new volumes without replacing or removing existing test data."""
+    directory = TEST_STATE / ("signed-fixture-v1-" + uuid.uuid4().hex)
+    directory.mkdir(mode=0o700)
+    definition = json.loads(docker(*compose, "config", "--format", "json"))
+    override = {
+        "volumes": {key: {"name": directory.name + "-" + key} for key in definition["volumes"]}
+    }
+    path = directory / "compose.json"
+    path.write_text(json.dumps(override))
+    fixture = json.loads(docker(
+        "run", "--rm", "--pull", "never", "--network", "none",
+        "--workdir", "/opt/rawrarr-web-export", "--entrypoint", "node",
+        "rawrarr-testing-base:local", "--input-type=module", "-e",
+        (Path(__file__).parent / "helpers/environment_signing_fixture.mjs").read_text(),
+    ))
+    print(f"Fresh isolated volumes selected; previous volumes preserved. Definition: {path}")
+    return [*compose, "-f", str(path)], fixture
+
+
+def ensure_test_signing_root(fixture: dict | None = None) -> str:
+    if fixture is not None:
+        public_key, fingerprint = fixture["publicKey"], fixture["fingerprint"]
+        user_id = str(uuid.uuid4())
+        sql = (
+            "INSERT INTO rawrarr_users (id,username,display_name) "
+            f"VALUES ('{user_id}'::uuid,'fixture_{user_id.replace('-', '')}','Disposable signed fixture');\n"
+            "INSERT INTO rawrarr_instance_signing_root(singleton,algorithm,public_key,fingerprint,owner_user_id) "
+            f"VALUES (TRUE,'ML-DSA-65',decode('{public_key}','base64'),'{fingerprint}','{user_id}'::uuid);\n"
+        )
+        for node in fixture["nodes"]:
+            payload = json.dumps(node["payload"], separators=(",", ":"), sort_keys=True)
+            sql += (
+                "UPDATE rawrarr_nodes SET "
+                f"signing_public_key=decode('{node['publicKeyHex']}','hex'),"
+                f"signing_fingerprint='{node['fingerprint']}',"
+                f"signing_approval_payload='{payload}'::jsonb,"
+                f"signing_approval_signature=decode('{node['signature']}','base64'),"
+                f"user_id='{user_id}'::uuid WHERE id='{node['nodeId']}';\n"
+            )
+        docker("exec", "-i", POSTGRES, "psql", "-U", "rawrarr", "-d", "rawrarr",
+               "-v", "ON_ERROR_STOP=1", input="BEGIN;\n" + sql + "COMMIT;\n")
+        return fingerprint
     try:
         with urllib.request.urlopen(coordinator_url() + "/api/nodes/signing-root", timeout=10) as response:
             root = json.load(response)
@@ -348,7 +390,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--start", action="store_true", help="build and start the isolated project services before checking")
     parser.add_argument("--ports-only", action="store_true", help="inspect subscriber container port bindings in the isolated environment")
+    parser.add_argument("--fresh-fixtures", action="store_true",
+                        help="with --start, use new isolated volumes and valid signed node approvals; retain old volumes")
     args = parser.parse_args()
+    if args.fresh_fixtures and not args.start:
+        parser.error("--fresh-fixtures requires --start")
     if docker("context", "show") != "orbstack":
         raise RuntimeError("Docker context must be orbstack")
     if args.ports_only:
@@ -366,17 +412,33 @@ def main() -> int:
     ensure_test_certificates()
     compose = ["compose", "-p", PROJECT, "-f", COMPOSE]
     docker(*compose, "config", "--quiet")
+    fixture = None
+    if args.fresh_fixtures:
+        compose, fixture = fresh_fixture(compose)
     if args.start:
         docker(*compose, "build", "roarlay")
         docker(*compose, "up", "-d", "radarr", "sonarr", "arr-proxy", "postgres", "headscale", "tailscale-coordinator", "roarlay")
         wait_healthy("roarlay")
         wait_healthy("headscale")
         tailscale_a_key, tailscale_b_key = prepare_headscale_auth_keys()
-        fingerprint = ensure_test_signing_root()
+        fingerprint = ensure_test_signing_root(fixture)
         environment = os.environ.copy()
         environment["RAWARR_INSTANCE_ROOT_FINGERPRINT"] = fingerprint
         environment["RAWARR_TEST_TAILSCALE_A_KEY_FILE"] = str(tailscale_a_key)
         environment["RAWARR_TEST_TAILSCALE_B_KEY_FILE"] = str(tailscale_b_key)
+        if fixture is not None:
+            program = (
+                "import base64,os,sys\n"
+                "os.umask(0o077)\n"
+                "with open('/data/node-signing-key','xb') as f:\n"
+                " f.write(b'RAWARR-NODE-SIGNING-KEY\\x00\\x01'+base64.b64decode(sys.stdin.read(),validate=True))\n"
+            )
+            for node, service in zip(fixture["nodes"], ("metadata-a", "metadata-b")):
+                docker(*compose, "run", "--rm", "-T", "--no-deps", "--entrypoint", "python3",
+                       service, "-c", program, input=node.pop("seed"), env=environment)
+            # Reload the public approval snapshot after seeding the fresh database.
+            docker(*compose, "restart", "roarlay", env=environment)
+            wait_healthy("roarlay")
         docker(*compose, "up", "-d", "tailscale-a", "metadata-a", "tailscale-b", "metadata-b", env=environment)
     for service in ("radarr", "sonarr"):
         wait_healthy(service)
