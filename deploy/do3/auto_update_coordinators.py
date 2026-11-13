@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
-"""Poll GitHub main and roll coordinator changes through do3's local image cache."""
+"""Poll GitHub main and roll published GHCR coordinator images through do3."""
 
 from __future__ import annotations
 
 import contextlib
-import hashlib
 import json
 import os
-import shutil
 import subprocess
 import sys
-import tarfile
 import time
 import urllib.error
 import urllib.request
@@ -41,7 +38,6 @@ PUBLIC = {
 INTERNAL_TAILSCALE_CONTAINER = "rawrarr-int-tailscale"
 INTERNAL_HEALTH_URL_PUBLIC = "https://rawrarr.risk-mermaid.ts.net/health"
 PUBLIC_HEALTH_URL = "https://roarlay.rawrarr.net/health"
-MIN_FREE_BYTES = 5 * 1024**3
 HEALTH_TIMEOUT_SECONDS = 150
 
 NON_RUNTIME_PREFIXES = ("docs/", "runbooks/", "scripts/", ".github/", "website/")
@@ -313,47 +309,11 @@ def deploy_role(role: str, target: dict, image: str, image_id: str, revision: st
             raise
 
 
-def download_and_build(token: str, revision: str, internal_build_dir: Path) -> tuple[str, str]:
-    tag = f"rawrarr:{revision}-amd64"
-    existing = command(["docker", "image", "inspect", tag], check=False)
-    if not existing.returncode:
-        if not image_matches(tag, revision):
-            raise RuntimeError(f"Immutable revision tag {tag} exists with the wrong revision or architecture")
-        image_id = json.loads(existing.stdout)[0]["Id"]
-        return tag, image_id
-    available = shutil.disk_usage("/opt").free
-    if available < MIN_FREE_BYTES:
-        raise RuntimeError(f"Only {available // 1024**3} GiB is free under /opt; refusing to build")
-    internal_build_dir.mkdir(mode=0o700, parents=True, exist_ok=False)
-    archive = internal_build_dir / "source.tar.gz"
-    environment = os.environ.copy()
-    environment["GH_TOKEN"] = token
-    with archive.open("wb") as output:
-        subprocess.run(["gh", "api", f"repos/{REPOSITORY}/tarball/{revision}"],
-                       check=True, stdout=output, stderr=subprocess.PIPE, env=environment)
-    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-    with archive.open("rb") as source_archive:
-        verified_digest = hashlib.file_digest(source_archive, "sha256").hexdigest()
-    if digest != verified_digest:
-        raise RuntimeError("Downloaded GitHub archive failed its SHA-256 verification")
-    (internal_build_dir / "source.sha256").write_text(f"{digest}  source.tar.gz\n", encoding="ascii")
-    source = internal_build_dir / "source"
-    source.mkdir(mode=0o700)
-    with tarfile.open(archive, "r:gz") as bundle:
-        members = bundle.getmembers()
-        if any(Path(member.name).is_absolute() or ".." in Path(member.name).parts for member in members):
-            raise RuntimeError("GitHub archive contains an unsafe path")
-        bundle.extractall(source, members=members, filter="data")
-    roots = list(source.iterdir())
-    if len(roots) != 1 or not (roots[0] / "rust-arr" / "Dockerfile").is_file():
-        raise RuntimeError("GitHub archive does not contain the expected rust-arr Docker build context")
-    build_context = roots[0] / "rust-arr"
-    command(["docker", "build", "--platform", "linux/amd64", "--build-arg",
-             f"RAWARR_BUILD_REVISION={revision}", "--label",
-             f"org.opencontainers.image.revision={revision}", "-t", tag,
-             str(build_context)], capture=False)
+def pull_published_image(revision: str) -> tuple[str, str]:
+    tag = f"ghcr.io/{REPOSITORY}:sha-{revision}"
+    command(["docker", "pull", "--platform", "linux/amd64", tag], capture=False)
     if not image_matches(tag, revision):
-        raise RuntimeError("Built image does not match the requested revision/platform")
+        raise RuntimeError(f"Published image {tag} does not match the requested revision/platform")
     image_id = json.loads(command(["docker", "image", "inspect", tag]).stdout)[0]["Id"]
     return tag, image_id
 
@@ -368,7 +328,7 @@ def load_token(path: Path) -> str:
 def run_once() -> int:
     platform = command(["docker", "info", "--format", "{{.OSType}}/{{.Architecture}}"]).stdout.strip()
     if platform not in {"linux/x86_64", "linux/amd64"}:
-        raise RuntimeError(f"do3 must build natively as linux/amd64; Docker reports {platform}")
+        raise RuntimeError(f"do3 must run natively as linux/amd64; Docker reports {platform}")
     token_path = Path(os.environ.get("RAWARR_GITHUB_TOKEN_FILE", "/root/gh-token"))
     token = load_token(token_path)
     head = get_main_sha(token)
@@ -400,18 +360,14 @@ def run_once() -> int:
                 newer_revision = ""
                 force_latest = True
         if newer_revision:
-            image = f"rawrarr:{newer_revision}-amd64"
-            if image_matches(image, newer_revision):
-                image_id = json.loads(command(["docker", "image", "inspect", image]).stdout)[0]["Id"]
-                print(f"promoting existing {newer_revision} image to the lagging {older_role} coordinator")
-                deploy_role(older_role, older_target, image, image_id, newer_revision)
-                internal_rev = deployed_revision(INTERNAL["container"])
-                public_rev = deployed_revision(PUBLIC["container"])
-                if internal_rev == public_rev:
-                    if internal_rev == head:
-                        return 0
-            else:
-                force_latest = True
+            image, image_id = pull_published_image(newer_revision)
+            print(f"promoting published {newer_revision} image to the lagging {older_role} coordinator")
+            deploy_role(older_role, older_target, image, image_id, newer_revision)
+            internal_rev = deployed_revision(INTERNAL["container"])
+            public_rev = deployed_revision(PUBLIC["container"])
+            if internal_rev == public_rev:
+                if internal_rev == head:
+                    return 0
         else:
             force_latest = True
     base = internal_rev
@@ -432,10 +388,9 @@ def run_once() -> int:
     elif not paths:
         paths = ["rust-arr/unknown-base"]
     print(f"coordinator changes on main {head}: {', '.join(paths[:12])}", flush=True)
-    build_dir = INTERNAL["project_dir"] / "builds" / f"github-main-{head[:7]}-auto-{time.time_ns()}"
-    image, image_id = download_and_build(token, head, build_dir)
+    image, image_id = pull_published_image(head)
     if get_main_sha(token) != head:
-        print(f"main advanced while building {head}; leaving services unchanged for the next poll")
+        print(f"main advanced while pulling image for {head}; leaving services unchanged for the next poll")
         return 0
     # Save rollback points before replacing the reusable cache tag with this image.
     preserve_tag(INTERNAL["image_base"], f"rawrarr:rollback-base-before-{head[:7]}-amd64")
