@@ -99,7 +99,15 @@ def changed_paths(token: str, base: str, head: str) -> list[str]:
         raise RuntimeError("GitHub compare response did not contain a file list")
     if len(files) >= 300:
         return ["rust-arr/unknown-change"]
-    return [entry["filename"] for entry in files if isinstance(entry, dict) and "filename" in entry]
+    paths = []
+    for entry in files:
+        if not isinstance(entry, dict):
+            continue
+        if "filename" in entry:
+            paths.append(entry["filename"])
+        if "previous_filename" in entry:
+            paths.append(entry["previous_filename"])
+    return paths
 
 
 def compare_revisions(token: str, base: str, head: str) -> dict:
@@ -318,6 +326,56 @@ def pull_published_image(revision: str) -> tuple[str, str]:
     return tag, image_id
 
 
+def pull_latest_published_image(token: str, head: str) -> tuple[str, str, str] | None:
+    latest_tag = f"ghcr.io/{REPOSITORY}:main"
+    command(["docker", "pull", "--platform", "linux/amd64", latest_tag], capture=False)
+    image = json.loads(command(["docker", "image", "inspect", latest_tag]).stdout)[0]
+    labels = image.get("Config", {}).get("Labels") or {}
+    revision = labels.get("org.opencontainers.image.revision", "")
+    if (image.get("Os") != "linux" or image.get("Architecture") != "amd64"
+            or len(revision) != 40
+            or any(character not in "0123456789abcdef" for character in revision)):
+        raise RuntimeError("Published main image has invalid revision or platform metadata")
+
+    comparison = compare_revisions(token, revision, head)
+    if comparison.get("status") == "identical":
+        paths = []
+    elif comparison.get("status") == "ahead":
+        files = comparison.get("files")
+        if not isinstance(files, list):
+            raise RuntimeError("GitHub compare response did not contain a file list")
+        if len(files) >= 300:
+            paths = ["rust-arr/unknown-change"]
+        else:
+            paths = []
+            for entry in files:
+                if not isinstance(entry, dict):
+                    continue
+                if "filename" in entry:
+                    paths.append(entry["filename"])
+                if "previous_filename" in entry:
+                    paths.append(entry["previous_filename"])
+    else:
+        raise RuntimeError(f"Published image revision {revision} is not an ancestor of main {head}")
+    if affects_coordinator(paths):
+        print(
+            f"published image {revision} is behind main {head} with coordinator changes; "
+            "waiting for the image workflow",
+            flush=True,
+        )
+        return None
+
+    tag = f"ghcr.io/{REPOSITORY}:sha-{revision}"
+    existing = command(["docker", "image", "inspect", tag], check=False)
+    if existing.returncode:
+        command(["docker", "tag", image["Id"], tag])
+    else:
+        existing_image = json.loads(existing.stdout)[0]
+        if existing_image["Id"] != image["Id"] or not image_matches(tag, revision):
+            raise RuntimeError(f"Immutable published image tag {tag} points to an unexpected image")
+    return tag, image["Id"], revision
+
+
 def load_token(path: Path) -> str:
     token = path.read_text(encoding="utf-8").strip()
     if not token or "\n" in token:
@@ -388,26 +446,29 @@ def run_once() -> int:
     elif not paths:
         paths = ["rust-arr/unknown-base"]
     print(f"coordinator changes on main {head}: {', '.join(paths[:12])}", flush=True)
-    image, image_id = pull_published_image(head)
+    published_image = pull_latest_published_image(token, head)
+    if published_image is None:
+        return 0
+    image, image_id, image_revision = published_image
     if get_main_sha(token) != head:
-        print(f"main advanced while pulling image for {head}; leaving services unchanged for the next poll")
+        print(f"main advanced while checking the published image for {head}; leaving services unchanged for the next poll")
         return 0
     # Save rollback points before replacing the reusable cache tag with this image.
-    preserve_tag(INTERNAL["image_base"], f"rawrarr:rollback-base-before-{head[:7]}-amd64")
+    preserve_tag(INTERNAL["image_base"], f"rawrarr:rollback-base-before-{image_revision[:7]}-amd64")
     for role, target in (("internal", INTERNAL), ("public", PUBLIC)):
-        preserve_image(target["container"], f"{role}-roarlay", head)
+        preserve_image(target["container"], f"{role}-roarlay", image_revision)
     command(["docker", "tag", image_id, INTERNAL["image_base"]])
     if get_main_sha(token) != head:
         print(f"main advanced before deployment of {head}; services will remain unchanged for the next poll")
         return 0
-    if internal_rev != head:
-        deploy_role("internal", INTERNAL, image, image_id, head)
+    if internal_rev != image_revision:
+        deploy_role("internal", INTERNAL, image, image_id, image_revision)
     if get_main_sha(token) != head:
         print(f"main advanced after internal verification; public promotion will follow the next poll")
         return 0
-    if public_rev != head:
-        deploy_role("public", PUBLIC, image, image_id, head)
-    print(f"both coordinator deployments finished for {head}")
+    if public_rev != image_revision:
+        deploy_role("public", PUBLIC, image, image_id, image_revision)
+    print(f"both coordinator deployments finished for published image {image_revision} (main {head})")
     return 0
 
 

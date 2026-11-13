@@ -5,18 +5,21 @@ Issue: [#349](https://github.com/willjasen/rawrarr/issues/349)
 ## Change
 
 The do3 coordinator updater continues to use its host-local GitHub token for
-reading `main` and comparing revisions, but now pulls the matching
-`ghcr.io/willjasen/rawrarr:sha-<full-sha>` multi-architecture image anonymously.
-It explicitly requests `linux/amd64` and verifies the image's revision label and
-architecture before deployment. The verified image ID is promoted from internal
+reading `main` and comparing revisions, but now discovers the latest published
+app image by anonymously pulling `ghcr.io/willjasen/rawrarr:main`. It explicitly
+requests `linux/amd64`, verifies the image's revision label and architecture,
+and compares that source revision with GitHub `main`. If coordinator/runtime
+changes remain unpublished, it waits for the image workflow rather than
+deploying stale code. Otherwise it pins the local image under its immutable
+`sha-<image-revision>` tag. The verified image ID is promoted from internal
 roarlay to public/live; the updater no longer downloads source archives or
 compiles Rawrarr on do3.
 
-The publish workflow creates the SHA manifest after the AMD64 and ARM64 images
-finish. If the updater sees a new `main` revision before its image is published,
-the failed pull is reported and the next timer poll retries it. Compose still
-uses `pull_policy: never` and `--pull never` after the updater has explicitly
-pulled and verified the image.
+The publish workflow creates the SHA manifest and advances the `main` tag after
+the AMD64 and ARM64 images finish. If the updater sees source changes on `main`
+before the image is published, it detects the mismatch and retries on a later
+timer poll. Compose still uses `pull_policy: never` and `--pull never` after the
+updater has explicitly pulled and verified the image.
 
 ## Compatibility and adoption
 
@@ -52,8 +55,18 @@ proxies `/` to `http://127.0.0.1:8080`, and the internal HTTPS health route
 responds. The public edge health request returned HTTP 403 from do3, which the
 updater treats as a warning rather than a local-service failure.
 
+After PR #461 merged as `e892b0829e4550c539faabdf6ab8b91b8ae50eac`, its updater
+commit did not get a SHA image because image publishing is triggered only by
+`rust-arr/**` or publish-workflow changes. The published GHCR `main` tag still
+points to the valid `3c250566dcd6bdf1737db81fdb05e53d97ecd8b8` image. The
+follow-up updater therefore discovers the published image revision from that
+tag, compares its source paths to current GitHub `main`, and waits if any
+coordinator/runtime changes remain unpublished. It then pins the validated
+image locally by its immutable SHA tag. This follow-up has not yet been
+installed or deployed.
+
 ## Verification
 
-- `python3 scripts/tests/test_do3_coordinator_auto_updater.py` — 15 tests passed.
+- `python3 scripts/tests/test_do3_coordinator_auto_updater.py` — 18 tests passed.
 - `python3 -m py_compile deploy/do3/auto_update_coordinators.py` — passed.
 - `git diff --check` — passed.
