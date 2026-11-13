@@ -5,7 +5,7 @@ import { subscriberCompose } from '../../rust-arr/web-export/subscriber-compose.
 
 const base = { nodeId: `fossil-${'a'.repeat(24)}`, coordinatorUrl: 'https://rawrarr.example.test', networkMode: 'internal-tailscale', authKey: 'tskey-auth-test-fixture', rootFingerprint: 'a'.repeat(64) };
 
-test('subscriber Compose offers fossil and boneyard without coordinator GitHub updater credentials', () => {
+test('subscriber Compose offers fossil and boneyard with anonymous GHCR pulls and no GitHub credentials', () => {
   for (const role of ['metadata', 'storage']) {
     const yaml = subscriberCompose({ ...base, role, mediaPath: '/srv/media' });
     assert.doesNotMatch(yaml, /^\s*ports\s*:/m, `${role} subscriber Compose must not publish any container port to the host`);
@@ -16,7 +16,8 @@ test('subscriber Compose offers fossil and boneyard without coordinator GitHub u
     assert.match(yaml, /rawrarr-ui:\/ui/);
     assert.match(yaml, /image: ghcr\.io\/willjasen\/rawrarr:main/);
     assert.match(yaml, /pull_policy: always/);
-    assert.match(yaml, /read:packages access before the first pull/);
+    assert.match(yaml, /public GHCR image does not require GitHub login/);
+    assert.doesNotMatch(yaml, /read:packages|docker login|GHCR_TOKEN|GitHub token/i);
     assert.doesNotMatch(yaml, /rawrarr:local/);
     assert.doesNotMatch(yaml, /RAWARR_UI_GITHUB_TOKEN|rawrarr_ui_github_token/);
     assert.match(yaml, new RegExp(`TS_HOSTNAME: rawrarr-my-${role === 'storage' ? 'boneyard' : 'fossil'}-node`));

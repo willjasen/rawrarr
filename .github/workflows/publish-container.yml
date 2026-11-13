@@ -1,4 +1,4 @@
-name: Publish private container image
+name: Publish public container image
 
 on:
   push:
