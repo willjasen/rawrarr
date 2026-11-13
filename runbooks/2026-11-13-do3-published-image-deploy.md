@@ -35,7 +35,10 @@ while this change is prepared. Its in-progress build for revision
 coordinator was recreated. At that time, internal and public/live were both
 healthy on `cff88a1384dba852a575ddfd0cd6595b12c00956`, with no deployment locks
 held. The updater timer must be reinstalled from published `main` before
-automatic updates resume.
+automatic updates resume. The old timer was subsequently disabled to prevent a
+reboot from restarting the source-building updater. Automatic polling remains
+paused until the replacement is installed from a verified published `main`
+archive.
 
 A manual internal-first attempt then pulled
 `ghcr.io/willjasen/rawrarr:sha-3c250566dcd6bdf1737db81fdb05e53d97ecd8b8` on
