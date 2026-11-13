@@ -26,6 +26,22 @@ fn enabled_but_unreachable_cache_falls_back_to_disk() {
     fs::remove_file(path).unwrap();
 }
 
+#[cfg(unix)]
+#[test]
+fn artwork_cache_rejects_symlinked_ciphertext() {
+    use std::os::unix::fs::symlink;
+
+    let target = temporary_file("symlink-target", b"age-ciphertext");
+    let path = target.with_extension("link");
+    symlink(&target, &path).unwrap();
+    assert!(ArtworkCache::disabled().read(&path).is_err());
+    assert!(ArtworkCache::from_options(true, Some("redis://127.0.0.1:1/"), 86_400)
+        .read(&path)
+        .is_err());
+    fs::remove_file(path).unwrap();
+    fs::remove_file(target).unwrap();
+}
+
 #[test]
 fn valkey_stores_and_returns_encrypted_artwork_when_configured() {
     let Ok(url) = std::env::var("RAWARR_TEST_VALKEY_URL") else {

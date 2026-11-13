@@ -4,7 +4,7 @@
 //! file before lookup, so a synchronized replacement cannot hit an old entry.
 use sha2::{Digest, Sha256};
 use redis::Commands;
-use std::{env, fs, path::Path, time::{Duration, UNIX_EPOCH}};
+use std::{env, fs, io::Read, path::Path, time::{Duration, UNIX_EPOCH}};
 use std::os::unix::fs::MetadataExt;
 
 #[derive(Clone)]
@@ -49,25 +49,44 @@ impl ArtworkCache {
 
     /// Returns verified ciphertext. Redis is best-effort; all failures fall back to disk.
     pub fn read(&self, path: &Path) -> std::io::Result<Vec<u8>> {
-        let Some(client) = &self.client else { return fs::read(path); };
+        self.read_bounded(path, u64::MAX)
+    }
+
+    pub fn read_bounded(&self, path: &Path, max_bytes: u64) -> std::io::Result<Vec<u8>> {
+        let (file, metadata) = crate::safe_fs::open_regular_file(path)?;
+        if metadata.len() > max_bytes {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "artwork ciphertext exceeds the permitted size"));
+        }
+        let Some(client) = &self.client else { return read_bounded(file, max_bytes); };
         // Syncthing installs changed files by replacement; inode, size, and nanosecond
         // mtime form a cheap generation key, so hits can be served without reading disk.
-        let metadata = fs::metadata(path)?;
         let modified = metadata.modified()?.duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
         let path_digest = Sha256::digest(path.as_os_str().to_string_lossy().as_bytes());
         let key = format!("rawrarr:artwork:v1:{}:{}:{}:{}", hex(&path_digest), metadata.ino(), metadata.len(), modified);
         let mut connection = match client.get_connection_with_timeout(Duration::from_millis(150)) {
             Ok(connection) => connection,
-            Err(_) => return fs::read(path),
+            Err(_) => return read_bounded(file, max_bytes),
         };
         let cached: Option<Vec<u8>> = connection.get(&key).ok().flatten();
         if let Some(cached) = cached {
+            if cached.len() as u64 > max_bytes {
+                return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "cached artwork ciphertext exceeds the permitted size"));
+            }
             return Ok(cached);
         }
-        let current = fs::read(path)?;
+        let current = read_bounded(file, max_bytes)?;
         let _: redis::RedisResult<()> = connection.set_ex(&key, &current, self.ttl_seconds);
         Ok(current)
     }
+}
+
+fn read_bounded(file: fs::File, max_bytes: u64) -> std::io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    file.take(max_bytes.saturating_add(1)).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "artwork ciphertext exceeds the permitted size"));
+    }
+    Ok(bytes)
 }
 
 fn hex(bytes: &[u8]) -> String {

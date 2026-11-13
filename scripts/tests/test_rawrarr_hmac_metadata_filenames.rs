@@ -47,3 +47,48 @@ fn movie_files_use_domain_separated_hmac_names_and_migrate_ciphertext() {
     assert_eq!(vault.load_artwork(12345).unwrap().unwrap().bytes, b"fixture");
     fs::remove_dir_all(root).unwrap();
 }
+
+#[cfg(unix)]
+#[test]
+fn legacy_filename_migration_skips_symlink_sources() {
+    use std::os::unix::fs::symlink;
+
+    let root = std::env::temp_dir().join(format!("rawrarr-hmac-symlink-{}", uuid::Uuid::new_v4()));
+    let shared = root.join("shared");
+    let identity = Command::new("age-keygen").arg("-pq").output().unwrap();
+    assert!(identity.status.success());
+    let identity = String::from_utf8(identity.stdout).unwrap();
+    let vault = AgeVault::from_identity_in_dirs(
+        identity,
+        shared.clone(),
+        root.join("local/config.json"),
+        false,
+    )
+    .unwrap();
+    vault
+        .save(&PersistedConfig {
+            device_names: std::collections::HashMap::new(),
+            sonarr: None,
+            radarr_url: "https://radarr.example".into(),
+            radarr_api_key: "fixture".into(),
+            radarr_ui_username: String::new(),
+            radarr_ui_password: String::new(),
+            metadata_filename_key: None,
+            additional_services: Vec::new(),
+            needs_migration: false,
+        })
+        .unwrap();
+
+    let outside = root.join("outside.txt");
+    let legacy = vault.metadata_dir.join("movies/artwork/12345.aged");
+    fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+    fs::write(&outside, b"private file contents").unwrap();
+    symlink(&outside, &legacy).unwrap();
+    let destination = vault.opaque_path_for("artwork", 12345).unwrap();
+
+    assert_eq!(vault.migrate_legacy_movie_filenames().unwrap(), 0);
+    assert!(legacy.symlink_metadata().unwrap().file_type().is_symlink());
+    assert!(!destination.exists());
+    assert_eq!(fs::read(outside).unwrap(), b"private file contents");
+    fs::remove_dir_all(root).unwrap();
+}

@@ -56,6 +56,21 @@ fn repaired_config_is_written_as_exact_private_ciphertext() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+#[cfg(unix)]
+#[test]
+fn config_ciphertext_reads_reject_symlinks() {
+    use std::os::unix::fs::symlink;
+
+    let root=std::env::temp_dir().join(format!("rawrarr-config-symlink-{}",uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&root).unwrap();
+    let target=root.join("ciphertext");
+    let path=root.join("config.aged");
+    std::fs::write(&target,b"age-encryption.org/v1\nopaque-ciphertext").unwrap();
+    symlink(&target,&path).unwrap();
+    assert!(read_ciphertext_file(&path).is_err());
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 #[test]
 fn merkle_is_stable_and_conflict_order_ignores_wall_clock() {
     let records = vec![revision(5, "node-b", "b"), revision(5, "node-a", "c"), revision(4, "node-z", "z")];

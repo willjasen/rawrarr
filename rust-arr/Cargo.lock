@@ -2187,6 +2187,7 @@ dependencies = [
  "hkdf",
  "hmac",
  "k256",
+ "libc",
  "md-5",
  "ml-dsa",
  "p256",
