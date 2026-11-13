@@ -36,7 +36,7 @@ def retry(operation, timeout=90):
 
 
 class Node:
-    def __init__(self, prefix, name, network, existing=None):
+    def __init__(self, prefix, name, network, existing=None, relay_url=None):
         self.name = prefix + "-" + name
         self.volume = self.name + "-state"
         self.label = name
@@ -46,6 +46,7 @@ class Node:
         self.volume_created = False
         self.network = network
         self.existing = existing
+        self.relay_url = relay_url
 
     def create(self):
         docker("volume", "create", self.volume)
@@ -62,6 +63,9 @@ class Node:
             args += ["--network", "container:" + self.existing, "-e", "RAWARR_RAYFISH_EXTERNAL_APP=1"]
         else:
             args += ["--network", self.network]
+        if self.relay_url:
+            args += ["-e", "RAWARR_RAYFISH_TEST_RELAY_URL=" + self.relay_url,
+                     "-e", "RAWARR_RAYFISH_TEST_RELAY_PROBE=1"]
         args += ["--entrypoint", "python", transport.IMAGE, "/state/test.py"]
         docker(*args)
         self.created = True
@@ -177,12 +181,20 @@ def soak(first, second, hours, report, cold_recovered):
     result = {"status": "running", "requested_hours": hours, "samples": 0,
               "elapsed_seconds": 0, "bytes": 0, "coverage": "direct LAN synthetic peers; no NAT or relay",
               "cold_restart_during_discovery_outage": "passed" if cold_recovered else "blocked",
-              "containers": [first.name, second.name]}
+              "containers": [first.name, second.name], "largest_wall_gap_seconds": 0,
+              "largest_monotonic_gap_seconds": 0}
+    last_sample_monotonic = start
     try:
         while True:
             now_wall = time.time()
+            now_monotonic = time.monotonic()
+            result["largest_wall_gap_seconds"] = max(result["largest_wall_gap_seconds"], now_wall - last_sample_wall)
+            result["largest_monotonic_gap_seconds"] = max(
+                result["largest_monotonic_gap_seconds"], now_monotonic - last_sample_monotonic)
             transport.require(now_wall - last_sample_wall <= 90,
                               "Soak sampling gap exceeded 90 seconds; suspend or scheduling outage invalidated continuity")
+            transport.require(now_monotonic - last_sample_monotonic <= 90,
+                              "Soak monotonic sampling gap exceeded 90 seconds")
             for node, baseline in zip((first, second), expected):
                 actual = node.request(17297)
                 transport.require(actual == baseline and actual[0] == 200,
@@ -194,6 +206,7 @@ def soak(first, second, hours, report, cold_recovered):
                               "Soak endpoint identities changed")
             samples += 1
             last_sample_wall = now_wall
+            last_sample_monotonic = now_monotonic
             elapsed = time.monotonic() - start
             result.update(samples=samples, elapsed_seconds=elapsed)
             transport.private_write(report, json.dumps(result, indent=2) + "\n")

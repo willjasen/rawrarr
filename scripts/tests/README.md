@@ -8,6 +8,34 @@
 - `test_rawrarr_subscriber_compose.mjs` — checks subscriber role Compose generation, fossil-prefixed generated IDs, and anonymous public GHCR pulls without GitHub credentials; run `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
 # Rawrarr tests
 
+- `rayfish_owner_offline_docker.py` -- three-endpoint closed mesh: the network
+  key holder goes fully offline while two admitted members exchange byte-exact
+  950,272-byte app responses. One member cold-restarts and reconnects to the
+  other without the owner; application 401s and endpoint identities remain
+  enforced. Run `python3 scripts/tests/rayfish_owner_offline_docker.py` using the
+  existing native Rayfish image. Discovery infrastructure remains available;
+  this is distinct from the failing simultaneous-cold-start/discovery-outage gate.
+
+- `rayfish_relay_docker.py` -- private-relay qualification with separate synthetic
+  peer namespaces, LAN discovery disabled, bidirectional 950,272-byte transfers,
+  application 401s, forwarded-byte counter evidence, relay outage/restoration and
+  absence of tested payload/credential/path markers from relay logs. Build
+  `docker build --platform linux/amd64 -f scripts/tests/Dockerfile.rayfish-relay
+  -t rawrarr-test-rayfish-relay:1.3.0 .` after the native Rayfish image, then run
+  `python3 scripts/tests/rayfish_relay_docker.py`. Use native ARM64 on an ARM64
+  host. The official relay binary is checksum-pinned and matches the fork's
+  dependency major/minor; this does not validate every fork-specific feature.
+  OrbStack bridges permit cross-network routing, so short-lived **test-only**
+  NET_ADMIN helpers restrict egress in the disposable peer namespaces to
+  loopback, private discovery TCP and private relay TCP. Rayfish keeps all caps
+  dropped. Filters are reapplied and verified after namespace recreation.
+  No host firewall, public relay, production state, or live service is used.
+  This proves traffic-relay fallback with direct paths blocked, not NAT
+  hole-punching, hardware sleep, or exhaustive metadata privacy.
+- `test_rayfish_relay_fixture.py` -- namespace/capability isolation and required
+  relay-byte evidence checks. Run
+  `python3 -m unittest discover -s scripts/tests -p test_rayfish_relay_fixture.py`.
+
 - `test_rayfish_transport.py` -- run `python3 scripts/tests/test_rayfish_transport.py`
   for strict configuration, closed-network, state, route-selection, Compose and
   local-liveness checks. After a native build of `deploy/rayfish/Dockerfile` tagged

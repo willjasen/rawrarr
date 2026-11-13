@@ -4,6 +4,7 @@
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import argparse
 import hashlib
+import http.client
 import json
 import os
 from pathlib import Path
@@ -190,6 +191,33 @@ class PolicyTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 transport.validate(dict(config(), **{key: "private-marker"}))
 
+    def test_discovery_packets_survive_server_restart_in_private_volume(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(Discovery, "directory", Path(directory)):
+            for round_number in range(2):
+                server = ThreadingHTTPServer(("127.0.0.1", 0), Discovery)
+                thread = threading.Thread(target=server.serve_forever, daemon=True)
+                thread.start()
+                connection = http.client.HTTPConnection(*server.server_address, timeout=3)
+                try:
+                    if round_number == 0:
+                        connection.request("PUT", "/pkarr/../../synthetic", body=b"synthetic-signed-packet")
+                        response = connection.getresponse()
+                        self.assertEqual(response.status, 200)
+                        response.read()
+                    connection.request("GET", "/pkarr/../../synthetic")
+                    response = connection.getresponse()
+                    self.assertEqual(response.status, 200)
+                    self.assertEqual(response.read(), b"synthetic-signed-packet")
+                    files = list(Path(directory).iterdir())
+                    self.assertEqual(len(files), 1)
+                    self.assertRegex(files[0].name, r"^[0-9a-f]{64}$")
+                    self.assertEqual(files[0].stat().st_mode & 0o777, 0o600)
+                finally:
+                    connection.close()
+                    server.shutdown()
+                    server.server_close()
+                    thread.join(timeout=3)
+
 
 class Fixture(BaseHTTPRequestHandler):
     payload = b"rawrarr-synthetic-ciphertext\n" * 32768
@@ -262,6 +290,10 @@ def worker():
             server = ThreadingHTTPServer(("127.0.0.1", port), Fixture)
             threading.Thread(target=server.serve_forever, daemon=True).start()
             servers.append(server)
+        if os.environ.get("RAWARR_RAYFISH_TEST_RELAY_PROBE") == "1":
+            probe = ThreadingHTTPServer(("0.0.0.0", 18092), Fixture)
+            threading.Thread(target=probe.serve_forever, daemon=True).start()
+            servers.append(probe)
     state = Path("/state") / name
     path = Path("/state") / (name + ".json")
     value = transport.validate(transport.read_json(path))
@@ -269,8 +301,9 @@ def worker():
     settings = state / "settings.toml"
     if "[discovery_dns]" not in settings.read_text():
         with settings.open("a") as output:
+            relay_url = os.environ.get("RAWARR_RAYFISH_TEST_RELAY_URL", "http://127.0.0.1:18091")
             output.write('\n[discovery_dns]\nservers = ["http://discovery:18090/pkarr"]\nreplace = true\n'
-                         '\n[relay]\nservers = ["http://127.0.0.1:18091"]\nreplace = true\n')
+                         f'\n[relay]\nservers = [{json.dumps(relay_url)}]\nreplace = true\n')
     process = None
     signal.signal(signal.SIGTERM, lambda *_: process.send_signal(signal.SIGINT) if process else None)
     try:

@@ -113,10 +113,56 @@ resume. This is not a Mac hardware sleep/wake test.
 The expanded synthetic integration intentionally exits nonzero for the cold-start
 qualification failure after performing remaining controls. The real-fossil
 environment check still passes and leaves its services unchanged.
-Short soak smoke checks and 2 soak-report unit tests passed. A 72-hour soak can
+Short soak smoke checks and 3 soak-report unit tests passed. A 72-hour soak can
 run using `--integration --soak-hours 72 --report /protected/report.json`;
 its passing report, if obtained, does not override the failed discovery gate.
 
 Native ARM64 execution could not start: the saved OpenSSH alias failed
 authentication, and Tailscale SSH stopped at strict host-key verification.
 Neither host verification nor credentials were changed or bypassed.
+
+### Private relay qualification
+
+Built the checksum-pinned native AMD64 official iroh-relay 1.3.0 test image.
+The real Rayfish fork depends on iroh-relay 1.3.0; the fixture exercises observed
+wire compatibility, not every fork-specific behavior.
+
+The first relay-isolation attempt correctly refused to claim success:
+OrbStack routed between the two Docker bridges. Added strict IPv4/IPv6 egress
+allowlists using temporary NET_ADMIN helpers in **only** the disposable peer
+namespaces. Another attempt detected lost filters after Docker stop/start
+recreated namespaces; the harness now reapplies and asserts isolation after
+restart. No host firewall or live namespace was altered.
+
+Final `python3 scripts/tests/rayfish_relay_docker.py` passed: mDNS disabled,
+bidirectional byte-exact 950,272-byte payloads, app HTTP 401s, forwarded-byte
+counter evidence, failure during relay outage and recovery after restoration.
+Tested plaintext payload, application-token and HTTP-path markers are absent
+from relay logs. All owned relay/peer containers, volumes and networks were
+removed. Metadata privacy beyond these markers and real NAT hole-punching are
+still pending.
+
+The first 72-hour direct-LAN soak was started in a detached session process from
+commit `0f40e54`. It failed the maximum-90-second sampling-gap guard after 21
+successful bidirectional samples and about 650 seconds of monotonic runtime
+(39,911,424 payload bytes). No byte/auth mismatch was reported. This invalidates
+continuity; it is not a successful soak. Its private atomic report
+and log are under this conversation's `files/` directory as
+`rayfish-soak-72h.json` and `rayfish-soak-72h.log`. Sampling every 30 seconds,
+failed transfers are not retried and gaps over 90 seconds invalidate continuity.
+Stopping it with SIGTERM records interruption and cleans its owned fixtures.
+Even a completed soak cannot override the failed cold/discovery qualification.
+
+Added largest wall-clock and monotonic sampling gaps to reports so a subsequent
+failure retains better diagnostics. An awake retry uses temporary `caffeinate -i`
+around the test process, not a persistent OS sleep-setting change; forced sleep
+or clock discontinuities can still invalidate it. Its report/log names are
+`rayfish-soak-72h-awake.json` and `rayfish-soak-72h-awake.log`.
+
+`python3 scripts/tests/rayfish_owner_offline_docker.py` passed with three distinct
+endpoints: after stopping the network key holder entirely, the other two
+admitted members exchanged byte-exact application responses. One member then
+cold-restarted and recovered without the owner. Discovery was still available;
+this does not resolve the simultaneous-cold-start/discovery-outage failure.
+Application 401s and endpoint identities remained enforced. Owned fixtures were
+removed, and no live service was used.

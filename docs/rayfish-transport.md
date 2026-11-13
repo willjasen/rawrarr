@@ -220,3 +220,25 @@ endpoint stability every 30 seconds without retrying broken transfers. More than
 90 seconds between sampling rounds invalidates continuity. The private atomic
 JSON report distinguishes soak results from the failed cold/discovery gate;
 successful soak measurements do not approve deployment.
+
+Private traffic-relay qualification now also passes on native AMD64. The
+test-only `scripts/tests/Dockerfile.rayfish-relay` pins official iroh-relay 1.3.0
+binaries; `python3 scripts/tests/rayfish_relay_docker.py` uses it with no public
+ports or public relays. Separate synthetic peers disable LAN discovery.
+Short-lived test helpers apply IPv4/IPv6 egress filters only within those
+disposable namespaces, allowing loopback and private discovery/relay TCP while
+blocking direct paths. Production sidecars still need no NET_ADMIN.
+The harness rechecks isolation after each namespace recreation, verifies both
+payload hashes and application 401s, accounts for transferred bytes using relay
+counters, and proves relay outage stops transfers and restoration resumes them.
+Payload, credential and HTTP-path markers are absent from the tested relay logs.
+Relay operators can still observe endpoint/address, timing and traffic-volume
+metadata; this is not an exhaustive confidentiality audit. NAT hole-punching
+and native ARM64 execution remain unverified.
+
+The three-endpoint owner-offline test also passes: after the closed mesh's
+network-key holder is stopped, two already-admitted members exchange application
+data, and one cold-restarts successfully while the owner stays offline.
+Private discovery remains available in that test. This supports the narrower
+claim that established membership does not require a continuously online
+network owner, not that discovery infrastructure can be removed.
