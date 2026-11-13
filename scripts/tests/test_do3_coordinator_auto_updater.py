@@ -2,6 +2,7 @@
 """Regression checks for the do3 coordinator auto-updater."""
 
 import importlib.util
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -65,6 +66,59 @@ class CoordinatorAutoUpdaterTests(unittest.TestCase):
 
         run.assert_called_once_with(["docker", "pull", "--platform", "linux/amd64", image], capture=False)
 
+    def test_latest_published_image_uses_its_source_sha_when_main_has_docs_only(self):
+        revision = "a" * 40
+        image_id = "sha256:" + "b" * 64
+        image = {
+            "Id": image_id,
+            "Os": "linux",
+            "Architecture": "amd64",
+            "Config": {"Labels": {"org.opencontainers.image.revision": revision}},
+        }
+        with (
+            patch.object(UPDATER, "command") as run,
+            patch.object(UPDATER, "compare_revisions", return_value={
+                "status": "ahead", "files": [{"filename": "docs/container-deployment.md"}],
+            }),
+        ):
+            run.side_effect = [
+                UPDATER.subprocess.CompletedProcess([], 0, "", ""),
+                UPDATER.subprocess.CompletedProcess([], 0, json.dumps([image]), ""),
+                UPDATER.subprocess.CompletedProcess([], 1, "", ""),
+                UPDATER.subprocess.CompletedProcess([], 0, "", ""),
+            ]
+            result = UPDATER.pull_latest_published_image("token", "c" * 40)
+
+        tag = f"ghcr.io/{UPDATER.REPOSITORY}:sha-{revision}"
+        self.assertEqual(result, (tag, image_id, revision))
+        run.assert_any_call(
+            ["docker", "pull", "--platform", "linux/amd64", f"ghcr.io/{UPDATER.REPOSITORY}:main"],
+            capture=False,
+        )
+        run.assert_any_call(["docker", "tag", image_id, tag])
+
+    def test_latest_published_image_waits_if_main_has_unpublished_runtime_changes(self):
+        revision = "a" * 40
+        image = {
+            "Id": "sha256:" + "b" * 64,
+            "Os": "linux",
+            "Architecture": "amd64",
+            "Config": {"Labels": {"org.opencontainers.image.revision": revision}},
+        }
+        with (
+            patch.object(UPDATER, "command") as run,
+            patch.object(UPDATER, "compare_revisions", return_value={
+                "status": "ahead", "files": [{"filename": "rust-arr/src/coordinator.rs"}],
+            }),
+        ):
+            run.side_effect = [
+                UPDATER.subprocess.CompletedProcess([], 0, "", ""),
+                UPDATER.subprocess.CompletedProcess([], 0, json.dumps([image]), ""),
+            ]
+            self.assertIsNone(UPDATER.pull_latest_published_image("token", "c" * 40))
+
+        self.assertEqual(run.call_count, 2)
+
     def test_runtime_paths_select_coordinator_updates(self):
         self.assertTrue(UPDATER.affects_coordinator(["rust-arr/src/coordinator.rs"]))
         self.assertTrue(UPDATER.affects_coordinator(["rust-arr/src/node_role.rs"]))
@@ -74,6 +128,18 @@ class CoordinatorAutoUpdaterTests(unittest.TestCase):
             "deploy/do3/docker-compose.production-container-names.yml",
         ]))
         self.assertFalse(UPDATER.affects_coordinator(["deploy/do3/auto_update_coordinators.py"]))
+
+    def test_changed_paths_include_previous_names_for_renamed_files(self):
+        with patch.object(UPDATER, "github_json", return_value={
+            "files": [{
+                "filename": "docs/renamed-coordinator-guide.md",
+                "previous_filename": "rust-arr/old-runtime-file.rs",
+            }],
+        }):
+            self.assertEqual(
+                UPDATER.changed_paths("token", "a" * 40, "b" * 40),
+                ["docs/renamed-coordinator-guide.md", "rust-arr/old-runtime-file.rs"],
+            )
 
     def test_documentation_tests_and_landing_page_changes_are_skipped(self):
         self.assertFalse(UPDATER.affects_coordinator([
