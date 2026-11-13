@@ -32,8 +32,16 @@
   No host firewall, public relay, production state, or live service is used.
   This proves traffic-relay fallback with direct paths blocked, not NAT
   hole-punching, hardware sleep, or exhaustive metadata privacy.
+  Add `--discovery-outage` to qualify dual cold restart while discovery is
+  stopped but the private relay remains available. This currently fails its
+  90-second cold-start gate; restoring discovery recovers transfers without
+  another peer restart. The command exits nonzero even after recovery.
+  Filters reuse saved service addresses during the outage, refresh them when
+  discovery returns, and probe the peer's current address and live listener
+  after each namespace change.
 - `test_rayfish_relay_fixture.py` -- namespace/capability isolation and required
-  relay-byte evidence checks. Run
+  relay-byte evidence, offline-DNS filter reuse, namespace-only filter replacement,
+  and current-address direct-probe checks. Run
   `python3 -m unittest discover -s scripts/tests -p test_rayfish_relay_fixture.py`.
 
 - `test_rayfish_transport.py` -- run `python3 scripts/tests/test_rayfish_transport.py`

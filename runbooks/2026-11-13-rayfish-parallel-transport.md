@@ -166,3 +166,31 @@ cold-restarted and recovered without the owner. Discovery was still available;
 this does not resolve the simultaneous-cold-start/discovery-outage failure.
 Application 401s and endpoint identities remained enforced. Owned fixtures were
 removed, and no live service was used.
+
+### Private-relay discovery-outage continuation
+
+`python3 scripts/tests/rayfish_relay_docker.py --discovery-outage` repeated the
+passing private-relay payload/auth/counter/outage checks, then cold-restarted both
+peers while the private discovery container was stopped. The relay stayed
+available, but forwarded requests timed out throughout the 90-second
+qualification window; local daemon liveness remained intact. The overall command
+correctly exited nonzero for this failed gate.
+
+Restoring discovery recovered bidirectional 950,272-byte responses and 401s
+without another peer restart. Relay counters accounted for both payloads, and
+endpoint identities remained unchanged. This narrows the earlier direct-LAN
+finding: an available traffic relay alone does not solve this cold-start failure.
+Upstream's pinned `src/daemon/network_registry.rs` distinguishes local
+key-holder restoration from member restoration needing the signed pkarr roster;
+cached transport paths do not establish that roster's availability.
+
+The experiment also exposed a fixture detail: Docker removes a stopped
+container's DNS alias and can reassign addresses. Filters now reuse previously
+resolved discovery/relay addresses while discovery is offline, and refresh them
+inside only the owned disposable peer namespaces when discovery returns.
+Direct-path checks resolve the peer's current address and verify its probe
+listener is live after each restart; stale addresses cannot stand in for
+isolation evidence. Five focused fixture tests pass. Final experiment evidence is
+in the private session file `rayfish-relay-discovery-outage-final.log`; owned
+containers, volumes and networks were cleaned up. The separate awake soak is
+unaffected and still has not completed its requested 72 hours.

@@ -242,3 +242,13 @@ data, and one cold-restarts successfully while the owner stays offline.
 Private discovery remains available in that test. This supports the narrower
 claim that established membership does not require a continuously online
 network owner, not that discovery infrastructure can be removed.
+
+The private-relay discovery-outage qualification also fails: neither peer
+serves forwarded application requests within 90 seconds after both cold-restart
+with discovery stopped, despite the private relay remaining available.
+Restoring the persistent discovery service recovers bidirectional byte-exact
+traffic and application 401s without another peer restart. Direct paths remain
+blocked, and relay byte counters account for the recovered payloads. A traffic
+relay is therefore not a demonstrated substitute for membership/discovery
+infrastructure. This is a rollout blocker, not a reason to bypass signed roster
+restoration or weaken membership checks.
