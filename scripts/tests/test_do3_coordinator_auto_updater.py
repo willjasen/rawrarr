@@ -33,6 +33,38 @@ class CoordinatorAutoUpdaterTests(unittest.TestCase):
     def test_public_container_reference_uses_the_prod_prefix(self):
         self.assertEqual(UPDATER.PUBLIC["container"], "rawrarr-prod-roarlay")
 
+    def test_published_image_pull_uses_the_exact_sha_and_native_platform(self):
+        revision = "a" * 40
+        image = f"ghcr.io/{UPDATER.REPOSITORY}:sha-{revision}"
+        image_id = "sha256:" + "b" * 64
+        with (
+            patch.object(UPDATER, "command") as run,
+            patch.object(UPDATER, "image_matches", return_value=True) as matches,
+        ):
+            run.side_effect = [
+                UPDATER.subprocess.CompletedProcess([], 0, "", ""),
+                UPDATER.subprocess.CompletedProcess([], 0, f'[{{"Id":"{image_id}"}}]', ""),
+            ]
+            pulled_image, pulled_id = UPDATER.pull_published_image(revision)
+
+        self.assertEqual(pulled_image, image)
+        self.assertEqual(pulled_id, image_id)
+        run.assert_any_call(["docker", "pull", "--platform", "linux/amd64", image], capture=False)
+        run.assert_any_call(["docker", "image", "inspect", image])
+        matches.assert_called_once_with(image, revision)
+
+    def test_published_image_with_mismatched_metadata_is_rejected(self):
+        revision = "a" * 40
+        image = f"ghcr.io/{UPDATER.REPOSITORY}:sha-{revision}"
+        with (
+            patch.object(UPDATER, "command") as run,
+            patch.object(UPDATER, "image_matches", return_value=False),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "does not match the requested revision/platform"):
+                UPDATER.pull_published_image(revision)
+
+        run.assert_called_once_with(["docker", "pull", "--platform", "linux/amd64", image], capture=False)
+
     def test_runtime_paths_select_coordinator_updates(self):
         self.assertTrue(UPDATER.affects_coordinator(["rust-arr/src/coordinator.rs"]))
         self.assertTrue(UPDATER.affects_coordinator(["rust-arr/src/node_role.rs"]))
