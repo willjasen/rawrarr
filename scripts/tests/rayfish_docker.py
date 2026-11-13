@@ -123,7 +123,97 @@ class Node:
             docker("volume", "rm", self.volume)
 
 
-def run(environment):
+def exercise_recovery(first, second, discovery):
+    expected = [second.request(8080), first.request(8080)]
+
+    def verify():
+        for node, baseline in zip((first, second), expected):
+            actual = node.request(17297)
+            transport.require(actual == baseline and actual[0] == 200,
+                              "Recovery changed peer payload or failed authentication")
+
+    docker("stop", "-t", "10", discovery.name)
+    verify()
+    first.stop()
+    second.stop()
+    first.start()
+    second.start()
+    cold_recovered = True
+    try:
+        retry(verify, timeout=30)
+    except RuntimeError:
+        cold_recovered = False
+        transport.require(first.status()["active"] and second.status()["active"],
+                          "Cold restart lost local transport liveness")
+        print("BLOCKED QUALIFICATION: cold restart during discovery outage does not reconnect within 30 seconds", flush=True)
+    docker("start", discovery.name)
+    first.stop()
+    second.stop()
+    first.start()
+    second.start()
+    retry(verify)
+    print("PASS: established transfers survive discovery loss; dual cold restart recovers after discovery restoration", flush=True)
+    docker("pause", first.name)
+    try:
+        try:
+            second.request(17297)
+        except RuntimeError:
+            pass
+        else:
+            raise RuntimeError("Suspended peer unexpectedly served an application request")
+    finally:
+        docker("unpause", first.name)
+    retry(verify)
+    print("PASS: peer process suspension fails explicitly and resumes byte-exact transfers", flush=True)
+    return cold_recovered
+
+
+def soak(first, second, hours, report, cold_recovered):
+    expected = [second.request(8080), first.request(8080)]
+    endpoints = [first.status()["endpoint"], second.status()["endpoint"]]
+    start = time.monotonic()
+    samples = 0
+    last_sample_wall = time.time()
+    result = {"status": "running", "requested_hours": hours, "samples": 0,
+              "elapsed_seconds": 0, "bytes": 0, "coverage": "direct LAN synthetic peers; no NAT or relay",
+              "cold_restart_during_discovery_outage": "passed" if cold_recovered else "blocked",
+              "containers": [first.name, second.name]}
+    try:
+        while True:
+            now_wall = time.time()
+            transport.require(now_wall - last_sample_wall <= 90,
+                              "Soak sampling gap exceeded 90 seconds; suspend or scheduling outage invalidated continuity")
+            for node, baseline in zip((first, second), expected):
+                actual = node.request(17297)
+                transport.require(actual == baseline and actual[0] == 200,
+                                  "Soak response changed or peer stopped responding")
+                result["bytes"] += actual[2]
+                transport.require(node.request(17297, authorized=False)[0] == 401,
+                                  "Soak bypassed application authorization")
+            transport.require([first.status()["endpoint"], second.status()["endpoint"]] == endpoints,
+                              "Soak endpoint identities changed")
+            samples += 1
+            last_sample_wall = now_wall
+            elapsed = time.monotonic() - start
+            result.update(samples=samples, elapsed_seconds=elapsed)
+            transport.private_write(report, json.dumps(result, indent=2) + "\n")
+            if elapsed >= hours * 3600:
+                break
+            time.sleep(min(30, hours * 3600 - elapsed))
+        result["status"] = "passed"
+        print(f"PASS: {hours:g}-hour direct-LAN soak, {samples} bidirectional samples", flush=True)
+    except BaseException:
+        result["status"] = "failed_or_interrupted"
+        raise
+    finally:
+        result["elapsed_seconds"] = time.monotonic() - start
+        transport.private_write(report, json.dumps(result, indent=2) + "\n")
+
+
+def run(environment, soak_hours=0, report=None):
+    transport.require(not soak_hours or not environment, "Soak must use disposable synthetic nodes, not persistent test sessions")
+    transport.require(0 <= soak_hours <= 72, "Soak duration must be between 0 and 72 hours")
+    transport.require(not soak_hours or report is not None, "Soak needs a persistent report file")
     info, = json.loads(docker("image", "inspect", transport.IMAGE))
     host = docker("info", "--format", "{{.OSType}}/{{.Architecture}}")
     arch = {"linux/x86_64": "amd64", "linux/arm64": "arm64", "linux/aarch64": "arm64"}.get(host)
@@ -205,6 +295,11 @@ def run(environment):
         for protocol in ("tcp:8081", "udp:8080"):
             verdict = json.loads(first.cli("firewall", "test", statuses[1]["endpoint"], protocol, "--json"))
             transport.require(verdict["action"] == "deny", "Non-application traffic was permitted")
+        cold_recovered = None
+        if not environment:
+            cold_recovered = exercise_recovery(first, second, discovery)
+        if soak_hours:
+            soak(first, second, soak_hours, report, cold_recovered)
         outsider = Node(prefix, "outsider", network)
         nodes.append(outsider)
         outsider.create()
@@ -254,6 +349,8 @@ def run(environment):
         else:
             raise RuntimeError("Revoked peer reached the app")
         print("PASS: transport outage fails closed, restart preserves identity, and revoked peer is denied", flush=True)
+        transport.require(cold_recovered is not False,
+                          "Qualification failed: simultaneous cold restart during discovery outage did not recover")
     except Exception:
         for node in nodes:
             if node.created:

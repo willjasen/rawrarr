@@ -31,6 +31,17 @@
   preservation of previous names, protected fixture directories and transactional
   public-only node-certificate seeding. Run
   `python3 -m unittest discover -s scripts/tests -p test_orbstack_signed_fixture.py`.
+- `test_rayfish_soak.py` -- checks measured soak results, separate discovery
+  qualification, explicit failure/interruption reports and absence of retries.
+  Run `python3 -m unittest discover -s scripts/tests -p test_rayfish_soak.py`.
+  `test_rayfish_transport.py --integration --soak-hours 72 --report /protected/report.json`
+  runs a direct-LAN synthetic soak with bidirectional byte/auth checks every
+  30 seconds, no hidden retries, and a 90-second maximum sampling gap. Reports
+  are atomic and private (0600). This is not NAT/relay or hardware sleep testing.
+  The expanded integration additionally exercises discovery loss, simultaneous
+  cold restart and process suspension. Cold restart while discovery is offline
+  currently fails qualification; the harness still checks restored discovery,
+  soak and remaining controls, then exits nonzero for that failed gate.
 
 - `test_postgres_viewers.py` -- checks separate public/internal Adminer networks,
   loopback ports, and absence of app secrets/mounts. Run

@@ -205,3 +205,18 @@ Outstanding gates include independent security review, NAT/traffic-relay
 fallback, discovery outages, sleep/wake, cold restart and relay-metadata/privacy
 assessment, a 72-hour soak, and native ARM64 execution. Direct-LAN success is
 not evidence that these pass.
+
+Expanded qualification on 2026-11-13 found that established connections survive
+loss of the private discovery store, but simultaneous cold restart of both peers
+with discovery still unavailable fails to reconnect within the test deadline.
+Restoring the persistent store and restarting peers restores byte-exact traffic.
+The expanded integration exits nonzero for that failed gate rather than treating
+its other passing checks as overall success. Container process pause/resume is
+tested separately; it is not a hardware sleep/wake test.
+
+For the isolated soak, add `--soak-hours 72 --report /protected/report.json` to
+`--integration`. Keep the host awake. The runner checks bytes, authentication and
+endpoint stability every 30 seconds without retrying broken transfers. More than
+90 seconds between sampling rounds invalidates continuity. The private atomic
+JSON report distinguishes soak results from the failed cold/discovery gate;
+successful soak measurements do not approve deployment.

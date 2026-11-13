@@ -94,3 +94,29 @@ absence of `RAWARR_NODE_RELAY_SOCKS5_URL` until explicit proxy bypass is tested.
 Rollback restores the saved original app route map and stops only pilot
 sidecars; retain their identity volumes. Never change Tailscale Serve, passkey
 origins, PostgreSQL, `/shared`, `/data` or unrelated services for this rollback.
+
+## Continued qualification
+
+User requested continued isolated testing without merging or live deployment.
+An agent security review reported no confirmed exploitable findings. This is not
+an independent professional audit and does not close that gate.
+
+Expanded direct-LAN qualification found a reproducible failure: established
+connections work without the discovery store, but simultaneous peer cold restart
+while it remains offline cannot resume within 30 seconds (the first experiment
+also exceeded 90 seconds). Peers recover after the persistent store returns and
+both restart. The fixture now persists signed packets across stop/start, so this
+is not merely lost test-store contents. New-peer admission works after restoration.
+Process suspension yields explicit request failure and byte-exact recovery on
+resume. This is not a Mac hardware sleep/wake test.
+
+The expanded synthetic integration intentionally exits nonzero for the cold-start
+qualification failure after performing remaining controls. The real-fossil
+environment check still passes and leaves its services unchanged.
+Short soak smoke checks and 2 soak-report unit tests passed. A 72-hour soak can
+run using `--integration --soak-hours 72 --report /protected/report.json`;
+its passing report, if obtained, does not override the failed discovery gate.
+
+Native ARM64 execution could not start: the saved OpenSSH alias failed
+authentication, and Tailscale SSH stopped at strict host-key verification.
+Neither host verification nor credentials were changed or bypassed.

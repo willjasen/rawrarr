@@ -2,6 +2,8 @@
 """Policy tests and opt-in disposable, separate-namespace Rayfish integration."""
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -210,20 +212,35 @@ class Fixture(BaseHTTPRequestHandler):
 
 class Discovery(BaseHTTPRequestHandler):
     """Test-only signed-packet store; Rayfish verifies the signatures."""
-    packets = {}
+    directory = Path("/state/discovery-packets")
+
+    def packet_path(self):
+        return self.directory / hashlib.sha256(self.path.encode()).hexdigest()
 
     def do_PUT(self):
         length = int(self.headers["Content-Length"])
         if not 0 < length <= 4096:
             self.send_error(400, "Invalid discovery packet")
             return
-        self.packets[self.path] = self.rfile.read(length)
+        packet = self.rfile.read(length)
+        if len(packet) != length:
+            self.send_error(400, "Incomplete discovery packet")
+            return
+        fd, temporary = tempfile.mkstemp(dir=self.directory)
+        try:
+            with os.fdopen(fd, "wb") as output:
+                output.write(packet)
+            os.replace(temporary, self.packet_path())
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
         self.send_response(200)
         self.send_header("Content-Length", "0")
         self.end_headers()
 
     def do_GET(self):
-        packet = self.packets.get(self.path, b"")
+        path = self.packet_path()
+        packet = path.read_bytes() if path.exists() else b""
         self.send_response(200 if packet else 404)
         self.send_header("Content-Length", str(len(packet)))
         self.end_headers()
@@ -236,6 +253,7 @@ class Discovery(BaseHTTPRequestHandler):
 def worker():
     name = os.environ["RAWARR_RAYFISH_WORKER"]
     if name == "discovery":
+        Discovery.directory.mkdir(mode=0o700, exist_ok=True)
         ThreadingHTTPServer(("0.0.0.0", 18090), Discovery).serve_forever()
         return
     servers = []
@@ -275,8 +293,18 @@ def worker():
 if __name__ == "__main__":
     if INNER:
         worker()
-    elif sys.argv[1:] in (["--integration"], ["--environment"]):
+    elif any(arg in ("--integration", "--environment") for arg in sys.argv[1:]):
         import rayfish_docker
-        rayfish_docker.run(environment=sys.argv[1] == "--environment")
+        parser = argparse.ArgumentParser(description=__doc__)
+        modes = parser.add_mutually_exclusive_group(required=True)
+        modes.add_argument("--integration", action="store_true")
+        modes.add_argument("--environment", action="store_true")
+        parser.add_argument("--soak-hours", type=float, default=0)
+        parser.add_argument("--report", type=Path)
+        args = parser.parse_args()
+        def interrupted(*_):
+            raise KeyboardInterrupt("Rayfish test interrupted")
+        signal.signal(signal.SIGTERM, interrupted)
+        rayfish_docker.run(environment=args.environment, soak_hours=args.soak_hours, report=args.report)
     else:
         unittest.main()
