@@ -88,6 +88,23 @@ report the merge SHA; internal deploys first, then public/live on the same
 image. The timer stays disabled until both deployments verify. No persistent
 data or protocol migration is involved.
 
+### Deployment of `ec1a3f6`
+
+PR #463 merged as `ec1a3f6660257eaf6a792d8c0c5f6d2af3db9bd2`; publish run
+43375039213 succeeded. On do3 the immutable
+`ghcr.io/willjasen/rawrarr:sha-ec1a3f6660257eaf6a792d8c0c5f6d2af3db9bd2` image
+(`sha256:e0b69034eb7b…`, `linux/amd64`) carried that SHA both as its OCI
+revision label and in `/usr/share/rawrarr/build-revision`. The fixed updater
+script (SHA-256 `9540a7ef…0892`, matching the merged source) was installed
+without the installer so the timer stayed disabled, then run once. It deployed
+internal first and verified image ID, `/api/version`, health, Serve `/` →
+`http://127.0.0.1:8080`, and internal HTTPS `/health` before promoting
+public/live to the same image. Independent checks confirmed both containers
+healthy on that image with `/api/version` reporting `ec1a3f6…`; the public edge
+returned HTTP 200 from a tailnet client (403 from do3 itself, as before). No
+deployment locks remained. The timer was then enabled and armed with one
+no-op run; it now polls every 60 seconds.
+
 ## Verification
 
 - `python3 scripts/tests/test_do3_coordinator_auto_updater.py` — 18 tests passed.
