@@ -16,7 +16,7 @@ See [container deployment](container-deployment.md) for the authoritative capabi
 
 **Tarpit** is the planned user-facing name for an untrusted Syncthing destination that receives selected media from a trusted boneyard and stores it encrypted at rest. The name evokes a dark, difficult-to-escape place, matching the intended property that the destination cannot view the encrypted media. Tarpit is a future node type, not an implemented Rawrarr role; no implementation work has started. A boneyard remains the Rawrarr storage role. Ordinary Syncthing transport encryption alone does not provide destination-at-rest encryption.
 
-Manual, account-scoped node approval and node-scoped central authentication are implemented for the coordinator's current single-owner setup. Browser device-code enrollment, multi-account invitations, public image distribution, and SwarmSail provisioning remain planned. The sections below retain future distribution/networking direction; references to the old service/shard packaging are superseded by the three-role deployment guide.
+Manual, account-scoped node approval and node-scoped central authentication are implemented for the coordinator's current single-owner setup. Browser device-code enrollment, multi-account invitations, and SwarmSail provisioning remain planned. The sections below retain future distribution/networking direction; references to the old service/shard packaging are superseded by the three-role deployment guide.
 
 ## Instance and enrollment model
 
@@ -33,13 +33,13 @@ Manual, account-scoped node approval and node-scoped central authentication are 
 
 ## Container configuration direction
 
-### Image distribution (planned)
+### Image distribution
 
-The initial implementation publishes private multi-architecture images to `ghcr.io/willjasen/rawrarr` on relevant pushes to `main`. The generated subscriber Compose uses the rolling `main` tag with `pull_policy: always`; the workflow also publishes a commit-SHA tag. An authorized operator authenticates to GHCR with a GitHub token that has `read:packages` before running Compose. Public distribution and a signed image provenance policy remain future work.
+The implementation publishes public multi-architecture images to `ghcr.io/willjasen/rawrarr` on relevant pushes to `main`. The generated subscriber Compose uses the rolling `main` tag with `pull_policy: always`; the workflow also publishes a commit-SHA tag. Subscriber nodes pull anonymously and do not need a GitHub token. A signed image provenance policy remains future work.
 
 Treat the application image as non-secret. Persist subscriber state only in the documented `/data` and `/shared` mounts. Keep original local media under `/media`; the target design allows only explicitly selected copies to be published under `/shared/out`. Upgrades replace the container while preserving its volumes. Do not bake private age identities, passkeys, credentials, media, or node-local databases into the image. The operator's `service` role may share the published application image only if its entrypoint and dependencies remain role-isolated; otherwise publish a separate service image. The service node must never receive subscriber-node mounts through a shared deployment template.
 
-The development Compose files continue to build `rawrarr:local` from source. Automated private GHCR publishing and authenticated subscriber Compose pulls are implemented; release version policy, update notifications, public distribution, and a signed provenance mechanism remain open.
+The development Compose files continue to build `rawrarr:local` from source. Automated public GHCR publishing and anonymous subscriber Compose pulls are implemented; release version policy, update notifications, and a signed provenance mechanism remain open.
 
 The eventual Docker packaging should expose a validated role setting, with syntax still to be chosen for `coordinator`, `storage`, `shard`, and `service`, including coordinator + storage combinations, and reject unknown or incompatible settings at startup. Compose examples should make role-specific mounts and services explicit. In particular:
 

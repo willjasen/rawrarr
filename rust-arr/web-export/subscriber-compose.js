@@ -20,7 +20,7 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
     ? `rawrarr-${baseHostname}`.slice(0, 63)
     : baseHostname;
   const lines = [
-    '# Rawrarr subscriber node. Sign in to ghcr.io with a GitHub token that has read:packages access before the first pull.',
+    '# Rawrarr subscriber node. The public GHCR image does not require GitHub login.',
     '# This file runs no coordinator, roarlay, or PostgreSQL service.',
     'services:',
     '  tailscale:',
