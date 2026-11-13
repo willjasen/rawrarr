@@ -6,6 +6,10 @@
 
 rawrarr is an early self-hosted device-to-device file-sharing project, with media automation as its first focused use case. The repository contains a Rust web application and local Docker Compose setup. See [ROADMAP.md](ROADMAP.md) for completed work, outstanding work, and the recommended next milestone.
 
+## License
+
+Rawrarr is licensed under the GNU Affero General Public License v3.0 only. See [LICENSE](LICENSE) for the full text. Third-party components remain subject to their own licenses.
+
 ## Run locally
 
 See the [user guide](docs/user-guide.md) for Docker Compose setup, passkey onboarding, age identity setup, Radarr configuration, and local scanning.
