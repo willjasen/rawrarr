@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+import socket
 import subprocess
 import time
 import unittest
@@ -31,7 +32,10 @@ class ViewerComposeTests(unittest.TestCase):
             self.assertEqual(viewer["container_name"], container + "-viewer")
             self.assertEqual(viewer["image"], "adminer:5.4.1-standalone")
             self.assertEqual(viewer["environment"], {"ADMINER_DEFAULT_SERVER": container})
-            self.assertEqual(set(viewer["networks"]), {network})
+            expected_networks = {network}
+            if service == "internal-viewer":
+                expected_networks.add("internal-viewer-ingress")
+            self.assertEqual(set(viewer["networks"]), expected_networks)
             self.assertEqual(viewer["ports"][0]["host_ip"], "127.0.0.1")
             self.assertEqual(str(viewer["ports"][0]["published"]), port)
             self.assertEqual(viewer["ports"][0]["target"], 8080)
@@ -40,7 +44,48 @@ class ViewerComposeTests(unittest.TestCase):
                 self.assertNotIn(key, viewer)
         self.assertEqual(config["networks"]["public-database"]["name"], "rawrarr-roarlay-prod-control")
         self.assertEqual(config["networks"]["internal-database"]["name"], "rawrarr-internal-do3-control")
-        self.assertTrue(all(network["external"] for network in config["networks"].values()))
+        self.assertTrue(config["networks"]["public-database"]["external"])
+        self.assertTrue(config["networks"]["internal-database"]["external"])
+        ingress = config["networks"]["internal-viewer-ingress"]
+        self.assertEqual(ingress["name"], "rawrarr-postgres-viewers-internal-ingress")
+        self.assertFalse(ingress.get("internal", False))
+        self.assertFalse(ingress.get("external", False))
+
+
+@unittest.skipUnless(os.environ.get("RAWARR_TEST_POSTGRES_VIEWER") == "1",
+                     "Set RAWARR_TEST_POSTGRES_VIEWER=1 for disposable Docker ingress integration")
+class ViewerIngressTests(unittest.TestCase):
+    def test_internal_database_network_has_separate_loopback_ingress(self):
+        name = "rawrarr-test-viewer-ingress-" + uuid.uuid4().hex[:12]
+        internal, ingress = name + "-internal", name + "-ingress"
+        command("docker", "image", "inspect", "postgres:17-alpine")
+        command("docker", "network", "create", "--internal", internal)
+        self.addCleanup(command, "docker", "network", "rm", internal)
+        command("docker", "network", "create", ingress)
+        self.addCleanup(command, "docker", "network", "rm", ingress)
+        command(
+            "docker", "create", "--pull", "never", "--name", name,
+            "--network", internal, "-p", "127.0.0.1::5432",
+            "--tmpfs", "/var/lib/postgresql/data",
+            "-e", "POSTGRES_HOST_AUTH_METHOD=trust", "postgres:17-alpine",
+        )
+        self.addCleanup(command, "docker", "rm", "-f", name)
+        command("docker", "network", "connect", ingress, name)
+        command("docker", "start", name)
+        for _ in range(30):
+            info, = json.loads(command("docker", "inspect", name).stdout)
+            binding = info["NetworkSettings"]["Ports"].get("5432/tcp")
+            if binding:
+                self.assertEqual(binding[0]["HostIp"], "127.0.0.1")
+                try:
+                    with socket.create_connection(("127.0.0.1", int(binding[0]["HostPort"])), timeout=1):
+                        break
+                except (ConnectionRefusedError, TimeoutError):
+                    pass
+            time.sleep(1)
+        else:
+            self.fail("Internal-network service with dedicated ingress had no reachable loopback port")
+        self.assertEqual(set(info["NetworkSettings"]["Networks"]), {internal, ingress})
 
 
 @unittest.skipUnless(os.environ.get("RAWARR_TEST_POSTGRES_VIEWER") == "1",
@@ -58,10 +103,12 @@ class ViewerDatabaseTests(unittest.TestCase):
         self.addCleanup(command, "docker", "rm", "-f", self.container)
         for _ in range(60):
             ready = subprocess.run(
-                ["docker", "exec", self.container, "pg_isready", "-U", "rawrarr", "-d", "rawrarr"],
+                ["docker", "exec", self.container, "psql", "-X", "-U", "rawrarr",
+                 "-d", "rawrarr", "-Atc", "SELECT 1"],
                 capture_output=True, text=True,
             )
-            if ready.returncode == 0:
+            logs = command("docker", "logs", self.container).stdout
+            if ready.returncode == 0 and "PostgreSQL init process complete" in logs:
                 break
             time.sleep(1)
         else:

@@ -58,7 +58,9 @@ The operator admin console is a separate, private service, not a coordinator pag
 
 Operator PostgreSQL inspection is separate from that sample console. Opt-in
 Adminer containers use distinct public/internal database networks and loopback
-ports reached through SSH tunnels. Each database has its own password for a
+ports reached through SSH tunnels. The internal viewer also has a dedicated
+viewer-only ingress bridge because Docker suppresses published ports on an
+internal-only network. Each database has its own password for a
 dedicated read-only login; PostgreSQL grants enforce access, not an Adminer
 display setting. No application credentials are mounted in the viewers. See
 [viewer adoption and rollback](../runbooks/2026-11-12-postgres-viewers.md).

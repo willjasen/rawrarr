@@ -13,8 +13,11 @@ issues, or Git. Use only the dedicated viewer login, never application credentia
 The opt-in Compose project is `rawrarr-postgres-viewers`. The public viewer
 (`rawrarr-prod-postgres-viewer`) attaches only to `rawrarr-roarlay-prod-control`
 and binds host loopback port 7300. The internal viewer
-(`rawrarr-int-postgres-viewer`) attaches only to `rawrarr-internal-do3-control`
-and binds loopback port 7302. Port 7301 already belongs to public Umami and must
+(`rawrarr-int-postgres-viewer`) attaches to `rawrarr-internal-do3-control` and a
+dedicated `rawrarr-postgres-viewers-internal-ingress` bridge, and binds loopback
+port 7302. Docker suppresses published ports for internal-only networks; the
+viewer-only bridge enables loopback publishing without altering the existing
+database network. Port 7301 already belongs to public Umami and must
 remain untouched. These network names and database container aliases
 were read back on do3 on 2026-11-12. No public route, PostgreSQL port, application
 secret mount, subscriber data mount, or persistent Adminer volume is introduced.
@@ -135,12 +138,18 @@ unexpectedly wrong. Never run a destructive verification against live data.
 
 - The published Adminer tag exists; Compose configuration validates locally.
 - Focused test: `python3 scripts/tests/test_postgres_viewers.py`.
-- Disposable database integration passed (all four focused tests):
+- Disposable database and Docker ingress integration passed (all five focused tests):
   `RAWARR_TEST_POSTGRES_VIEWER=1 python3 scripts/tests/test_postgres_viewers.py`.
   Requires Docker and an existing native `postgres:17-alpine` image. See the
   [test index](../scripts/tests/README.md); it never uses live databases.
 - Deployment, password setup, and live login remain pending until
   the change is published on main and the operator completes password setup.
+- Initial deployment of `d4e47521ad9d08338bdbc38cacc7f026ec231605`
+  succeeded for public, including authenticated SELECT and permission-denied
+  write verification. Internal exposed Docker's internal-only port suppression;
+  the follow-up adds a viewer-only ingress bridge. Both new passwords are
+  generated into each environment's protected `secrets/postgres-viewer-password`
+  file (root-owned, mode 0600), not application password files or Git.
 - Adminer's upstream UI is not customized here. Desktop/mobile Playwright
   coverage for it is not added; live upstream layout/login is a verification gap.
   No Rawrarr browser-facing UI is changed.
