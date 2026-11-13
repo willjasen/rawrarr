@@ -10,7 +10,7 @@ WebAuthn requires HTTPS or a browser-recognized localhost origin. Configure `RAW
 
 ## Local development
 
-Requires Rust 1.85 or newer.
+Requires Rust 1.88 or newer.
 
 Use the persistent Compose deployment described in the [user guide](../docs/user-guide.md) for local web development and UI review. It publishes `127.0.0.1:7297`, with browser origin `http://localhost:7297`. Check port ownership before starting or rebuilding; reuse `rawrarr-local` rather than starting a competing web process or choosing another port. The application listens on port 8080 inside its container.
 

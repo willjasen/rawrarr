@@ -3,7 +3,7 @@
 FROM golang:1.25-bookworm AS age-builder
 RUN go install filippo.io/age/cmd/...@v1.3.2
 
-FROM rust:1.85-bookworm AS builder
+FROM rust:1.88-bookworm AS builder
 ARG TARGETARCH
 ARG RAWARR_BUILD_REVISION=unknown
 WORKDIR /src
