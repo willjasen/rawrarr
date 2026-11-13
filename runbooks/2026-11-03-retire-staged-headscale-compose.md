@@ -17,7 +17,9 @@ The operator then clarified: "Anything in regards to deploying a coordinator to
 either the MacBook or the Mac mini is no longer needed. The internal coordinator
 lives on do3 and will stay there." The remaining MacBook coordinator overlay
 was retained solely for old callers, including the admin preview. The operator
-selected "Keep the preview as a standalone localhost-only container".
+selected "Keep the preview as a standalone localhost-only container". That
+preview was later paused; see
+[`2026-11-13-pause-admin-console-preview.md`](2026-11-13-pause-admin-console-preview.md).
 
 The clean task branch/worktrees were inspected and `origin/main` fetched.
 Newer upstream changes were observed, not merged into this task. No other task's
@@ -59,7 +61,7 @@ moved between projects or recreated. Read their labels and preserve the project
 until deliberate migration. A legacy sidecar may still own port 7299; do not
 reconfigure/restart it automatically. Tailnet access supplied by the retired
 namespace is intentionally no longer included. See
-[admin adoption](../docs/admin-console.md#local-preview).
+[admin adoption](../docs/admin-console.md#paused-preview).
 
 Do not merely remove the old MacBook overlay from a combined deployment's
 command: it changes more than admin networking. Any unexpected dependent stack

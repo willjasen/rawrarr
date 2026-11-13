@@ -4,13 +4,21 @@ import test from "node:test";
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), "utf8");
 
-test("admin preview is explicitly sample-only and has no production data connection", async () => {
-  const [html, script, nginx, compose, architecture] = await Promise.all([
+test("admin preview is paused with no Docker build or launch definition", async () => {
+  const architecture = await read("docs/admin-console.md");
+  await Promise.all([
+    assert.rejects(readFile(new URL("../../admin/Dockerfile", import.meta.url)), { code: "ENOENT" }),
+    assert.rejects(readFile(new URL("../../docker-compose.admin.yml", import.meta.url)), { code: "ENOENT" })
+  ]);
+  assert.match(architecture, /preview is paused/i);
+  assert.doesNotMatch(architecture, /docker compose .* up/i);
+});
+
+test("retained admin mockup source is sample-only and has no production data connection", async () => {
+  const [html, script, nginx] = await Promise.all([
     read("admin/index.html"),
     read("admin/app.js"),
-    read("admin/nginx.conf"),
-    read("docker-compose.admin.yml"),
-    read("docs/admin-console.md")
+    read("admin/nginx.conf")
   ]);
 
   assert.match(html, /Preview only — no live production data/);
@@ -22,11 +30,6 @@ test("admin preview is explicitly sample-only and has no production data connect
   assert.doesNotMatch(script, /\b(fetch|XMLHttpRequest|WebSocket|EventSource)\b/);
   assert.doesNotMatch(nginx, /\bproxy_pass\b/);
   assert.match(nginx, /connect-src 'none'/);
-  assert.match(compose, /127\.0\.0\.1:7299:8090/);
-  assert.doesNotMatch(compose, /network_mode:|depends_on:|^  tailscale:/m);
-  assert.doesNotMatch(compose, /\b(postgres|DATABASE_URL|RAWARR_PG_)\b/i);
-  assert.match(architecture, /require administrator authentication and authorization in the service/);
-  assert.match(architecture, /do not enable Funnel/i);
 });
 
 test("sample account search and status filters render without a backend", async () => {

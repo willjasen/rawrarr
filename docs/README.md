@@ -4,7 +4,7 @@
 - [Compose inventory and cleanup](compose-layout.md) — current definitions, caller map, isolated test layout, and planned consolidation groups.
 - [Security](SECURITY.md) — trust boundaries, age encryption, browser-to-node encrypted transport through the coordinator, authentication, storage, and current limitations.
 - [Production deployment plan](production-deployment-plan.md) — start with coordinator-local PostgreSQL, production launch requirements, and a future managed-database migration path.
-- [Admin console](admin-console.md) — private, separate-container dashboard preview, network boundaries, and the authentication gate required before live account data.
+- [Admin console](admin-console.md) — paused sample preview; security and authorization prerequisites for any future reactivation.
 - [Stripe service](stripe-service.md) — hosted webhook intake, account linkage, database boundary, and current billing limitations.
 - [Coordinator analytics](coordinator-analytics.md) — optional self-hosted Umami analytics with fixed, privacy-limited coordinator pageviews.
 
