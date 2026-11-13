@@ -138,7 +138,7 @@ unexpectedly wrong. Never run a destructive verification against live data.
 
 - The published Adminer tag exists; Compose configuration validates locally.
 - Focused test: `python3 scripts/tests/test_postgres_viewers.py`.
-- Disposable database integration passed (all four focused tests):
+- Disposable database and Docker ingress integration passed (all five focused tests):
   `RAWARR_TEST_POSTGRES_VIEWER=1 python3 scripts/tests/test_postgres_viewers.py`.
   Requires Docker and an existing native `postgres:17-alpine` image. See the
   [test index](../scripts/tests/README.md); it never uses live databases.
