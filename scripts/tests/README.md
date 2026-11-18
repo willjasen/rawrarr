@@ -8,6 +8,25 @@
 - `test_rawrarr_subscriber_compose.mjs` — checks subscriber role Compose generation, fossil-prefixed generated IDs, and anonymous public GHCR pulls without GitHub credentials; run `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
 # Rawrarr tests
 
+- `rayfish_user_isolation_docker.py` -- creates two independent closed user
+  meshes, with separate coordinator sidecars sharing one network namespace.
+  Checks each synthetic user's authenticated route, `.ray` resolution through
+  the private rootless SOCKS proxy, anonymous denial and a cross-user misroute.
+  Run `python3 scripts/tests/rayfish_user_isolation_docker.py`
+  with the native Rayfish image in OrbStack. This tests the network topology,
+  not browser DNS/HTTPS, automatic account-bound provisioning or fresh revocation.
+- `rayfish_coordinator_docker.py` -- exercises a current-worktree coordinator
+  binary against a real fossil over Rayfish, with a real test-only Tailscale
+  SOCKS server. Checks the loopback bypass, delegated node session, wrong-user
+  and anonymous denial, ACL verdicts, an admitted-but-unapproved peer and
+  outage behavior. Build the binary in a prepared, network-disconnected native
+  test clone with `cargo build --locked --offline --manifest-path
+  /workspace/rust-arr/Cargo.toml`, copy its binary from
+  `/opt/rawrarr-test-target/debug/rust-arr` to a protected path outside the
+  repository, and run `python3 scripts/tests/rayfish_coordinator_docker.py
+  --binary /absolute/path/to/binary` with the signed isolated environment
+  already running. The binary must come from the current worktree. Only
+  disposable transport state and test sessions are created and removed.
 - `rayfish_owner_offline_docker.py` -- three-endpoint closed mesh: the network
   key holder goes fully offline while two admitted members exchange byte-exact
   950,272-byte app responses. One member cold-restarts and reconnects to the

@@ -14,6 +14,25 @@ Roarlay retains accounts, passkeys, node approvals and application coordination.
 Fossil and boneyard remain subscriber roles. Existing Tailscale clients, HTTPS
 Serve routes, browser origins and passkey RP IDs do not change.
 
+The intended product boundary is a separate closed Rayfish network per user,
+with the coordinator participating separately in each network. The current
+pilot does **not** provision or bind networks and routes to Rawrarr accounts
+automatically. Network names are local aliases, not proof of ownership or
+isolation. Do not deploy a shared pilot mesh as per-user isolation. A synthetic
+test exercises two separate networks, but account-bound provisioning, cross-user
+authorization, revocation and recovery still require implementation and review.
+The intended end state is to remove user-node dependence on SwarmSail/Headscale,
+while keeping Tailscale available for coordinator access. That replacement
+requires proving every affected route and service, including Syncthing and
+configuration-peer traffic, plus a migration and rollback path. It is not yet
+implemented and does not authorize removal of existing services.
+The eventual replacement must pass the complete isolated environment with
+subscriber Tailscale containers stopped. The current environment joins those
+containers' network namespaces, so it cannot demonstrate that outcome merely
+by stopping them. A separate namespace topology and qualified HTTPS, config
+peer and Syncthing paths are required; coordinator-side Tailscale access may
+remain.
+
 The rootless pilot exposes only a selected subscriber's loopback TCP 8080.
 Configured forwards bind namespace-local IPv4 loopback ports 17000–17999 and
 target a recorded Rayfish mesh IPv6 address on TCP 8080. Firewall admission also
@@ -159,8 +178,10 @@ the supplied original map is untouched. Save both maps separately. Applying
 the emitted map to `RAWARR_NODE_RELAY_TARGETS` remains an explicit operator
 deployment step. There is no automatic fallback or automatic app reconfiguration.
 If `RAWARR_NODE_RELAY_SOCKS5_URL` is set, explicitly set
-`RAWARR_NODE_RELAY_BYPASS_LOOPBACK_PROXY=true` when selecting Rayfish loopback
-targets. This bypasses that proxy for all configured `127.0.0.1` node targets;
+`RAWARR_NODE_RELAY_BYPASS_LOOPBACK_PROXY=true` to make Rayfish loopback targets
+independent of that SOCKS proxy. The tested Tailscale SOCKS server could also
+reach a loopback forward when the bypass was off, but that route depends on the
+proxy being available. The bypass applies to all configured `127.0.0.1` node targets;
 other targets still use the configured proxy. The setting defaults to `false`
 to preserve existing behavior. It does not bypass proxies for `localhost`, IPv6
 loopback, or arbitrary local addresses. Existing Tailscale HTTPS routes remain
@@ -203,7 +224,18 @@ and explicit deployment of published `main`. Public adoption remains planned.
 Rollback restores the saved original application route map and disables/stops
 only the pilot sidecars. Keep their volumes for diagnosis and identity-preserving
 recovery; do not delete state as a rollback step. A stopped sidecar must produce
-an explicit selected-route failure, not silently route elsewhere.
+no successful response through an unintended route. A request may instead remain
+pending; a bounded coordinator response timeout has not been qualified.
+
+The browser-direct route requested for this pilot is not implemented. Nodes should
+continue to contact the coordinator over HTTPS. A browser can probe a node's
+`host.network.ray` address only when the browser's own device has suitable
+Rayfish connectivity and DNS; the node's rootless sidecar provides neither to
+the browser. Direct HTTPS also requires a browser-trusted node certificate and
+an owner-bound authorization handoff. WebRTC is a possible alternative that
+does not require a browser-side Rayfish client, but needs authenticated signaling,
+verified node identity, a node-side endpoint and possibly a TURN relay. It is not
+a normal HTTPS URL and has not been implemented or qualified.
 
 Outstanding gates include independent security review, NAT/traffic-relay
 fallback, discovery outages, sleep/wake, cold restart and relay-metadata/privacy

@@ -267,5 +267,67 @@ The generic coordinator Compose templates expose the flag with default
 override before enabling it. An isolated native regression clone passed the two
 real-socket Rust proxy tests and 36 coordinator workspace tests. Both generic
 Compose definitions resolve the default `false` and explicit `true` correctly.
-The updated coordinator has not yet been tested end-to-end against the
-real-Rayfish full environment.
+
+### Per-user networks and real coordinator integration
+
+Will requested one closed Rayfish network per user, with pinned ACLs and a
+separate coordinator participant for each user. He also requested that nodes
+continue using HTTPS to reach the coordinator and that the browser prefer an
+authorized node's `.ray` URL when reachable. WebRTC was raised as a possible
+browser-direct alternative. These are new requirements, not completed features.
+The intended end state also removes SwarmSail/Headscale from user-node
+networking while preserving optional Tailscale access to the coordinator. Will
+requires a complete environment test with subscriber Tailscale containers
+stopped before that replacement can be considered working. Current fossil and
+Rayfish containers share those namespace holders, so the existing environment
+cannot test this by simply stopping them. The synthetic user-network test uses
+no Tailscale containers, but it does not exercise the complete environment.
+The new topology must independently qualify coordinator HTTPS, application and
+config-peer flows, Syncthing, authentication, failure/recovery and rollback.
+Rayfish's pinned upstream documents names of the form `node.network.ray`; its
+rootless mode does not install routes or DNS on the browser device, and a
+browser-trusted HTTPS identity is still needed. Existing direct route validation
+does not accept arbitrary `.ray` origins. No origin checks or TLS verification
+were relaxed.
+
+`python3 scripts/tests/rayfish_user_isolation_docker.py` passed with two closed
+synthetic user networks and separate Rayfish coordinator peers sharing a network
+namespace. Each reached its own authenticated fixture and a deliberate
+cross-user route failed. Authenticated rootless SOCKS requests resolved each
+user's own `.ray` name and rejected the other user's name. This is not a browser
+DNS, browser HTTPS or certificate test. It does not establish account-bound automatic
+provisioning or prove which of the network and ACL denied the cross-user route.
+The network name is a local alias, not an ownership proof. Account binding,
+secure invitations, port allocation, revocation and key recovery remain gates.
+Loopback forwards are also reachable by other processes in the shared
+coordinator network namespace; they are not per-process isolation.
+
+Restored the existing stopped signed-fixture environment without replacing its
+volumes. Its Arr connectivity check and real two-fossil Rayfish environment
+test passed again. Built the current coordinator binary from the worktree in a
+prepared native isolated clone and exercised it on a separate loopback listener
+against the real fossil, using
+`python3 scripts/tests/rayfish_coordinator_docker.py --binary /protected/binary`.
+The original coordinator and Tailscale services were not restarted by this
+test. Authenticated bytes matched the real fossil, a delegated session was
+created for the correct owner/node, anonymous and wrong-user requests were
+denied, and an admitted but unapproved Rayfish peer could not reach the fossil.
+Firewall verdicts allowed the pinned app path and denied selected unrelated
+TCP/UDP ports, coordinator ingress and the unapproved peer. Verdicts are
+policy evaluations, not packet tests for every protocol/port.
+
+With an actual Tailscale userspace SOCKS server running, the disabled bypass
+also returned HTTP 200: that proxy could reach the loopback forward in this
+fixture. Stopping SOCKS made disabled-bypass requests return 502, while the
+enabled bypass worked with SOCKS either stopped or running. This corrects the
+earlier assumption that SOCKS interception necessarily prevents all such
+requests; bypass removes the dependency, rather than proving every proxy fails.
+Stopping the Rayfish fossil did not produce a successful fallback. One run
+remained pending beyond the 15-second client deadline rather than immediately
+returning 502; bounded upstream response failure remains unverified.
+
+Per-user provisioning, browser `.ray` HTTPS identity/trust and secure direct
+handoff, browser-side network reachability, WebRTC, actual internal HTTPS
+ingress, hardware/network tests, stale revocation and the uninterrupted 72-hour
+soak remain unimplemented or unqualified. Existing deployed state has not
+changed; no migration is needed for these additional test fixtures and docs.
