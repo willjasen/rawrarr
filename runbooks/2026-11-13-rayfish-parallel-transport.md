@@ -340,5 +340,14 @@ certificate-verified HTTPS and returned distinct authenticated responses through
 Rayfish. Anonymous requests were denied. Stopping the coordinator Rayfish
 forward produced HTTP 502 on both relay routes without breaking node-to-coordinator
 HTTPS health requests; restarting the forward restored both routes. This does
-not qualify a fossil-side outage deadline, the full Arr workload, config-peer
-repair, Syncthing, or browser-direct `.ray` access.
+not qualify a fossil-side outage deadline, config-peer repair, Syncthing, or
+browser-direct `.ray` access.
+
+A fresh join on the bridge without a working private traffic relay failed
+intermittently with `No addressing information available`. Two subsequent runs
+with the private iroh relay passed, including real Radarr and Sonarr HTTPS on both
+nodes, encrypted settings persistence, status and library reads. The SHA-256
+digest of each age config export matched across the local and Rayfish paths.
+Arr settings and upstream Arr API calls run on the node; only the ciphertext
+export is relayed. This does not establish that discovery is reliable across
+partitions or on a real network.

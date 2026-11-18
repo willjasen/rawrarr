@@ -16,8 +16,11 @@
   group the build clone there too with
   `--label com.docker.compose.project=rawrarr-test-rayfish`. Checks verified HTTPS
   registration, distinct authenticated Rayfish responses, anonymous denial,
-  coordinator-side forward outage and recovery. Does not cover the full Arr,
-  config-peer, Syncthing, or browser workload.
+  coordinator-side forward outage and recovery. Uses cached LinuxServer Radarr
+  and Sonarr images and the private relay image documented below. Exercises
+  encrypted settings, status and library reads on both nodes, and compares
+  Rayfish-relayed config ciphertext with the local export. Does not cover
+  config-peer repair, Syncthing, or the browser workload.
 - `rayfish_user_isolation_docker.py` -- creates two independent closed user
   meshes, with separate coordinator sidecars sharing one network namespace.
   Checks each synthetic user's authenticated route, `.ray` resolution through

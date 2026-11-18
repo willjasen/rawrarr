@@ -284,12 +284,16 @@ def ensure_test_signing_root(fixture: dict | None = None) -> str:
     return fingerprint
 
 
-def api_key(service: str) -> str:
-    contents = docker("exec", f"{PROJECT}-{service}-1", "cat", "/config/config.xml")
+def container_api_key(container: str) -> str:
+    contents = docker("exec", container, "cat", "/config/config.xml")
     key = ET.fromstring(contents).findtext("ApiKey")
     if not key:
-        raise RuntimeError(f"{service} has no generated API key")
+        raise RuntimeError(f"{container} has no generated API key")
     return key
+
+
+def api_key(service: str) -> str:
+    return container_api_key(f"{PROJECT}-{service}-1")
 
 
 def seed_session() -> tuple[str, str, str]:

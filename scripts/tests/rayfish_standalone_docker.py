@@ -11,9 +11,21 @@ import signal
 import tempfile
 import uuid
 
-from test_orbstack_arr_connectivity import docker, run_openssl
+from test_orbstack_arr_connectivity import APP_FLOW, container_api_key, docker, run_openssl
 from test_rayfish_transport import transport
 from rayfish_docker import Node, RAYFISH_STACK_LABEL, retry
+from rayfish_relay_docker import IMAGE as RELAY_IMAGE
+
+
+CIPHERTEXT_DIGEST = """
+import hashlib, ssl, sys, urllib.request
+request = urllib.request.Request(sys.argv[1], headers={"Cookie": "rawrarr_session=" + sys.stdin.read()})
+with urllib.request.urlopen(request, timeout=12, context=ssl.create_default_context(cafile="/run/coordinator-ca")) as response:
+    ciphertext = response.read(16385)
+if len(ciphertext) > 16384 or not ciphertext.startswith(b"age-encryption.org/v1\\n"):
+    raise SystemExit("Expected a bounded binary age config export")
+print(hashlib.sha256(ciphertext).hexdigest())
+"""
 
 
 def run(binary: Path, directory: Path) -> None:
@@ -37,7 +49,7 @@ def run(binary: Path, directory: Path) -> None:
                 "-addext", "basicConstraints=critical,CA:TRUE", "-keyout", str(ca_key), "-out", str(ca))
     extensions = directory / "server.ext"
     extensions.write_text("basicConstraints=critical,CA:FALSE\nextendedKeyUsage=serverAuth\n"
-                          "subjectAltName=DNS:coordinator.test\n")
+                          "subjectAltName=DNS:coordinator.test,DNS:radarr.test,DNS:sonarr.test\n")
     run_openssl("req", "-new", "-newkey", "rsa:2048", "-nodes", "-subj", "/CN=coordinator.test",
                 "-keyout", str(key), "-out", str(csr))
     run_openssl("x509", "-req", "-in", str(csr), "-days", "1", "-CA", str(ca), "-CAkey", str(ca_key),
@@ -117,24 +129,48 @@ def run(binary: Path, directory: Path) -> None:
         sql(statement + "COMMIT;")
         docker("stop", "-t", "5", coordinator)
         start_ready(coordinator)
+        arr = {"radarr": 7878, "sonarr": 8989}
+        arr_containers = {
+            service: create(service, f"lscr.io/linuxserver/{service}:latest", alias=service)
+            for service in arr
+        }
+        for name in arr_containers.values():
+            docker("start", name)
+
         caddyfile = directory / "Caddyfile"
         caddyfile.write_text(
             "{\n auto_https disable_redirects\n servers {\n protocols h1 h2\n }\n}\n"
             "https://coordinator.test {\n tls /run/cert.pem /run/key.pem\n reverse_proxy roarlay:8080\n}\n"
+            + "".join(f"https://{service}.test {{\n tls /run/cert.pem /run/key.pem\n"
+                      f" reverse_proxy {service}:{port}\n}}\n" for service, port in arr.items())
         )
         https = create("https", "caddy:2-alpine", "--mount", bind(caddyfile, "/etc/caddy/Caddyfile"),
                        "--mount", bind(certificate, "/run/cert.pem"), "--mount", bind(key, "/run/key.pem"),
+                       "--network-alias", "radarr.test", "--network-alias", "sonarr.test",
                        alias="coordinator.test")
         docker("start", https)
         retry(lambda: docker("exec", coordinator, "curl", "--max-time", "2", "-fsS", "--cacert",
                              "/run/coordinator-ca", origin + "/health"), timeout=30)
+        for service in arr:
+            retry(lambda: docker("exec", coordinator, "curl", "--max-time", "2", "-fsS", "--cacert",
+                                 "/run/coordinator-ca", f"https://{service}.test/ping"), timeout=120)
+        arr_keys = {service + "Key": container_api_key(name) for service, name in arr_containers.items()}
+
         discovery = Node(prefix, "discovery", prefix)
         peers.append(discovery)
         discovery.create()
         docker("network", "disconnect", prefix, discovery.name)
         docker("network", "connect", "--alias", "discovery", prefix, discovery.name)
         docker("start", discovery.name)
-        route_peer = Node(prefix, "coordinator-peer", prefix, coordinator)
+        relay_config = directory / "relay.toml"
+        relay_config.write_text('http_bind_addr = "0.0.0.0:3340"\nenable_quic_addr_discovery = false\n')
+        relay = create("iroh-relay", RELAY_IMAGE, "--read-only", "--cap-drop", "ALL",
+                       "--security-opt", "no-new-privileges:true",
+                       "--mount", bind(relay_config, "/run/relay.toml"), alias="relay",
+                       command=("--dev", "--config-path", "/run/relay.toml"))
+        docker("start", relay)
+        relay_url = "http://relay:3340"
+        route_peer = Node(prefix, "coordinator-peer", prefix, coordinator, relay_url=relay_url)
         route_peer.config["role"] = "coordinator"
         peers.append(route_peer)
         route_peer.create()
@@ -152,6 +188,7 @@ def run(binary: Path, directory: Path) -> None:
                 "RAWARR_ROLE": "metadata", "RAWARR_NODE_ID": node["nodeId"],
                 "RAWARR_COORDINATOR_URL": origin, "RAWARR_NODE_TOKEN_FILE": "/run/node-token",
                 "RAWARR_INSTANCE_ROOT_FINGERPRINT": records["fingerprint"], "SSL_CERT_FILE": "/run/coordinator-ca",
+                "RAWARR_ARR_CA_CERT_FILE": "/run/coordinator-ca", "RAWARR_LOCAL_PLAINTEXT_CONFIG": "false",
                 "RUST_ARR_LISTEN_ADDR": "127.0.0.1:8080", "RUST_ARR_HEALTH_ADDR": "127.0.0.1:7299",
             }
             node_name = create(
@@ -162,7 +199,7 @@ def run(binary: Path, directory: Path) -> None:
             )
             start_ready(node_name)
             fossils.append(node_name)
-            peer = Node(prefix, f"peer-{label}", prefix, node_name)
+            peer = Node(prefix, f"peer-{label}", prefix, node_name, relay_url=relay_url)
             peers.append(peer)
             peer.create()
             peer.start()
@@ -182,6 +219,14 @@ def run(binary: Path, directory: Path) -> None:
         route_peer.stop()
         route_peer.update()
         route_peer.start()
+
+        services = json.loads(docker("inspect", coordinator, *fossils))
+        if [service["Config"]["Labels"].get("com.docker.compose.service") for service in services] != [
+            "roarlay", "metadata-a", "metadata-b",
+        ]:
+            raise RuntimeError("The test stack must label only the coordinator roarlay")
+        if any(service["HostConfig"]["PortBindings"] for service in services):
+            raise RuntimeError("The coordinator and subscribers must not publish host ports")
 
         token = secrets.token_hex(32)
         digest = hashlib.sha256(token.encode()).hexdigest()
@@ -218,6 +263,15 @@ def run(binary: Path, directory: Path) -> None:
             retry(lambda: check_route(route, baseline))
             if request(coordinator, route)[0] != 401:
                 raise RuntimeError("Anonymous HTTPS request was not denied")
+            print(docker("exec", "-i", fossil, "python3", "-c", APP_FLOW,
+                         input=json.dumps({"session": node_token, **arr_keys})))
+            config_path = "/api/metadata/export/config"
+            local = docker("exec", "-i", fossil, "python3", "-c", CIPHERTEXT_DIGEST,
+                           "http://127.0.0.1:8080" + config_path, input=node_token)
+            forwarded = docker("exec", "-i", coordinator, "python3", "-c", CIPHERTEXT_DIGEST,
+                               origin + f"/nodes/{node['nodeId']}" + config_path, input=token)
+            if local != forwarded:
+                raise RuntimeError("Rayfish config export differed from the local ciphertext")
             routes.append(route)
             baselines.append(baseline)
         if baselines[0] == baselines[1]:
@@ -232,6 +286,7 @@ def run(binary: Path, directory: Path) -> None:
         for route, baseline in zip(routes, baselines):
             retry(lambda: check_route(route, baseline))
         print("PASS: two signed fossils register over verified HTTPS and relay distinct authenticated responses over Rayfish")
+        print("PASS: both fossils use real Radarr and Sonarr and export matching config ciphertext through Rayfish")
         print("PASS: no Tailscale or Headscale in the fixture; Rayfish outage breaks relay only, and restart restores it")
     finally:
         failures = []
