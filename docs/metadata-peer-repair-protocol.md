@@ -36,7 +36,25 @@ This detects many partial rollbacks when a peer retains a newer signed revision.
 
 Use an explicit, owner-managed allowlist of the two peer device IDs and direct Tailscale HTTPS URLs for the first deployment. A peer presents its existing instance-root-signed device certificate. The receiver verifies the pinned root fingerprint, certified device ID/role, expected allowlist entry, and certificate signature. No shared peer secret is introduced. A later coordinator-backed peer discovery endpoint is a separate change.
 
-Configure the same two-entry `RAWARR_CONFIG_PEERS` JSON object on each fossil. Keys must be the stable node IDs; values must be HTTPS URLs on the tailnet ending at each node's direct API base, such as `https://node-name.example.ts.net/direct-api`. The service rejects non-Tailscale hostnames, credentials, query strings, and fragments. Do not put API keys or age identities in this setting.
+Configure `RAWARR_CONFIG_PEERS` as a JSON object keyed by stable node IDs. The
+default accepts HTTPS `.ts.net` bases such as
+`https://node-name.example.ts.net/direct-api`. For an opt-in Rayfish route,
+set `RAWARR_CONFIG_PEER_RAYFISH_HTTP=true` and map the remote ID to its local
+forward, for example `http://127.0.0.1:17443`. Only IPv4 loopback on ports
+17000–17999 at the root is accepted for this form. The opt-in starts a
+config-RPC-only HTTP listener on `127.0.0.1:8443` on metadata nodes. Don't
+publish it or configure a non-Rayfish forward to it. Configure the receiving sidecar's
+`allow_config_peer_in` for the expected Rayfish endpoint and the originating
+sidecar's `config-peer` forward for the pinned receiver. Configure each node
+to allow the other node ID so the existing signature checks still apply.
+Rayfish encrypts the node-to-node hop; the two local hops use HTTP without
+proxies or redirects. This setting does not affect coordinator HTTPS or browser routes.
+Credentials, query strings, and fragments are not allowed in either route.
+
+No persisted data or protocol migration is needed. Leave `.ts.net` routes in
+place until both peers are upgraded and the Rayfish route is verified. For
+rollback, restore the original peer URLs and remove the dedicated forward and
+grant. Do not put API keys or age identities in the peer map or sidecar config.
 
 Before transfer, peers use a protocol-versioned challenge exchange with a fresh 256-bit receiver nonce. The sender signs a canonical proof binding the nonce, sender ID, receiver ID, protocol version, and requested capability. Challenges expire after 30 seconds and are one-use. Each request signs the method, exact path, body digest, sender ID, receiver ID, and a fresh nonce. Reject unknown peers, invalid signatures, expired/reused challenges, unsupported versions, and mismatched targets.
 

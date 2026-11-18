@@ -30,6 +30,25 @@ See [device architecture](device-architecture.md), [cloud access architecture](c
 
 The coordinator continues handling login, discovery, node approvals, route tickets, and fallback traffic. Media bytes remain on storage nodes and must not be proxied by the coordinator. Where browser-visible content is required to remain hidden from the coordinator, use the ciphertext-only browser decryption boundary in [blind coordinator content](blind-coordinator-content.md) on both direct and fallback paths.
 
+### Rayfish and browser-direct options (planned)
+
+Each user should have a separate closed Rayfish network, with the coordinator
+participating separately; account-bound provisioning is not implemented. Nodes
+continue to communicate with the coordinator over HTTPS. A browser on the
+user's Rayfish network could probe an authorized node's `host.network.ray` URL
+and use it directly when available, retaining the coordinator route otherwise.
+Node-side rootless Rayfish does not install routes or DNS on the browser device,
+and a `.ray` name does not itself provide a browser-trusted HTTPS certificate.
+Do not broaden the current direct-origin allowlist or send handoff credentials
+until node identity, certificate trust, ownership, origin and CORS are established.
+
+A WebRTC data channel is an alternative if the browser device does not run
+Rayfish. HTTPS signaling would authenticate the account and bind the connection's
+DTLS fingerprint to the owner-approved node identity; the node needs its own
+WebRTC endpoint and a bounded application protocol. ICE may require a TURN
+relay. A data channel is not a URL that existing `fetch` calls can use directly.
+Neither Rayfish browser-direct routing nor WebRTC is implemented or qualified.
+
 ## Decisions and prerequisites
 
 The product choices for this plan are:

@@ -50,6 +50,11 @@ coordinator origin. See [Compose retirement/adoption](compose-layout.md).
 
 ## Product decision
 
+An opt-in [rootless Rayfish parallel-transport pilot](rayfish-transport.md) is
+implemented under #446. It leaves Tailscale ingress and passkey origins unchanged;
+only explicitly selected application TCP routes can use it. Internal/live
+adoption, NAT/relay qualification and the soak/security gates remain pending.
+
 Tailscale is an optional connectivity layer. Rawrarr remains usable through another trusted private transport. It carries coordinator web/API, authenticated device control, and application data only; never media files/streams or PostgreSQL access. Tailscale membership does not authorize Rawrarr data access or decrypt ciphertext.
 
 The internal coordinator stays on do3. Fossil (`metadata`) and boneyard (`storage`)

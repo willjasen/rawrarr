@@ -1,4 +1,30 @@
 use super::*;
+
+#[test]
+fn rayfish_peer_route_requires_opt_in_and_dedicated_http_loopback_port() {
+    for url in ["http://127.0.0.1:17443", "http://127.0.0.1:17999/"] {
+        assert!(rayfish_peer_url(url));
+        let mut peer = PeerRpc::fixture("node-a", &"a".repeat(64), HashMap::new());
+        assert!(peer.client_for_peer(url).is_err(), "HTTP routes must be disabled by default");
+        peer.rayfish_http = true;
+        assert!(peer.client_for_peer(url).is_ok());
+    }
+    for url in [
+        "https://127.0.0.1:17443",
+        "http://127.0.0.2:17443",
+        "http://localhost:17443",
+        "http://192.0.2.1:17443",
+        "http://127.0.0.1:80",
+        "http://127.0.0.1:18000",
+        "http://127.0.0.1:17443/direct-api",
+        "http://127.0.0.1:17443/?q=1",
+        "http://user@127.0.0.1:17443",
+    ] {
+        assert!(!rayfish_peer_url(url), "{url}");
+    }
+    assert!(valid_peer_url("https://fossil.example.ts.net/direct-api"));
+    assert!(!valid_peer_url("http://127.0.0.1:17443"));
+}
 use ml_dsa::{MlDsa65, SigningKey, signature::{Keypair, Signer}};
 use axum::{Router, extract::{Request, State}, routing::get};
 

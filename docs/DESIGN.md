@@ -6,6 +6,12 @@ This is the living product-design guide for how Rawrarr should behave and feel t
 
 ## Design goals
 
+An experimental, operator-selected [Rayfish parallel transport](rayfish-transport.md)
+may carry specific authenticated node requests beside Tailscale. It does not
+replace Rawrarr's coordinator or change browser/passkey origins. Route changes
+must be explicit and reversible, with visible failures rather than hidden
+transport fallback. Internal rollout and public adoption remain gated on testing.
+
 - **Private by default.** Make it clear which information is public, encrypted, shared, or local. Do not reveal private identities, credentials, media paths, or full identifiers in ordinary UI.
 - **Friendly and calm.** Use the Rawrarr dinosaur identity and green accents with a clean, modern interface. Keep setup focused and avoid overwhelming first-time users with advanced configuration.
 - **Show useful status.** Tell the user whether an integration or device is connected, when information last changed, and what action can fix a problem. Prefer live updates over asking the user to reload.

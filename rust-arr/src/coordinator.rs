@@ -38,6 +38,33 @@ fn parse_approved_nodes(registry: &str) -> Result<Vec<ApprovedNode>, serde_json:
     serde_json::from_str(registry)
 }
 
+fn parse_relay_loopback_bypass(value: Option<&str>) -> Result<bool, &'static str> {
+    match value {
+        None | Some("false") => Ok(false),
+        Some("true") => Ok(true),
+        _ => Err("RAWARR_NODE_RELAY_BYPASS_LOOPBACK_PROXY must be true or false"),
+    }
+}
+
+fn build_relay_client(
+    proxy_url: Option<&str>,
+    bypass_loopback: bool,
+) -> Result<reqwest::Client, reqwest::Error> {
+    let mut builder = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(5))
+        .redirect(reqwest::redirect::Policy::none());
+    if let Some(proxy_url) = proxy_url {
+        let no_proxy = if bypass_loopback {
+            reqwest::NoProxy::from_string("fossil,127.0.0.1")
+        } else {
+            reqwest::NoProxy::from_string("fossil")
+        };
+        let proxy = reqwest::Proxy::all(proxy_url)?.no_proxy(no_proxy);
+        builder = builder.proxy(proxy);
+    }
+    builder.build()
+}
+
 #[derive(Clone)]
 struct ApprovedAuth {
     digest: String,
@@ -240,15 +267,16 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         }
         relay_targets.insert(node_id, url);
     }
-    let mut relay_client_builder = reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(5))
-        .redirect(reqwest::redirect::Policy::none());
-    if let Ok(proxy_url) = env::var("RAWARR_NODE_RELAY_SOCKS5_URL") {
-        let proxy = reqwest::Proxy::all(&proxy_url)?
-            .no_proxy(reqwest::NoProxy::from_string("fossil"));
-        relay_client_builder = relay_client_builder.proxy(proxy);
-    }
-    let relay_client = relay_client_builder.build()?;
+    let bypass_setting = match env::var("RAWARR_NODE_RELAY_BYPASS_LOOPBACK_PROXY") {
+        Ok(value) => Some(value),
+        Err(env::VarError::NotPresent) => None,
+        Err(env::VarError::NotUnicode(_)) => {
+            return Err("RAWARR_NODE_RELAY_BYPASS_LOOPBACK_PROXY must be true or false".into());
+        }
+    };
+    let bypass_loopback = parse_relay_loopback_bypass(bypass_setting.as_deref())?;
+    let proxy_url = env::var("RAWARR_NODE_RELAY_SOCKS5_URL").ok();
+    let relay_client = build_relay_client(proxy_url.as_deref(), bypass_loopback)?;
     let direct_targets_text = env::var("RAWARR_NODE_DIRECT_TARGETS")
         .ok()
         .filter(|value| !value.trim().is_empty())
@@ -1425,6 +1453,10 @@ mod direct_route_tests {
 #[cfg(test)]
 #[path = "../../scripts/tests/test_rawrarr_node_enrollment.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../../scripts/tests/test_rayfish_relay_proxy.rs"]
+mod rayfish_relay_proxy_tests;
 
 async fn coordinator_health() -> axum::response::Html<String> {
     axum::response::Html(crate::ui_assets::text("coordinator_health.html", include_str!("coordinator_health.html")).await)

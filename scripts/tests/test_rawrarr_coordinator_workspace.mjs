@@ -429,7 +429,7 @@ test('internal coordinator maps current fossil IDs to their relay and direct Tai
 
 test('coordinator relay can reach tailnet nodes through its Tailscale SOCKS5 sidecar', () => {
   assert.match(coordinator, /RAWARR_NODE_RELAY_SOCKS5_URL/);
-  assert.match(coordinator, /reqwest::Proxy::all\(&proxy_url\)/);
+  assert.match(coordinator, /reqwest::Proxy::all\(proxy_url\)/);
   assert.match(coordinator, /NoProxy::from_string\("fossil"\)/);
   assert.match(compose, /"mac-mini-storage":"https:\/\/rawrarr-mini\.risk-mermaid\.ts\.net"/);
   assert.match(compose, /RAWARR_NODE_RELAY_SOCKS5_URL/);

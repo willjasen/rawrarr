@@ -1,0 +1,30 @@
+# Private test-only traffic relay. Never deploy this image as a Rawrarr service.
+FROM rawrarr-rayfish:0.5.16
+USER root
+ARG TARGETARCH
+RUN apk add --no-cache iptables
+RUN TARGETARCH="$TARGETARCH" python - <<'PY'
+import hashlib
+import io
+import os
+import tarfile
+import urllib.request
+
+artifacts = {
+    "amd64": ("x86_64", "677f4c62342a6ba8044459b5fd4302f2b1dcb8402542072e3a4ade5039bc0b9e"),
+    "arm64": ("aarch64", "dc4b9d620642026966d498763ec8ba3a6eefde8d39994b2d63e3d15d7af770f8"),
+}
+arch, expected = artifacts[os.environ["TARGETARCH"]]
+url = f"https://github.com/n0-computer/iroh/releases/download/v1.3.0/iroh-relay-v1.3.0-{arch}-unknown-linux-musl.tar.gz"
+with urllib.request.urlopen(url, timeout=120) as response:
+    data = response.read(64 * 1024 * 1024)
+if hashlib.sha256(data).hexdigest() != expected:
+    raise SystemExit("Private relay fixture checksum mismatch")
+with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
+    binary, = [item for item in archive if item.isfile() and item.name.split("/")[-1] == "iroh-relay"]
+    with archive.extractfile(binary) as source, open("/usr/local/bin/iroh-relay", "xb") as output:
+        output.write(source.read())
+os.chmod("/usr/local/bin/iroh-relay", 0o755)
+PY
+USER 10001:10001
+ENTRYPOINT ["/usr/local/bin/iroh-relay"]

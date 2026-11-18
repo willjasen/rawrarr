@@ -8,6 +8,139 @@
 - `test_rawrarr_subscriber_compose.mjs` — checks subscriber role Compose generation, fossil-prefixed generated IDs, and anonymous public GHCR pulls without GitHub credentials; run `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
 # Rawrarr tests
 
+- `rayfish_standalone_docker.py --binary /path/to/rust-arr` -- runs a fresh
+  `roarlay` coordinator, two signed nodes labeled `metadata-a` and `metadata-b`,
+  and disposable support services (`rayfish-coord`, `discovery`, `peer-a`,
+  `peer-b`, and others) in
+  OrbStack's `rawrarr-test-rayfish` group without Tailscale or Headscale.
+  Supply a current-worktree binary built in a prepared native test clone;
+  group the build clone there too with
+  `--label com.docker.compose.project=rawrarr-test-rayfish`. Checks verified HTTPS
+  registration, distinct authenticated Rayfish responses, anonymous denial,
+  coordinator-side forward outage and recovery. Uses cached LinuxServer Radarr
+  and Sonarr images and the private relay image documented below. Exercises
+  encrypted settings, status and library reads on both nodes, and compares
+  Rayfish-relayed config ciphertext with the local export. Also uses cached
+  Syncthing 2.1.5 to verify byte-identical bidirectional transfers between two
+  explicitly paired devices via a pinned TCP forward. Removes one node's test
+  config and journal, then verifies signed repair over Rayfish restores the
+  exact ciphertext and rejects unsigned requests. Does not cover the
+  browser-direct `.ray` workload.
+  The Rayfish sidecar logs show startup, route grant counts, mesh readiness
+  changes, and shutdown. Raw daemon output stays in the test sidecar's
+  disposable `/state` volume.
+- `rayfish_user_isolation_docker.py` -- creates two independent closed user
+  meshes, with separate coordinator sidecars sharing one network namespace.
+  Checks each synthetic user's authenticated route, `.ray` resolution through
+  the private rootless SOCKS proxy, anonymous denial and a cross-user misroute.
+  Run `python3 scripts/tests/rayfish_user_isolation_docker.py`
+  with the native Rayfish image in OrbStack. This tests the network topology,
+  not browser DNS/HTTPS, automatic account-bound provisioning or fresh revocation.
+- `rayfish_coordinator_docker.py` -- exercises a current-worktree coordinator
+  binary against a real fossil over Rayfish, with a real test-only Tailscale
+  SOCKS server. Checks the loopback bypass, delegated node session, wrong-user
+  and anonymous denial, ACL verdicts, an admitted-but-unapproved peer and
+  outage behavior. Build the binary in a prepared, network-disconnected native
+  test clone with `cargo build --locked --offline --manifest-path
+  /workspace/rust-arr/Cargo.toml`, copy its binary from
+  `/opt/rawrarr-test-target/debug/rust-arr` to a protected path outside the
+  repository, and run `python3 scripts/tests/rayfish_coordinator_docker.py
+  --binary /absolute/path/to/binary` with the signed isolated environment
+  already running. The binary must come from the current worktree. Only
+  disposable transport state and test sessions are created and removed.
+- `rayfish_owner_offline_docker.py` -- three-endpoint closed mesh: the network
+  key holder goes fully offline while two admitted members exchange byte-exact
+  950,272-byte app responses. One member cold-restarts and reconnects to the
+  other without the owner; application 401s and endpoint identities remain
+  enforced. Run `python3 scripts/tests/rayfish_owner_offline_docker.py` using the
+  existing native Rayfish image. Discovery infrastructure remains available;
+  this is distinct from the failing simultaneous-cold-start/discovery-outage gate.
+  Add `--discovery-outage` to pause the private discovery server, verify it is
+  paused while its DNS name still resolves, and cold-restart both ordinary
+  members with the separate key holder offline. This tests cached-member
+  recovery, not key-holder recovery or enforcement of fresh revocations.
+  Add both `--discovery-outage --revocation-outage` to kick a member while both
+  members are offline, verify that the network's private discovery packet
+  changed, and test the stale members after restart during discovery loss.
+  This currently exits nonzero: the kicked member still reaches the application
+  until discovery and the key holder return and the other member reconverges.
+  The fixtures use synthetic app credentials and never use live node state.
+- `test_rayfish_owner_fixture.py` -- checks that revocation qualification reads
+  the target network's z-base-32 discovery record and rejects malformed keys.
+  Run `python3 -m unittest discover -s scripts/tests -p test_rayfish_owner_fixture.py`.
+- `test_rayfish_relay_proxy.rs` -- verifies the coordinator's opt-in IPv4
+  loopback proxy bypass with real local HTTP and SOCKS sockets, while remote
+  targets retain the proxy and the default remains unchanged. Run
+  `cargo test --locked --offline --manifest-path /workspace/rust-arr/Cargo.toml rayfish_relay_proxy_tests`
+  in the prepared native isolated test clone.
+
+- `rayfish_relay_docker.py` -- private-relay qualification with separate synthetic
+  peer namespaces, LAN discovery disabled, bidirectional 950,272-byte transfers,
+  application 401s, forwarded-byte counter evidence, relay outage/restoration and
+  absence of tested payload/credential/path markers from relay logs. Build
+  `docker build --platform linux/amd64 -f scripts/tests/Dockerfile.rayfish-relay
+  -t rawrarr-test-rayfish-relay:1.3.0 .` after the native Rayfish image, then run
+  `python3 scripts/tests/rayfish_relay_docker.py`. Use native ARM64 on an ARM64
+  host. The official relay binary is checksum-pinned and matches the fork's
+  dependency major/minor; this does not validate every fork-specific feature.
+  OrbStack bridges permit cross-network routing, so short-lived **test-only**
+  NET_ADMIN helpers restrict egress in the disposable peer namespaces to
+  loopback, private discovery TCP and private relay TCP. Rayfish keeps all caps
+  dropped. Filters are reapplied and verified after namespace recreation.
+  No host firewall, public relay, production state, or live service is used.
+  This proves traffic-relay fallback with direct paths blocked, not NAT
+  hole-punching, hardware sleep, or exhaustive metadata privacy.
+  Add `--discovery-outage` to qualify dual cold restart while discovery is
+  stopped but the private relay remains available. This currently fails its
+  90-second cold-start gate; restoring discovery recovers transfers without
+  another peer restart. The command exits nonzero even after recovery.
+  Filters reuse saved service addresses during the outage, refresh them when
+  discovery returns, and probe the peer's current address and live listener
+  after each namespace change.
+- `test_rayfish_relay_fixture.py` -- namespace/capability isolation and required
+  relay-byte evidence, offline-DNS filter reuse, namespace-only filter replacement,
+  and current-address direct-probe checks. Run
+  `python3 -m unittest discover -s scripts/tests -p test_rayfish_relay_fixture.py`.
+
+- `test_rayfish_transport.py` -- run `python3 scripts/tests/test_rayfish_transport.py`
+  for strict configuration, closed-network, state, route-selection, Compose and
+  local-liveness checks. After a native build of `deploy/rayfish/Dockerfile` tagged
+  `rawrarr-rayfish:0.5.16`, add `--integration` for real rootless peers in separate
+  Docker namespaces: bidirectional 950,272-byte/hash checks, application HTTP 401s,
+  an admitted-but-unapproved peer, non-app TCP/UDP firewall verdicts, outage,
+  identity-preserving restart and revocation. `--environment` runs beside the
+  already-healthy `rawrarr-test-environment` fossils and verifies authenticated
+  node-specific response hashes plus bidirectional Tailscale pings during a
+  Rayfish outage. Disposable sidecars/volumes and task-created session rows are
+  removed; existing services are not restarted. These use direct LAN discovery
+  and a private signed-record fixture, not NAT/traffic-relay qualification.
+- `test_orbstack_arr_connectivity.py --start --fresh-fixtures` -- current full
+  coordinator/two-fossil/Headscale/Arr environment with valid signed node
+  certificates. Creates fresh uniquely named volumes and reports their generated
+  Compose override; retains all previous volumes. Uses the reusable native
+  `rawrarr-testing-base:local` ML-DSA tooling without installing host Node.js.
+  Test-only signer material never enters coordinator state; browser approval
+  is not exercised by this seeded tier.
+- `test_orbstack_signed_fixture.py` -- checks fresh-volume override selection,
+  preservation of previous names, protected fixture directories and transactional
+  public-only node-certificate seeding. Run
+  `python3 -m unittest discover -s scripts/tests -p test_orbstack_signed_fixture.py`.
+- `test_rayfish_soak.py` -- checks measured soak results, separate discovery
+  qualification, explicit failure/interruption reports and absence of retries.
+  Run `python3 -m unittest discover -s scripts/tests -p test_rayfish_soak.py`.
+  `test_rayfish_transport.py --integration --soak-hours 72 --report /protected/report.json`
+  runs a direct-LAN synthetic soak with bidirectional byte/auth checks every
+  30 seconds, no hidden retries, and a 90-second maximum sampling gap. Reports
+  are atomic and private (0600). This is not NAT/relay or hardware sleep testing.
+  The expanded integration additionally exercises discovery loss, simultaneous
+  cold restart and process suspension. Cold restart while discovery is offline
+  currently fails qualification; the harness still checks restored discovery,
+  soak and remaining controls, then exits nonzero for that failed gate.
+  `test_rayfish_transport.py --soak-status --report /protected/report.json`
+  displays a `running` report older than 90 seconds as `stale` without modifying
+  it; stale means no recent report, not proof of a particular process failure.
+  The command returns nonzero unless both the soak and its discovery gate passed.
+
 - `test_postgres_viewers.py` -- checks separate public/internal Adminer networks,
   loopback ports, and absence of app secrets/mounts. Run
   `python3 scripts/tests/test_postgres_viewers.py`. With a running Docker daemon

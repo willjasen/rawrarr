@@ -106,6 +106,24 @@ For the full integration procedure, use:
 python3 scripts/tests/test_orbstack_arr_connectivity.py --start
 ```
 
+For current signed-node protocol fixtures, use
+`python3 scripts/tests/test_orbstack_arr_connectivity.py --start --fresh-fixtures`.
+This selects new uniquely named volumes in `rawrarr-test-environment`, seeds
+valid ML-DSA node certificates using the existing native test dependency image,
+and preserves all previous volumes. Its generated Compose override is reported
+under protected test state; preserve that override when managing this fixture.
+Do not subsequently use the base Compose definition to recreate these services,
+since it selects the older volumes. Without `--start`, the connectivity check
+can exercise the currently running fixture without changing its volumes.
+The signer runs only in the test helper; no root private key enters the coordinator.
+Fixture seeding does not test interactive browser approval.
+
+To verify optional Rayfish beside the two real fossils, build its native image
+and run `python3 scripts/tests/test_rayfish_transport.py --environment`.
+The check uses disposable Rayfish sidecars, verifies authenticated node-specific
+responses in both directions, and leaves existing app/Tailscale containers
+running without recreation. See [the pilot guide](docs/rayfish-transport.md).
+
 This requires OrbStack, OpenSSL, Node.js with the pinned web-export modules, and
 the protected test-only files described in the
 [original environment runbook](runbooks/2026-10-21-orbstack-coordinator-two-node-test.md).
