@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Prove two members remain usable without the closed mesh's key holder online."""
+"""Test closed-mesh members without the key holder or, optionally, discovery."""
 
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -12,10 +13,11 @@ import rayfish_transport as transport
 from rayfish_docker import Node, docker, retry
 
 
-def run():
+def run(discovery_outage=False):
     prefix = "rawrarr-test-rayfish-owner-" + uuid.uuid4().hex[:10]
     nodes = []
     network_created = False
+    discovery_paused = False
     try:
         docker("network", "create", prefix)
         network_created = True
@@ -66,8 +68,34 @@ def run():
                           [item["endpoint"] for item in statuses], "Member restart changed identities")
         print("PASS: two admitted members exchange byte-exact app traffic with the network owner offline", flush=True)
         print("PASS: member cold restart recovers without the network owner; app 401s remain enforced", flush=True)
+        if discovery_outage:
+            docker("pause", discovery.name)
+            discovery_paused = True
+            discovery_state, = json.loads(docker("inspect", discovery.name))
+            transport.require(discovery_state["State"]["Paused"], "Discovery fixture did not pause")
+            for peer in (first, second):
+                peer.stop()
+            for peer in (first, second):
+                peer.start()
+                docker("exec", peer.name, "python", "-c",
+                       "import socket; socket.gethostbyname('discovery')")
+            retry(verify)
+            transport.require([first.status()["endpoint"], second.status()["endpoint"]] ==
+                              [item["endpoint"] for item in statuses],
+                              "Member cold restarts changed identities")
+            print("PASS: both members cold-restart and exchange authenticated app traffic with discovery "
+                  "and the network owner offline", flush=True)
+            docker("unpause", discovery.name)
+            discovery_paused = False
+            retry(verify)
+            print("PASS: both members remain reachable after discovery returns", flush=True)
     finally:
         errors = []
+        if discovery_paused:
+            try:
+                docker("unpause", discovery.name)
+            except RuntimeError as error:
+                errors.append(error)
         for node in reversed(nodes):
             try:
                 node.cleanup()
@@ -83,4 +111,7 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--discovery-outage", action="store_true",
+                        help="Also cold-restart both members while the private discovery server is paused")
+    run(discovery_outage=parser.parse_args().discovery_outage)

@@ -326,15 +326,23 @@ def worker():
 if __name__ == "__main__":
     if INNER:
         worker()
-    elif any(arg in ("--integration", "--environment") for arg in sys.argv[1:]):
+    elif any(arg in ("--integration", "--environment", "--soak-status") for arg in sys.argv[1:]):
         import rayfish_docker
         parser = argparse.ArgumentParser(description=__doc__)
         modes = parser.add_mutually_exclusive_group(required=True)
         modes.add_argument("--integration", action="store_true")
         modes.add_argument("--environment", action="store_true")
+        modes.add_argument("--soak-status", action="store_true", help="Inspect a soak report's freshness")
         parser.add_argument("--soak-hours", type=float, default=0)
         parser.add_argument("--report", type=Path)
         args = parser.parse_args()
+        if args.soak_status:
+            if args.report is None or args.soak_hours:
+                parser.error("--soak-status requires --report and no --soak-hours")
+            result = rayfish_docker.soak_status(args.report)
+            print(json.dumps(result, indent=2))
+            sys.exit(0 if result["status"] == "passed" and
+                     result.get("cold_restart_during_discovery_outage") == "passed" else 1)
         def interrupted(*_):
             raise KeyboardInterrupt("Rayfish test interrupted")
         signal.signal(signal.SIGTERM, interrupted)

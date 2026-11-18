@@ -223,6 +223,19 @@ def soak(first, second, hours, report, cold_recovered):
         transport.private_write(report, json.dumps(result, indent=2) + "\n")
 
 
+def soak_status(report):
+    result = transport.read_json(report)
+    transport.require(isinstance(result, dict), "Invalid soak report")
+    transport.require(result.get("status") in ("running", "passed", "failed_or_interrupted"),
+                      "Invalid soak report status")
+    age = time.time() - report.stat().st_mtime
+    transport.require(age >= 0, "Soak report timestamp is in the future; check the system clock")
+    result["report_age_seconds"] = age
+    if result["status"] == "running" and age > 90:
+        result["status"] = "stale"
+    return result
+
+
 def run(environment, soak_hours=0, report=None):
     transport.require(not soak_hours or not environment, "Soak must use disposable synthetic nodes, not persistent test sessions")
     transport.require(0 <= soak_hours <= 72, "Soak duration must be between 0 and 72 hours")

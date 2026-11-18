@@ -15,6 +15,10 @@
   enforced. Run `python3 scripts/tests/rayfish_owner_offline_docker.py` using the
   existing native Rayfish image. Discovery infrastructure remains available;
   this is distinct from the failing simultaneous-cold-start/discovery-outage gate.
+  Add `--discovery-outage` to pause the private discovery server, verify it is
+  paused while its DNS name still resolves, and cold-restart both ordinary
+  members with the separate key holder offline. This tests cached-member
+  recovery, not key-holder recovery or enforcement of fresh revocations.
 
 - `rayfish_relay_docker.py` -- private-relay qualification with separate synthetic
   peer namespaces, LAN discovery disabled, bidirectional 950,272-byte transfers,
@@ -78,6 +82,10 @@
   cold restart and process suspension. Cold restart while discovery is offline
   currently fails qualification; the harness still checks restored discovery,
   soak and remaining controls, then exits nonzero for that failed gate.
+  `test_rayfish_transport.py --soak-status --report /protected/report.json`
+  displays a `running` report older than 90 seconds as `stale` without modifying
+  it; stale means no recent report, not proof of a particular process failure.
+  The command returns nonzero unless both the soak and its discovery gate passed.
 
 - `test_postgres_viewers.py` -- checks separate public/internal Adminer networks,
   loopback ports, and absence of app secrets/mounts. Run

@@ -1,6 +1,7 @@
 """Check soak reports distinguish measured success from rollout qualification."""
 
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -54,6 +55,31 @@ class SoakTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     rayfish_docker.soak(*self.peers(), 1, report, True)
             self.assertEqual(json.loads(report.read_text())["status"], "failed_or_interrupted")
+
+    def test_running_report_is_stale_after_heartbeat_deadline_without_rewriting(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "report.json"
+            original = '{"status": "running", "samples": 87}\n'
+            report.write_text(original)
+            os.utime(report, (1000, 1000))
+            with patch.object(rayfish_docker.time, "time", return_value=1090):
+                self.assertEqual(rayfish_docker.soak_status(report)["status"], "running")
+            with patch.object(rayfish_docker.time, "time", return_value=1091):
+                result = rayfish_docker.soak_status(report)
+            self.assertEqual(result["status"], "stale")
+            self.assertEqual(result["samples"], 87)
+            self.assertEqual(report.read_text(), original)
+
+    def test_completed_report_remains_completed_and_future_timestamp_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "report.json"
+            report.write_text('{"status": "passed"}')
+            os.utime(report, (1000, 1000))
+            with patch.object(rayfish_docker.time, "time", return_value=2000):
+                self.assertEqual(rayfish_docker.soak_status(report)["status"], "passed")
+            with patch.object(rayfish_docker.time, "time", return_value=999):
+                with self.assertRaises(ValueError):
+                    rayfish_docker.soak_status(report)
 
 
 if __name__ == "__main__":

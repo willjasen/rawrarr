@@ -194,3 +194,38 @@ isolation evidence. Five focused fixture tests pass. Final experiment evidence i
 in the private session file `rayfish-relay-discovery-outage-final.log`; owned
 containers, volumes and networks were cleaned up. The separate awake soak is
 unaffected and still has not completed its requested 72 hours.
+
+### 2026-11-18: interrupted soak and separate key-holder experiment
+
+The awake soak's last report was written on 2026-11-13 at 05:09:35 -0500,
+after 87 samples and approximately 2,705 seconds. Its process was absent when
+checked on 2026-11-18; the three test containers had exited with status 255.
+The host/runtime interruption's cause is not established. The report still
+said `running` because abrupt termination prevented its cleanup handler from
+writing a final state. The soak is incomplete, not passed.
+
+Added a read-only `--soak-status --report PATH` check which treats a `running`
+report with no update for over 90 seconds as `stale` and exits nonzero. It
+preserves the original report, distinguishes stale evidence from a confirmed
+process exit, and cannot override the separate discovery qualification.
+
+Discovery diagnostics with a paused server confirmed the original outage is
+not merely Docker removing the server's DNS alias. The network-key holder
+reported `timed out checking network destruction` and did not restore its
+network; an ordinary member warm-resumed from its cached verified roster.
+
+`python3 scripts/tests/rayfish_owner_offline_docker.py --discovery-outage`
+passed with a separate stopped key holder and a paused discovery server whose
+DNS name remained resolvable: both ordinary members cold-restarted, exchanged
+byte-exact 950,272-byte responses, enforced HTTP 401s, retained endpoint
+identities and remained reachable when discovery returned. This does not fix the
+key holder's cold-start failure or establish fresh revocation enforcement during
+discovery loss. Cached roster freshness is an explicit security gate. In a
+separate diagnostic run, two cached members remained able to communicate after
+the owner requested a kick while they were offline. A repeated run verified
+that the exact network's discovery packet changed after the kick before
+pausing discovery; both members still exchanged authenticated fixture
+responses after restarting with the key holder and discovery unavailable.
+The new packet was not independently decoded to verify its roster, so the
+precise published revocation remains unverified. Keep this as a security gate;
+do not treat cached membership as proof of current authorization.

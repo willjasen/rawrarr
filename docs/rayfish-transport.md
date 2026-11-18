@@ -220,6 +220,11 @@ endpoint stability every 30 seconds without retrying broken transfers. More than
 90 seconds between sampling rounds invalidates continuity. The private atomic
 JSON report distinguishes soak results from the failed cold/discovery gate;
 successful soak measurements do not approve deployment.
+Use `python3 scripts/tests/test_rayfish_transport.py --soak-status --report
+/protected/report.json` to inspect freshness. A report that says `running`
+but has not been updated in 90 seconds is displayed as `stale`, not as an
+active soak; this does not prove why it stopped. The command returns nonzero
+unless both the soak and the separate discovery qualification passed.
 
 Private traffic-relay qualification now also passes on native AMD64. The
 test-only `scripts/tests/Dockerfile.rayfish-relay` pins official iroh-relay 1.3.0
@@ -242,6 +247,20 @@ data, and one cold-restarts successfully while the owner stays offline.
 Private discovery remains available in that test. This supports the narrower
 claim that established membership does not require a continuously online
 network owner, not that discovery infrastructure can be removed.
+
+An additional direct-LAN test with a separate, stopped key holder found that
+two ordinary members can both cold-restart and exchange authenticated
+application responses while private discovery is paused. This is a narrower
+result than the two-peer key-holder test: the key holder's own restart remains
+blocked by its destruction-check timeout. Cached membership also cannot
+establish that a newly revoked peer is excluded while signed discovery is
+unavailable; treat that as a security and rollout gate, not a basis for
+automatically failing open. Keep independent application authorization and the
+existing Tailscale route. In a disposable test, both members could still
+exchange application responses after the key holder kicked one while they were
+offline and the corresponding discovery record changed, then they restarted
+while discovery was paused. The test did not independently decode the updated
+record, so the exact published roster content remains unverified.
 
 The private-relay discovery-outage qualification also fails: neither peer
 serves forwarded application requests within 90 seconds after both cold-restart
