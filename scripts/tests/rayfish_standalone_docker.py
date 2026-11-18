@@ -15,6 +15,7 @@ from test_orbstack_arr_connectivity import APP_FLOW, container_api_key, docker, 
 from test_rayfish_transport import transport
 from rayfish_docker import Node, RAYFISH_STACK_LABEL, retry
 from rayfish_relay_docker import IMAGE as RELAY_IMAGE
+from rayfish_syncthing_fixture import FORWARD_PORT, start as start_syncthing, verify_transfer
 
 
 CIPHERTEXT_DIGEST = """
@@ -58,9 +59,10 @@ def run(binary: Path, directory: Path) -> None:
     key.chmod(0o600)
     owner = uuid.uuid4()
 
-    def create(label, image, *options, command=(), alias=None):
+    def create(label, image, *options, command=(), alias=None, namespace=None):
         name = f"{prefix}-{label}"
-        args = ["create", "--name", name, "--pull", "never", "--network", prefix,
+        args = ["create", "--name", name, "--pull", "never",
+                "--network", f"container:{namespace}" if namespace else prefix,
                 "--label", RAYFISH_STACK_LABEL,
                 "--label", f"com.docker.compose.service={label}"]
         if alias:
@@ -170,7 +172,7 @@ def run(binary: Path, directory: Path) -> None:
                        command=("--dev", "--config-path", "/run/relay.toml"))
         docker("start", relay)
         relay_url = "http://relay:3340"
-        route_peer = Node(prefix, "coordinator-peer", prefix, coordinator, relay_url=relay_url)
+        route_peer = Node(prefix, "rayfish-coord", prefix, coordinator, relay_url=relay_url)
         route_peer.config["role"] = "coordinator"
         peers.append(route_peer)
         route_peer.create()
@@ -285,6 +287,23 @@ def run(binary: Path, directory: Path) -> None:
         route_peer.start()
         for route, baseline in zip(routes, baselines):
             retry(lambda: check_route(route, baseline))
+
+        sender, dialer = peers[-2:]
+        sender_status = sender.status()
+        sender_mesh, = sender_status["networks"]
+        sender.config["allow_syncthing_in"] = [dialer.status()["endpoint"]]
+        dialer.config["forwards"] = [{
+            "node_id": records["nodes"][0]["nodeId"], "peer_id": sender_status["endpoint"],
+            "peer_ipv6": sender_mesh["my_ipv6"], "local_port": FORWARD_PORT, "service": "syncthing",
+        }]
+        for peer in (sender, dialer):
+            peer.stop()
+            peer.update()
+            peer.start()
+        shares = start_syncthing(directory, create, fossils)
+        verify_transfer(shares, 0, "from-a.bin")
+        verify_transfer(shares, 1, "from-b.bin")
+        print("PASS: approved Syncthing peers exchange matching file bytes over pinned Rayfish TCP")
         print("PASS: two signed fossils register over verified HTTPS and relay distinct authenticated responses over Rayfish")
         print("PASS: both fossils use real Radarr and Sonarr and export matching config ciphertext through Rayfish")
         print("PASS: no Tailscale or Headscale in the fixture; Rayfish outage breaks relay only, and restart restores it")

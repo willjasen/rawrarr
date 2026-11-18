@@ -59,7 +59,8 @@ class Node:
                 "-e", "RAWARR_RAYFISH_WORKER=" + self.label,
                 "-e", "RAWARR_RAYFISH_DISCOVERY_URL=http://discovery:18090/pkarr",
                 "-e", "RAYFISH_ROOTLESS_DIR=/state/" + self.label,
-                "--label", RAYFISH_STACK_LABEL]
+                "--label", RAYFISH_STACK_LABEL,
+                "--label", f"com.docker.compose.service={self.label}"]
         if self.existing:
             args += ["--network", "container:" + self.existing, "-e", "RAWARR_RAYFISH_EXTERNAL_APP=1"]
         else:

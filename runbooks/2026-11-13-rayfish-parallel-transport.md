@@ -351,3 +351,10 @@ digest of each age config export matched across the local and Rayfish paths.
 Arr settings and upstream Arr API calls run on the node; only the ciphertext
 export is relayed. This does not establish that discovery is reliable across
 partitions or on a real network.
+
+The standalone stack also passed bidirectional Syncthing file transfer using
+explicitly paired test devices, loopback-only listeners, and a subscriber-only
+Rayfish TCP 22000 forward pinned to the receiving endpoint. Discovery, NAT
+traversal, and public relays were disabled in Syncthing. This does not verify
+automatic peer provisioning or repair; signed config-peer URLs still require
+HTTPS under `.ts.net`.

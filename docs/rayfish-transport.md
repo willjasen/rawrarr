@@ -33,9 +33,11 @@ by stopping them. A separate namespace topology and qualified HTTPS, config
 peer and Syncthing paths are required; coordinator-side Tailscale access may
 remain.
 
-The rootless pilot exposes only a selected subscriber's loopback TCP 8080.
+The rootless pilot can expose a selected subscriber's loopback TCP 8080 and,
+separately, opt-in Syncthing data traffic on TCP 22000.
 Configured forwards bind namespace-local IPv4 loopback ports 17000–17999 and
-target a recorded Rayfish mesh IPv6 address on TCP 8080. Firewall admission also
+target a recorded Rayfish mesh IPv6 address on TCP 8080 by default or on TCP
+22000 with `"service": "syncthing"` on subscriber forwards. Firewall admission also
 pins the full authenticated endpoint identity and local network alias. Use the
 status `endpoint` field, not the optional paired-user `identity` field.
 Addresses are recorded from `networks[].my_ipv6`, not guessed from hostnames.
@@ -51,7 +53,9 @@ passkeys or application credential files into it. Transport admission is not
 application authorization.
 
 The firewall defaults deny in both directions. New inbound TCP is allowed only
-from explicitly pinned callers to 8080. Rayfish 0.5.16 tracks only locally
+from explicitly pinned callers to the permitted port. `allow_in` grants app
+access; `allow_syncthing_in` independently grants Syncthing data access.
+Rayfish 0.5.16 tracks only locally
 initiated flows: accepted server connections therefore also require outbound TCP
 permission to that exact caller on arbitrary destination ports for ephemeral-port
 replies. **This is not a source-port-restricted, stateful reply rule.** The
@@ -188,9 +192,13 @@ loopback, or arbitrary local addresses. Existing Tailscale HTTPS routes remain
 the fallback configuration, not a silent per-request retry path. Restoring the
 original target map and removing the opt-in returns to the previous behavior.
 
-Existing signed configuration-peer RPC can also use an explicitly configured
-loopback forward, but automatic peer-map generation/adoption is not implemented.
-Syncthing, media, database traffic and browser ingress are outside this pilot.
+Signed configuration-peer RPC still requires a `.ts.net` HTTPS peer URL;
+Rayfish peer-map adoption is not implemented. Syncthing's data path was tested
+with manually paired devices and a loopback-only listener; its GUI and discovery,
+media, database traffic and browser ingress are not forwarded. Existing configs
+retain their behavior when the optional Syncthing settings are absent; no
+persistent-state migration is required. Roll back by restoring the prior
+Syncthing address and removing the optional grant and forward.
 
 ## Verification, adoption and rollback
 

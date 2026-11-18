@@ -20,6 +20,8 @@ import tomllib
 VERSION = 1
 IMAGE = "rawrarr-rayfish:0.5.16"
 APP_PORT = 8080
+SYNCTHING_PORT = 22000
+SERVICE_PORTS = {"app": APP_PORT, "syncthing": SYNCTHING_PORT}
 NAME = re.compile(r"[a-z][a-z0-9-]{0,62}\Z")
 IDENTITY = re.compile(r"[0-9a-f]{64}\Z")
 SAFE_SETTINGS = {
@@ -67,7 +69,7 @@ def identity(value):
 
 def validate(config):
     fields(config, ("version", "name", "namespace", "role", "network"),
-           ("expose_app", "allow_in", "forwards", "lan_discovery"))
+           ("expose_app", "allow_in", "allow_syncthing_in", "forwards", "lan_discovery"))
     require(type(config["version"]) is int and config["version"] == VERSION, "Unsupported transport configuration version")
     for key in ("name", "namespace", "network"):
         require(isinstance(config[key], str) and NAME.fullmatch(config[key]), f"Invalid {key}")
@@ -77,6 +79,7 @@ def validate(config):
     require(type(expose) is bool, "expose_app must be a boolean")
     require(not expose or config["role"] != "coordinator", "The pilot does not expose coordinator ingress")
     allow = config.get("allow_in", [])
+    allow_sync = config.get("allow_syncthing_in", [])
     forwards = config.get("forwards", [])
     require(isinstance(allow, list) and len(allow) <= 16, "Invalid inbound peer list")
     require(isinstance(forwards, list) and len(forwards) <= 16, "Invalid forward list")
@@ -84,9 +87,17 @@ def validate(config):
         identity(peer)
     require(len(set(allow)) == len(allow), "Duplicate inbound peer")
     require(expose == bool(allow), "Application exposure requires explicit inbound peers, and vice versa")
+    require(isinstance(allow_sync, list) and len(allow_sync) <= 16, "Invalid Syncthing inbound peer list")
+    for peer in allow_sync:
+        identity(peer)
+    require(len(set(allow_sync)) == len(allow_sync), "Duplicate Syncthing inbound peer")
+    require(not allow_sync or config["role"] != "coordinator", "The pilot does not expose coordinator ingress")
     ports, nodes = set(), set()
     for forward in forwards:
-        fields(forward, ("node_id", "peer_id", "peer_ipv6", "local_port"))
+        fields(forward, ("node_id", "peer_id", "peer_ipv6", "local_port"), ("service",))
+        service = forward.get("service", "app")
+        require(isinstance(service, str) and service in SERVICE_PORTS, "Unknown forward service")
+        require(service != "syncthing" or config["role"] != "coordinator", "Syncthing forwards are subscriber-only")
         identity(forward["peer_id"])
         require(isinstance(forward["node_id"], str) and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", forward["node_id"]),
                 "Invalid Rawrarr node ID")
@@ -95,9 +106,10 @@ def validate(config):
         require(address in ipaddress.IPv6Network("200::/7"), "Forward destination is not a Rayfish mesh address")
         port = forward["local_port"]
         require(type(port) is int and 17000 <= port <= 17999, "Pilot loopback ports must be between 17000 and 17999")
-        require(port not in ports and forward["node_id"] not in nodes, "Duplicate forward port or node")
+        destination = (forward["node_id"], service)
+        require(port not in ports and destination not in nodes, "Duplicate forward port or node service")
         ports.add(port)
-        nodes.add(forward["node_id"])
+        nodes.add(destination)
     return config
 
 
@@ -149,12 +161,15 @@ def relay_targets(config, existing):
 def firewall(config):
     validate(config)
     text = 'default_inbound = "deny"\ndefault_outbound = "deny"\nreject = true\ndisabled = false\n'
-    rules = [("in", peer, APP_PORT) for peer in config.get("allow_in", [])]
+    inbound = [(peer, APP_PORT) for peer in config.get("allow_in", [])]
+    inbound += [(peer, SYNCTHING_PORT) for peer in config.get("allow_syncthing_in", [])]
+    rules = [("in", peer, port) for peer, port in inbound]
     # Rayfish tracks only locally initiated flows. Server replies need outbound
     # TCP permission to the pinned caller's ephemeral port; rootless exposes
-    # only APP_PORT and creates only the explicitly configured local forwards.
-    rules += [("out", peer, None) for peer in config.get("allow_in", [])]
-    rules += [("out", forward["peer_id"], APP_PORT) for forward in config.get("forwards", [])]
+    # only configured services and creates only the explicitly configured local forwards.
+    rules += [("out", peer, None) for peer, _ in inbound]
+    rules += [("out", forward["peer_id"], SERVICE_PORTS[forward.get("service", "app")])
+              for forward in config.get("forwards", [])]
     if not rules:
         text += "rules = []\n"
     for direction, peer, port in sorted(set(rules), key=lambda rule: (rule[0], rule[1], rule[2] or 0)):
@@ -240,9 +255,12 @@ def run(config, state):
         arguments = ["ray", "rootless", "--socks5", "127.0.0.1:0"]
         if config.get("expose_app"):
             arguments += ["--expose", f"{APP_PORT}=127.0.0.1:{APP_PORT}"]
+        if config.get("allow_syncthing_in"):
+            arguments += ["--expose", f"{SYNCTHING_PORT}=127.0.0.1:{SYNCTHING_PORT}"]
         for forward in config.get("forwards", []):
             address = ipaddress.IPv6Address(forward["peer_ipv6"])
-            arguments += ["--forward", f"127.0.0.1:{forward['local_port']}=[{address}]:{APP_PORT}"]
+            port = SERVICE_PORTS[forward.get("service", "app")]
+            arguments += ["--forward", f"127.0.0.1:{forward['local_port']}=[{address}]:{port}"]
         os.environ["RAYFISH_ROOTLESS_DIR"] = str(state)
         os.environ.pop("RAYFISH_CONFIG_DIR", None)
         # Retain the node-state lock across exec for the lifetime of the daemon.

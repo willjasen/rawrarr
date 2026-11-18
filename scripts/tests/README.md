@@ -10,7 +10,8 @@
 
 - `rayfish_standalone_docker.py --binary /path/to/rust-arr` -- runs a fresh
   `roarlay` coordinator, two signed nodes labeled `metadata-a` and `metadata-b`,
-  and disposable support services in
+  and disposable support services (`rayfish-coord`, `discovery`, `peer-a`,
+  `peer-b`, and others) in
   OrbStack's `rawrarr-test-rayfish` group without Tailscale or Headscale.
   Supply a current-worktree binary built in a prepared native test clone;
   group the build clone there too with
@@ -19,8 +20,10 @@
   coordinator-side forward outage and recovery. Uses cached LinuxServer Radarr
   and Sonarr images and the private relay image documented below. Exercises
   encrypted settings, status and library reads on both nodes, and compares
-  Rayfish-relayed config ciphertext with the local export. Does not cover
-  config-peer repair, Syncthing, or the browser workload.
+  Rayfish-relayed config ciphertext with the local export. Also uses cached
+  Syncthing 2.1.5 to verify byte-identical bidirectional transfers between two
+  explicitly paired devices via a pinned TCP forward. Does not cover signed
+  config-peer repair or the browser workload.
 - `rayfish_user_isolation_docker.py` -- creates two independent closed user
   meshes, with separate coordinator sidecars sharing one network namespace.
   Checks each synthetic user's authenticated route, `.ray` resolution through

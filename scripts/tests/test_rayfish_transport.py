@@ -73,6 +73,22 @@ class PolicyTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 transport.relay_targets(dict(config(role), forwards=[forward()]), {"fossil-test": "http://existing/"})
 
+    def test_syncthing_permission_does_not_expose_app_or_gui(self):
+        peer = "a" * 64
+        sync_forward = dict(forward(), service="syncthing")
+        rules = tomllib.loads(transport.firewall(dict(config("metadata"), allow_syncthing_in=[peer])))["rules"]
+        incoming, reply = rules
+        self.assertEqual(incoming["port"], {"start": 22000, "end": 22000})
+        self.assertEqual(incoming["peer"]["identity"], peer)
+        self.assertEqual(reply["peer"], incoming["peer"])
+        outgoing, = tomllib.loads(transport.firewall(dict(config("storage"), forwards=[sync_forward])))["rules"]
+        self.assertEqual(outgoing["port"], incoming["port"])
+        for changes in ({"allow_syncthing_in": [peer]}, {"forwards": [sync_forward]}):
+            with self.assertRaises(ValueError):
+                transport.validate(dict(config(), **changes))
+        with self.assertRaises(ValueError):
+            transport.validate(dict(config("storage"), forwards=[dict(sync_forward, service="gui")]))
+
     def test_compose_is_opt_in_and_does_not_mutate_existing_services(self):
         result = transport.compose(config(), Path("/run/pilot.json"))
         self.assertEqual(set(result["services"]), {"rayfish-pilot"})
