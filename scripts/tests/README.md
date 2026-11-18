@@ -24,6 +24,9 @@
   Syncthing 2.1.5 to verify byte-identical bidirectional transfers between two
   explicitly paired devices via a pinned TCP forward. Does not cover signed
   config-peer repair or the browser workload.
+  The Rayfish sidecar logs show startup, route grant counts, mesh readiness
+  changes, and shutdown. Raw daemon output stays in the test sidecar's
+  disposable `/state` volume.
 - `rayfish_user_isolation_docker.py` -- creates two independent closed user
   meshes, with separate coordinator sidecars sharing one network namespace.
   Checks each synthetic user's authenticated route, `.ray` resolution through

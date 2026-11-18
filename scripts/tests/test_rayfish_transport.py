@@ -298,7 +298,9 @@ def worker():
     name = os.environ["RAWARR_RAYFISH_WORKER"]
     if name == "discovery":
         Discovery.directory.mkdir(mode=0o700, exist_ok=True)
-        ThreadingHTTPServer(("0.0.0.0", 18090), Discovery).serve_forever()
+        with ThreadingHTTPServer(("0.0.0.0", 18090), Discovery) as listener:
+            print("Rayfish discovery: ready on TCP 18090 (private signed-packet fixture)", flush=True)
+            listener.serve_forever()
         return
     servers = []
     if os.environ.get("RAWARR_RAYFISH_EXTERNAL_APP") != "1":
@@ -314,6 +316,14 @@ def worker():
     path = Path("/state") / (name + ".json")
     value = transport.validate(transport.read_json(path))
     transport.prepare_state(value, state)
+    print(
+        f"Rayfish {name}: starting rootless transport ({value['role']}); "
+        f"app grants={len(value.get('allow_in', []))}, "
+        f"Syncthing grants={len(value.get('allow_syncthing_in', []))}, "
+        f"config-peer grants={len(value.get('allow_config_peer_in', []))}, "
+        f"forwards={len(value.get('forwards', []))}",
+        flush=True,
+    )
     settings = state / "settings.toml"
     if "[discovery_dns]" not in settings.read_text():
         with settings.open("a") as output:
@@ -321,15 +331,41 @@ def worker():
             output.write('\n[discovery_dns]\nservers = ["http://discovery:18090/pkarr"]\nreplace = true\n'
                          f'\n[relay]\nservers = [{json.dumps(relay_url)}]\nreplace = true\n')
     process = None
-    signal.signal(signal.SIGTERM, lambda *_: process.send_signal(signal.SIGINT) if process else None)
+
+    def shutdown(*_):
+        if process and process.poll() is None:
+            print(f"Rayfish {name}: shutdown requested", flush=True)
+            process.send_signal(signal.SIGINT)
+
+    signal.signal(signal.SIGTERM, shutdown)
     try:
         with (Path("/state") / (name + ".log")).open("a") as log:
             process = subprocess.Popen(["python", str(ROOT / "rayfish_transport.py"), "run",
                                         "--config", str(path), "--state", str(state)],
                                        env=dict(os.environ, RAYFISH_ROOTLESS_DIR=str(state)),
                                        stdout=log, stderr=log)
-            if process.wait() not in (0, -signal.SIGINT):
+            previous = None
+            while process.poll() is None:
+                try:
+                    process.wait(timeout=2)
+                    break
+                except subprocess.TimeoutExpired:
+                    pass
+                try:
+                    result = subprocess.run(["ray", "--rootless", "status", "--json"],
+                                            capture_output=True, timeout=2, check=False)
+                    status = json.loads(result.stdout) if result.returncode == 0 else {}
+                    current = (len(status.get("networks", [])) if status.get("active") else None)
+                except (subprocess.TimeoutExpired, ValueError):
+                    current = None
+                if current != previous:
+                    summary = "status unavailable" if current is None else f"active; joined networks={current}"
+                    print(f"Rayfish {name}: {summary}", flush=True)
+                    previous = current
+            if process.returncode not in (0, -signal.SIGINT):
+                print(f"Rayfish {name}: daemon failed (exit {process.returncode})", flush=True)
                 raise RuntimeError("Rayfish worker exited unexpectedly; inspect its private test log")
+            print(f"Rayfish {name}: stopped", flush=True)
     finally:
         if process and process.poll() is None:
             process.send_signal(signal.SIGINT)
