@@ -158,10 +158,14 @@ Only named, already-configured node routes change to `http://127.0.0.1:PORT/`;
 the supplied original map is untouched. Save both maps separately. Applying
 the emitted map to `RAWARR_NODE_RELAY_TARGETS` remains an explicit operator
 deployment step. There is no automatic fallback or automatic app reconfiguration.
-If `RAWARR_NODE_RELAY_SOCKS5_URL` is set, do not select these loopback targets
-until proxy bypass has been implemented and tested; the current explicit
-coordinator proxy can intercept them. Existing Tailscale HTTPS routes remain
-the fallback configuration, not a silent per-request retry path.
+If `RAWARR_NODE_RELAY_SOCKS5_URL` is set, explicitly set
+`RAWARR_NODE_RELAY_BYPASS_LOOPBACK_PROXY=true` when selecting Rayfish loopback
+targets. This bypasses that proxy for all configured `127.0.0.1` node targets;
+other targets still use the configured proxy. The setting defaults to `false`
+to preserve existing behavior. It does not bypass proxies for `localhost`, IPv6
+loopback, or arbitrary local addresses. Existing Tailscale HTTPS routes remain
+the fallback configuration, not a silent per-request retry path. Restoring the
+original target map and removing the opt-in returns to the previous behavior.
 
 Existing signed configuration-peer RPC can also use an explicitly configured
 loopback forward, but automatic peer-map generation/adoption is not implemented.
@@ -259,8 +263,11 @@ automatically failing open. Keep independent application authorization and the
 existing Tailscale route. In a disposable test, both members could still
 exchange application responses after the key holder kicked one while they were
 offline and the corresponding discovery record changed, then they restarted
-while discovery was paused. The test did not independently decode the updated
-record, so the exact published roster content remains unverified.
+while discovery was paused. The key holder no longer listed the kicked member.
+When discovery and the key holder returned, the remaining member removed the
+kicked peer and its Rayfish connection to the app failed. This observed stale
+revocation window is a rollout blocker; transport membership must not replace
+Rawrarr's own authorization.
 
 The private-relay discovery-outage qualification also fails: neither peer
 serves forwarded application requests within 90 seconds after both cold-restart

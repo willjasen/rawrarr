@@ -88,8 +88,8 @@ Independent security review, stricter return-flow policy assessment, NAT and
 traffic-relay fallback, public-discovery outage/privacy tests, sleep/wake and
 cold-start behavior, native ARM64 execution and the 72-hour soak remain gates.
 The current direct-LAN fixtures disable public traffic relays and cannot
-establish those results. Coordinator loopback relay selection also requires
-absence of `RAWARR_NODE_RELAY_SOCKS5_URL` until explicit proxy bypass is tested.
+establish those results. When the explicit SOCKS proxy is configured, selecting
+coordinator loopback relay targets requires the opt-in described below.
 
 Rollback restores the saved original app route map and stops only pilot
 sidecars; retain their identity volumes. Never change Tailscale Serve, passkey
@@ -229,3 +229,43 @@ responses after restarting with the key holder and discovery unavailable.
 The new packet was not independently decoded to verify its roster, so the
 precise published revocation remains unverified. Keep this as a security gate;
 do not treat cached membership as proof of current authorization.
+
+### Offline revocation and reconvergence
+
+The repeatable command
+`python3 scripts/tests/rayfish_owner_offline_docker.py --discovery-outage --revocation-outage`
+checks that the key holder lists both members, then kicks one while they are
+stopped. The key holder no longer lists it, and the exact network's discovery
+packet changes. With that holder stopped and discovery paused, both members
+restart from cached rosters and the kicked member still receives authenticated
+fixture responses. After discovery and the key holder return, the remaining
+member removes that peer and its Rayfish connection to the healthy local app
+fails. The final observed reconvergence took 5.7 seconds after discovery and
+the key holder returned. The command intentionally exits nonzero for the stale-revocation
+qualification; if transfer is unavailable but removal is not observable, it
+also fails as inconclusive instead of claiming a safe denial.
+
+This is an isolated synthetic test, not evidence that a real Rawrarr session
+or node authorization was revoked. It proves transport revocation cannot be
+assumed fresh across a discovery partition. Do not remove independent Rawrarr
+authorization or relax the network destruction check to make recovery pass.
+Use original Tailscale routes for rollback; automatic fallback remains absent.
+
+### Opt-in coordinator loopback proxy bypass
+
+The coordinator's explicit Tailscale SOCKS proxy previously intercepted the
+Rayfish forward's `127.0.0.1` target. Added the default-off
+`RAWARR_NODE_RELAY_BYPASS_LOOPBACK_PROXY=true` setting to bypass that proxy for
+configured IPv4 loopback relay targets only. Remote targets and the pre-existing
+`fossil` exception keep their previous behavior, redirects remain disabled, and
+invalid values fail startup. This affects no existing deployment unless
+explicitly enabled; it requires no state, schema, or protocol migration.
+Rollback removes the setting and restores the original route map. It is not
+automatic failover and does not address the discovery or revocation blockers.
+The generic coordinator Compose templates expose the flag with default
+`false`; environments using different Compose definitions must add an explicit
+override before enabling it. An isolated native regression clone passed the two
+real-socket Rust proxy tests and 36 coordinator workspace tests. Both generic
+Compose definitions resolve the default `false` and explicit `true` correctly.
+The updated coordinator has not yet been tested end-to-end against the
+real-Rayfish full environment.

@@ -35,6 +35,7 @@ services:
       RAWARR_COORDINATOR_WEB_ORIGIN: ${RAWARR_COORDINATOR_WEB_ORIGIN:-https://roarlay.rawrarr.net}
       RAWARR_NODE_RELAY_TARGETS: ${RAWARR_NODE_RELAY_TARGETS:-{"macbook-metadata":"http://fossil:8080","mac-mini-storage":"https://rawrarr-mini.risk-mermaid.ts.net"}}
       RAWARR_NODE_RELAY_SOCKS5_URL: ${RAWARR_NODE_RELAY_SOCKS5_URL:-socks5h://127.0.0.1:1055}
+      RAWARR_NODE_RELAY_BYPASS_LOOPBACK_PROXY: ${RAWARR_NODE_RELAY_BYPASS_LOOPBACK_PROXY:-false}
     secrets:
       - rawrarr_postgres_password
       - rawrarr_approved_nodes

@@ -19,6 +19,20 @@
   paused while its DNS name still resolves, and cold-restart both ordinary
   members with the separate key holder offline. This tests cached-member
   recovery, not key-holder recovery or enforcement of fresh revocations.
+  Add both `--discovery-outage --revocation-outage` to kick a member while both
+  members are offline, verify that the network's private discovery packet
+  changed, and test the stale members after restart during discovery loss.
+  This currently exits nonzero: the kicked member still reaches the application
+  until discovery and the key holder return and the other member reconverges.
+  The fixtures use synthetic app credentials and never use live node state.
+- `test_rayfish_owner_fixture.py` -- checks that revocation qualification reads
+  the target network's z-base-32 discovery record and rejects malformed keys.
+  Run `python3 -m unittest discover -s scripts/tests -p test_rayfish_owner_fixture.py`.
+- `test_rayfish_relay_proxy.rs` -- verifies the coordinator's opt-in IPv4
+  loopback proxy bypass with real local HTTP and SOCKS sockets, while remote
+  targets retain the proxy and the default remains unchanged. Run
+  `cargo test --locked --offline --manifest-path /workspace/rust-arr/Cargo.toml rayfish_relay_proxy_tests`
+  in the prepared native isolated test clone.
 
 - `rayfish_relay_docker.py` -- private-relay qualification with separate synthetic
   peer namespaces, LAN discovery disabled, bidirectional 950,272-byte transfers,
