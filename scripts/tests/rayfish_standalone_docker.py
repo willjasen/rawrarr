@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import secrets
 import signal
+import subprocess
 import tempfile
 import uuid
 
@@ -16,6 +17,8 @@ from test_rayfish_transport import transport
 from rayfish_docker import Node, RAYFISH_STACK_LABEL, retry
 from rayfish_relay_docker import IMAGE as RELAY_IMAGE
 from rayfish_syncthing_fixture import FORWARD_PORT, start as start_syncthing, verify_transfer
+
+REPAIR_PORT = 17443
 
 
 CIPHERTEXT_DIGEST = """
@@ -188,9 +191,13 @@ def run(binary: Path, directory: Path) -> None:
             # The disposable app can read its bind-mounted credentials, but Rayfish never mounts them.
             env = {
                 "RAWARR_ROLE": "metadata", "RAWARR_NODE_ID": node["nodeId"],
+                "RAWARR_DATA_DIR": "/data", "RAWARR_SHARED_DATA_DIR": "/shared",
                 "RAWARR_COORDINATOR_URL": origin, "RAWARR_NODE_TOKEN_FILE": "/run/node-token",
                 "RAWARR_INSTANCE_ROOT_FINGERPRINT": records["fingerprint"], "SSL_CERT_FILE": "/run/coordinator-ca",
                 "RAWARR_ARR_CA_CERT_FILE": "/run/coordinator-ca", "RAWARR_LOCAL_PLAINTEXT_CONFIG": "false",
+                "RAWARR_CONFIG_PEER_RAYFISH_HTTP": "true",
+                "RAWARR_CONFIG_PEERS": json.dumps({record["nodeId"]: f"http://127.0.0.1:{REPAIR_PORT}"
+                                                   for record in records["nodes"] if record != node}),
                 "RUST_ARR_LISTEN_ADDR": "127.0.0.1:8080", "RUST_ARR_HEALTH_ADDR": "127.0.0.1:7299",
             }
             node_name = create(
@@ -231,6 +238,8 @@ def run(binary: Path, directory: Path) -> None:
             raise RuntimeError("The coordinator and subscribers must not publish host ports")
 
         token = secrets.token_hex(32)
+        node_tokens = []
+        config_path = "/api/metadata/export/config"
         digest = hashlib.sha256(token.encode()).hexdigest()
         def session_statement(digest, node_id):
             return ("INSERT INTO rawrarr_sessions(token_hash,user_id,expires_at,node_id) "
@@ -257,6 +266,7 @@ def run(binary: Path, directory: Path) -> None:
 
         for node, fossil in zip(records["nodes"], fossils):
             node_token = secrets.token_hex(32)
+            node_tokens.append(node_token)
             sql(session_statement(hashlib.sha256(node_token.encode()).hexdigest(), node["nodeId"]))
             baseline = request(fossil, "http://127.0.0.1:8080" + path, node_token)
             if baseline[0] != 200 or not baseline[1].startswith("age1"):
@@ -267,7 +277,6 @@ def run(binary: Path, directory: Path) -> None:
                 raise RuntimeError("Anonymous HTTPS request was not denied")
             print(docker("exec", "-i", fossil, "python3", "-c", APP_FLOW,
                          input=json.dumps({"session": node_token, **arr_keys})))
-            config_path = "/api/metadata/export/config"
             local = docker("exec", "-i", fossil, "python3", "-c", CIPHERTEXT_DIGEST,
                            "http://127.0.0.1:8080" + config_path, input=node_token)
             forwarded = docker("exec", "-i", coordinator, "python3", "-c", CIPHERTEXT_DIGEST,
@@ -291,15 +300,64 @@ def run(binary: Path, directory: Path) -> None:
         sender, dialer = peers[-2:]
         sender_status = sender.status()
         sender_mesh, = sender_status["networks"]
-        sender.config["allow_syncthing_in"] = [dialer.status()["endpoint"]]
-        dialer.config["forwards"] = [{
+        authorized_peer = dialer.status()["endpoint"]
+        sender.config["allow_syncthing_in"] = [authorized_peer]
+        sender.config["allow_config_peer_in"] = [authorized_peer]
+        forward = {
             "node_id": records["nodes"][0]["nodeId"], "peer_id": sender_status["endpoint"],
-            "peer_ipv6": sender_mesh["my_ipv6"], "local_port": FORWARD_PORT, "service": "syncthing",
-        }]
+            "peer_ipv6": sender_mesh["my_ipv6"],
+        }
+        dialer.config["forwards"] = [
+            dict(forward, local_port=FORWARD_PORT, service="syncthing"),
+            dict(forward, local_port=REPAIR_PORT, service="config-peer"),
+        ]
+        def exported_digest(index):
+            return docker("exec", "-i", fossils[index], "python3", "-c", CIPHERTEXT_DIGEST,
+                          "http://127.0.0.1:8080" + config_path, input=node_tokens[index])
+
+        original_digest = exported_digest(0)
+        docker("exec", fossils[1], "mv", "/shared/config.aged", "/shared/config.fixture-backup")
+        # Simulate a fresh receiver with neither a local revision journal nor a Valkey mirror.
+        docker("exec", fossils[1], "sh", "-c",
+               "if test -d /data/config-revisions; then mv /data/config-revisions /data/config-revisions.fixture-backup; fi")
+        if request(fossils[1], "http://127.0.0.1:8080" + config_path, node_tokens[1])[0] != 404:
+            raise RuntimeError("The receiver still exports config before the Rayfish route is available")
         for peer in (sender, dialer):
             peer.stop()
             peer.update()
             peer.start()
+        peer_url = f"http://127.0.0.1:{REPAIR_PORT}"
+
+        def check_config_peer():
+            code, status = request(fossils[1], "http://127.0.0.1:8080/api/config-peer/status", node_tokens[1])
+            if code != 200:
+                raise RuntimeError(f"Config-peer status returned HTTP {code}")
+            snapshot = json.loads(status)
+            if snapshot.get("reachablePeers") != [records["nodes"][0]["nodeId"]]:
+                raise RuntimeError(
+                    f"Signed config-peer did not reach the sender (state={snapshot.get('state')}, "
+                    f"configured={snapshot.get('configuredPeers')})"
+                )
+            if exported_digest(1) != original_digest:
+                raise RuntimeError("Signed Rayfish repair did not restore the expected ciphertext")
+
+        try:
+            def check_unsigned():
+                if request(fossils[1], peer_url + "/config-peer/manifest")[0] != 401:
+                    raise RuntimeError("Unsigned request to the config-peer manifest was not denied")
+                if request(fossils[1], peer_url + "/api/metadata/export/config")[0] != 404:
+                    raise RuntimeError("The config-peer listener exposed an unrelated application route")
+
+            retry(check_unsigned, timeout=20)
+            retry(check_config_peer, timeout=100)
+        except RuntimeError:
+            for fossil in fossils:
+                logs = subprocess.run(["docker", "--context", "orbstack", "logs", "--tail", "150", fossil],
+                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
+                print("\n".join(line for line in logs.stdout.splitlines()
+                                if "config-peer" in line and "/api/config-peer/status" not in line)[-3000:])
+            raise
+        print("PASS: signed Rayfish config-peer repair restores exact ciphertext; unsigned requests denied")
         shares = start_syncthing(directory, create, fossils)
         verify_transfer(shares, 0, "from-a.bin")
         verify_transfer(shares, 1, "from-b.bin")

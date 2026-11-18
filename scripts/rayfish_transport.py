@@ -21,7 +21,10 @@ VERSION = 1
 IMAGE = "rawrarr-rayfish:0.5.16"
 APP_PORT = 8080
 SYNCTHING_PORT = 22000
-SERVICE_PORTS = {"app": APP_PORT, "syncthing": SYNCTHING_PORT}
+CONFIG_PEER_PORT = 8443
+SERVICE_PORTS = {"app": APP_PORT, "syncthing": SYNCTHING_PORT, "config-peer": CONFIG_PEER_PORT}
+INBOUND_SERVICE_KEYS = {"allow_in": APP_PORT, "allow_syncthing_in": SYNCTHING_PORT,
+                        "allow_config_peer_in": CONFIG_PEER_PORT}
 NAME = re.compile(r"[a-z][a-z0-9-]{0,62}\Z")
 IDENTITY = re.compile(r"[0-9a-f]{64}\Z")
 SAFE_SETTINGS = {
@@ -69,7 +72,7 @@ def identity(value):
 
 def validate(config):
     fields(config, ("version", "name", "namespace", "role", "network"),
-           ("expose_app", "allow_in", "allow_syncthing_in", "forwards", "lan_discovery"))
+           ("expose_app", *INBOUND_SERVICE_KEYS, "forwards", "lan_discovery"))
     require(type(config["version"]) is int and config["version"] == VERSION, "Unsupported transport configuration version")
     for key in ("name", "namespace", "network"):
         require(isinstance(config[key], str) and NAME.fullmatch(config[key]), f"Invalid {key}")
@@ -79,7 +82,6 @@ def validate(config):
     require(type(expose) is bool, "expose_app must be a boolean")
     require(not expose or config["role"] != "coordinator", "The pilot does not expose coordinator ingress")
     allow = config.get("allow_in", [])
-    allow_sync = config.get("allow_syncthing_in", [])
     forwards = config.get("forwards", [])
     require(isinstance(allow, list) and len(allow) <= 16, "Invalid inbound peer list")
     require(isinstance(forwards, list) and len(forwards) <= 16, "Invalid forward list")
@@ -87,17 +89,20 @@ def validate(config):
         identity(peer)
     require(len(set(allow)) == len(allow), "Duplicate inbound peer")
     require(expose == bool(allow), "Application exposure requires explicit inbound peers, and vice versa")
-    require(isinstance(allow_sync, list) and len(allow_sync) <= 16, "Invalid Syncthing inbound peer list")
-    for peer in allow_sync:
-        identity(peer)
-    require(len(set(allow_sync)) == len(allow_sync), "Duplicate Syncthing inbound peer")
-    require(not allow_sync or config["role"] != "coordinator", "The pilot does not expose coordinator ingress")
+    for key, role_set in (("allow_syncthing_in", ("metadata", "storage")), ("allow_config_peer_in", ("metadata",))):
+        grants = config.get(key, [])
+        require(isinstance(grants, list) and len(grants) <= 16, f"Invalid {key} peer list")
+        for peer in grants:
+            identity(peer)
+        require(len(set(grants)) == len(grants), f"Duplicate {key} inbound peer")
+        require(not grants or config["role"] in role_set, f"{key} is unavailable for this role")
     ports, nodes = set(), set()
     for forward in forwards:
         fields(forward, ("node_id", "peer_id", "peer_ipv6", "local_port"), ("service",))
         service = forward.get("service", "app")
         require(isinstance(service, str) and service in SERVICE_PORTS, "Unknown forward service")
         require(service != "syncthing" or config["role"] != "coordinator", "Syncthing forwards are subscriber-only")
+        require(service != "config-peer" or config["role"] == "metadata", "Config-peer forwards are metadata-only")
         identity(forward["peer_id"])
         require(isinstance(forward["node_id"], str) and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", forward["node_id"]),
                 "Invalid Rawrarr node ID")
@@ -161,8 +166,7 @@ def relay_targets(config, existing):
 def firewall(config):
     validate(config)
     text = 'default_inbound = "deny"\ndefault_outbound = "deny"\nreject = true\ndisabled = false\n'
-    inbound = [(peer, APP_PORT) for peer in config.get("allow_in", [])]
-    inbound += [(peer, SYNCTHING_PORT) for peer in config.get("allow_syncthing_in", [])]
+    inbound = [(peer, port) for key, port in INBOUND_SERVICE_KEYS.items() for peer in config.get(key, [])]
     rules = [("in", peer, port) for peer, port in inbound]
     # Rayfish tracks only locally initiated flows. Server replies need outbound
     # TCP permission to the pinned caller's ephemeral port; rootless exposes
@@ -253,10 +257,9 @@ def run(config, state):
         prepare_state(config, state)
         verify_forward_addresses(config)
         arguments = ["ray", "rootless", "--socks5", "127.0.0.1:0"]
-        if config.get("expose_app"):
-            arguments += ["--expose", f"{APP_PORT}=127.0.0.1:{APP_PORT}"]
-        if config.get("allow_syncthing_in"):
-            arguments += ["--expose", f"{SYNCTHING_PORT}=127.0.0.1:{SYNCTHING_PORT}"]
+        for key, port in INBOUND_SERVICE_KEYS.items():
+            if config.get(key):
+                arguments += ["--expose", f"{port}=127.0.0.1:{port}"]
         for forward in config.get("forwards", []):
             address = ipaddress.IPv6Address(forward["peer_ipv6"])
             port = SERVICE_PORTS[forward.get("service", "app")]

@@ -126,7 +126,7 @@ impl CiphertextMirror {
 }
 
 #[derive(Clone)]
-pub struct PeerRpc { node_id: String, root_fingerprint: String, peers: HashMap<String, String>, challenges: std::sync::Arc<Mutex<HashMap<String, Instant>>> }
+pub struct PeerRpc { node_id: String, root_fingerprint: String, peers: HashMap<String, String>, rayfish_http: bool, challenges: std::sync::Arc<Mutex<HashMap<String, Instant>>> }
 
 #[derive(Clone, Default)]
 pub struct PeerSyncStatus(Arc<Mutex<Option<PeerSyncSnapshot>>>);
@@ -157,14 +157,23 @@ impl PeerSyncStatus {
 impl PeerRpc {
     pub fn from_env(node_id: &str) -> Self {
         let root_fingerprint = env::var("RAWARR_INSTANCE_ROOT_FINGERPRINT").unwrap_or_default().trim().to_ascii_lowercase();
+        let rayfish_http = env::var("RAWARR_CONFIG_PEER_RAYFISH_HTTP").as_deref() == Ok("true");
         let peers: HashMap<String, String> = env::var("RAWARR_CONFIG_PEERS").ok().and_then(|value| serde_json::from_str::<HashMap<String, String>>(&value).ok()).unwrap_or_default()
-            .into_iter().filter(|(id,url)| valid_peer_id(id) && valid_peer_url(url)).collect();
-        Self { node_id: node_id.to_owned(), root_fingerprint, peers, challenges: Default::default() }
+            .into_iter().filter(|(id,url)| {
+                let accepted = valid_peer_id(id) && (valid_peer_url(url) || (rayfish_http && rayfish_peer_url(url)));
+                if !accepted {
+                    eprintln!("Rawrarr config-peer rejected an invalid peer route");
+                }
+                accepted
+            }).collect();
+        Self { node_id: node_id.to_owned(), root_fingerprint, peers, rayfish_http, challenges: Default::default() }
     }
+
+    pub fn rayfish_http_enabled(&self) -> bool { self.rayfish_http }
 
     #[cfg(test)]
     fn fixture(node_id:&str,root_fingerprint:&str,peers:HashMap<String,String>)->Self {
-        Self {node_id:node_id.to_owned(),root_fingerprint:root_fingerprint.to_owned(),peers,challenges:Default::default()}
+        Self {node_id:node_id.to_owned(),root_fingerprint:root_fingerprint.to_owned(),peers,rayfish_http:false,challenges:Default::default()}
     }
 
     pub fn peer_urls(&self) -> Vec<(String, String)> { self.peers.iter().map(|(id,url)|(id.clone(),url.trim_end_matches('/').to_owned())).collect() }
@@ -201,16 +210,32 @@ impl PeerRpc {
         crate::device_signing::canonical_json(&payload).is_ok_and(|bytes|crate::device_signing::verify(&public_key,&signature,&bytes))
     }
 
-    async fn signed_headers(&self, base: &str, receiver_id: &str, certificate: &serde_json::Value, method: &str, path: &str) -> Result<HeaderMap, ()> {
-        let client=reqwest::Client::builder().timeout(Duration::from_secs(10)).redirect(reqwest::redirect::Policy::none()).build().map_err(|_|())?;
-        let response=client.get(format!("{base}/config-peer/challenge")).send().await.map_err(|_|())?;
-        if !response.status().is_success(){return Err(());}
+    fn client_for_peer(&self, base: &str) -> Result<reqwest::Client, ()> {
+        let mut builder = reqwest::Client::builder().timeout(Duration::from_secs(10)).redirect(reqwest::redirect::Policy::none());
+        if rayfish_peer_url(base) {
+            if !self.rayfish_http { return Err(()); }
+            builder = builder.no_proxy();
+        }
+        builder.build().map_err(|_| ())
+    }
+
+    async fn signed_headers(&self, client: &reqwest::Client, base: &str, receiver_id: &str, certificate: &serde_json::Value, method: &str, path: &str) -> Result<HeaderMap, ()> {
+        let response=client.get(format!("{base}/config-peer/challenge")).send().await.map_err(|error| {
+            eprintln!("Rawrarr config-peer challenge transport failed (connect: {}, timeout: {})", error.is_connect(), error.is_timeout());
+        })?;
+        if !response.status().is_success(){
+            eprintln!("Rawrarr config-peer challenge returned HTTP {}", response.status().as_u16());
+            return Err(());
+        }
         let bytes=response.bytes().await.map_err(|_|())?;
         if bytes.len()>4096{return Err(());}
         let challenge:serde_json::Value=serde_json::from_slice(&bytes).map_err(|_|())?;
         if challenge.get("version").and_then(serde_json::Value::as_u64)!=Some(1){return Err(());}
         let nonce=challenge.get("nonce").and_then(serde_json::Value::as_str).filter(|value|value.len()==64).ok_or(())?;
-        if challenge.get("receiverId").and_then(serde_json::Value::as_str)!=Some(receiver_id){return Err(());}
+        if challenge.get("receiverId").and_then(serde_json::Value::as_str)!=Some(receiver_id){
+            eprintln!("Rawrarr config-peer challenge returned an unexpected receiver");
+            return Err(());
+        }
         let payload=serde_json::json!({"domain":"rawrarr-config-peer-request-v1","version":1,"senderId":self.node_id,"receiverId":receiver_id,"method":method,"path":path,"bodySha256":hex(&Sha256::digest([])),"nonce":nonce});
         let bytes=crate::device_signing::canonical_json(&payload).map_err(|_|())?;
         let signature=crate::secure_config::AgeVault::sign_node_message(&bytes).map_err(|_|())?;
@@ -230,13 +255,23 @@ impl PeerRpc {
         let mut reachable_peers=Vec::new();
         for (peer_id,base) in self.peer_urls() {
             if peer_id==self.node_id {continue;}
-            let Ok(client)=reqwest::Client::builder().timeout(Duration::from_secs(10)).redirect(reqwest::redirect::Policy::none()).build() else{continue;};
+            let Ok(client)=self.client_for_peer(&base) else{continue;};
             let mut peer_revisions=Vec::new(); let mut announced_root=None; let mut offset=0usize; let mut total=None;
             loop {
                 let request_path=format!("/config-peer/manifest?offset={offset}&limit=128");
-                let Ok(headers)=self.signed_headers(&base,&peer_id,certificate,"GET","/config-peer/manifest").await else{break;};
-                let Ok(response)=client.get(format!("{base}{request_path}")).headers(headers).send().await else{break;};
-                if !response.status().is_success(){break;}
+                let Ok(headers)=self.signed_headers(&client,&base,&peer_id,certificate,"GET","/config-peer/manifest").await else{break;};
+                let response = match client.get(format!("{base}{request_path}")).headers(headers).send().await {
+                    Ok(response) => response,
+                    Err(error) => {
+                        eprintln!("Rawrarr config-peer manifest transport failed (request: {}, connect: {}, timeout: {})",
+                                  error.is_request(), error.is_connect(), error.is_timeout());
+                        break;
+                    }
+                };
+                if !response.status().is_success(){
+                    eprintln!("Rawrarr config-peer manifest returned HTTP {}", response.status().as_u16());
+                    break;
+                }
                 if !reachable_peers.contains(&peer_id) { reachable_peers.push(peer_id.clone()); }
                 let Ok(bytes)=response.bytes().await else{break;};
                 if bytes.len()>10*1024*1024{break;}
@@ -266,7 +301,7 @@ impl PeerRpc {
             let current=read_ciphertext_file(path).ok().filter(|bytes|hex(&Sha256::digest(bytes))==digest.to_ascii_lowercase());
             if current.is_some(){continue;}
             let request_path=format!("/config-peer/config/{digest}");
-            let Ok(headers)=self.signed_headers(&base,&peer_id,certificate,"GET",&request_path).await else{continue;};
+            let Ok(headers)=self.signed_headers(&client,&base,&peer_id,certificate,"GET",&request_path).await else{continue;};
             let Ok(response)=client.get(format!("{base}{request_path}")).headers(headers).send().await else{continue;};
             if !response.status().is_success(){continue;}
             let Ok(bytes)=response.bytes().await else{continue;};
@@ -287,6 +322,16 @@ fn valid_peer_url(value:&str)->bool {
         && url.username().is_empty() && url.password().is_none() && url.query().is_none() && url.fragment().is_none())
 }
 
+fn rayfish_peer_url(value: &str) -> bool {
+    url::Url::parse(value).is_ok_and(|url| {
+        url.scheme() == "http"
+            && url.host_str() == Some("127.0.0.1")
+            && url.port().is_some_and(|port| (17000..=17999).contains(&port))
+            && url.path() == "/"
+            && url.username().is_empty() && url.password().is_none()
+            && url.query().is_none() && url.fragment().is_none()
+    })
+}
 fn write_active_ciphertext(path:&Path,bytes:&[u8])->std::io::Result<()> {
     if !valid_ciphertext(bytes){return Err(std::io::Error::new(std::io::ErrorKind::InvalidData,"invalid age ciphertext"));}
     let parent=path.parent().ok_or_else(||std::io::Error::new(std::io::ErrorKind::InvalidInput,"config path has no parent"))?; fs::create_dir_all(parent)?;

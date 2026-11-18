@@ -3123,6 +3123,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(middleware::from_fn(log_request))
         .layer(middleware::from_fn(direct_api_cors))
         .with_state(state.clone());
+    if role == node_role::NodeRole::Metadata && state.config_peer.rayfish_http_enabled() {
+        let peer_app = Router::new()
+            .route("/config-peer/challenge", get(config_repair::challenge))
+            .route("/config-peer/manifest", get(config_repair::manifest))
+            .route("/config-peer/config/{digest}", get(config_repair::config_object))
+            .layer(middleware::from_fn(log_request))
+            .with_state(state.clone());
+        let peer_listener = tokio::net::TcpListener::bind("127.0.0.1:8443").await?;
+        tokio::spawn(async move {
+            if let Err(error) = axum::serve(peer_listener, peer_app).await {
+                eprintln!("Rawrarr Rayfish config-peer listener failed: {error}");
+            }
+        });
+        println!("Rawrarr Rayfish config-peer HTTP listening on 127.0.0.1:8443");
+    }
     let app = Router::new()
         .route("/health", get(health))
         .route("/api/nodes/enroll", post(node_auth::enrollment_proxy))

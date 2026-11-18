@@ -22,8 +22,10 @@
   encrypted settings, status and library reads on both nodes, and compares
   Rayfish-relayed config ciphertext with the local export. Also uses cached
   Syncthing 2.1.5 to verify byte-identical bidirectional transfers between two
-  explicitly paired devices via a pinned TCP forward. Does not cover signed
-  config-peer repair or the browser workload.
+  explicitly paired devices via a pinned TCP forward. Removes one node's test
+  config and journal, then verifies signed repair over Rayfish restores the
+  exact ciphertext and rejects unsigned requests. Does not cover the
+  browser-direct `.ray` workload.
   The Rayfish sidecar logs show startup, route grant counts, mesh readiness
   changes, and shutdown. Raw daemon output stays in the test sidecar's
   disposable `/state` volume.

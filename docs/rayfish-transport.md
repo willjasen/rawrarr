@@ -192,8 +192,10 @@ loopback, or arbitrary local addresses. Existing Tailscale HTTPS routes remain
 the fallback configuration, not a silent per-request retry path. Restoring the
 original target map and removing the opt-in returns to the previous behavior.
 
-Signed configuration-peer RPC still requires a `.ts.net` HTTPS peer URL;
-Rayfish peer-map adoption is not implemented. Syncthing's data path was tested
+Signed configuration-peer RPC can opt into a pinned `config-peer` TCP 8443
+forward between metadata nodes; see the [peer repair protocol](metadata-peer-repair-protocol.md)
+for the loopback HTTP listener and peer-map requirements. Automatic peer
+provisioning is not implemented. Syncthing's data path was tested
 with manually paired devices and a loopback-only listener; its GUI and discovery,
 media, database traffic and browser ingress are not forwarded. Existing configs
 retain their behavior when the optional Syncthing settings are absent; no

@@ -356,5 +356,13 @@ The standalone stack also passed bidirectional Syncthing file transfer using
 explicitly paired test devices, loopback-only listeners, and a subscriber-only
 Rayfish TCP 22000 forward pinned to the receiving endpoint. Discovery, NAT
 traversal, and public relays were disabled in Syncthing. This does not verify
-automatic peer provisioning or repair; signed config-peer URLs still require
-HTTPS under `.ts.net`.
+automatic peer provisioning.
+
+The standalone stack restored a missing encrypted config from a signed
+metadata peer over Rayfish. The repair listener exposed only config-peer RPC
+on loopback; unsigned manifest requests returned 401, and unrelated app routes
+returned 404. The two local ends used HTTP and the mesh hop used Rayfish
+encryption. Node registration and health checks still used verified HTTPS to
+Roarlay. Arr, Syncthing, and coordinator forward outage/recovery passed in the
+same run without Headscale or Tailscale. Browser-direct `.ray` access and
+revocation under partition remain unqualified.

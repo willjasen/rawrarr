@@ -89,6 +89,20 @@ class PolicyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             transport.validate(dict(config("storage"), forwards=[dict(sync_forward, service="gui")]))
 
+    def test_config_peer_permission_is_metadata_only_and_separate_from_app(self):
+        peer = "a" * 64
+        grant = {"allow_config_peer_in": [peer]}
+        route = {"forwards": [dict(forward(), service="config-peer")]}
+        incoming, _ = tomllib.loads(transport.firewall(dict(config("metadata"), **grant)))["rules"]
+        outgoing, = tomllib.loads(transport.firewall(dict(config("metadata"), **route)))["rules"]
+        self.assertEqual(incoming["port"], {"start": 8443, "end": 8443})
+        self.assertEqual(outgoing["port"], incoming["port"])
+        self.assertEqual(incoming["peer"], outgoing["peer"])
+        for role in ("coordinator", "storage"):
+            for changes in (grant, route):
+                with self.assertRaises(ValueError):
+                    transport.validate(dict(config(role), **changes))
+
     def test_compose_is_opt_in_and_does_not_mutate_existing_services(self):
         result = transport.compose(config(), Path("/run/pilot.json"))
         self.assertEqual(set(result["services"]), {"rayfish-pilot"})
