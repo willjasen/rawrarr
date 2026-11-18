@@ -13,6 +13,7 @@ import rayfish_transport as transport
 
 ROOT = Path(__file__).resolve().parents[2]
 PROJECT = "rawrarr-test-environment"
+RAYFISH_STACK_LABEL = "com.docker.compose.project=rawrarr-test-rayfish"
 
 
 def docker(*args, timeout=60):
@@ -49,7 +50,7 @@ class Node:
         self.relay_url = relay_url
 
     def create(self):
-        docker("volume", "create", self.volume)
+        docker("volume", "create", "--label", RAYFISH_STACK_LABEL, self.volume)
         self.volume_created = True
         args = ["create", "--name", self.name, "--pull", "never", "--read-only",
                 "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
@@ -58,7 +59,7 @@ class Node:
                 "-e", "RAWARR_RAYFISH_WORKER=" + self.label,
                 "-e", "RAWARR_RAYFISH_DISCOVERY_URL=http://discovery:18090/pkarr",
                 "-e", "RAYFISH_ROOTLESS_DIR=/state/" + self.label,
-                "--label", "com.docker.compose.project=rawrarr-test-regression"]
+                "--label", RAYFISH_STACK_LABEL]
         if self.existing:
             args += ["--network", "container:" + self.existing, "-e", "RAWARR_RAYFISH_EXTERNAL_APP=1"]
         else:
@@ -275,7 +276,7 @@ def run(environment, soak_hours=0, report=None):
                 tokens.append(token)
         else:
             network = prefix
-            docker("network", "create", network)
+            docker("network", "create", "--label", RAYFISH_STACK_LABEL, network)
             network_created = True
         discovery = Node(prefix, "discovery", network)
         # The local signed-record store is a test fixture, not a deployed coordinator/relay.

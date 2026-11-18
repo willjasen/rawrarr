@@ -12,7 +12,7 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import rayfish_transport as transport
-from rayfish_docker import Node, docker, retry
+from rayfish_docker import Node, RAYFISH_STACK_LABEL, docker, retry
 
 
 def network_record_hash(discovery, key):
@@ -34,7 +34,7 @@ def run(discovery_outage=False, revocation_outage=False):
     network_created = False
     discovery_paused = False
     try:
-        docker("network", "create", prefix)
+        docker("network", "create", "--label", RAYFISH_STACK_LABEL, prefix)
         network_created = True
         discovery = Node(prefix, "discovery", prefix)
         nodes.append(discovery)

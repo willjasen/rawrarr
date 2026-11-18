@@ -68,7 +68,7 @@ def main(binary):
 
     def start_coordinator(name, bypass, listen, forward, socks):
         args = ["create", "--name", name, "--pull", "never",
-                "--label", "com.docker.compose.project=rawrarr-test-regression",
+                "--label", fixture.RAYFISH_STACK_LABEL,
                 "--network", "container:" + names[1], "--volumes-from", names[2] + ":ro"]
         env = {
             "RAWARR_ROLE": "coordinator",
@@ -200,7 +200,7 @@ def main(binary):
         socks_name = prefix + "-tailscale-socks"
         fixture.docker("create", "--name", socks_name, "--pull", "never", "--cap-drop", "ALL",
                        "--security-opt", "no-new-privileges:true",
-                       "--label", "com.docker.compose.project=rawrarr-test-regression",
+                       "--label", fixture.RAYFISH_STACK_LABEL,
                        "--network", "container:" + names[1], "--entrypoint", "/usr/local/bin/tailscaled",
                        "tailscale/tailscale:stable", "--tun=userspace-networking",
                        "--state=mem:", "--socket=/tmp/isolated-test.sock",

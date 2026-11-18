@@ -13,7 +13,7 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import rayfish_transport as transport
-from rayfish_docker import Node, docker, retry
+from rayfish_docker import Node, RAYFISH_STACK_LABEL, docker, retry
 
 IMAGE = "rawrarr-test-rayfish-relay:1.3.0"
 
@@ -21,7 +21,8 @@ IMAGE = "rawrarr-test-rayfish-relay:1.3.0"
 def restrict_peer_egress(peer, destinations=None, replace=False):
     # A test helper owns packet filters only in this disposable namespace.
     # The Rayfish process itself remains UID 10001 with all capabilities dropped.
-    helper = ["run", "--rm", "--pull", "never", "--network", "container:" + peer.name,
+    helper = ["run", "--rm", "--pull", "never", "--label", RAYFISH_STACK_LABEL,
+              "--network", "container:" + peer.name,
               "--cap-drop", "ALL", "--cap-add", "NET_ADMIN", "--user", "0:0",
               "--read-only", "--entrypoint", "iptables", IMAGE]
     if destinations is None:
@@ -78,7 +79,7 @@ def run(discovery_outage=False):
     try:
         for suffix in ("a", "b"):
             network = prefix + "-" + suffix
-            docker("network", "create", network)
+            docker("network", "create", "--label", RAYFISH_STACK_LABEL, network)
             networks.append(network)
         discovery = Node(prefix, "discovery", networks[0])
         nodes.append(discovery)
@@ -87,12 +88,12 @@ def run(discovery_outage=False):
         for network in networks:
             docker("network", "connect", "--alias", "discovery", network, discovery.name)
         docker("start", discovery.name)
-        docker("volume", "create", volume)
+        docker("volume", "create", "--label", RAYFISH_STACK_LABEL, volume)
         volume_created = True
         docker("create", "--name", relay, "--pull", "never", "--read-only",
                "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
                "--network", networks[0], "--network-alias", "relay", "-v", volume + ":/state",
-               "--label", "com.docker.compose.project=rawrarr-test-regression",
+               "--label", RAYFISH_STACK_LABEL,
                IMAGE, "--dev", "--config-path", "/state/relay.toml")
         relay_created = True
         docker("network", "connect", "--alias", "relay", networks[1], relay)

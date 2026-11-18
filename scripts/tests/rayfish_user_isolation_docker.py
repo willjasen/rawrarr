@@ -54,7 +54,7 @@ def main():
     nodes = []
     network_created = False
     try:
-        fixture.docker("network", "create", network)
+        fixture.docker("network", "create", "--label", fixture.RAYFISH_STACK_LABEL, network)
         network_created = True
         discovery = fixture.Node(prefix, "discovery", network)
         nodes.append(discovery)

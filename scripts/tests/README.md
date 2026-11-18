@@ -8,6 +8,16 @@
 - `test_rawrarr_subscriber_compose.mjs` — checks subscriber role Compose generation, fossil-prefixed generated IDs, and anonymous public GHCR pulls without GitHub credentials; run `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
 # Rawrarr tests
 
+- `rayfish_standalone_docker.py --binary /path/to/rust-arr` -- runs a fresh
+  `roarlay` coordinator, two signed nodes labeled `metadata-a` and `metadata-b`,
+  and disposable support services in
+  OrbStack's `rawrarr-test-rayfish` group without Tailscale or Headscale.
+  Supply a current-worktree binary built in a prepared native test clone;
+  group the build clone there too with
+  `--label com.docker.compose.project=rawrarr-test-rayfish`. Checks verified HTTPS
+  registration, distinct authenticated Rayfish responses, anonymous denial,
+  coordinator-side forward outage and recovery. Does not cover the full Arr,
+  config-peer, Syncthing, or browser workload.
 - `rayfish_user_isolation_docker.py` -- creates two independent closed user
   meshes, with separate coordinator sidecars sharing one network namespace.
   Checks each synthetic user's authenticated route, `.ray` resolution through

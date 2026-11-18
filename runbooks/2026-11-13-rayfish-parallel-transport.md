@@ -331,3 +331,14 @@ handoff, browser-side network reachability, WebRTC, actual internal HTTPS
 ingress, hardware/network tests, stale revocation and the uninterrupted 72-hour
 soak remain unimplemented or unqualified. Existing deployed state has not
 changed; no migration is needed for these additional test fixtures and docs.
+
+## Standalone OrbStack qualification without Tailscale
+
+The disposable `rawrarr-test-rayfish` stack ran one coordinator and two signed
+metadata nodes with neither Tailscale nor Headscale. Both nodes registered over
+certificate-verified HTTPS and returned distinct authenticated responses through
+Rayfish. Anonymous requests were denied. Stopping the coordinator Rayfish
+forward produced HTTP 502 on both relay routes without breaking node-to-coordinator
+HTTPS health requests; restarting the forward restored both routes. This does
+not qualify a fossil-side outage deadline, the full Arr workload, config-peer
+repair, Syncthing, or browser-direct `.ray` access.
