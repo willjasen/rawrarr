@@ -408,3 +408,9 @@ project only, under its per-container locks. There is no subscriber data
 or application migration. No live Rawrarr route references the relay.
 Private discovery remains unprovisioned: the upstream pkarr relay publishes
 to the public DHT, and the disposable fixture is not a deployable service.
+
+The follow-up implements a non-federating discovery store that verifies
+packet signatures, preserves newer records across restarts, and caps the
+number of stored keys. It uses a separate volume; no existing Rawrarr data
+needs migration. Keep existing Fossil routes as rollback until cross-host
+workloads pass with the new service.

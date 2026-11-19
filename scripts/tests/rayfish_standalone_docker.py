@@ -161,12 +161,12 @@ def run(binary: Path, directory: Path) -> None:
                                  "/run/coordinator-ca", f"https://{service}.test/ping"), timeout=120)
         arr_keys = {service + "Key": container_api_key(name) for service, name in arr_containers.items()}
 
-        discovery = Node(prefix, "discovery", prefix)
-        peers.append(discovery)
-        discovery.create()
-        docker("network", "disconnect", prefix, discovery.name)
-        docker("network", "connect", "--alias", "discovery", prefix, discovery.name)
-        docker("start", discovery.name)
+        discovery = create("discovery", "rawrarr-rayfish-discovery:local", "--read-only",
+                           "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+                           "-v", "/state", alias="discovery")
+        docker("start", discovery)
+        retry(lambda: docker("exec", coordinator, "curl", "--max-time", "2", "-fsS",
+                             "http://discovery:18090/healthz"), timeout=15)
         relay_config = directory / "relay.toml"
         relay_config.write_text('http_bind_addr = "0.0.0.0:3340"\nenable_quic_addr_discovery = false\n')
         relay = create("iroh-relay", RELAY_IMAGE, "--read-only", "--cap-drop", "ALL",
@@ -375,9 +375,9 @@ def run(binary: Path, directory: Path) -> None:
 
         traffic_peers = (route_peer, sender, dialer)
         identities = [peer.status()["endpoint"] for peer in traffic_peers]
-        docker("pause", discovery.name)
+        docker("pause", discovery)
         try:
-            if docker("inspect", "--format", "{{.State.Paused}}", discovery.name) != "true":
+            if docker("inspect", "--format", "{{.State.Paused}}", discovery) != "true":
                 raise RuntimeError("Discovery fixture did not pause")
             for peer in traffic_peers:
                 peer.stop()
@@ -423,7 +423,7 @@ else:
                 raise RuntimeError("The removed config-peer pin did not deny network access")
             print("PASS: removing a local config-peer grant denies the peer with discovery still offline")
         finally:
-            docker("unpause", discovery.name)
+            docker("unpause", discovery)
         print("PASS: two signed fossils register over verified HTTPS and relay distinct authenticated responses over Rayfish")
         print("PASS: both fossils use real Radarr and Sonarr and export matching config ciphertext through Rayfish")
         print("PASS: no Tailscale or Headscale in the fixture; Rayfish outage breaks relay only, and restart restores it")
