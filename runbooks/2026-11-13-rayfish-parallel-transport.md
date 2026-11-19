@@ -382,3 +382,13 @@ in the test-only Syncthing configuration.
 This qualifies neither cross-host cold recovery nor partition revocation.
 No live routes or containers were changed. Adoption and rollback are described
 in `docs/rayfish-transport.md`.
+
+## 2026-11-18: Private infrastructure configuration
+
+For [#446](https://github.com/willjasen/rawrarr/issues/446), sidecars accept
+an explicit discovery/relay pair and refuse conflicting saved settings.
+The standalone fixture uses the same configuration. Local pin removal
+and restart are a containment option during a discovery outage, not a way
+to revoke a peer on hosts the operator cannot reach. No application data,
+database, or protocol migration is needed. Provision private service endpoints
+and qualify cross-host recovery and rollback before changing live routes.

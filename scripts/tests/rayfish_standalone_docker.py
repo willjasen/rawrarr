@@ -400,6 +400,28 @@ def run(binary: Path, directory: Path) -> None:
             verify_transfer(shares, 0, "after-restart-a.bin")
             verify_transfer(shares, 1, "after-restart-b.bin")
             print("PASS: all traffic peers cold-start with owner and discovery offline; relay, config repair and Syncthing recover")
+
+            sender.stop()
+            del sender.config["allow_config_peer_in"]
+            sender.update()
+            sender.start()
+            retry(check_routes, timeout=45)
+            if request(fossils[0], "http://127.0.0.1:8443/config-peer/manifest")[0] != 401:
+                raise RuntimeError("The sender's local config-peer listener is not healthy")
+            denial_probe = """
+import http.client, sys
+connection = http.client.HTTPConnection("127.0.0.1", int(sys.argv[1]), timeout=5)
+try:
+    connection.request("GET", "/config-peer/manifest")
+    connection.getresponse()
+except (OSError, http.client.RemoteDisconnected):
+    print("denied")
+else:
+    raise SystemExit("The removed pin still permits the peer to reach the config-peer listener")
+"""
+            if docker("exec", fossils[1], "python3", "-c", denial_probe, str(REPAIR_PORT)) != "denied":
+                raise RuntimeError("The removed config-peer pin did not deny network access")
+            print("PASS: removing a local config-peer grant denies the peer with discovery still offline")
         finally:
             docker("unpause", discovery.name)
         print("PASS: two signed fossils register over verified HTTPS and relay distinct authenticated responses over Rayfish")

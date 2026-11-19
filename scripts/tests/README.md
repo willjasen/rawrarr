@@ -28,8 +28,10 @@
   key holder stopped and discovery paused, cold-restarts all three traffic
   sidecars and verifies the HTTPS relay, access denial, signed repair, and
   bidirectional sync again. Discovery remains configured and the private
-  traffic relay stays up. Does not cover partition revocation or the
-  browser-direct `.ray` workload.
+  traffic relay stays up. Uses the same `infrastructure` configuration as
+  the sidecar and verifies that removing the receiving sidecar's config-peer
+  pin denies access while discovery stays paused. Does not cover automatic
+  partition revocation or the browser-direct `.ray` workload.
   The Rayfish sidecar logs show startup, route grant counts, mesh readiness
   changes, and shutdown. Raw daemon output stays in the test sidecar's
   disposable `/state` volume.

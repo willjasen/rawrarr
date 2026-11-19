@@ -116,6 +116,30 @@ container names and listeners first. Do not select the Docker host or a database
 LAN discovery is off unless explicitly enabled; enabling it publishes discovery
 information on the local network. The isolated tests explicitly enable it.
 
+For a private deployment, set both infrastructure endpoints on every sidecar
+(including the enrollment endpoint) before its first start:
+
+```json
+{
+  "infrastructure": {
+    "discovery": "https://discovery.example.net/pkarr",
+    "relay": "https://relay.example.net:3340"
+  }
+}
+```
+
+These are fields to add to the bootstrap JSON above. The wrapper configures
+Rayfish to replace its default servers with exactly these endpoints. Provision
+the signed-packet discovery service and the iroh traffic relay separately;
+this option does not deploy them. Use trusted TLS for endpoints across hosts.
+HTTP is accepted only for IPv4 loopback or single-label container service
+names; use those forms only on an isolated local Docker network. URLs cannot
+carry credentials, query parameters, or fragments. Leaving `infrastructure`
+out preserves legacy defaults on unconfigured state. An existing sidecar
+must use a fresh transport volume and be re-enrolled to switch infrastructure;
+the wrapper refuses to reuse state with mismatched saved settings. Retain the
+original volume and route as rollback, and do not copy private endpoint keys.
+
 ```sh
 python3 scripts/rayfish_transport.py compose --config /protected/pilot.json \
   > /protected/rayfish.compose.json
@@ -328,6 +352,14 @@ When discovery and the key holder returned, the remaining member removed the
 kicked peer and its Rayfish connection to the app failed. This observed stale
 revocation window is a rollout blocker; transport membership must not replace
 Rawrarr's own authorization.
+
+An operator who can still reach the receiving hosts can remove a peer's pinned
+grants from their `allow_in`, `allow_config_peer_in`, `allow_syncthing_in`, and
+any matching `forwards`, as applicable, and restart each affected sidecar.
+This stops its existing connections and rewrites the deny-by-default ACL before
+restart. The standalone fixture verifies the config-peer case while discovery
+is offline. This is local containment, not automatic revocation on hosts the
+operator cannot reach; a mesh `kick` alone is not equivalent to this procedure.
 
 The private-relay discovery-outage qualification also fails: neither peer
 serves forwarded application requests within 90 seconds after both cold-restart

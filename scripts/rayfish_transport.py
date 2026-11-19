@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+from urllib.parse import urlsplit
 
 
 VERSION = 1
@@ -27,6 +28,8 @@ INBOUND_SERVICE_KEYS = {"allow_in": APP_PORT, "allow_syncthing_in": SYNCTHING_PO
                         "allow_config_peer_in": CONFIG_PEER_PORT}
 NAME = re.compile(r"[a-z][a-z0-9-]{0,62}\Z")
 IDENTITY = re.compile(r"[0-9a-f]{64}\Z")
+INFRASTRUCTURE = {"discovery": "discovery_dns", "relay": "relay"}
+DNS_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
 SAFE_SETTINGS = {
     "mdns_enabled": False,
     "dns_mode": "off",
@@ -70,14 +73,41 @@ def identity(value):
     return value
 
 
+def infrastructure_settings(config):
+    if "infrastructure" not in config:
+        return {}
+    value = config["infrastructure"]
+    fields(value, INFRASTRUCTURE)
+    tables = {}
+    for key, table in INFRASTRUCTURE.items():
+        url = value[key]
+        require(isinstance(url, str) and len(url) <= 512 and url.isascii()
+                and re.fullmatch(r"[a-z0-9:/.-]+", url), f"Invalid {key} endpoint URL")
+        endpoint = urlsplit(url)
+        hostname = endpoint.hostname or ""
+        port = endpoint.port
+        require(len(hostname) <= 253 and all(DNS_LABEL.fullmatch(label) for label in hostname.split("."))
+                and endpoint.netloc == hostname + (f":{port}" if port else ""),
+                f"Invalid {key} endpoint authority")
+        require(endpoint.scheme == "https" or (
+            endpoint.scheme == "http" and (hostname == "127.0.0.1" or
+                                           (NAME.fullmatch(hostname) and DNS_LABEL.fullmatch(hostname)))
+        ), f"{key} requires HTTPS outside a local container namespace")
+        require(endpoint.path == "/pkarr" if key == "discovery" else endpoint.path in ("", "/"),
+                f"Invalid {key} endpoint path")
+        tables[table] = {"servers": [url], "replace": True}
+    return tables
+
+
 def validate(config):
     fields(config, ("version", "name", "namespace", "role", "network"),
-           ("expose_app", *INBOUND_SERVICE_KEYS, "forwards", "lan_discovery"))
+           ("expose_app", *INBOUND_SERVICE_KEYS, "forwards", "lan_discovery", "infrastructure"))
     require(type(config["version"]) is int and config["version"] == VERSION, "Unsupported transport configuration version")
     for key in ("name", "namespace", "network"):
         require(isinstance(config[key], str) and NAME.fullmatch(config[key]), f"Invalid {key}")
     require(config["role"] in ("coordinator", "metadata", "storage"), "Invalid Rawrarr role")
     require(type(config.get("lan_discovery", False)) is bool, "lan_discovery must be a boolean")
+    infrastructure_settings(config)
     expose = config.get("expose_app", False)
     require(type(expose) is bool, "expose_app must be a boolean")
     require(not expose or config["role"] != "coordinator", "The pilot does not expose coordinator ingress")
@@ -219,12 +249,23 @@ def prepare_state(config, state):
         private_write(marker, json.dumps(expected))
     settings = state / "settings.toml"
     expected_settings = dict(SAFE_SETTINGS, mdns_enabled=config.get("lan_discovery", False))
+    expected_tables = infrastructure_settings(config)
     if not settings.exists():
-        private_write(settings, "".join(f"{key} = {json.dumps(value)}\n" for key, value in expected_settings.items()))
+        entries = [f"{key} = {json.dumps(value)}\n" for key, value in expected_settings.items()]
+        for table, options in expected_tables.items():
+            entries.append(f"\n[{table}]\n")
+            entries.extend(f"{key} = {json.dumps(value)}\n" for key, value in options.items())
+        private_write(settings, "".join(entries))
     require(not settings.is_symlink() and settings.is_file(), "Settings must be a regular file")
     saved = tomllib.loads(settings.read_text())
     require(all(type(saved.get(key)) is type(value) and saved.get(key) == value
                 for key, value in expected_settings.items()), "Unsafe saved Rayfish settings; restore pilot settings before restarting")
+    for table in INFRASTRUCTURE.values():
+        actual = saved.get(table)
+        expected_table = expected_tables.get(table)
+        require(actual == expected_table and
+                (actual is None or actual.get("replace") is True),
+                "Saved discovery or relay settings do not match configuration; use fresh transport state")
     require(not saved.get("file_auto_accept_peers") and not saved.get("controllers")
             and not saved.get("managed_machines") and not saved.get("device_generations"),
             "File auto-accept, device pairing, and remote management are outside the pilot")

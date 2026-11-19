@@ -42,12 +42,14 @@ class Node:
         self.volume = self.name + "-state"
         self.label = name
         self.config = {"version": 1, "name": name, "namespace": existing or self.name,
-                       "role": "metadata", "network": "rawrarr-pilot", "lan_discovery": True}
+                       "role": "metadata", "network": "rawrarr-pilot", "lan_discovery": True,
+                       "infrastructure": {"discovery": "http://discovery:18090/pkarr",
+                                          "relay": relay_url or "http://127.0.0.1:18091"}}
         self.created = False
         self.volume_created = False
         self.network = network
         self.existing = existing
-        self.relay_url = relay_url
+        self.relay_probe = relay_url is not None
 
     def create(self):
         docker("volume", "create", "--label", RAYFISH_STACK_LABEL, self.volume)
@@ -57,7 +59,6 @@ class Node:
                 "--tmpfs", "/tmp:rw,nosuid,mode=1777,size=16m",
                 "-v", self.volume + ":/state", "-e", "RAWARR_RAYFISH_TEST_INNER=1",
                 "-e", "RAWARR_RAYFISH_WORKER=" + self.label,
-                "-e", "RAWARR_RAYFISH_DISCOVERY_URL=http://discovery:18090/pkarr",
                 "-e", "RAYFISH_ROOTLESS_DIR=/state/" + self.label,
                 "--label", RAYFISH_STACK_LABEL,
                 "--label", f"com.docker.compose.service={self.label}"]
@@ -65,9 +66,8 @@ class Node:
             args += ["--network", "container:" + self.existing, "-e", "RAWARR_RAYFISH_EXTERNAL_APP=1"]
         else:
             args += ["--network", self.network]
-        if self.relay_url:
-            args += ["-e", "RAWARR_RAYFISH_TEST_RELAY_URL=" + self.relay_url,
-                     "-e", "RAWARR_RAYFISH_TEST_RELAY_PROBE=1"]
+        if self.relay_probe:
+            args += ["-e", "RAWARR_RAYFISH_TEST_RELAY_PROBE=1"]
         args += ["--entrypoint", "python", transport.IMAGE, "/state/test.py"]
         docker(*args)
         self.created = True
