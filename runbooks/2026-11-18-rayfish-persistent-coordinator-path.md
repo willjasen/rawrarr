@@ -60,7 +60,8 @@ route.
 ## Final state and remaining gates
 
 No internal/public service, Tailscale route, or Fossil was changed. The task
-changes are local to this worktree and have not been committed or pushed. Before
+changes were committed locally in `70b5192` on
+`codex/rayfish-persistent-coordinator-path`; they have not been pushed. Before
 future adoption, publish the work to `main`, apply the Compose overlays under
 the established locks, verify coordinator route/health and authenticated
 Roarlay-to-node traffic across namespace-holder recreation, and rehearse
