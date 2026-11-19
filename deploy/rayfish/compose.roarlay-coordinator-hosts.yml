@@ -1,0 +1,7 @@
+# Apply only to the generated Rayfish sidecar sharing rawrarr-int-tailscale.
+# This lets the sidecar use the same canonical HTTPS URLs as the Macs while
+# sending those requests through the unpublished coordinator-only proxy.
+services:
+  rayfish-roarlay:
+    extra_hosts:
+      - "do3.risk-mermaid.ts.net=172.31.99.2"

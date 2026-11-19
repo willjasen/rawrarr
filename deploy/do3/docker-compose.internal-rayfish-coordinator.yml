@@ -1,0 +1,12 @@
+# Optional overlay for the internal coordinator only. The private, internal
+# bridge has no default gateway; Roarlay and Tailscale share this namespace.
+services:
+  tailscale:
+    networks:
+      rayfish-coordinator:
+        ipv4_address: 172.31.99.3
+
+networks:
+  rayfish-coordinator:
+    name: rawrarr-internal-rayfish-coordinator
+    external: true

@@ -57,6 +57,7 @@ NON_RUNTIME_FILES = {
     "docker-compose.headscale-mini.yml",
     "docker-compose.tailscale-macbook.yml",
     "deploy/do3/docker-compose.internal-coordinator.yml",
+    "deploy/do3/docker-compose.internal-rayfish-coordinator.yml",
     "deploy/do3/docker-compose.analytics-dashboard-internal.yml",
     "deploy/do3/docker-compose.production-container-names.yml",
 }

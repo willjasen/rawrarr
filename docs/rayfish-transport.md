@@ -231,6 +231,68 @@ loopback, or arbitrary local addresses. Existing Tailscale HTTPS routes remain
 the fallback configuration, not a silent per-request retry path. Restoring the
 original target map and removing the opt-in returns to the previous behavior.
 
+### Persistent internal coordinator access on do3
+
+The internal coordinator uses the same canonical HTTPS infrastructure URLs as
+the Macs: `https://do3.risk-mermaid.ts.net:18444/pkarr` for discovery and
+`https://do3.risk-mermaid.ts.net:18443` for the traffic relay. Its Tailscale
+namespace holder cannot reach the tailnet-only listener through the normal host
+egress path. Use the opt-in access proxy files below to give that namespace a
+private route while preserving TLS hostname verification:
+
+- `deploy/rayfish/docker-compose.coordinator-access.yml` runs an unpublished,
+  non-root TLS proxy on an internal Docker bridge. It reaches only the existing
+  relay and discovery backend networks and accepts requests only from the
+  coordinator endpoint address.
+- `deploy/do3/docker-compose.internal-rayfish-coordinator.yml` attaches the
+  coordinator Tailscale namespace holder to that same internal bridge. The
+  bridge is not a default gateway. The overlay is separate from the standard
+  coordinator Compose file and must be included whenever the namespace holder
+  is recreated.
+- `deploy/rayfish/compose.roarlay-coordinator-hosts.yml` maps the canonical
+  hostname to the proxy's fixed bridge address for the generated
+  `rayfish-roarlay` sidecar only. Roarlay, the Macs, and Tailscale Serve keep
+  their existing name resolution and routes.
+
+The do3 bridge uses `172.31.99.0/29` (`.2` proxy, `.3` coordinator). This range
+was checked against do3's current Docker networks and host IPv4 routes on
+2026-11-18; recheck it before creating the network on any host. The private
+network is internal-only and the proxy publishes no host ports. The HTTPS
+certificate and key remain host-local at `/opt/rawrarr-internal-rayfish/tls.crt`
+and `tls.key`; set `RAWARR_RAYFISH_TLS_CERT_PATH` and
+`RAWARR_RAYFISH_TLS_KEY_PATH` only if the protected host-local paths differ.
+
+Prepare from a published `main` archive on do3. First check the Docker network
+range, source revision and image; build the proxy image from the checked-out
+published source with `docker build -f deploy/rayfish/Dockerfile.https -t
+rawrarr-internal-rayfish-https:local .`. Then validate and start the proxy
+project, including its external backend networks:
+
+```sh
+docker compose -p rawrarr-internal-rayfish-access \
+  -f deploy/rayfish/docker-compose.coordinator-access.yml config --quiet
+docker compose -p rawrarr-internal-rayfish-access \
+  -f deploy/rayfish/docker-compose.coordinator-access.yml up -d --pull never
+```
+
+When applying the internal coordinator Compose definition, add
+`-f deploy/do3/docker-compose.internal-rayfish-coordinator.yml` to its existing
+file list. This changes the Tailscale namespace holder's network attachment, so
+coordinate the holder and Roarlay recreation with their existing deployment
+locks. Confirm the default route and `tailscale serve status --json` before and
+after. The proxy is in a separate Compose project; stopping that project and
+removing the coordinator overlay restores the previous topology.
+
+Generate the coordinator sidecar configuration with the two canonical URLs
+above, set its name to `rayfish-roarlay` and namespace to
+`rawrarr-int-tailscale`, then include
+`-f deploy/rayfish/compose.roarlay-coordinator-hosts.yml` when validating and
+starting its generated Compose. Verify TLS health for both services from the
+sidecar namespace, then verify authenticated Roarlay-to-Fossil responses,
+anonymous denial and the normal coordinator HTTPS health route before selecting
+any Rayfish relay target. This access path alone does not change a node route or
+authorize a Fossil cutover.
+
 Signed configuration-peer RPC can opt into a pinned `config-peer` TCP 8443
 forward between metadata nodes; see the [peer repair protocol](metadata-peer-repair-protocol.md)
 for the loopback HTTP listener and peer-map requirements. Automatic peer

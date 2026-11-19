@@ -1,0 +1,37 @@
+{
+	admin off
+	auto_https disable_redirects
+	servers {
+		protocols h1
+	}
+}
+
+https://do3.risk-mermaid.ts.net:18443 {
+	tls /run/tls.crt /run/tls.key
+	@coordinator remote_ip 172.31.99.3
+	handle @coordinator {
+		@health path /healthz
+		handle @health {
+			reverse_proxy relay:3340 {
+				rewrite /ping
+			}
+		}
+		handle {
+			reverse_proxy relay:3340
+		}
+	}
+	handle {
+		respond 403
+	}
+}
+
+https://do3.risk-mermaid.ts.net:18444 {
+	tls /run/tls.crt /run/tls.key
+	@coordinator remote_ip 172.31.99.3
+	handle @coordinator {
+		reverse_proxy discovery:18090
+	}
+	handle {
+		respond 403
+	}
+}

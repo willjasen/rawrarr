@@ -1,0 +1,4 @@
+FROM caddy:2.11.7-alpine
+RUN cp /usr/bin/caddy /usr/local/bin/caddy-unprivileged
+ENTRYPOINT ["/usr/local/bin/caddy-unprivileged"]
+CMD ["run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

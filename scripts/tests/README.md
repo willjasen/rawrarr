@@ -79,6 +79,13 @@
 - `test_rayfish_owner_fixture.py` -- checks that revocation qualification reads
   the target network's z-base-32 discovery record and rejects malformed keys.
   Run `python3 -m unittest discover -s scripts/tests -p test_rayfish_owner_fixture.py`.
+- `test_rayfish_coordinator_path.py` -- validates the persistent do3 coordinator
+  proxy and namespace overlays with `docker compose config`, confirms that the
+  private proxy has no published ports and restricts requests to the coordinator
+  endpoint, and checks that canonical hostname mapping is applied only to the
+  Rayfish sidecar. Run `python3 scripts/tests/test_rayfish_coordinator_path.py`;
+  the command requires Docker Compose but does not contact the Docker daemon or
+  change live services.
 - `test_rayfish_relay_proxy.rs` -- verifies the coordinator's opt-in IPv4
   loopback proxy bypass with real local HTTP and SOCKS sockets, while remote
   targets retain the proxy and the default remains unchanged. Run
