@@ -366,3 +366,29 @@ encryption. Node registration and health checks still used verified HTTPS to
 Roarlay. Arr, Syncthing, and coordinator forward outage/recovery passed in the
 same run without Headscale or Tailscale. Browser-direct `.ray` access and
 revocation under partition remain unqualified.
+
+## 2026-11-18: Separate enrollment from traffic
+
+Follow-up for [#446](https://github.com/willjasen/rawrarr/issues/446). The
+standalone AMD64 OrbStack fixture now uses an enrollment-only key holder
+instead of placing the key on Roarlay's traffic endpoint. With the owner
+stopped, discovery paused, and the private traffic relay still running, all
+three traffic sidecars restarted with unchanged identities. Authorized
+Roarlay relay traffic, anonymous denial, signed config repair, and
+bidirectional Syncthing passed. One intermediate run timed out during initial
+Syncthing transfer; the final run passed with an explicit reconnect cadence
+in the test-only Syncthing configuration.
+
+This qualifies neither cross-host cold recovery nor partition revocation.
+No live routes or containers were changed. Adoption and rollback are described
+in `docs/rayfish-transport.md`.
+
+## 2026-11-18: Private infrastructure configuration
+
+For [#446](https://github.com/willjasen/rawrarr/issues/446), sidecars accept
+an explicit discovery/relay pair and refuse conflicting saved settings.
+The standalone fixture uses the same configuration. Local pin removal
+and restart are a containment option during a discovery outage, not a way
+to revoke a peer on hosts the operator cannot reach. No application data,
+database, or protocol migration is needed. Provision private service endpoints
+and qualify cross-host recovery and rollback before changing live routes.

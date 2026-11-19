@@ -44,10 +44,13 @@ def start(directory, create, fossils):
             ET.SubElement(folder, "device", id=identity)
         options = root.find("options")
         for key in ("listenAddress", "globalAnnounceEnabled", "localAnnounceEnabled",
-                    "relaysEnabled", "natEnabled", "crashReportingEnabled"):
+                    "relaysEnabled", "natEnabled", "crashReportingEnabled", "reconnectionIntervalS"):
             for entry in options.findall(key):
                 options.remove(entry)
-            ET.SubElement(options, key).text = "tcp://127.0.0.1:22000" if key == "listenAddress" else "false"
+            ET.SubElement(options, key).text = {
+                "listenAddress": "tcp://127.0.0.1:22000",
+                "reconnectionIntervalS": "5",
+            }.get(key, "false")
         root.find("gui/address").text = "127.0.0.1:8384"
         tree.write(file, encoding="utf-8")
         container = create(f"syncthing-{'ab'[index]}", IMAGE, "--user", user,

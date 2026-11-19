@@ -40,6 +40,41 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(value["default_outbound"], "deny")
         self.assertFalse(value["disabled"])
 
+    def test_explicit_infrastructure_replaces_defaults_and_rejects_drift(self):
+        private = {"discovery": "https://discovery.example.net/pkarr",
+                   "relay": "https://relay.example.net:3340"}
+        value = dict(config(), infrastructure=private)
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "state"
+            transport.prepare_state(value, state)
+            settings = state / "settings.toml"
+            saved = tomllib.loads(settings.read_text())
+            self.assertEqual(saved["discovery_dns"], {"servers": [private["discovery"]], "replace": True})
+            self.assertEqual(saved["relay"], {"servers": [private["relay"]], "replace": True})
+            transport.prepare_state(value, state)
+            with self.assertRaisesRegex(ValueError, "do not match"):
+                transport.prepare_state(config(), state)
+            settings.write_text(settings.read_text().replace("replace = true", "replace = false"))
+            with self.assertRaisesRegex(ValueError, "do not match"):
+                transport.prepare_state(value, state)
+
+    def test_infrastructure_requires_both_endpoints_and_valid_urls(self):
+        private = {"discovery": "https://discovery.example.net/pkarr", "relay": "https://relay.example.net"}
+        transport.validate(dict(config(), infrastructure=private))
+        for invalid in (
+            {"discovery": private["discovery"]},
+            dict(private, discovery="https://discovery.example.net/not-pkarr"),
+            dict(private, discovery="https://name:secret@discovery.example.net/pkarr"),
+            dict(private, relay="http://relay.example.net"),
+            dict(private, relay="http://192.0.2.1:3340"),
+            dict(private, relay="http://3221225985:3340"),
+            dict(private, relay="https://relay.example.net:0"),
+            dict(private, relay="https://relay.example.net:65536"),
+            dict(private, relay="https://relay.example.net/?secret=1"),
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                transport.validate(dict(config(), infrastructure=invalid))
+
     def test_inbound_is_peer_network_and_app_pinned_with_tcp_replies(self):
         value = dict(config("metadata"), expose_app=True, allow_in=["a" * 64])
         incoming, reply = tomllib.loads(transport.firewall(value))["rules"]
@@ -338,12 +373,6 @@ def worker():
         f"forwards={len(value.get('forwards', []))}",
         flush=True,
     )
-    settings = state / "settings.toml"
-    if "[discovery_dns]" not in settings.read_text():
-        with settings.open("a") as output:
-            relay_url = os.environ.get("RAWARR_RAYFISH_TEST_RELAY_URL", "http://127.0.0.1:18091")
-            output.write('\n[discovery_dns]\nservers = ["http://discovery:18090/pkarr"]\nreplace = true\n'
-                         f'\n[relay]\nservers = [{json.dumps(relay_url)}]\nreplace = true\n')
     process = None
 
     def shutdown(*_):

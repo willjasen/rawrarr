@@ -175,13 +175,24 @@ def run(binary: Path, directory: Path) -> None:
                        command=("--dev", "--config-path", "/run/relay.toml"))
         docker("start", relay)
         relay_url = "http://relay:3340"
+        mesh_owner = Node(prefix, "mesh-owner", prefix, relay_url=relay_url)
+        peers.append(mesh_owner)
+        mesh_owner.create()
+        mesh_owner.start()
+        mesh_owner.cli("create", "--closed", "--name", "rawrarr-pilot", "--hostname", "mesh-owner")
+        mesh_owner.cli("files", "auto-accept", "rawrarr-pilot", "off")
+
+        def join_mesh(peer):
+            invite = json.loads(mesh_owner.cli("invite", "rawrarr-pilot", "--json"))["code"]
+            retry(lambda: peer.cli("join", invite, "--name", "rawrarr-pilot", "--hostname", peer.label,
+                                   "--no-auto-accept-files"))
+
         route_peer = Node(prefix, "rayfish-coord", prefix, coordinator, relay_url=relay_url)
         route_peer.config["role"] = "coordinator"
         peers.append(route_peer)
         route_peer.create()
         route_peer.start()
-        route_peer.cli("create", "--closed", "--name", "rawrarr-pilot", "--hostname", "coordinator-peer")
-        route_peer.cli("files", "auto-accept", "rawrarr-pilot", "off")
+        join_mesh(route_peer)
         endpoint = route_peer.status()["endpoint"]
 
         for label, node, token, port in zip(("a", "b"), records["nodes"], tokens, (17297, 17298)):
@@ -212,9 +223,7 @@ def run(binary: Path, directory: Path) -> None:
             peers.append(peer)
             peer.create()
             peer.start()
-            invite = json.loads(route_peer.cli("invite", "rawrarr-pilot", "--json"))["code"]
-            retry(lambda: peer.cli("join", invite, "--name", "rawrarr-pilot", "--hostname", peer.label,
-                                   "--no-auto-accept-files"))
+            join_mesh(peer)
             status = peer.status()
             mesh, = status["networks"]
             route_peer.config.setdefault("forwards", []).append({
@@ -228,6 +237,7 @@ def run(binary: Path, directory: Path) -> None:
         route_peer.stop()
         route_peer.update()
         route_peer.start()
+        mesh_owner.stop()
 
         services = json.loads(docker("inspect", coordinator, *fossils))
         if [service["Config"]["Labels"].get("com.docker.compose.service") for service in services] != [
@@ -362,6 +372,58 @@ def run(binary: Path, directory: Path) -> None:
         verify_transfer(shares, 0, "from-a.bin")
         verify_transfer(shares, 1, "from-b.bin")
         print("PASS: approved Syncthing peers exchange matching file bytes over pinned Rayfish TCP")
+
+        traffic_peers = (route_peer, sender, dialer)
+        identities = [peer.status()["endpoint"] for peer in traffic_peers]
+        docker("pause", discovery.name)
+        try:
+            if docker("inspect", "--format", "{{.State.Paused}}", discovery.name) != "true":
+                raise RuntimeError("Discovery fixture did not pause")
+            for peer in traffic_peers:
+                peer.stop()
+            for peer in traffic_peers:
+                peer.start()
+            if [peer.status()["endpoint"] for peer in traffic_peers] != identities:
+                raise RuntimeError("Cold restart changed traffic peer identities")
+
+            def check_routes():
+                for route, baseline in zip(routes, baselines):
+                    check_route(route, baseline)
+
+            retry(check_routes, timeout=45)
+            for route in routes:
+                if request(coordinator, route)[0] != 401:
+                    raise RuntimeError("Cold restart bypassed application authorization")
+            check_unsigned()
+            docker("exec", fossils[1], "rm", "/shared/config.aged")
+            retry(check_config_peer, timeout=100)
+            verify_transfer(shares, 0, "after-restart-a.bin")
+            verify_transfer(shares, 1, "after-restart-b.bin")
+            print("PASS: all traffic peers cold-start with owner and discovery offline; relay, config repair and Syncthing recover")
+
+            sender.stop()
+            del sender.config["allow_config_peer_in"]
+            sender.update()
+            sender.start()
+            retry(check_routes, timeout=45)
+            if request(fossils[0], "http://127.0.0.1:8443/config-peer/manifest")[0] != 401:
+                raise RuntimeError("The sender's local config-peer listener is not healthy")
+            denial_probe = """
+import http.client, sys
+connection = http.client.HTTPConnection("127.0.0.1", int(sys.argv[1]), timeout=5)
+try:
+    connection.request("GET", "/config-peer/manifest")
+    connection.getresponse()
+except (OSError, http.client.RemoteDisconnected):
+    print("denied")
+else:
+    raise SystemExit("The removed pin still permits the peer to reach the config-peer listener")
+"""
+            if docker("exec", fossils[1], "python3", "-c", denial_probe, str(REPAIR_PORT)) != "denied":
+                raise RuntimeError("The removed config-peer pin did not deny network access")
+            print("PASS: removing a local config-peer grant denies the peer with discovery still offline")
+        finally:
+            docker("unpause", discovery.name)
         print("PASS: two signed fossils register over verified HTTPS and relay distinct authenticated responses over Rayfish")
         print("PASS: both fossils use real Radarr and Sonarr and export matching config ciphertext through Rayfish")
         print("PASS: no Tailscale or Headscale in the fixture; Rayfish outage breaks relay only, and restart restores it")
