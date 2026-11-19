@@ -48,6 +48,15 @@ jobs:
           echo "elapsed_seconds=$((end_time - start_time))" >> "$GITHUB_OUTPUT"
           exit "$test_status"
 
+      - name: Test private Rayfish discovery in its runtime image
+        run: |
+          docker build --quiet -f deploy/rayfish/Dockerfile.discovery -t rawrarr-rayfish-discovery:local .
+          docker run --rm --network none --read-only \
+            --tmpfs /tmp:uid=10001,gid=10001 --cap-drop ALL \
+            --security-opt no-new-privileges \
+            -v "$PWD/scripts/tests/rayfish_private_discovery_integration.py:/tmp/test-discovery.py:ro" \
+            --entrypoint python3 rawrarr-rayfish-discovery:local /tmp/test-discovery.py
+
       - name: Publish test run summary
         if: always()
         env:

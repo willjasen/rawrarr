@@ -36,10 +36,10 @@
   The Rayfish sidecar logs show startup, route grant counts, mesh readiness
   changes, and shutdown. Raw daemon output stays in the test sidecar's
   disposable `/state` volume.
-- `test_rayfish_private_discovery.py` -- verifies real Ed25519 signatures,
+- `rayfish_private_discovery_integration.py` -- verifies real Ed25519 signatures,
   timestamp ordering, persistence, no enumeration, and capacity limits.
   Build with `docker build -f deploy/rayfish/Dockerfile.discovery -t rawrarr-rayfish-discovery:local .`,
-  then run `docker run --rm --network none -v "$PWD/scripts/tests/test_rayfish_private_discovery.py:/tmp/test-discovery.py:ro" --entrypoint python3 rawrarr-rayfish-discovery:local /tmp/test-discovery.py`.
+  then run `docker run --rm --network none -v "$PWD/scripts/tests/rayfish_private_discovery_integration.py:/tmp/test-discovery.py:ro" --entrypoint python3 rawrarr-rayfish-discovery:local /tmp/test-discovery.py`.
 - `rayfish_user_isolation_docker.py` -- creates two independent closed user
   meshes, with separate coordinator sidecars sharing one network namespace.
   Checks each synthetic user's authenticated route, `.ray` resolution through

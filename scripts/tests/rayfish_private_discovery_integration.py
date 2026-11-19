@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise the private PKARR store using actual Ed25519 signatures."""
+"""Exercise the private PKARR store inside its image using Ed25519 signatures."""
 
 import base64
 import http.client
