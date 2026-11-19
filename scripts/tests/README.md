@@ -10,7 +10,7 @@
 
 - `rayfish_standalone_docker.py --binary /path/to/rust-arr` -- runs a fresh
   `roarlay` coordinator, two signed nodes labeled `metadata-a` and `metadata-b`,
-  and disposable support services (`rayfish-coord`, `discovery`, `peer-a`,
+  and disposable support services (`mesh-owner`, `rayfish-coord`, `discovery`, `peer-a`,
   `peer-b`, and others) in
   OrbStack's `rawrarr-test-rayfish` group without Tailscale or Headscale.
   Supply a current-worktree binary built in a prepared native test clone;
@@ -24,7 +24,11 @@
   Syncthing 2.1.5 to verify byte-identical bidirectional transfers between two
   explicitly paired devices via a pinned TCP forward. Removes one node's test
   config and journal, then verifies signed repair over Rayfish restores the
-  exact ciphertext and rejects unsigned requests. Does not cover the
+  exact ciphertext and rejects unsigned requests. With the enrollment-only
+  key holder stopped and discovery paused, cold-restarts all three traffic
+  sidecars and verifies the HTTPS relay, access denial, signed repair, and
+  bidirectional sync again. Discovery remains configured and the private
+  traffic relay stays up. Does not cover partition revocation or the
   browser-direct `.ray` workload.
   The Rayfish sidecar logs show startup, route grant counts, mesh readiness
   changes, and shutdown. Raw daemon output stays in the test sidecar's

@@ -132,23 +132,25 @@ recreate the associated transport sidecar after verifying its new namespace.
 
 ## Admission and route selection
 
-Create a dedicated closed network on one pilot endpoint:
+Create a dedicated closed network on the enrollment-only endpoint. Do not
+grant this endpoint application ingress or configure any forwards:
 
 ```sh
 docker exec RAYFISH_CONTAINER ray --rootless create --closed \
-  --name rawrarr-pilot --hostname fossil-a
+  --name rawrarr-pilot --hostname mesh-owner
 docker exec RAYFISH_CONTAINER ray --rootless files auto-accept rawrarr-pilot off
 docker exec RAYFISH_CONTAINER ray --rootless status --json
 ```
 
 Generate an invitation using `ray --rootless invite rawrarr-pilot --json` and
 transfer its `code` through a protected channel. Do not put invitation codes in
-Compose, Git, ordinary logs or `/shared`. On the other endpoint, use
-`ray --rootless join CODE --name rawrarr-pilot --hostname fossil-b
+Compose, Git, ordinary logs or `/shared`. On each traffic endpoint, use a
+separate invitation and a distinct hostname, for example
+`ray --rootless join CODE --name rawrarr-pilot --hostname fossil-a
 --no-auto-accept-files`. Do not accept firewall auto-management or device pairing.
 The creator must turn file auto-accept off before its next restart too.
 
-After recording both endpoints and mesh addresses, add explicit inbound peers
+After recording the traffic endpoint IDs and mesh addresses, add explicit inbound peers
 and/or forwards. This example uses **synthetic** values that must be replaced:
 
 ```json
@@ -293,6 +295,22 @@ data, and one cold-restarts successfully while the owner stays offline.
 Private discovery remains available in that test. This supports the narrower
 claim that established membership does not require a continuously online
 network owner, not that discovery infrastructure can be removed.
+
+For the pilot, keep the network key in a dedicated enrollment-only endpoint
+with no application listener or forwards. Enroll Roarlay's sidecar and both
+subscriber sidecars as ordinary members. The standalone OrbStack fixture
+restarts all three traffic sidecars with that key holder stopped and private
+discovery paused, then checks authorized relay traffic, anonymous denial,
+signed config repair, and bidirectional Syncthing. The private traffic relay
+remains online on the same Docker bridge; this does not qualify recovery
+across hosts or NATs.
+
+Existing Tailscale deployments require no application or data migration for
+this topology. For an existing Rayfish pilot that put the owner on a traffic
+sidecar, enroll ordinary peers in a new closed mesh with separate state; do
+not copy the owner state to another sidecar. Retain the old routes and
+identities until the new pins and routes are verified. Roll back by restoring
+the previous route and sidecar settings without deleting either mesh's state.
 
 An additional direct-LAN test with a separate, stopped key holder found that
 two ordinary members can both cold-restart and exchange authenticated
