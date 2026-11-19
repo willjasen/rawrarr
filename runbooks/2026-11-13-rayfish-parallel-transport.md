@@ -414,3 +414,22 @@ packet signatures, preserves newer records across restarts, and caps the
 number of stored keys. It uses a separate volume; no existing Rawrarr data
 needs migration. Keep existing Fossil routes as rollback until cross-host
 workloads pass with the new service.
+
+## 2026-11-18: Coordinator access without a shared-gateway allowlist
+
+Private discovery is now deployed alongside the relay in a separate do3
+Compose project. The two Macs exchanged authenticated fixture traffic across
+hosts, but internal Roarlay's Docker namespace received HTTP 403 from the
+tailnet-facing ingress. An allowlist change for its Docker egress address
+did not resolve this and was rolled back.
+
+An unpublished TLS proxy on a dedicated internal Docker network reached
+both backends with the same HTTPS URLs used by the Macs. A disposable
+Rayfish sidecar sharing Roarlay's namespace used its own hostname mapping
+and enrolled in a closed test mesh. Attaching and detaching the bridge left
+default routing and Tailscale Serve unchanged. The temporary bridge, proxy,
+and peers were removed. A persistent deployment must preserve the attachment
+when the namespace holder is recreated and verify authorized Roarlay-to-node
+traffic before changing the first live route. No application or data
+migration is needed for the ingress path. Rollback removes the pilot path
+and preserves existing Tailscale routes.
