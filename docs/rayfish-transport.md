@@ -131,7 +131,11 @@ For a private deployment, set both infrastructure endpoints on every sidecar
 These are fields to add to the bootstrap JSON above. The wrapper configures
 Rayfish to replace its default servers with exactly these endpoints. Provision
 the signed-packet discovery service and the iroh traffic relay separately;
-this option does not deploy them. Use trusted TLS for endpoints across hosts.
+this option does not deploy them. Build the private discovery server with
+`docker build -f deploy/rayfish/Dockerfile.discovery -t rawrarr-rayfish-discovery:local .`.
+Run it on a private backend network with a fresh persistent volume at `/state`;
+do not publish its HTTP port directly. Put both services behind trusted TLS
+and restrict ingress to approved pilot hosts.
 HTTP is accepted only for IPv4 loopback or single-label container service
 names; use those forms only on an isolated local Docker network. URLs cannot
 carry credentials, query parameters, or fragments. Leaving `infrastructure`
@@ -139,6 +143,15 @@ out preserves legacy defaults on unconfigured state. An existing sidecar
 must use a fresh transport volume and be re-enrolled to switch infrastructure;
 the wrapper refuses to reuse state with mismatched saved settings. Retain the
 original volume and route as rollback, and do not copy private endpoint keys.
+
+The discovery server does not federate or send packets to a DHT. It verifies
+the Ed25519 signature against the requested record key and atomically retains
+the newest signed packet in SQLite. It has no list endpoint or eviction;
+it rejects new keys after 512 records and continues accepting updates to
+existing keys. Keep its database on service-local storage, back it up, and
+monitor for capacity errors. Do not silently restore an older snapshot over
+a newer database: doing so loses the newer signed records, including possible
+revocations. Starting this server requires no application data migration.
 
 ```sh
 python3 scripts/rayfish_transport.py compose --config /protected/pilot.json \

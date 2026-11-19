@@ -15,7 +15,8 @@
   OrbStack's `rawrarr-test-rayfish` group without Tailscale or Headscale.
   Supply a current-worktree binary built in a prepared native test clone;
   group the build clone there too with
-  `--label com.docker.compose.project=rawrarr-test-rayfish`. Checks verified HTTPS
+  `--label com.docker.compose.project=rawrarr-test-rayfish`. Build the private
+  discovery image as described below first. Checks verified HTTPS
   registration, distinct authenticated Rayfish responses, anonymous denial,
   coordinator-side forward outage and recovery. Uses cached LinuxServer Radarr
   and Sonarr images and the private relay image documented below. Exercises
@@ -35,6 +36,10 @@
   The Rayfish sidecar logs show startup, route grant counts, mesh readiness
   changes, and shutdown. Raw daemon output stays in the test sidecar's
   disposable `/state` volume.
+- `rayfish_private_discovery_integration.py` -- verifies real Ed25519 signatures,
+  timestamp ordering, persistence, no enumeration, and capacity limits.
+  Build with `docker build -f deploy/rayfish/Dockerfile.discovery -t rawrarr-rayfish-discovery:local .`,
+  then run `docker run --rm --network none -v "$PWD/scripts/tests/rayfish_private_discovery_integration.py:/tmp/test-discovery.py:ro" --entrypoint python3 rawrarr-rayfish-discovery:local /tmp/test-discovery.py`.
 - `rayfish_user_isolation_docker.py` -- creates two independent closed user
   meshes, with separate coordinator sidecars sharing one network namespace.
   Checks each synthetic user's authenticated route, `.ray` resolution through

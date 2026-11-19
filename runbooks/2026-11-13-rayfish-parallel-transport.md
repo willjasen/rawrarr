@@ -392,3 +392,25 @@ and restart are a containment option during a discovery outage, not a way
 to revoke a peer on hosts the operator cannot reach. No application data,
 database, or protocol migration is needed. Provision private service endpoints
 and qualify cross-host recovery and rollback before changing live routes.
+
+## 2026-11-18: Internal traffic relay staged
+
+For [#446](https://github.com/willjasen/rawrarr/issues/446), do3 runs a
+checksum-pinned iroh relay in the separate `rawrarr-internal-rayfish` Compose
+project at `/opt/rawrarr-internal-rayfish`. Only its HTTPS proxy is published,
+on the do3 tailnet interface at TCP 18443. Both Macs reached `/healthz` from
+independent Docker bridges; an unlisted container source received HTTP 403.
+This tests the HTTPS and backend health path, not cross-host payload transfer.
+
+The certificate is mounted from host-local files; monitor its expiry and
+renew it before enrolling live peers. To roll back, stop this Compose
+project only, under its per-container locks. There is no subscriber data
+or application migration. No live Rawrarr route references the relay.
+Private discovery remains unprovisioned: the upstream pkarr relay publishes
+to the public DHT, and the disposable fixture is not a deployable service.
+
+The follow-up implements a non-federating discovery store that verifies
+packet signatures, preserves newer records across restarts, and caps the
+number of stored keys. It uses a separate volume; no existing Rawrarr data
+needs migration. Keep existing Fossil routes as rollback until cross-host
+workloads pass with the new service.
