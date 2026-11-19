@@ -124,6 +124,7 @@ class CoordinatorAutoUpdaterTests(unittest.TestCase):
         self.assertTrue(UPDATER.affects_coordinator(["rust-arr/src/node_role.rs"]))
         self.assertFalse(UPDATER.affects_coordinator([
             "deploy/do3/docker-compose.internal-coordinator.yml",
+            "deploy/do3/docker-compose.internal-rayfish-coordinator.yml",
             "deploy/do3/docker-compose.analytics-dashboard-internal.yml",
             "deploy/do3/docker-compose.production-container-names.yml",
         ]))
@@ -217,9 +218,10 @@ class CoordinatorAutoUpdaterTests(unittest.TestCase):
             project.mkdir()
             base = project / "compose.yml"
             image_override = project / "image.override.yml"
+            rayfish_overlay = project / "rayfish-coordinator.override.yml"
             previous_timestamp = project / "builds" / "old" / "deployment-info.override.yml"
             next_timestamp = project / "builds" / "new" / "deployment-info.override.yml"
-            for path in (base, image_override, previous_timestamp):
+            for path in (base, image_override, rayfish_overlay, previous_timestamp):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.touch()
             labels = {
@@ -227,12 +229,12 @@ class CoordinatorAutoUpdaterTests(unittest.TestCase):
                 "com.docker.compose.project.working_dir": str(project),
                 "com.docker.compose.service": "roarlay",
                 "com.docker.compose.project.config_files": ",".join(
-                    (str(base), str(image_override), str(previous_timestamp))
+                    (str(base), str(image_override), str(rayfish_overlay), str(previous_timestamp))
                 ),
             }
             with patch.object(UPDATER, "docker_container", return_value={"Config": {"Labels": labels}}):
                 _name, _directory, _service, files = UPDATER.compose_files("service", next_timestamp)
-            self.assertEqual(files, [base, image_override, next_timestamp])
+            self.assertEqual(files, [base, image_override, rayfish_overlay, next_timestamp])
 
     def test_failed_run_reports_error_without_raising(self):
         with patch.object(UPDATER, "run_once", side_effect=RuntimeError("internal verification failed")), \

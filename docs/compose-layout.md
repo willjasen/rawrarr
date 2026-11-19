@@ -13,6 +13,11 @@ Lack of a repository caller is not evidence that a deployed overlay is unused.
   coordinator/two-fossil environment, with its Caddy and Headscale fixtures beside
   it. It replaces `docker-compose.orbstack-test.yml`.
 - `deploy/do3/` contains environment-specific coordinator/support definitions.
+  The optional `docker-compose.internal-rayfish-coordinator.yml` overlay is
+  paired with `deploy/rayfish/docker-compose.coordinator-access.yml`; include
+  it in the active internal coordinator file list whenever the Tailscale
+  namespace holder is recreated. Its bridge is internal and has no default
+  gateway. See the [Rayfish transport guide](rayfish-transport.md#persistent-internal-coordinator-access-on-do3).
   Leave these separate from subscriber definitions and from each other.
 - `rust-arr/web-export/subscriber-compose.js` generates downloaded subscriber
   Compose. Its output is not a checked-in deployment stack.

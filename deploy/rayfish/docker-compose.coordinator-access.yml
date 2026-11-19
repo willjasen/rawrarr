@@ -1,0 +1,53 @@
+# Private coordinator-only TLS path to the existing Rayfish backends.
+# No host ports are published. The certificate/key stay host-local.
+services:
+  coordinator-proxy:
+    container_name: rawrarr-int-rayfish-coordinator-proxy
+    image: rawrarr-internal-rayfish-https:local
+    pull_policy: never
+    user: "10001:10001"
+    cap_drop: [ALL]
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /config:uid=10001,gid=10001
+      - /data:uid=10001,gid=10001
+    volumes:
+      - ./coordinator-access.Caddyfile:/etc/caddy/Caddyfile:ro
+      - type: bind
+        source: ${RAWARR_RAYFISH_TLS_CERT_PATH:-/opt/rawrarr-internal-rayfish/tls.crt}
+        target: /run/tls.crt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${RAWARR_RAYFISH_TLS_KEY_PATH:-/opt/rawrarr-internal-rayfish/tls.key}
+        target: /run/tls.key
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/caddy-unprivileged", "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      coordinator-access:
+        ipv4_address: 172.31.99.2
+      relay-backend: {}
+      discovery-backend: {}
+    restart: unless-stopped
+
+networks:
+  coordinator-access:
+    name: rawrarr-internal-rayfish-coordinator
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.31.99.0/29
+  relay-backend:
+    name: rawrarr-internal-rayfish_backend
+    external: true
+  discovery-backend:
+    name: rawrarr-internal-rayfish-discovery_backend
+    external: true
