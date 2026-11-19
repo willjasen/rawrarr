@@ -414,3 +414,93 @@ packet signatures, preserves newer records across restarts, and caps the
 number of stored keys. It uses a separate volume; no existing Rawrarr data
 needs migration. Keep existing Fossil routes as rollback until cross-host
 workloads pass with the new service.
+
+## 2026-11-18: Coordinator access without a shared-gateway allowlist
+
+Private discovery is now deployed alongside the relay in a separate do3
+Compose project. The two Macs exchanged authenticated fixture traffic across
+hosts, but internal Roarlay's Docker namespace received HTTP 403 from the
+tailnet-facing ingress. An allowlist change for its Docker egress address
+did not resolve this and was rolled back.
+
+An unpublished TLS proxy on a dedicated internal Docker network reached
+both backends with the same HTTPS URLs used by the Macs. A disposable
+Rayfish sidecar sharing Roarlay's namespace used its own hostname mapping
+and enrolled in a closed test mesh. Attaching and detaching the bridge left
+default routing and Tailscale Serve unchanged. The temporary bridge, proxy,
+and peers were removed. A persistent deployment must preserve the attachment
+when the namespace holder is recreated and verify authorized Roarlay-to-node
+traffic before changing the first live route. No application or data
+migration is needed for the ingress path. Rollback removes the pilot path
+and preserves existing Tailscale routes.
+
+## Fossil cutover handoff
+
+**Status:** Neither internal Fossil has switched. Private discovery and relay
+are live on do3. The Mac-to-Mac test proved authenticated transfer between
+disposable peers, not Roarlay-to-live-Fossil traffic. The isolated coordinator
+ingress probe proved enrollment and was removed afterward. Merging these notes
+does not enable Rayfish on either node.
+
+| Order | Host | Existing Compose project | Native image |
+| --- | --- | --- | --- |
+| 1 | MacBook Pro | `rawrarr-node-internal` | `linux/amd64` |
+| 2 | Mac mini | `rawrarr-internal` | `linux/arm64` |
+
+1. **Prepare rollback before touching a live route.** Use synchronized GitHub
+   `main` and verify the image revision, native architecture, and Docker
+   context on each host. Save the original Compose file list, image IDs,
+   Roarlay relay and direct target maps, and any affected peer settings outside
+   Git. Record the current health and authenticated route for both Fossils.
+   Keep the subscriber Tailscale services, state volumes, and host tailnet
+   access available. Use the existing per-container deployment locks.
+2. **Make Roarlay's Rayfish ingress persistent first.** Reuse the isolated
+   bridge and unpublished TLS proxy design above. Keep the same canonical
+   discovery and relay URLs as the Macs; the hostname override belongs only
+   to the coordinator Rayfish sidecar. Make the bridge attachment, proxy
+   address, and sidecar join survive recreation of the namespace holder.
+   Check both Rayfish backends from the sidecar, keep unlisted sources denied
+   on the tailnet-facing ingress, and verify that the default route, internal
+   Tailscale Serve, and Roarlay HTTPS registration path are unchanged.
+3. **Stage an independent namespace for the MacBook canary.** Do not merely
+   stop the existing Tailscale service: Fossil and its loopback artwork cache
+   share that namespace. Put Fossil, its cache, and the Rayfish sidecar in a
+   dedicated namespace that does not depend on subscriber Tailscale. Bind
+   application listeners to loopback; publish no new host ports. Retain the
+   existing `/data`, `/shared`, node identity, credentials, and volume
+   ownership. The MacBook Compose layout passed a dry run only. On the mini,
+   inspect the effective loopback cache dependency separately; its running
+   cache was not in the effective Compose definition at preflight. There is
+   no database, application-data, or protocol migration.
+4. **Enroll and verify the new route before selecting it.** Use one closed mesh
+   per user, a separate enrollment-only key holder, and a separate state
+   volume for each sidecar. Use the private do3 discovery and relay settings
+   in the [transport guide](../docs/rayfish-transport.md#build-and-generate).
+   Pin the full endpoint IDs and reported mesh IPv6 addresses. On Fossil,
+   grant app TCP 8080 only to its approved Roarlay peer. On Roarlay, add one
+   loopback forward per Fossil. Verify the pinned forward from Roarlay's
+   namespace, then use `relay-targets` to change only the canary's entry in
+   `RAWARR_NODE_RELAY_TARGETS`. Set
+   `RAWARR_NODE_RELAY_BYPASS_LOOPBACK_PROXY=true` if the Tailscale SOCKS proxy
+   is configured. Check for any direct route that still targets the old
+   subscriber transport; do not advertise it as working after detachment.
+   Keep Roarlay HTTPS check-ins verified. Config repair and Syncthing need
+   separate, explicitly pinned grants and must be qualified if the node
+   relies on them; do not expose the Syncthing GUI.
+5. **Observe the MacBook before repeating on the mini.** Verify authenticated
+   Roarlay requests reach the expected Fossil identity, anonymous requests
+   are denied, and the other Fossil still works over its unchanged route.
+   Check cache access, required Arr and peer workloads, and restart/recovery
+   without the subscriber Tailscale namespace. Verify rollback and local
+   grant removal before promoting the mini. The sustained soak remains
+   outstanding. Automatic revocation on an unreachable receiver is not
+   implemented: a mesh kick alone does not guarantee immediate revocation
+   during a discovery partition.
+
+**Rollback:** If the route, identity, authorization, cache, or a required
+workload fails, restore the canary's original Compose files and namespace
+dependencies and restore Roarlay's saved route maps and proxy setting. Recreate
+only the affected services under their locks. Verify the original authenticated
+Tailscale route and coordinator HTTPS, then stop only the canary's Rayfish
+sidecars. Preserve both transport state volumes and all application data. No
+automatic per-request fallback is configured.
