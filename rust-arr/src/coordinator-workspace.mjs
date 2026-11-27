@@ -334,13 +334,13 @@ cryptoLinkForm.addEventListener('submit', async event => {
   try {
     const provider = window.ethereum;
     if (!provider || typeof provider.request !== 'function') throw new Error('Install an Ethereum wallet extension to link an ENS wallet.');
-    const start = await jsonRequest('/api/auth/eth/link/start', { method: 'POST', body: JSON.stringify({ ensName: document.getElementById('crypto-ens-name').value.trim() }) });
+    const start = await jsonRequest('/api/auth/eth/link/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ensName: document.getElementById('crypto-ens-name').value.trim() }) });
     const accounts = await provider.request({ method: 'eth_requestAccounts' });
     const account = Array.isArray(accounts) ? accounts.find(value => value.toLowerCase() === start.address.toLowerCase()) : null;
     if (!account) throw new Error('Select the wallet currently resolved by this ENS name, then try again.');
     const hexMessage = `0x${Array.from(new TextEncoder().encode(start.message), byte => byte.toString(16).padStart(2, '0')).join('')}`;
     const signature = await provider.request({ method: 'personal_sign', params: [hexMessage, account] });
-    await jsonRequest('/api/auth/eth/link/finish', { method: 'POST', body: JSON.stringify({ challengeId: start.challengeId, signature }) });
+    await jsonRequest('/api/auth/eth/link/finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ challengeId: start.challengeId, signature }) });
     message.textContent = 'ENS wallet linked.';
     await loadProfile();
   } catch (error) {
