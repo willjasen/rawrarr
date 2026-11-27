@@ -373,7 +373,7 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 
 - `test_coordinator_health.py` — Read-only live coordinator health-page and protected-auth checks; run `python3 scripts/tests/test_coordinator_health.py --base-url https://rawrarr.risk-mermaid.ts.net`. Requires Python 3.
 
-- `test_rawrarr_device_signing_crypto.mjs` — checks owner-side ML-DSA-65 root creation, age-encrypted backup, folded-armor import, root-signed approvals and rejection revocations, distinct signature domains, root fingerprint matching, and tamper rejection; run with `node --test scripts/tests/test_rawrarr_device_signing_crypto.mjs`.
+- `test_rawrarr_device_signing_crypto.mjs` — checks owner-side ML-DSA-65 root creation, age-encrypted backup, folded-armor import, root-signed approvals and rejection revocations, owner-authorized app identity unwrap, per-fossil age-encrypted app-key grant issuance, epoch and target binding, root fingerprint matching, and tamper rejection; run `node --test scripts/tests/test_rawrarr_device_signing_crypto.mjs` in the prepared Docker test clone, where the pinned web-export modules are available.
 - Rust `shared_logs` tests verify signed compressed records, event tampering rejection, and offline node-certificate validation against an independently pinned instance-root fingerprint; run with `cargo test --bin rust-arr shared_logs::tests`.
 `test_rawrarr_library_detail_link_layout.mjs` checks that Movies and TV display year and Arr detail links in the artwork/title column. Run with `node --test scripts/tests/test_rawrarr_library_detail_link_layout.mjs`.
 
