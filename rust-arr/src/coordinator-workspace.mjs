@@ -313,6 +313,7 @@ async function loadProfile() {
     accessStatus.textContent = access.tier === 'free'
       ? `Free tier · ${access.fossilNodes} of ${access.fossilNodeLimit} fossil nodes`
       : `${access.tier[0].toUpperCase()}${access.tier.slice(1)} tier${access.paidThrough ? ` · paid through ${new Date(access.paidThrough).toLocaleDateString()}` : ''}`;
+    document.getElementById('crypto-wallet-link-form').hidden = Boolean(wallet.wallets?.length);
     const walletName = wallet.wallets?.[0]?.ensName;
     walletStatus.textContent = walletName ? `Linked wallet · ${walletName}` : 'No ENS wallet linked';
     if (walletName) document.getElementById('crypto-ens-name').value = walletName;
