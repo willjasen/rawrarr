@@ -17,11 +17,24 @@ allowlist. No WebRTC endpoint, signaling, or browser transport exists yet.
 
 ## Implementation notes
 
-Pending investigation and implementation.
+Added a pinned `webrtc-rs` 0.21.1 dependency and a test-only local offer/answer
+data-channel probe. The probe creates two native peers bound to loopback UDP,
+exchanges complete ICE descriptions directly, and asserts a message round trip;
+it uses no signaling server, STUN or TURN. The crate requires Rust 1.91 because
+its pinned `rtc-mdns` dependency uses `Ipv4Addr::from_octets`, stabilized in
+Rust 1.91. The runtime and reusable test image builders were both updated.
+
+This is transport qualification groundwork only. Authenticated signaling,
+node identity proof, bounded workspace operations, browser routing and fallback
+remain unimplemented. The test image rebuild is in progress.
 
 ## Verification
 
-Pending.
+- `git diff --check` — passed.
+- Prior run on Rust 1.88 failed while compiling `rtc-mdns 0.21.1`:
+  `Ipv4Addr::from_octets` is unstable on that compiler.
+- The reusable Rust 1.91 test image is rebuilding; the focused data-channel
+  test has not yet completed.
 
 ## Adoption and rollback
 
