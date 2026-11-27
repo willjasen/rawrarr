@@ -106,20 +106,21 @@ impl CiphertextMirror {
             }
         }
         let Some((digest,bytes))=verified else{return Ok(None);};
-        let parent = path.parent().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "config path has no parent"))?;
-        fs::create_dir_all(parent)?;
-        let staging = parent.join(format!(".config.{}.tmp", uuid::Uuid::new_v4().simple()));
+        let shared=crate::secure_config::AgeVault::shared_dir();
+        let directory=open_config_directory(&shared,path)?;
+        let parent=path.parent().ok_or_else(||std::io::Error::new(std::io::ErrorKind::InvalidInput,"config path has no parent"))?;
+        let staging = format!(".config.{}.tmp", uuid::Uuid::new_v4().simple());
         use std::io::Write;
         use std::os::unix::fs::OpenOptionsExt;
         let write_result = (|| {
-            let mut file = fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&staging)?;
+            let mut file = fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(parent.join(&staging))?;
             file.write_all(&bytes)?;
             file.sync_all()?;
-            fs::rename(&staging, path)?;
-            fs::File::open(parent)?.sync_all()?;
+            fs::rename(parent.join(&staging), path)?;
+            directory.sync_all()?;
             Ok::<(), std::io::Error>(())
         })();
-        if write_result.is_err() { let _ = fs::remove_file(&staging); }
+        if write_result.is_err() { let _ = fs::remove_file(parent.join(&staging)); }
         write_result?;
         Ok(Some(digest))
     }
@@ -306,7 +307,8 @@ impl PeerRpc {
             if !response.status().is_success(){continue;}
             let Ok(bytes)=response.bytes().await else{continue;};
             if bytes.len()>MAX_CONFIG_BYTES || !valid_ciphertext(&bytes) || hex(&Sha256::digest(&bytes))!=digest.to_ascii_lowercase(){continue;}
-            if write_active_ciphertext(path,&bytes).is_ok(){mirror.mirror(&bytes);repaired=true;}
+            let shared=crate::secure_config::AgeVault::shared_dir();
+            if let Ok(shared)=fs::canonicalize(shared) { if write_active_ciphertext(path,&bytes, &shared).is_ok(){mirror.mirror(&bytes);repaired=true;} }
         }
         let local_root = merkle_root(&load_revisions());
         let matching = peer_roots.values().filter(|root| *root == &local_root).count();
@@ -332,11 +334,24 @@ fn rayfish_peer_url(value: &str) -> bool {
             && url.query().is_none() && url.fragment().is_none()
     })
 }
-fn write_active_ciphertext(path:&Path,bytes:&[u8])->std::io::Result<()> {
+fn open_config_directory(shared:&Path,path:&Path)->std::io::Result<fs::File> {
+    let canonical_shared=fs::canonicalize(shared)?;
+    if path != canonical_shared.join("config.aged") {
+        return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied,"config path is outside the configured shared-data root"));
+    }
+    crate::safe_fs::ensure_directory(&canonical_shared)?;
+    let directory=fs::File::open(&canonical_shared)?;
+    let metadata=directory.metadata()?;
+    if !metadata.is_dir() { return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied,"config path parent is not a directory")); }
+    Ok(directory)
+}
+
+fn write_active_ciphertext(path:&Path,bytes:&[u8],shared:&Path)->std::io::Result<()> {
     if !valid_ciphertext(bytes){return Err(std::io::Error::new(std::io::ErrorKind::InvalidData,"invalid age ciphertext"));}
-    let parent=path.parent().ok_or_else(||std::io::Error::new(std::io::ErrorKind::InvalidInput,"config path has no parent"))?; fs::create_dir_all(parent)?;
+    let directory=open_config_directory(shared,path)?;
+    let parent=path.parent().ok_or_else(||std::io::Error::new(std::io::ErrorKind::InvalidInput,"config path has no parent"))?;
     let staging=parent.join(format!(".config.{}.tmp",uuid::Uuid::new_v4().simple()));
-    let result=(||{let mut file=fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&staging)?;file.write_all(bytes)?;file.sync_all()?;fs::rename(&staging,path)?;fs::File::open(parent)?.sync_all()?;Ok::<(),std::io::Error>(())})();
+    let result=(||{let mut file=fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&staging)?;file.write_all(bytes)?;file.sync_all()?;fs::rename(&staging,path)?;directory.sync_all()?;Ok::<(),std::io::Error>(())})();
     if result.is_err(){let _=fs::remove_file(staging);} result
 }
 
