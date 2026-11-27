@@ -24,3 +24,7 @@ The owner client must decrypt the owner-wrapped group identity and then the prep
 - `git diff --check` — passed.
 - Direct host execution was unavailable because the checkout has no web-export `node_modules`; using the prepared isolated clone resolved the dependency gap. The full Rust, Node, Playwright, and environment suites were not run. No end-to-end grant installation or delivery was exercised; PR #494 remains open and defines the node verifier contract.
 - No existing data or protocol migration is required because issuance is client-side and is not wired to app settings or coordinator delivery. The utility requires callers to source the app identity through the owner-authorized decrypt helper and to refresh the target's accepted epoch before issuing. Grant delivery remains tracked separately by [#500](https://github.com/willjasen/rawrarr/issues/500).
+
+## Final state
+
+Implementation commit `94fbba6` is on `codex/issue-497-owner-app-key-grants` and pushed. Pull request [#504](https://github.com/willjasen/rawrarr/pull/504) targets `main`; it was open and mergeable at the last check, with the `Basic script tests` GitHub Action still running. No deployment or app-settings activation was performed. The shared checkout's unrelated untracked runbook and other task worktrees remain untouched.
