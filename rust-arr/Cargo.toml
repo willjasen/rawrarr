@@ -3,7 +3,7 @@ name = "rust-arr"
 version = "0.1.0"
 license = "AGPL-3.0-only"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.91"
 
 [dependencies]
 axum = "0.8"
@@ -15,6 +15,8 @@ async-stream = "0.3"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 chrono-tz = "0.10"
 futures-util = "0.3"
+async-trait = "0.1"
+bytes = "1"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 reqwest = { version = "0.13", default-features = false, features = ["form", "json", "multipart", "query", "rustls", "socks", "stream"] }
 redis = { version = "0.27", default-features = false, features = ["tokio-comp"] }
@@ -34,6 +36,7 @@ tokio = { version = "1", features = ["fs", "macros", "net", "rt-multi-thread", "
 url = "2"
 uuid = { version = "1", features = ["serde", "v4"] }
 webauthn-rs = { version = "0.5.5", default-features = false, features = ["danger-allow-state-serialisation"] }
+webrtc = { version = "=0.21.1", default-features = false, features = ["runtime-tokio", "crypto-ring"] }
 zeroize = "1"
 
 [lints.rust]

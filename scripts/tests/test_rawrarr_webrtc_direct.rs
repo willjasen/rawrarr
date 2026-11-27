@@ -1,0 +1,161 @@
+use std::sync::Arc;
+    use std::time::Duration;
+
+    use bytes::BytesMut;
+    use tokio::sync::Notify;
+    use webrtc::data_channel::{DataChannel, DataChannelEvent};
+    use webrtc::peer_connection::{
+        MediaEngine, PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler,
+        RTCConfigurationBuilder, RTCIceGatheringState, Registry,
+        register_default_interceptors,
+    };
+    use webrtc::runtime::{Runtime, default_runtime};
+
+    #[derive(Clone)]
+    struct GatherHandler(Arc<Notify>);
+
+    #[async_trait::async_trait]
+    impl PeerConnectionEventHandler for GatherHandler {
+        async fn on_ice_gathering_state_change(&self, state: RTCIceGatheringState) {
+            if state == RTCIceGatheringState::Complete {
+                self.0.notify_one();
+            }
+        }
+    }
+
+    #[derive(Clone)]
+    struct EchoHandler {
+        runtime: Arc<dyn Runtime>,
+        gathered: Arc<Notify>,
+    }
+
+    #[async_trait::async_trait]
+    impl PeerConnectionEventHandler for EchoHandler {
+        async fn on_ice_gathering_state_change(&self, state: RTCIceGatheringState) {
+            if state == RTCIceGatheringState::Complete {
+                self.gathered.notify_one();
+            }
+        }
+
+        async fn on_data_channel(&self, channel: Arc<dyn DataChannel>) {
+            self.runtime.spawn(Box::pin(async move {
+                while let Some(event) = channel.poll().await {
+                    match event {
+                        DataChannelEvent::OnMessage(message) => {
+                            let _ = channel.send(BytesMut::from(message.data.as_ref())).await;
+                        }
+                        DataChannelEvent::OnClose => break,
+                        _ => {}
+                    }
+                }
+            }));
+        }
+    }
+
+    async fn local_peer(
+        runtime: Arc<dyn Runtime>,
+        handler: Arc<dyn PeerConnectionEventHandler>,
+    ) -> Arc<PeerConnection> {
+        let mut media = MediaEngine::default();
+        media.register_default_codecs().expect("default codecs register");
+        let interceptors = register_default_interceptors(Registry::new(), &mut media)
+            .expect("default interceptors register");
+        PeerConnectionBuilder::new()
+            .with_configuration(RTCConfigurationBuilder::new().build())
+            .with_media_engine(media)
+            .with_interceptor_registry(interceptors)
+            .with_handler(handler)
+            .with_runtime(runtime)
+            .with_udp_addrs(vec!["127.0.0.1:0"])
+            .with_data_channel_send_buffer_limit(64 * 1024)
+            .build()
+            .await
+            .expect("peer connection builds")
+    }
+
+    async fn wait_for_ice(notify: &Notify) {
+        tokio::time::timeout(Duration::from_secs(10), notify.notified())
+            .await
+            .expect("ICE gathering completes");
+    }
+
+    #[tokio::test]
+    async fn local_data_channel_round_trips_without_signaling_or_turn_services() {
+        let runtime = default_runtime().expect("Tokio WebRTC runtime is enabled");
+        let offer_gathered = Arc::new(Notify::new());
+        let answer_gathered = Arc::new(Notify::new());
+        let offer_peer = local_peer(
+            runtime.clone(),
+            Arc::new(GatherHandler(offer_gathered.clone())),
+        )
+        .await;
+        let answer_peer = local_peer(
+            runtime.clone(),
+            Arc::new(EchoHandler {
+                runtime,
+                gathered: answer_gathered.clone(),
+            }),
+        )
+        .await;
+
+        let channel = offer_peer
+            .create_data_channel("rawrarr-workspace-v1", None)
+            .await
+            .expect("data channel creates");
+        let offer = offer_peer.create_offer(None).await.expect("offer creates");
+        offer_peer
+            .set_local_description(offer)
+            .await
+            .expect("offer becomes local description");
+        wait_for_ice(&offer_gathered).await;
+        let offer = offer_peer
+            .local_description()
+            .await
+            .expect("local offer exists");
+
+        answer_peer
+            .set_remote_description(offer)
+            .await
+            .expect("remote offer is accepted");
+        let answer = answer_peer
+            .create_answer(None)
+            .await
+            .expect("answer creates");
+        answer_peer
+            .set_local_description(answer)
+            .await
+            .expect("answer becomes local description");
+        wait_for_ice(&answer_gathered).await;
+        let answer = answer_peer
+            .local_description()
+            .await
+            .expect("local answer exists");
+        offer_peer
+            .set_remote_description(answer)
+            .await
+            .expect("remote answer is accepted");
+
+        let round_trip = tokio::time::timeout(Duration::from_secs(10), async {
+            let mut opened = false;
+            while let Some(event) = channel.poll().await {
+                match event {
+                    DataChannelEvent::OnOpen => {
+                        opened = true;
+                        channel.send_text("rawrarr-local-probe").await.unwrap();
+                    }
+                    DataChannelEvent::OnMessage(message) if opened => {
+                        return message.data.to_vec();
+                    }
+                    DataChannelEvent::OnClose => break,
+                    _ => {}
+                }
+            }
+            Vec::new()
+        })
+        .await
+        .expect("data channel opens and exchanges a message");
+
+        assert_eq!(round_trip, b"rawrarr-local-probe");
+        offer_peer.close().await.expect("offer connection closes");
+        answer_peer.close().await.expect("answer connection closes");
+    }

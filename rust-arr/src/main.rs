@@ -25,6 +25,7 @@ pub mod shared_logs;
 pub mod storage_node;
 pub mod syncthing;
 mod ui_assets;
+mod webrtc_direct;
 
 use axum::middleware::Next;
 use axum::{
