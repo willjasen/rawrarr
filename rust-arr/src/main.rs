@@ -1472,7 +1472,16 @@ struct MetadataStorageStatus {
     tv_bytes: u64,
 }
 
+const MAX_METADATA_SCAN_DEPTH: usize = 64;
+
 fn directory_size(path: &std::path::Path) -> std::io::Result<u64> {
+    directory_size_at_depth(path, 0)
+}
+
+fn directory_size_at_depth(path: &std::path::Path, depth: usize) -> std::io::Result<u64> {
+    if depth > MAX_METADATA_SCAN_DEPTH {
+        return Err(std::io::Error::other("Metadata directory nesting limit exceeded"));
+    }
     let mut entries = match std::fs::read_dir(path) {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
@@ -1482,7 +1491,7 @@ fn directory_size(path: &std::path::Path) -> std::io::Result<u64> {
         let entry = entry?;
         let file_type = entry.file_type()?;
         let bytes = if file_type.is_dir() {
-            directory_size(&entry.path())?
+            directory_size_at_depth(&entry.path(), depth + 1)?
         } else if file_type.is_file() {
             entry.metadata()?.len()
         } else {
