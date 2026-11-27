@@ -26,10 +26,10 @@ Implemented: `/local` path preference with the old environment variable retained
 
 Checks run:
 
-- `cargo test --locked --offline --manifest-path rust-arr/Cargo.toml config_repair --no-fail-fast` — 12 passed.
+- `cargo test --locked --offline --manifest-path rust-arr/Cargo.toml config_repair --no-fail-fast` — 13 passed, including the two-node test. That test runs isolated node processes in both directions against authorized mock peer RPC endpoints.
 - `cargo test --locked --offline --manifest-path rust-arr/Cargo.toml secure_config:: --no-fail-fast` — 37 passed.
 - Node.js 26.13.1 container: `test_rawrarr_brand_case.mjs` and `test_rawrarr_subscriber_compose.mjs` — 5 passed.
 - The documented full regression runner was run earlier. It used Node.js 26.13.1; Rust findings were fixed and the focused Rust groups above pass. Playwright had two existing browser navigation timeouts (crypto ENS login and artwork); the full runner has not been rerun after fixes.
 - `git diff --check` passed.
 
-The host still has Node.js 24.22.3, so run Node-dependent project checks through the documented Node.js 26 test image; the project `.nvmrc` and test clone target Node 26. No host runtime was changed. The live services were not changed. Keep deployment and setting `RAWARR_EVT_WRITE_MODE=evt` gated on an isolated two-node RPC test covering reconnect, object transfer and conflict/tombstone convergence; current focused tests verify revision signatures, path validation and ordering, not a full two-node event-mode exchange. Rollback before cutover is to retain legacy mode. After cutover, reverse copy and writer coordination are required; no automatic deletion is provided.
+The host still has Node.js 24.22.3, so run Node-dependent project checks through the documented Node.js 26 test image; the project `.nvmrc` and test clone target Node 26. No host runtime was changed. The two-node RPC test covers both directions, reconnect repair, object transfer, deterministic conflict resolution, tombstone propagation, and retry idempotency using mock peer endpoints. It does not run the full Compose service topology or verify Valkey and Syncthing isolation; the broader service integration described in [the protocol](../docs/metadata-peer-repair-protocol.md) remains a deployment gate. The live services were not changed. Rollback before cutover is to retain legacy mode. After cutover, reverse copy and writer coordination are required; no automatic deletion is provided.

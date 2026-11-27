@@ -2,7 +2,7 @@
 
 ## Status
 
-The initial config repair is deployed in code; this change adds fixed-path encrypted metadata RPC behind explicit `/evt` write mode. The isolated end-to-end reconnect/conflict gate remains pending, and production deployment must wait for it. The legacy write mode remains the default during mixed-version rollout. See [issue #100](https://github.com/willjasen/rawrarr/issues/100), [issue #486](https://github.com/willjasen/rawrarr/issues/486), and the [task runbook](../runbooks/2026-10-26-valkey-metadata-mirror-rpc.md).
+The initial config repair is deployed in code; this change adds fixed-path encrypted metadata RPC behind explicit `/evt` write mode. A code-level two-node RPC integration now exercises each direction using isolated node processes and authorized mock peers, including stale reconnect repair, ciphertext transfer, conflict resolution, tombstones, and idempotent retry. The broader service-topology deployment gate below remains necessary before enabling event mode on real nodes. The legacy write mode remains the default during mixed-version rollout. See [issue #100](https://github.com/willjasen/rawrarr/issues/100), [issue #486](https://github.com/willjasen/rawrarr/issues/486), and the [task runbook](../runbooks/2026-10-26-valkey-metadata-mirror-rpc.md).
 
 ## Scope and data boundary
 
@@ -83,7 +83,7 @@ Merkle equality is an integrity/reconciliation hint, not authorization. Verify p
 
 ## Two-node verification gate
 
-An isolated integration must use two fossil services with independent `/local`, `/evt`, legacy `/shared`, and Valkey instances. It must verify:
+The code-level two-node RPC test does not replace this service-topology integration. Before deployment, use two fossil services with independent `/local`, `/evt`, legacy `/shared`, and Valkey instances. Verify:
 
 - initial import and exact repair from the MacBook-present/Mac-mini-missing state;
 - Valkey loss and rebuild from local `config.aged`;
@@ -98,7 +98,7 @@ An isolated integration must use two fossil services with independent `/local`, 
 - no config plaintext or API credentials in Valkey, peer payloads, coordinator observations, or logs;
 - `.stignore` excludes exactly root `/config.aged` on each device while app metadata and artwork continue syncing through Syncthing.
 
-Passing this gate demonstrates config and fossil-object convergence for this two-node topology only. It does not demonstrate automatic failover, RF=3, or recovery when all ciphertext and replicas are lost.
+The code-level test verifies the fossil-object RPC path in both directions, including reconnect, conflict, tombstone, and retry behavior; it does not exercise the config Valkey mirror, deployed service composition, or Syncthing isolation. Passing the broader service gate demonstrates config and fossil-object convergence for this two-node topology only. Neither gate demonstrates automatic failover, RF=3, or recovery when all ciphertext and replicas are lost.
 
 ## Review gate
 
