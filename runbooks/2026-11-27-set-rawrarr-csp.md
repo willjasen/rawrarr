@@ -21,7 +21,7 @@ No persisted data, database, encrypted configuration, or node/coordinator protoc
 - `node --test scripts/tests/test_rawrarr_security_headers.mjs` passed.
 - `git diff --check` passed.
 - `node --test scripts/tests/test_public_landing_page.mjs` could not start because `/usr/local/lib/node_modules/playwright-core/index.mjs` is missing in this host context.
-- `cargo test --locked --manifest-path rust-arr/Cargo.toml --no-run` is still compiling the crate; completion is pending. `cargo fmt --check` reports extensive pre-existing formatting differences across unrelated source and fixture files, so no broad formatting was applied.
+- `cargo test --locked --manifest-path rust-arr/Cargo.toml --no-run` passed and produced the unit-test executable after an initial cold build (11m 53s). `cargo fmt --check` reports extensive pre-existing formatting differences across unrelated source and fixture files, so no broad formatting was applied.
 - Live response check: `https://rawrarr.net/` returns a CSP. `https://roarlay.rawrarr.net/` currently returns a 303 redirect without CSP; this will be covered by the coordinator middleware after deployment.
 
 No deployment performed; published-source deployment and live verification remain follow-up work.
