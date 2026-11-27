@@ -293,6 +293,7 @@ impl std::error::Error for VaultError {}
 impl AgeVault {
     const PREPARED_APP_IDENTITIES_FILE: &'static str = "app-identities.aged";
     const MAX_PREPARED_APP_IDENTITIES_BYTES: u64 = 64 * 1024;
+    const MAX_APP_CONFIG_BYTES: usize = 2 * 1024 * 1024;
 
     fn prepared_app_identities_path(&self) -> PathBuf {
         self.shared_dir.join(Self::PREPARED_APP_IDENTITIES_FILE)
@@ -414,6 +415,121 @@ impl AgeVault {
             })?;
         }
         Ok(())
+    }
+
+    fn app_config_path(&self, instance_id: &str) -> Result<PathBuf, VaultError> {
+        let parsed = uuid::Uuid::parse_str(instance_id).map_err(|_| VaultError::InvalidConfig)?;
+        if parsed.to_string() != instance_id {
+            return Err(VaultError::InvalidConfig);
+        }
+        Ok(shared_in_dir_for(&self.shared_dir)
+            .join("apps")
+            .join(instance_id)
+            .join("config.aged"))
+    }
+
+    fn ensure_app_config_parent(&self, instance_id: &str) -> Result<(), VaultError> {
+        crate::safe_fs::ensure_directory(&self.shared_dir)
+            .map_err(|_| VaultError::StorageFailed)?;
+        let mut directory = self.shared_dir.clone();
+        for component in ["in", "apps", instance_id] {
+            directory.push(component);
+            match fs::create_dir(&directory) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(_) => return Err(VaultError::StorageFailed),
+            }
+            crate::safe_fs::ensure_directory(&directory)
+                .map_err(|_| VaultError::StorageFailed)?;
+            set_shared_directory_permissions(&directory)?;
+        }
+        Ok(())
+    }
+
+    fn prepared_app_identity(
+        &self,
+        instance_id: &str,
+    ) -> Result<Option<PreparedAppIdentity>, VaultError> {
+        let Some(registry) = self.read_prepared_app_identities()? else {
+            return Ok(None);
+        };
+        Ok(registry
+            .apps
+            .into_values()
+            .find(|app| app.instance_id == instance_id))
+    }
+
+    /// Stage an app-owned JSON configuration as age ciphertext under `/shared/in/apps`.
+    /// This low-level storage primitive is not wired to an app settings flow until
+    /// app-key authorization, delivery, and writer coordination are active.
+    pub fn stage_app_config(&self, instance_id: &str, plaintext: &[u8]) -> Result<(), VaultError> {
+        if plaintext.is_empty()
+            || plaintext.len() > Self::MAX_APP_CONFIG_BYTES
+            || !serde_json::from_slice::<serde_json::Value>(plaintext)
+                .is_ok_and(|value| value.is_object())
+        {
+            return Err(VaultError::InvalidConfig);
+        }
+        let _guard = CONFIG_WRITE_LOCK
+            .lock()
+            .map_err(|_| VaultError::StorageFailed)?;
+        let app = self
+            .prepared_app_identity(instance_id)?
+            .ok_or(VaultError::InvalidConfig)?;
+        self.ensure_app_config_parent(instance_id)?;
+        encrypt_shared_file(
+            &app.recipient,
+            &self.app_config_path(instance_id)?,
+            plaintext,
+        )
+    }
+
+    /// Read staged app config only when the matching prepared app identity is available.
+    /// Callers must not expose this until the app authorization protocol is implemented.
+    pub fn read_staged_app_config(
+        &self,
+        instance_id: &str,
+    ) -> Result<Option<Zeroizing<Vec<u8>>>, VaultError> {
+        let path = self.app_config_path(instance_id)?;
+        let mut parent = self.shared_dir.clone();
+        for component in ["in", "apps", instance_id] {
+            parent.push(component);
+            match crate::safe_fs::ensure_directory(&parent) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+                Err(_) => return Err(VaultError::StorageFailed),
+            }
+        }
+        let Some(ciphertext) = read_optional_shared_file(
+            &path,
+            Self::MAX_APP_CONFIG_BYTES as u64 + 4096,
+        )? else {
+            return Ok(None);
+        };
+        if !ciphertext.starts_with(b"age-encryption.org/v1\n") {
+            return Err(VaultError::InvalidConfig);
+        }
+        let app = self
+            .prepared_app_identity(instance_id)?
+            .ok_or(VaultError::InvalidConfig)?;
+        let output = run_with_input_data(
+            "age",
+            &["--decrypt", "--identity"],
+            app.identity.as_bytes(),
+            &ciphertext,
+        )?;
+        if !output.status.success() {
+            return Err(VaultError::DecryptionFailed);
+        }
+        let plaintext = Zeroizing::new(output.stdout);
+        if plaintext.is_empty()
+            || plaintext.len() > Self::MAX_APP_CONFIG_BYTES
+            || !serde_json::from_slice::<serde_json::Value>(plaintext.as_slice())
+                .is_ok_and(|value| value.is_object())
+        {
+            return Err(VaultError::DecryptionFailed);
+        }
+        Ok(Some(plaintext))
     }
 
     pub fn shared_dir() -> PathBuf {
@@ -2714,6 +2830,103 @@ mod tests {
             .expect("retained registry exists");
         assert_eq!(retained.apps["radarr"].instance_id, radarr_id);
         assert_eq!(retained.apps["sonarr"].instance_id, sonarr_id);
+        fs::remove_dir_all(root).expect("remove isolated test data");
+    }
+
+    #[test]
+    fn staged_app_configuration_uses_only_its_app_identity() {
+        let keygen = Command::new("age-keygen")
+            .arg("-pq")
+            .output()
+            .expect("age-keygen must be installed for this test");
+        assert!(keygen.status.success());
+        let user_identity = String::from_utf8(keygen.stdout).expect("identity is UTF-8");
+        let root = env::temp_dir().join(format!(
+            "rawrarr-app-config-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let shared_dir = root.join("shared");
+        fs::create_dir_all(&shared_dir).expect("create isolated shared directory");
+        let vault = AgeVault::from_identity_in_dirs(
+            user_identity,
+            shared_dir.clone(),
+            root.join("radarr-config.json"),
+            false,
+        )
+        .expect("open isolated age vault");
+        let config = PersistedConfig {
+            device_names: std::collections::HashMap::new(),
+            sonarr: None,
+            radarr_url: "http://radarr.example:7878".into(),
+            radarr_api_key: "test-only credential marker".into(),
+            radarr_ui_username: String::new(),
+            radarr_ui_password: String::new(),
+            additional_services: Vec::new(),
+            needs_migration: false,
+            metadata_filename_key: Some("22".repeat(32)),
+        };
+        vault.save(&config).expect("save Radarr settings and prepare app identity");
+        vault
+            .save_sonarr(Some(ArrConnection {
+                url: "http://sonarr.example:8989".into(),
+                api_key: "test-only Sonarr credential".into(),
+            }))
+            .expect("save Sonarr settings and prepare app identity");
+        let registry = vault
+            .read_prepared_app_identities()
+            .expect("read app identity registry")
+            .expect("registry exists");
+        let radarr = &registry.apps["radarr"];
+        let sonarr = &registry.apps["sonarr"];
+        let radarr_id = radarr.instance_id.clone();
+        let sonarr_identity = Zeroizing::new(sonarr.identity.clone());
+        let app_config = br#"{"schemaVersion":1,"connection":{"url":"http://radarr.example:7878","apiKey":"test-only credential marker"},"settings":{"backupSource":"/documents","retention":30}}"#;
+
+        vault
+            .stage_app_config(&radarr_id, app_config)
+            .expect("encrypt app config to the Radarr identity");
+        let path = vault.app_config_path(&radarr_id).expect("derive app config path");
+        assert!(path.starts_with(shared_in_dir_for(&shared_dir).join("apps")));
+        let ciphertext = fs::read(&path).expect("read staged ciphertext");
+        assert!(ciphertext.starts_with(b"age-encryption.org/v1\n"));
+        assert!(!ciphertext
+            .windows(app_config.len())
+            .any(|window| window == app_config));
+        assert!(!ciphertext
+            .windows(b"test-only credential marker".len())
+            .any(|window| window == b"test-only credential marker"));
+        assert_eq!(
+            vault
+                .read_staged_app_config(&radarr_id)
+                .expect("read using matching app identity")
+                .expect("staged config exists")
+                .as_slice(),
+            app_config
+        );
+
+        let wrong_identity = run_with_input_data(
+            "age",
+            &["--decrypt", "--identity"],
+            sonarr_identity.as_bytes(),
+            &ciphertext,
+        )
+        .expect("try decrypting Radarr config with Sonarr identity");
+        assert!(!wrong_identity.status.success());
+        assert!(vault.stage_app_config("../../config", app_config).is_err());
+        assert!(vault.stage_app_config(&radarr_id, b"[]").is_err());
+        assert!(vault.stage_app_config(&radarr_id, b"not json").is_err());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+            let app_directory = path.parent().expect("app config parent");
+            fs::remove_dir_all(app_directory).expect("remove app config directory");
+            let outside = root.join("outside");
+            fs::create_dir_all(&outside).expect("create outside directory");
+            symlink(&outside, app_directory).expect("replace app directory with symlink");
+            assert!(vault.stage_app_config(&radarr_id, app_config).is_err());
+            assert!(vault.read_staged_app_config(&radarr_id).is_err());
+            assert!(!outside.join("config.aged").exists());
+        }
         fs::remove_dir_all(root).expect("remove isolated test data");
     }
 
