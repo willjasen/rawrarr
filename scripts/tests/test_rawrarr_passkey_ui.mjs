@@ -72,3 +72,11 @@ test('allows additional passkey accounts and authenticates against all registere
   assert.match(authSource, /if !exists \{\s*sqlx::query\("UPDATE rawrarr_nodes SET user_id = \$1 WHERE user_id IS NULL"\)/);
   assert.match(authSource, /struct AuthenticationStart \{\}/);
 });
+
+ test('both ENS wallet linking requests declare their JSON bodies', async () => {
+  const workspace = await readFile(new URL('../../rust-arr/src/coordinator-workspace.mjs', import.meta.url), 'utf8');
+  for (const phase of ['start', 'finish']) {
+    const line = workspace.split('\n').find(line => line.includes(`/api/auth/eth/link/${phase}`));
+    assert.ok(line.includes("'Content-Type': 'application/json'"), `${phase} must declare JSON to avoid HTTP 415`);
+  }
+});
