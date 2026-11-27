@@ -6,6 +6,7 @@ import { chromium } from '/usr/local/lib/node_modules/playwright-core/index.mjs'
 
 const authPage = await readFile(new URL('../../rust-arr/src/auth.html', import.meta.url), 'utf8');
 const passkeyClient = await readFile(new URL('../../rust-arr/src/passkey-client.mjs', import.meta.url), 'utf8');
+const authResponse = await readFile(new URL('../../rust-arr/src/auth-response.mjs', import.meta.url), 'utf8');
 
 test('passkey sign-in and account creation fit desktop and mobile auth pages', async t => {
   let userExists = false;
@@ -17,6 +18,9 @@ test('passkey sign-in and account creation fit desktop and mobile auth pages', a
     } else if (pathname === '/assets/passkey-client.mjs') {
       response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
       response.end(passkeyClient);
+    } else if (pathname === '/assets/auth-response.mjs') {
+      response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
+      response.end(authResponse);
     } else if (pathname === '/api/auth/status') {
       response.writeHead(200, { 'content-type': 'application/json' });
       response.end(JSON.stringify({ userExists }));

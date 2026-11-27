@@ -34,11 +34,17 @@ impl NodeRole {
             (Self::Storage, false) => {
                 Err("storage requires RAWARR_LIBRARY_PATH and a read-only media mount")
             }
-            (Self::Coordinator | Self::Metadata, true) => {
-                Err("only storage may configure RAWARR_LIBRARY_PATH")
-            }
+            (Self::Coordinator, true) => Err("coordinator cannot configure RAWARR_LIBRARY_PATH"),
             _ => Ok(()),
         }
+    }
+
+    pub fn supports_metadata(self) -> bool {
+        self == Self::Metadata
+    }
+
+    pub fn supports_storage(self, media_configured: bool) -> bool {
+        self == Self::Storage || (self == Self::Metadata && media_configured)
     }
 }
 

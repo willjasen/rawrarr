@@ -32,7 +32,7 @@ test('Devices offers owner-routed storage scans with a bounded 1–2 GB movie sa
   assert.match(main, /\.route\("\/api\/library\/scan\/status", get\(storage_scan_status\)\)/);
   assert.match(main, /get\(storage_scan_schedule\)\.put\(update_storage_scan_schedule\)/);
   assert.match(coordinator, /storage_scan_relay_allowed\(/);
-  assert.match(coordinator, /role != "storage"/);
+  assert.match(coordinator, /!matches!\(role, "metadata" \| "storage"\)/);
   assert.match(coordinator, /api\/library\/scan\/schedule/);
 });
 

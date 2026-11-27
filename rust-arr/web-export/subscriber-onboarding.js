@@ -136,12 +136,8 @@ byId('deploy-step').querySelector('[data-reopen="deploy-step"]').addEventListene
   updateSteps();
 });
 byId('root-fingerprint-confirm').addEventListener('input', clearCompose);
-let automaticDeviceName = 'My fossil node';
 byId('node-role').addEventListener('change', () => {
-  byId('media-path-group').hidden = byId('node-role').value !== 'storage';
-  const nextDefault = byId('node-role').value === 'storage' ? 'My boneyard node' : 'My fossil node';
-  if (byId('device-name').value === automaticDeviceName) byId('device-name').value = nextDefault;
-  automaticDeviceName = nextDefault;
+  byId('media-path-group').hidden = !byId('node-role').checked;
   clearCompose();
 });
 byId('media-path').addEventListener('input', clearCompose);
@@ -162,7 +158,7 @@ byId('prepare-compose').addEventListener('click', () => {
     if (!/^[0-9a-f]{64}$/.test(pinnedFingerprint) || pinnedFingerprint !== rootFingerprint) throw new Error('Re-enter the independently saved root fingerprint exactly.');
     const mode = byId('network-mode').value;
     const coordinatorUrl = mode === 'internal-tailscale' ? byId('internal-coordinator-url').value.trim().replace(/\/$/, '') : location.origin;
-    const yaml = subscriberCompose({ role: byId('node-role').value, nodeId, coordinatorUrl, deviceName: byId('device-name').value, mediaPath: byId('media-path').value, networkMode: mode, controlServer: byId('headscale-server').value.trim(), authKey, rootFingerprint: pinnedFingerprint });
+    const yaml = subscriberCompose({ role: byId('node-role').checked ? 'storage' : 'metadata', nodeId, coordinatorUrl, deviceName: byId('device-name').value, mediaPath: byId('media-path').value, networkMode: mode, controlServer: byId('headscale-server').value.trim(), authKey, rootFingerprint: pinnedFingerprint });
     byId('compose-preview').textContent = yaml;
     byId('compose-preview').hidden = false;
     byId('download-compose').hidden = false;

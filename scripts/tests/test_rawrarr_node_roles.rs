@@ -1,6 +1,6 @@
 use super::NodeRole;
 #[test]
-fn three_roles_only() {
+fn existing_roles_remain_supported() {
     for (text, role) in [
         ("coordinator", NodeRole::Coordinator),
         ("storage", NodeRole::Storage),
@@ -13,11 +13,21 @@ fn three_roles_only() {
     }
 }
 #[test]
-fn media_is_exclusive_to_storage() {
+fn media_is_required_for_legacy_storage_and_optional_for_metadata() {
     assert!(NodeRole::Storage.validate_media(true).is_ok());
     assert!(NodeRole::Storage.validate_media(false).is_err());
-    for role in [NodeRole::Coordinator, NodeRole::Metadata] {
-        assert!(role.validate_media(false).is_ok());
-        assert!(role.validate_media(true).is_err());
-    }
+    assert!(NodeRole::Metadata.validate_media(false).is_ok());
+    assert!(NodeRole::Metadata.validate_media(true).is_ok());
+    assert!(NodeRole::Coordinator.validate_media(false).is_ok());
+}
+
+#[test]
+fn fossil_adds_storage_capability_without_changing_legacy_storage_role() {
+    assert!(!NodeRole::Storage.supports_metadata());
+    assert!(NodeRole::Storage.supports_storage(false));
+    assert!(NodeRole::Metadata.supports_storage(true));
+    assert!(!NodeRole::Metadata.supports_storage(false));
+    assert!(NodeRole::Metadata.supports_metadata());
+    assert!(!NodeRole::Coordinator.supports_metadata());
+    assert!(NodeRole::Coordinator.validate_media(true).is_err());
 }

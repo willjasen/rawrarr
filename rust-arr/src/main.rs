@@ -59,6 +59,7 @@ use zeroize::{Zeroize, Zeroizing};
 struct AppState {
     auth: node_auth::NodeAuth,
     role: node_role::NodeRole,
+    storage_enabled: bool,
     radarr: Arc<RwLock<Option<RadarrClient>>>,
     vault: Arc<RwLock<Option<secure_config::AgeVault>>>,
     library: Option<library::LibraryRoot>,
@@ -979,6 +980,7 @@ mod dashboard_event_tests {
         Arc::new(AppState {
             auth: node_auth::NodeAuth::test_fixture(),
             role: node_role::NodeRole::Metadata,
+            storage_enabled: false,
             radarr: Arc::new(RwLock::new(None)),
             vault: Arc::new(RwLock::new(None)),
             library: None,
@@ -1002,11 +1004,12 @@ mod dashboard_event_tests {
     }
 
     #[tokio::test]
-    async fn owner_recipient_endpoint_rejects_non_fossils() {
+    async fn owner_recipient_endpoint_remains_metadata_only() {
         for role in [node_role::NodeRole::Storage, node_role::NodeRole::Coordinator] {
             let mut state = fixture_state();
             Arc::get_mut(&mut state).unwrap().role = role;
-            assert_eq!(export_owner_age_recipient(State(state)).await.unwrap_err().0, StatusCode::NOT_FOUND);
+            let result = export_owner_age_recipient(State(state)).await;
+            assert_eq!(result.unwrap_err().0, StatusCode::NOT_FOUND);
         }
     }
 
@@ -1136,7 +1139,7 @@ async fn request_storage_scan(
     State(state): State<Arc<AppState>>,
     Json(options): Json<storage_node::ScanOptions>,
 ) -> Response {
-    if state.role != node_role::NodeRole::Storage {
+    if !state.storage_enabled {
         return StatusCode::NOT_FOUND.into_response();
     }
     match state.storage_scan.start(options, state.shared_logs.clone(), false).await {
@@ -1146,7 +1149,7 @@ async fn request_storage_scan(
 }
 
 async fn storage_scan_schedule(State(state): State<Arc<AppState>>) -> Response {
-    if state.role != node_role::NodeRole::Storage {
+    if !state.storage_enabled {
         return StatusCode::NOT_FOUND.into_response();
     }
     let Some(schedule) = &state.storage_schedule else {
@@ -1159,7 +1162,7 @@ async fn update_storage_scan_schedule(
     State(state): State<Arc<AppState>>,
     Json(schedule): Json<storage_node::ScanSchedule>,
 ) -> Response {
-    if state.role != node_role::NodeRole::Storage {
+    if !state.storage_enabled {
         return StatusCode::NOT_FOUND.into_response();
     }
     let Some(scheduler) = &state.storage_schedule else {
@@ -1176,14 +1179,14 @@ async fn update_storage_scan_schedule(
 }
 
 async fn storage_scan_status(State(state): State<Arc<AppState>>) -> Response {
-    if state.role != node_role::NodeRole::Storage {
+    if !state.storage_enabled {
         return StatusCode::NOT_FOUND.into_response();
     }
     Json(state.storage_scan.status().await).into_response()
 }
 
 async fn cancel_storage_scan(State(state): State<Arc<AppState>>) -> Response {
-    if state.role != node_role::NodeRole::Storage {
+    if !state.storage_enabled {
         return StatusCode::NOT_FOUND.into_response();
     }
     match state.storage_scan.cancel().await {
@@ -2069,8 +2072,8 @@ async fn export_age_recipient() -> Result<Response<Body>, StatusCode> {
 async fn export_owner_age_recipient(
     State(state): State<Arc<AppState>>,
 ) -> Result<Response<Body>, (StatusCode, &'static str)> {
-    if state.role != node_role::NodeRole::Metadata {
-        return Err((StatusCode::NOT_FOUND, "Owner public recipients are available only on fossils"));
+    if !state.role.supports_metadata() {
+        return Err((StatusCode::NOT_FOUND, "Owner public recipients are available only on subscriber nodes"));
     }
     let recipient = if let Some(vault) = state.vault.read().await.as_ref() {
         vault.user_recipient().to_owned()
@@ -2754,7 +2757,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     role.validate_media(media_configured)?;
     let arguments: Vec<String> = env::args().skip(1).collect();
     if !arguments.is_empty()
-        && (arguments != ["storage-scan-once"] || role != node_role::NodeRole::Storage)
+        && (arguments != ["storage-scan-once"] || !role.supports_storage(media_configured))
     {
         return Err(
             "only storage supports the storage-scan-once command; other arguments are invalid"
@@ -2817,7 +2820,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config_mirror = Arc::new(config_repair::CiphertextMirror::from_env());
     let config_peer = config_repair::PeerRpc::from_env(&node_id);
     let config_peer_status = config_repair::PeerSyncStatus::default();
-    if role == node_role::NodeRole::Metadata {
+    if role.supports_metadata() {
         let path = secure_config::AgeVault::config_path();
         config_mirror.restore_revisions();
         if let Err(error) = config_mirror.restore_from_valkey(&path) {
@@ -2871,7 +2874,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("rawrarr shared logging could not be initialized");
     }
     let storage_scan = storage_node::ScanController::default();
-    let storage_schedule = if role == node_role::NodeRole::Storage {
+    let storage_schedule = if role.supports_storage(media_configured) {
         let schedule = storage_node::ScanScheduler::load()?;
         storage_node::start_scan_scheduler(
             schedule.clone(),
@@ -2890,6 +2893,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         device_id,
         shared_logs: shared_logs.clone(),
         role,
+        storage_enabled: role.supports_storage(media_configured),
         storage_scan,
         storage_schedule,
         syncthing: syncthing::Client::from_env()
@@ -2906,7 +2910,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config_peer: config_peer.clone(),
         config_peer_status: config_peer_status.clone(),
     });
-    if role == node_role::NodeRole::Metadata {
+    if role.supports_metadata() {
         let mirror = state.config_mirror.clone();
         let application_state = state.clone();
         let path = secure_config::AgeVault::config_path();
@@ -2951,7 +2955,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         });
     }
-    if role == node_role::NodeRole::Metadata {
+    if role.supports_metadata() {
         tokio::spawn(run_metadata_artwork_backfill(state.clone()));
         tokio::spawn(run_metadata_sonarr_backfill(state.clone()));
     }
@@ -3130,7 +3134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(middleware::from_fn(log_request))
         .layer(middleware::from_fn(direct_api_cors))
         .with_state(state.clone());
-    if role == node_role::NodeRole::Metadata && state.config_peer.rayfish_http_enabled() {
+    if role.supports_metadata() && state.config_peer.rayfish_http_enabled() {
         let peer_app = Router::new()
             .route("/config-peer/challenge", get(config_repair::challenge))
             .route("/config-peer/manifest", get(config_repair::manifest))
@@ -3140,10 +3144,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let peer_listener = tokio::net::TcpListener::bind("127.0.0.1:8443").await?;
         tokio::spawn(async move {
             if let Err(error) = axum::serve(peer_listener, peer_app).await {
-                eprintln!("Rawrarr Rayfish config-peer listener failed: {error}");
+                eprintln!("rawrarr Rayfish config-peer listener failed: {error}");
             }
         });
-        println!("Rawrarr Rayfish config-peer HTTP listening on 127.0.0.1:8443");
+        println!("rawrarr Rayfish config-peer HTTP listening on 127.0.0.1:8443");
     }
     let app = Router::new()
         .route("/health", get(health))
