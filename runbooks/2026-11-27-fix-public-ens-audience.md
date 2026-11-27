@@ -13,3 +13,5 @@ Container environment now contains the public audience. External POST `/api/auth
 
 ## Recovery
 Under the same deployment lock, restore the host Compose backup and recreate only public roarlay using its existing Compose file list. This restores the former audience behavior; no data rollback is needed.
+
+Final checks: public container reports healthy; deployment lock released. The HTTPS health request from do3 itself was blocked with HTTP 403 by the public edge, so that route is unverified from that host. The external ENS API request succeeded in reaching the application and returning its account validation message.
