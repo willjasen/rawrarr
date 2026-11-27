@@ -156,6 +156,16 @@ During an active trial, allow each signed-in account up to five AI questions per
 
 ## Integrations and library behavior
 
+### General self-hosted app catalog (planned)
+
+Rawrarr should grow a RunTipi-like catalog and app lifecycle for general self-hosted apps, alongside its media-specific integrations. An owner should be able to discover an app, review what it needs, select an approved node, install and configure it, open its UI, manage updates and backups, and remove the app while retaining its data by default. Duplicati is a useful first non-media example for validating this design; it is not currently a supported Rawrarr-managed app.
+
+Keep the catalog and app lifecycle separate from node roles. The coordinator may present catalog information and record owner intent, but the selected node performs container and local-data operations. A definition must make its image/source and version, architecture and node requirements, ports, network access, persistent paths, secrets, health check, backup behavior, and upgrade/rollback limits visible before installation or update. Catalog entries need provenance and review before they can request execution. Do not expose arbitrary Docker privileges or silently install an unreviewed Compose bundle.
+
+For Duplicati, keep its database, settings, and cache in declared node-local persistent storage. Let the owner explicitly choose backup sources and destinations and grant only the required paths or service access. Keep destination credentials on that node. A backup archive can be stored on a chosen local, shared, or remote destination, but that does not make Duplicati's database, credentials, or every configured target part of Rawrarr's shared tree. UI access must route only to the selected managed instance and preserve its own authentication. App removal retains persistent data unless the owner separately confirms deletion.
+
+This product direction leaves the upstream catalog, manifest format, signing/review model, secret provider, and exact node execution API open for design. Existing media app provisioning, migration, and UI routing retain the scopes in [#96](https://github.com/willjasen/rawrarr/issues/96), [#112](https://github.com/willjasen/rawrarr/issues/112), and [#116](https://github.com/willjasen/rawrarr/issues/116). See [general app platform issue #482](https://github.com/willjasen/rawrarr/issues/482).
+
 ### Arr summary cards
 
 Render the four-card summary row for each Arr library through one shared component. Keep each service's card labels, details, and value keys in a service definition; the renderer owns the common markup, layout, value updates, and reset behavior. Radarr and Sonarr use the same concepts where they match, while their labels and explanations name the service and its media type. A future Lidarr, Readarr, or other Arr page should add a service definition and reuse the renderer instead of copying card markup or formatting logic. Only include a metric when that service can report a value with the same meaning.

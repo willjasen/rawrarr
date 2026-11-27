@@ -8,6 +8,8 @@ Over time, Rawrarr can also become a unified media automation system. A useful w
 
 ## Product areas
 
+- **General self-hosted apps (planned):** provide an owner-controlled catalog and lifecycle for useful apps beyond media automation, with a RunTipi-like experience for discovering, installing, configuring, accessing, updating, backing up, restoring, and removing apps on approved nodes. Duplicati is an example of a general app, not a currently supported Rawrarr integration. Each app definition must declare its node/architecture requirements, persistent data, secrets, routes, health checks, and upgrade/backup behavior. App lifecycle must remain distinct from Rawrarr node roles; removing an app must preserve its data unless the owner explicitly requests deletion. See [issue #482](https://github.com/willjasen/rawrarr/issues/482).
+
 - **Discovery:** manage search sources and indexer integrations, normalize search results, and make discovery available to Rawrarr and connected *arr services.
 - **Library management:** track movies, television, music, books, subtitles, metadata, files, quality preferences, and wanted state.
 - **Fulfillment:** route approved requests through provider-neutral download adapters for BitTorrent, Usenet, and future methods, then coordinate import and file placement.
@@ -34,6 +36,12 @@ The current trial implementation records a three-day trial for a newly registere
 ## Architectural direction
 
 Keep search-source adapters, metadata providers, download clients, media catalog, and remote device transport as separate interfaces. Store normalized results and catalog events in Rawrarr's own data model, with source provenance and stable IDs. Define explicit capability and compatibility boundaries for optional Arr integrations rather than making Radarr's API the internal system of record.
+
+The planned general app platform is a separate catalog and lifecycle layer. A reviewed, versioned app definition describes how an approved node runs an app; the coordinator presents catalog and lifecycle intent and asks that node to perform work through its existing authenticated control boundary. The initial design should prefer per-app container isolation and narrowly declared volumes/networks over a general host-level orchestrator. It must not treat arbitrary catalog content as trusted executable configuration.
+
+For a Duplicati definition, the app's database, settings, and local cache stay in an explicitly declared node-local persistent data path. Backup sources and destinations are owner-selected paths or services with explicit access grants; credentials are stored on the selected node using its secret mechanism. A Rawrarr route can expose the app UI only through an authenticated, owner-approved path to that app instance. Backup archives may be deliberately placed on a selected shared or remote destination, but Rawrarr must not silently sync Duplicati's database, credentials, or arbitrary backup targets. The definition must state whether upgrades can change the app's database, how a pre-upgrade backup is made, how health is checked, and what rollback can restore.
+
+This direction does not yet select an upstream catalog, manifest format, or update authority. Catalog entries need provenance and review; installation must show requested ports, volumes, capabilities, network access, secrets, and data effects before the owner approves it. Existing managed Arr provisioning and routes remain tracked in [#96](https://github.com/willjasen/rawrarr/issues/96) and [#116](https://github.com/willjasen/rawrarr/issues/116); app migration between fossils remains tracked in [#112](https://github.com/willjasen/rawrarr/issues/112). General apps should eventually be able to implement shared lifecycle contracts, but those issues retain their current scope.
 
 ## Project status
 
