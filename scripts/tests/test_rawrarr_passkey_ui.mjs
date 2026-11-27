@@ -1,12 +1,28 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { decodeOptions } from '../../rust-arr/src/passkey-client.mjs';
+import { readJsonResponse } from '../../rust-arr/src/auth-response.mjs';
 import { readFile } from 'node:fs/promises';
 
 const authPage = await readFile(new URL('../../rust-arr/src/auth.html', import.meta.url), 'utf8');
 const authSource = await readFile(new URL('../../rust-arr/src/auth.rs', import.meta.url), 'utf8');
 
 const encoded = value => Buffer.from(value).toString('base64url');
+
+test('handles empty and non-JSON sign-in error responses without a JSON parse exception', async () => {
+  await assert.rejects(
+    readJsonResponse(new Response('', { status: 404 }), 'Passkey sign-in failed'),
+    { message: 'This sign-in method is unavailable in this environment.' },
+  );
+  await assert.rejects(
+    readJsonResponse(new Response('upstream unavailable', { status: 503 }), 'Passkey sign-in failed'),
+    { message: 'Passkey sign-in failed (HTTP 503)' },
+  );
+  await assert.rejects(
+    readJsonResponse(new Response('{"error":"Wallet service is unavailable"}', { status: 503 }), 'Passkey sign-in failed'),
+    { message: 'Wallet service is unavailable' },
+  );
+});
 
 test('decodes the nested WebAuthn publicKey response shape', () => {
   const options = decodeOptions({

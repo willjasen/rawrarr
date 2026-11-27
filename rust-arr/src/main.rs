@@ -830,6 +830,13 @@ async fn passkey_client_js() -> Response<Body> {
     )
 }
 
+async fn auth_response_js() -> Response<Body> {
+    static_asset(
+        "text/javascript; charset=utf-8",
+        ui_assets::text("auth-response.mjs", include_str!("auth-response.mjs")).await.into_bytes(),
+    )
+}
+
 async fn metadata_export_js() -> Response<Body> {
     let mut response = static_asset(
         "text/javascript; charset=utf-8",
@@ -3150,6 +3157,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/assets/rawrarr-favicon.svg", get(rawrarr_favicon))
         .route("/favicon.ico", get(rawrarr_favicon_ico))
         .route("/assets/passkey-client.mjs", get(passkey_client_js))
+        .route("/assets/auth-response.mjs", get(auth_response_js))
         .route("/assets/metadata-export.js", get(metadata_export_js))
         .route("/api/auth/status", get(node_auth::proxy))
         .route("/api/auth/register/start", post(node_auth::proxy))

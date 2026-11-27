@@ -331,6 +331,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
             "/assets/passkey-client.mjs",
             get(coordinator_passkey_client),
         )
+        .route("/assets/auth-response.mjs", get(coordinator_auth_response))
         .route(
             "/assets/coordinator-passkey.mjs",
             get(coordinator_passkey_script),
@@ -2314,6 +2315,15 @@ async fn coordinator_passkey_client() -> Response {
         header::CACHE_CONTROL,
         HeaderValue::from_static("no-store"),
     );
+    response
+}
+
+async fn coordinator_auth_response() -> Response {
+    let mut response = axum::response::Response::new(
+        axum::body::Body::from(crate::ui_assets::text("auth-response.mjs", include_str!("auth-response.mjs")).await),
+    );
+    response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/javascript; charset=utf-8"));
+    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
 }
 
