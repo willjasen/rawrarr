@@ -60,12 +60,12 @@ test('first-account identity setup finishes on Devices before optional node Comp
   const rootFingerprint = (await page.locator('#root-fingerprint').innerText()).match(/[0-9a-f]{64}/i)?.[0];
   assert.ok(rootFingerprint, 'the verified root fingerprint is available for node pinning');
   await page.locator('#root-fingerprint-confirm').fill(rootFingerprint);
-  assert.deepEqual(await page.locator('#node-role option').allTextContents(), ['Fossil (metadata)', 'Boneyard (storage)']);
+  assert.match(await page.locator('#deploy-step').innerText(), /one enrolled node and one container/);
   assert.equal(await page.locator('#device-name').inputValue(), 'My fossil node');
-  await page.locator('#node-role').selectOption('storage');
-  assert.equal(await page.locator('#device-name').inputValue(), 'My boneyard node');
-  await page.locator('#node-role').selectOption('metadata');
-  assert.equal(await page.locator('#device-name').inputValue(), 'My fossil node');
+  await page.locator('#node-role').check();
+  assert.equal(await page.locator('#media-path-group').isVisible(), true);
+  await page.locator('#node-role').uncheck();
+  assert.equal(await page.locator('#media-path-group').isVisible(), false);
   await page.locator('#device-name').fill('MacBook fossil');
   assert.equal(await page.locator('#device-name').inputValue(), 'MacBook fossil');
   await page.locator('#network-auth-key').fill('tskey-auth-example-secret');
@@ -74,6 +74,9 @@ test('first-account identity setup finishes on Devices before optional node Comp
   await page.locator('#prepare-compose').click();
   assert.equal(await page.locator('#compose-preview').isVisible(), true);
   const composePreview = await page.locator('#compose-preview').innerText();
+  assert.match(composePreview, /  fossil:/);
+  assert.match(composePreview, /RAWARR_ROLE: metadata/);
+  assert.doesNotMatch(composePreview, /  boneyard:/);
   assert.match(composePreview, /RAWARR_COORDINATOR_URL: "https:\/\/rawrarr-mini\.example-tailnet\.ts\.net"/);
   assert.match(composePreview, /TS_AUTHKEY: "tskey-auth-example-secret"/);
   assert.deepEqual(await page.locator('#network-mode option').allTextContents(), ['Internal use · my Tailscale tailnet', 'Public service · Headscale']);

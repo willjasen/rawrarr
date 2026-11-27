@@ -1,8 +1,8 @@
-export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, mediaPath = '', networkMode, controlServer, authKey, rootFingerprint }) {
-  if (!['metadata', 'storage'].includes(role)) throw new Error('Only fossil and boneyard nodes can be installed here.');
+export function subscriberCompose({ role = 'metadata', nodeId, coordinatorUrl, deviceName, mediaPath = '', networkMode, controlServer, authKey, rootFingerprint }) {
+  if (!['metadata', 'storage'].includes(role)) throw new Error('Choose fossil with optional media storage.');
   if (!['internal-tailscale', 'headscale'].includes(networkMode)) throw new Error('Choose internal Tailscale or public Headscale networking.');
   if (!/^fossil-[0-9a-f]{24}$/.test(nodeId)) throw new Error('Invalid generated fossil ID.');
-  const defaultName = role === 'storage' ? 'My boneyard node' : 'My fossil node';
+  const defaultName = 'My fossil node';
   const name = String(deviceName ?? defaultName).trim();
   if (!name || name.length > 64 || /[\u0000-\u001f\u007f]/.test(name)) throw new Error('Enter a device name of 1 to 64 characters without control characters.');
   const networkAuthKey = String(authKey ?? '').trim();
@@ -13,7 +13,8 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
   catch { throw new Error('The coordinator must have an HTTPS origin.'); }
   if (origin.protocol !== 'https:' || origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash) throw new Error('The coordinator must have an HTTPS origin.');
   coordinatorUrl = origin.origin;
-  if (role === 'storage' && (!/^(?:\/[^\0-\x1f]*|[A-Za-z]:[\\/][^\0-\x1f]+)$/.test(mediaPath.trim()))) throw new Error('Enter the absolute path to your media folder.');
+  const hasMedia = Boolean(mediaPath.trim());
+  if (hasMedia && !/^(?:\/[^\0-\x1f]*|[A-Za-z]:[\\/][^\0-\x1f]+)$/.test(mediaPath.trim())) throw new Error('Enter the absolute path to your media folder.');
   const quote = value => JSON.stringify(value);
   const baseHostname = name.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63) || nodeId;
   const hostname = networkMode === 'internal-tailscale' && !baseHostname.startsWith('rawrarr-')
@@ -55,11 +56,11 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
     );
   }
   lines.push(
-    `  ${role === 'storage' ? 'boneyard' : 'fossil'}:`,
+    '  fossil:',
     '    image: ghcr.io/willjasen/rawrarr:main',
     '    pull_policy: always',
     '    environment:',
-    `      RAWARR_ROLE: ${role}`,
+    '      RAWARR_ROLE: metadata',
     '      RUST_ARR_LISTEN_ADDR: 0.0.0.0:8080',
     '      RUST_ARR_DIRECT_LISTEN_ADDR: 0.0.0.0:8082',
     '      RAWARR_DATA_DIR: /data',
@@ -77,7 +78,7 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
     '      RAWARR_WEBAUTHN_ORIGIN: http://localhost:7297',
     '      RAWARR_LOCAL_PLAINTEXT_CONFIG: "false"',
   );
-  if (role === 'storage') lines.push('      RAWARR_LIBRARY_PATH: /media');
+  if (hasMedia) lines.push('      RAWARR_LIBRARY_PATH: /media');
   lines.push(
     '    network_mode: service:tailscale',
     '    depends_on:',
@@ -88,7 +89,7 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
     '      - rawrarr-shared:/shared',
     '      - rawrarr-ui:/ui',
   );
-  if (role === 'storage') lines.push('      - type: bind', `        source: ${quote(mediaPath.trim())}`, '        target: /media', '        read_only: true', '        bind:', '          create_host_path: false');
+  if (hasMedia) lines.push('      - type: bind', `        source: ${quote(mediaPath.trim())}`, '        target: /media', '        read_only: true', '        bind:', '          create_host_path: false');
   lines.push('    restart: unless-stopped');
   if (networkMode === 'headscale') lines.push('secrets:', '  tailscale-authkey:', '    file: ./tailscale-authkey');
   lines.push(

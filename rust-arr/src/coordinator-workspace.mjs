@@ -2511,7 +2511,12 @@ function renderNodes(nodes, healthByNode, configPeerStatusByNode, configNode, se
         merkleBadge.setAttribute('aria-label', detail.textContent ? `${label.textContent}; ${detail.textContent}.` : `${label.textContent}.`);
         card.append(merkleBadge);
       }
-      if (node.role === 'storage') {
+      if (node.role === 'storage' || node.role === 'metadata') {
+        const storageDetails = document.createElement('details');
+        storageDetails.className = 'boneyard-storage-details';
+        const storageSummary = document.createElement('summary');
+        storageSummary.textContent = 'Boneyard media storage';
+        storageDetails.append(storageSummary);
         const scanActions = document.createElement('div');
         scanActions.className = 'storage-scan-actions';
         const actions = [
@@ -2632,7 +2637,8 @@ function renderNodes(nodes, healthByNode, configPeerStatusByNode, configNode, se
           event.stopPropagation();
           void saveStorageSchedule(node, scheduleForm, scheduleSummary, saveScheduleButton, scanMessage);
         });
-        card.append(scanActions, scanStatus, scheduleForm);
+        storageDetails.append(scanActions, scanStatus, scheduleForm);
+        card.append(storageDetails);
         void refreshStorageSchedule(node, scheduleForm, scheduleSummary, scanMessage);
       }
       card.append(editButton);

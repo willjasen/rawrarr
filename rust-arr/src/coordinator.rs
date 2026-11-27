@@ -1430,7 +1430,7 @@ mod direct_route_tests {
             &Method::PUT,
             br#"{"frequency":"daily","time":"04:00","timeZone":"America/New_York","weekday":null}"#
         ));
-        assert!(!storage_scan_relay_allowed(
+        assert!(storage_scan_relay_allowed(
             "metadata",
             "api/library/scan/missing",
             &Method::POST,
@@ -2137,7 +2137,7 @@ fn storage_scan_relay_allowed(
     method: &Method,
     body: &[u8],
 ) -> bool {
-    if role != "storage" {
+    if !matches!(role, "metadata" | "storage") {
         return false;
     }
     match path {

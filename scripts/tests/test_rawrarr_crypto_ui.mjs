@@ -8,6 +8,7 @@ const root = new URL('../../rust-arr/src/', import.meta.url);
 const billingHtml = await readFile(new URL('coordinator_billing.html', root), 'utf8');
 const billingScript = await readFile(new URL('coordinator-billing.mjs', root), 'utf8');
 const authHtml = await readFile(new URL('auth.html', root), 'utf8');
+const authResponse = await readFile(new URL('auth-response.mjs', root), 'utf8');
 const workspaceHtml = await readFile(new URL('coordinator_workspace.html', root), 'utf8');
 const workspaceScript = await readFile(new URL('coordinator-workspace.mjs', root), 'utf8');
 const rust = await readFile(new URL('coordinator_crypto.rs', root), 'utf8');
@@ -80,6 +81,11 @@ async function serveAuth(page, routeApi) {
     if (request.url === '/assets/passkey-client.mjs') {
       response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
       response.end('export function decodeOptions(value) { return value; }');
+      return;
+    }
+    if (request.url === '/assets/auth-response.mjs') {
+      response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
+      response.end(authResponse);
       return;
     }
     response.writeHead(404);
