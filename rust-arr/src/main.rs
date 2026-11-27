@@ -265,6 +265,19 @@ async fn log_request(request: Request<Body>, next: Next) -> Response<Body> {
     response
 }
 
+pub(crate) async fn main_security_headers(request: Request<Body>, next: Next) -> Response<Body> {
+    let mut response = next.run(request).await;
+    response.headers_mut().insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static("default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.themoviedb.org; connect-src 'self' https: wss:; font-src 'self' data:; upgrade-insecure-requests"),
+    );
+    response.headers_mut().insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    response
+}
+
 impl Drop for GeneratedAgeIdentity {
     fn drop(&mut self) {
         self.identity.zeroize();
@@ -3183,6 +3196,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .route("/setup/age", get(subscriber_ui_disabled))
     }
     .layer(middleware::from_fn(log_request))
+    .layer(middleware::from_fn(main_security_headers))
     .with_state(state);
     let listener = tokio::net::TcpListener::bind(socket_address).await?;
     if let Ok(direct_address) = env::var("RUST_ARR_DIRECT_LISTEN_ADDR") {

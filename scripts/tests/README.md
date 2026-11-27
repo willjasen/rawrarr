@@ -8,6 +8,8 @@
 - `test_rawrarr_subscriber_compose.mjs` — checks subscriber role Compose generation, fossil-prefixed generated IDs, and anonymous public GHCR pulls without GitHub credentials; run `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
 # Rawrarr tests
 
+- `test_rawrarr_security_headers.mjs` — checks that the Rust app applies its CSP and `X-Content-Type-Options` headers through common middleware. Run with `node --test scripts/tests/test_rawrarr_security_headers.mjs`.
+
 - `rayfish_standalone_docker.py --binary /path/to/rust-arr` -- runs a fresh
   `roarlay` coordinator, two signed nodes labeled `metadata-a` and `metadata-b`,
   and disposable support services (`mesh-owner`, `rayfish-coord`, `discovery`, `peer-a`,

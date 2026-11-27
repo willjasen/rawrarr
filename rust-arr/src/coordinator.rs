@@ -431,7 +431,10 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
             authorize_node,
         ))
         .with_state(state);
-    Ok(public.merge(coordinator_browser).merge(authenticated))
+    Ok(public
+        .merge(coordinator_browser)
+        .merge(authenticated)
+        .layer(middleware::from_fn(crate::main_security_headers)))
 }
 
 async fn coordinator_auth_context(
