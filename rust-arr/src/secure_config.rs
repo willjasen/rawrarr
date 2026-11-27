@@ -23,6 +23,8 @@ pub struct AgeVault {
     group_identity: String,
     recipient: String,
     shared_dir: PathBuf,
+    data_dir: PathBuf,
+    evt_dir: PathBuf,
     metadata_dir: PathBuf,
     config_path: PathBuf,
     local_config_path: PathBuf,
@@ -65,6 +67,31 @@ struct PreparedAppIdentity {
     instance_id: String,
     identity: String,
     recipient: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct AppKeyGrant {
+    algorithm: String,
+    root_public_key: String,
+    root_fingerprint: String,
+    signed_payload: AppKeyGrantPayload,
+    signature: String,
+    encrypted_identity: String,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct AppKeyGrantPayload {
+    domain: String,
+    schema_version: u32,
+    app_instance_id: String,
+    app_type: String,
+    app_recipient: String,
+    device_id: String,
+    device_recipient: String,
+    key_epoch: u64,
+    encrypted_identity_sha256: String,
 }
 
 impl Drop for PreparedAppIdentity {
@@ -290,6 +317,9 @@ impl std::fmt::Display for VaultError {
 
 impl std::error::Error for VaultError {}
 
+const MAX_APP_KEY_GRANT_BYTES: usize = 64 * 1024;
+const MAX_APP_IDENTITY_ENVELOPE_BYTES: usize = 16 * 1024;
+
 impl AgeVault {
     const PREPARED_APP_IDENTITIES_FILE: &'static str = "app-identities.aged";
     const MAX_PREPARED_APP_IDENTITIES_BYTES: u64 = 64 * 1024;
@@ -422,17 +452,17 @@ impl AgeVault {
         if parsed.to_string() != instance_id {
             return Err(VaultError::InvalidConfig);
         }
-        Ok(shared_in_dir_for(&self.shared_dir)
+        Ok(self.evt_dir
+            .join("fossil")
             .join("apps")
             .join(instance_id)
             .join("config.aged"))
     }
 
     fn ensure_app_config_parent(&self, instance_id: &str) -> Result<(), VaultError> {
-        crate::safe_fs::ensure_directory(&self.shared_dir)
-            .map_err(|_| VaultError::StorageFailed)?;
-        let mut directory = self.shared_dir.clone();
-        for component in ["in", "apps", instance_id] {
+        crate::safe_fs::ensure_directory(&self.evt_dir).map_err(|_| VaultError::StorageFailed)?;
+        let mut directory = self.evt_dir.clone();
+        for component in ["fossil", "apps", instance_id] {
             directory.push(component);
             match fs::create_dir(&directory) {
                 Ok(()) => {}
@@ -441,22 +471,137 @@ impl AgeVault {
             }
             crate::safe_fs::ensure_directory(&directory)
                 .map_err(|_| VaultError::StorageFailed)?;
-            set_shared_directory_permissions(&directory)?;
+            set_private_directory_permissions(&directory)?;
         }
         Ok(())
     }
 
-    fn prepared_app_identity(
+    /// Install a root-signed app-key grant encrypted for this node's device age ID.
+    /// The coordinator may relay the grant, but cannot create or decrypt it.
+    pub fn install_app_key_grant(
         &self,
-        instance_id: &str,
-    ) -> Result<Option<PreparedAppIdentity>, VaultError> {
-        let Some(registry) = self.read_prepared_app_identities()? else {
-            return Ok(None);
-        };
-        Ok(registry
-            .apps
-            .into_values()
-            .find(|app| app.instance_id == instance_id))
+        bundle: &[u8],
+        device_id: &str,
+    ) -> Result<(), VaultError> {
+        let expected_root = env::var("RAWARR_INSTANCE_ROOT_FINGERPRINT")
+            .map_err(|_| VaultError::InvalidIdentity)?
+            .trim()
+            .to_ascii_lowercase();
+        Self::install_app_key_grant_at(bundle, &expected_root, device_id, &self.data_dir)
+    }
+
+    fn install_app_key_grant_at(
+        bundle_bytes: &[u8],
+        expected_root_fingerprint: &str,
+        device_id: &str,
+        data_dir: &Path,
+    ) -> Result<(), VaultError> {
+        if bundle_bytes.is_empty() || bundle_bytes.len() > MAX_APP_KEY_GRANT_BYTES {
+            return Err(VaultError::InvalidConfig);
+        }
+        let grant: AppKeyGrant =
+            serde_json::from_slice(bundle_bytes).map_err(|_| VaultError::InvalidConfig)?;
+        let payload = &grant.signed_payload;
+        let app_id = uuid::Uuid::parse_str(&payload.app_instance_id)
+            .map_err(|_| VaultError::InvalidConfig)?;
+        if app_id.to_string() != payload.app_instance_id
+            || grant.algorithm != crate::device_signing::ALGORITHM
+            || grant.root_fingerprint != expected_root_fingerprint
+            || payload.domain != "rawrarr-app-key-grant-v1"
+            || payload.schema_version != 1
+            || payload.key_epoch == 0
+            || payload.app_type.is_empty()
+            || payload.app_type.len() > 64
+            || !payload
+                .app_type
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+            || payload.device_id != device_id
+            || !is_post_quantum_recipient(&payload.app_recipient)
+            || !is_post_quantum_recipient(&payload.device_recipient)
+            || payload.encrypted_identity_sha256.len() != 64
+            || !payload
+                .encrypted_identity_sha256
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        {
+            return Err(VaultError::InvalidConfig);
+        }
+
+        let root_public_key = BASE64
+            .decode(&grant.root_public_key)
+            .map_err(|_| VaultError::InvalidIdentity)?;
+        if crate::device_signing::fingerprint(&root_public_key) != expected_root_fingerprint {
+            return Err(VaultError::InvalidIdentity);
+        }
+        let signature = BASE64
+            .decode(&grant.signature)
+            .map_err(|_| VaultError::InvalidIdentity)?;
+        let signed_payload = serde_json::to_value(payload).map_err(|_| VaultError::InvalidConfig)?;
+        let canonical = crate::device_signing::canonical_json(&signed_payload)
+            .map_err(|_| VaultError::InvalidConfig)?;
+        if !crate::device_signing::verify(&root_public_key, &signature, &canonical) {
+            return Err(VaultError::InvalidIdentity);
+        }
+
+        let encrypted_identity = BASE64
+            .decode(&grant.encrypted_identity)
+            .map_err(|_| VaultError::InvalidConfig)?;
+        if encrypted_identity.len() > MAX_APP_IDENTITY_ENVELOPE_BYTES
+            || !encrypted_identity.starts_with(b"age-encryption.org/v1\n")
+        {
+            return Err(VaultError::InvalidConfig);
+        }
+        let digest = Sha256::digest(&encrypted_identity);
+        if encode_hex(&digest) != payload.encrypted_identity_sha256 {
+            return Err(VaultError::InvalidIdentity);
+        }
+
+        let device_identity_path = data_dir.join("node-age-identity");
+        let device_identity = Zeroizing::new(
+            String::from_utf8(read_private_file(&device_identity_path, 16 * 1024)?)
+                .map_err(|_| VaultError::InvalidIdentity)?,
+        );
+        let device_recipient = identity_to_recipient(&device_identity)?;
+        if device_recipient != payload.device_recipient {
+            return Err(VaultError::InvalidIdentity);
+        }
+        let output = decrypt_age_input(device_identity.as_bytes(), &encrypted_identity)?;
+        if !output.status.success() {
+            return Err(VaultError::InvalidIdentity);
+        }
+        let app_identity = Zeroizing::new(
+            String::from_utf8(output.stdout).map_err(|_| VaultError::InvalidIdentity)?,
+        );
+        if !has_single_post_quantum_identity(&app_identity)
+            || identity_to_recipient(&app_identity)? != payload.app_recipient
+        {
+            return Err(VaultError::InvalidIdentity);
+        }
+
+        let _guard = CONFIG_WRITE_LOCK
+            .lock()
+            .map_err(|_| VaultError::StorageFailed)?;
+        persist_app_identity_at(
+            data_dir,
+            &payload.app_instance_id,
+            payload.key_epoch,
+            &app_identity,
+        )
+    }
+
+    fn current_app_identity(&self, instance_id: &str) -> Result<Zeroizing<String>, VaultError> {
+        let path = app_identity_path(&self.data_dir, instance_id)?;
+        let parent = path.parent().ok_or(VaultError::StorageFailed)?;
+        crate::safe_fs::ensure_directory(parent).map_err(|_| VaultError::InvalidIdentity)?;
+        let identity = Zeroizing::new(
+            String::from_utf8(read_private_file(&path, 16 * 1024)?)
+                .map_err(|_| VaultError::InvalidIdentity)?,
+        );
+        if !has_single_post_quantum_identity(&identity) {
+            return Err(VaultError::InvalidIdentity);
+        }
+        Ok(identity)
     }
 
     /// Stage an app-owned JSON configuration as age ciphertext under `/shared/in/apps`.
@@ -473,12 +618,11 @@ impl AgeVault {
         let _guard = CONFIG_WRITE_LOCK
             .lock()
             .map_err(|_| VaultError::StorageFailed)?;
-        let app = self
-            .prepared_app_identity(instance_id)?
-            .ok_or(VaultError::InvalidConfig)?;
+        let app_identity = self.current_app_identity(instance_id)?;
+        let app_recipient = identity_to_recipient(&app_identity)?;
         self.ensure_app_config_parent(instance_id)?;
         encrypt_shared_file(
-            &app.recipient,
+            &app_recipient,
             &self.app_config_path(instance_id)?,
             plaintext,
         )
@@ -491,8 +635,8 @@ impl AgeVault {
         instance_id: &str,
     ) -> Result<Option<Zeroizing<Vec<u8>>>, VaultError> {
         let path = self.app_config_path(instance_id)?;
-        let mut parent = self.shared_dir.clone();
-        for component in ["in", "apps", instance_id] {
+        let mut parent = self.evt_dir.clone();
+        for component in ["fossil", "apps", instance_id] {
             parent.push(component);
             match crate::safe_fs::ensure_directory(&parent) {
                 Ok(()) => {}
@@ -509,13 +653,11 @@ impl AgeVault {
         if !ciphertext.starts_with(b"age-encryption.org/v1\n") {
             return Err(VaultError::InvalidConfig);
         }
-        let app = self
-            .prepared_app_identity(instance_id)?
-            .ok_or(VaultError::InvalidConfig)?;
+        let app_identity = self.current_app_identity(instance_id)?;
         let output = run_with_input_data(
             "age",
             &["--decrypt", "--identity"],
-            app.identity.as_bytes(),
+            app_identity.as_bytes(),
             &ciphertext,
         )?;
         if !output.status.success() {
@@ -1083,7 +1225,8 @@ impl AgeVault {
     }
 
     pub fn persist_identity_locally(&self) -> Result<(), VaultError> {
-        let data_dir = env::var_os("RAWARR_DATA_DIR")
+        let data_dir = env::var_os("RAWARR_LOCAL_DIR")
+            .or_else(|| env::var_os("RAWARR_DATA_DIR"))
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("data"));
         fs::create_dir_all(&data_dir).map_err(|_| VaultError::StorageFailed)?;
@@ -1127,7 +1270,8 @@ impl AgeVault {
         local_config_path: PathBuf,
         local_plaintext_config: bool,
     ) -> Result<Self, VaultError> {
-        let data_dir = env::var_os("RAWARR_DATA_DIR")
+        let data_dir = env::var_os("RAWARR_LOCAL_DIR")
+            .or_else(|| env::var_os("RAWARR_DATA_DIR"))
             .map(PathBuf::from)
             .unwrap_or_else(|| shared_dir.join(".node-state"));
         Self::from_identity_in_data_dir(identity, shared_dir, data_dir, local_config_path, local_plaintext_config)
@@ -1291,6 +1435,10 @@ impl AgeVault {
         } else {
             encrypt_shared_file(&user_recipient, &user_envelope_path, group_identity.as_bytes())?;
         }
+        let evt_dir = env::var_os("RAWARR_EVT_DIR")
+            .map(PathBuf::from)
+            .or_else(|| shared_dir.parent().map(|parent| parent.join("evt")))
+            .unwrap_or_else(|| PathBuf::from("evt"));
         let vault = Self {
             movie_metadata_cache: Default::default(),
             identity,
@@ -1306,6 +1454,8 @@ impl AgeVault {
             local_plaintext_config,
             metadata_filename_key: std::sync::Arc::new(std::sync::OnceLock::new()),
             shared_dir,
+            data_dir,
+            evt_dir,
         };
         migrate_legacy_metadata(&vault.shared_dir)?;
         // The first approved node creates the shared config as soon as it
@@ -1352,7 +1502,8 @@ impl AgeVault {
     /// Ensure this subscriber node has a persistent age identity separate from the user's vault.
     /// Existing malformed files are deliberately left untouched for recovery.
     pub fn ensure_node_identity() -> Result<String, VaultError> {
-        let data_dir = env::var_os("RAWARR_DATA_DIR")
+        let data_dir = env::var_os("RAWARR_LOCAL_DIR")
+            .or_else(|| env::var_os("RAWARR_DATA_DIR"))
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("data"));
         ensure_node_identity_at(&data_dir.join("node-age-identity"))
@@ -1361,14 +1512,16 @@ impl AgeVault {
     /// Ensure this subscriber has a persistent signing key separate from the user's signing authority.
     /// Existing malformed files are deliberately left untouched for recovery.
     pub fn ensure_node_signing_key() -> Result<(), VaultError> {
-        let data_dir = env::var_os("RAWARR_DATA_DIR")
+        let data_dir = env::var_os("RAWARR_LOCAL_DIR")
+            .or_else(|| env::var_os("RAWARR_DATA_DIR"))
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("data"));
         ensure_node_signing_key_at(&data_dir.join("node-signing-key"))
     }
 
     pub fn node_signing_public_key() -> Result<Vec<u8>, VaultError> {
-        let data_dir = env::var_os("RAWARR_DATA_DIR")
+        let data_dir = env::var_os("RAWARR_LOCAL_DIR")
+            .or_else(|| env::var_os("RAWARR_DATA_DIR"))
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("data"));
         let key = load_node_signing_key(&data_dir.join("node-signing-key"))?;
@@ -1376,7 +1529,8 @@ impl AgeVault {
     }
 
     pub fn sign_node_message(message: &[u8]) -> Result<Vec<u8>, VaultError> {
-        let data_dir = env::var_os("RAWARR_DATA_DIR")
+        let data_dir = env::var_os("RAWARR_LOCAL_DIR")
+            .or_else(|| env::var_os("RAWARR_DATA_DIR"))
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("data"));
         let key = load_node_signing_key(&data_dir.join("node-signing-key"))?;
@@ -1384,7 +1538,8 @@ impl AgeVault {
     }
 
     pub fn node_identity_recipient() -> Result<String, VaultError> {
-        let data_dir = env::var_os("RAWARR_DATA_DIR")
+        let data_dir = env::var_os("RAWARR_LOCAL_DIR")
+            .or_else(|| env::var_os("RAWARR_DATA_DIR"))
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("data"));
         node_identity_recipient(&data_dir.join("node-age-identity"))
@@ -1704,7 +1859,8 @@ fn local_plaintext_config_enabled() -> bool {
 }
 
 fn local_data_dir() -> PathBuf {
-    env::var_os("RAWARR_DATA_DIR")
+    env::var_os("RAWARR_LOCAL_DIR")
+        .or_else(|| env::var_os("RAWARR_DATA_DIR"))
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("data"))
 }
@@ -1748,6 +1904,131 @@ fn has_single_post_quantum_identity(identity: &str) -> bool {
         }
     }
     identity_count == 1
+}
+
+fn app_identity_root(data_dir: &Path, instance_id: &str) -> Result<PathBuf, VaultError> {
+    let parsed = uuid::Uuid::parse_str(instance_id).map_err(|_| VaultError::InvalidConfig)?;
+    if parsed.to_string() != instance_id {
+        return Err(VaultError::InvalidConfig);
+    }
+    Ok(data_dir.join("app-identities").join(instance_id))
+}
+
+fn app_identity_path(data_dir: &Path, instance_id: &str) -> Result<PathBuf, VaultError> {
+    let root = app_identity_root(data_dir, instance_id)?;
+    let app_root = root.parent().ok_or(VaultError::StorageFailed)?;
+    crate::safe_fs::ensure_directory(data_dir).map_err(|_| VaultError::StorageFailed)?;
+    crate::safe_fs::ensure_directory(app_root).map_err(|_| VaultError::InvalidIdentity)?;
+    match crate::safe_fs::ensure_directory(&root) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(VaultError::InvalidIdentity);
+        }
+        Err(_) => return Err(VaultError::StorageFailed),
+    }
+    let active_epoch = String::from_utf8(read_private_file(&root.join("active-epoch"), 32)?)
+        .map_err(|_| VaultError::InvalidIdentity)?;
+    let epoch = active_epoch
+        .trim()
+        .parse::<u64>()
+        .ok()
+        .filter(|epoch| *epoch > 0)
+        .ok_or(VaultError::InvalidIdentity)?;
+    let epoch_dir = root.join(format!("epoch-{epoch}"));
+    crate::safe_fs::ensure_directory(&epoch_dir).map_err(|_| VaultError::StorageFailed)?;
+    Ok(epoch_dir.join("identity"))
+}
+
+fn persist_app_identity_at(
+    data_dir: &Path,
+    instance_id: &str,
+    key_epoch: u64,
+    identity: &str,
+) -> Result<(), VaultError> {
+    if key_epoch == 0 || !has_single_post_quantum_identity(identity) {
+        return Err(VaultError::InvalidIdentity);
+    }
+    let root = app_identity_root(data_dir, instance_id)?;
+    crate::safe_fs::ensure_directory(data_dir).map_err(|_| VaultError::StorageFailed)?;
+    let app_identities_dir = data_dir.join("app-identities");
+    ensure_private_child_dir(data_dir, "app-identities")?;
+    ensure_private_child_dir(&app_identities_dir, instance_id)?;
+    let current_epoch_path = root.join("active-epoch");
+    let current_epoch = match fs::symlink_metadata(&current_epoch_path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+            return Err(VaultError::StorageFailed);
+        }
+        Ok(_) => {
+            let value = String::from_utf8(read_private_file(&current_epoch_path, 32)?)
+                .map_err(|_| VaultError::InvalidIdentity)?;
+            Some(value.trim().parse::<u64>().map_err(|_| VaultError::InvalidIdentity)?)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(_) => return Err(VaultError::StorageFailed),
+    };
+    if current_epoch.is_some_and(|current| key_epoch < current) {
+        return Err(VaultError::InvalidIdentity);
+    }
+    let epoch_name = format!("epoch-{key_epoch}");
+    ensure_private_child_dir(&root, &epoch_name)?;
+    let identity_path = root.join(&epoch_name).join("identity");
+    persist_private_identity(&identity_path, identity)?;
+    if current_epoch != Some(key_epoch) {
+        write_private_atomic(&current_epoch_path, format!("{key_epoch}\n").as_bytes())?;
+    }
+    Ok(())
+}
+
+fn ensure_private_child_dir(parent: &Path, name: &str) -> Result<PathBuf, VaultError> {
+    let path = parent.join(name);
+    match fs::create_dir(&path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(_) => return Err(VaultError::StorageFailed),
+    }
+    crate::safe_fs::ensure_directory(&path).map_err(|_| VaultError::StorageFailed)?;
+    set_private_directory_permissions(&path)?;
+    Ok(path)
+}
+
+fn read_private_file(path: &Path, max_bytes: u64) -> Result<Vec<u8>, VaultError> {
+    use std::os::unix::fs::PermissionsExt;
+    let metadata = fs::symlink_metadata(path).map_err(|_| VaultError::StorageFailed)?;
+    if !metadata.is_file() || metadata.permissions().mode() & 0o077 != 0 {
+        return Err(VaultError::InvalidIdentity);
+    }
+    crate::safe_fs::read_regular_file(path, max_bytes).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::InvalidData {
+            VaultError::InvalidIdentity
+        } else {
+            VaultError::StorageFailed
+        }
+    })
+}
+
+fn write_private_atomic(path: &Path, contents: &[u8]) -> Result<(), VaultError> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let parent = path.parent().ok_or(VaultError::StorageFailed)?;
+    let temporary = temporary_path(path);
+    let result = (|| {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&temporary)
+            .map_err(|_| VaultError::StorageFailed)?;
+        set_private_file_permissions(&file)?;
+        file.write_all(contents).map_err(|_| VaultError::StorageFailed)?;
+        file.sync_all().map_err(|_| VaultError::StorageFailed)?;
+        fs::rename(&temporary, path).map_err(|_| VaultError::StorageFailed)?;
+        fs::File::open(parent)
+            .and_then(|directory| directory.sync_all())
+            .map_err(|_| VaultError::StorageFailed)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(temporary);
+    }
+    result
 }
 
 fn persist_private_identity(path: &Path, identity: &str) -> Result<(), VaultError> {
@@ -2321,6 +2602,8 @@ fn set_shared_directory_permissions(path: &Path) -> Result<(), VaultError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
 
     #[test]
     fn node_identity_is_created_once_and_existing_identity_is_reused() {
@@ -2847,6 +3130,7 @@ mod tests {
         ));
         let shared_dir = root.join("shared");
         fs::create_dir_all(&shared_dir).expect("create isolated shared directory");
+        fs::create_dir_all(root.join("evt")).expect("create isolated event data directory");
         let vault = AgeVault::from_identity_in_dirs(
             user_identity,
             shared_dir.clone(),
@@ -2854,6 +3138,9 @@ mod tests {
             false,
         )
         .expect("open isolated age vault");
+        let device_identity_path = vault.data_dir.join("node-age-identity");
+        let device_recipient = ensure_node_identity_at(&device_identity_path)
+            .expect("create isolated node age identity");
         let config = PersistedConfig {
             device_names: std::collections::HashMap::new(),
             sonarr: None,
@@ -2882,11 +3169,103 @@ mod tests {
         let sonarr_identity = Zeroizing::new(sonarr.identity.clone());
         let app_config = br#"{"schemaVersion":1,"connection":{"url":"http://radarr.example:7878","apiKey":"test-only credential marker"},"settings":{"backupSource":"/documents","retention":30}}"#;
 
+        let root_signing_key = SigningKey::<MlDsa65>::from_seed(&[19u8; 32].into());
+        let root_public_key = root_signing_key.verifying_key().encode();
+        let root_public_key_bytes: &[u8] = root_public_key.as_ref();
+        let root_fingerprint = crate::device_signing::fingerprint(root_public_key_bytes);
+        let encrypted_identity_path = root.join("grant-envelope.aged");
+        encrypt_shared_file(&device_recipient, &encrypted_identity_path, radarr.identity.as_bytes())
+            .expect("wrap Radarr identity for this node");
+        let encrypted_identity = fs::read(&encrypted_identity_path).expect("read wrapped app identity");
+        let payload = AppKeyGrantPayload {
+            domain: "rawrarr-app-key-grant-v1".into(),
+            schema_version: 1,
+            app_instance_id: radarr_id.clone(),
+            app_type: "radarr".into(),
+            app_recipient: radarr.recipient.clone(),
+            device_id: "fossil-test".into(),
+            device_recipient: device_recipient.clone(),
+            key_epoch: 1,
+            encrypted_identity_sha256: encode_hex(&Sha256::digest(&encrypted_identity)),
+        };
+        let payload_value = serde_json::to_value(&payload).expect("serialize grant payload");
+        let canonical_payload = crate::device_signing::canonical_json(&payload_value)
+            .expect("canonicalize grant payload");
+        let signature = root_signing_key.sign(&canonical_payload).encode();
+        let signature_bytes: &[u8] = signature.as_ref();
+        let make_grant = |payload: &AppKeyGrantPayload, envelope: &[u8]| {
+            let value = serde_json::json!({
+                "algorithm": crate::device_signing::ALGORITHM,
+                "rootPublicKey": BASE64.encode(root_public_key_bytes),
+                "rootFingerprint": root_fingerprint,
+                "signedPayload": payload,
+                "signature": BASE64.encode(signature_bytes),
+                "encryptedIdentity": BASE64.encode(envelope),
+            });
+            serde_json::to_vec(&value).expect("encode grant")
+        };
+        let grant = make_grant(&payload, &encrypted_identity);
+        AgeVault::install_app_key_grant_at(
+            &grant,
+            &root_fingerprint,
+            "fossil-test",
+            &vault.data_dir,
+        )
+        .expect("install root-authorized app key grant");
+        assert_eq!(
+            fs::metadata(app_identity_path(&vault.data_dir, &radarr_id).expect("app identity path"))
+                .expect("app identity metadata").permissions().mode() & 0o777,
+            0o600,
+            "app age identity must remain node-local and private"
+        );
+        #[cfg(unix)]
+        {
+            let identity_path = app_identity_path(&vault.data_dir, &radarr_id)
+                .expect("app identity path");
+            fs::set_permissions(&identity_path, fs::Permissions::from_mode(0o644))
+                .expect("make test identity too permissive");
+            assert!(vault.stage_app_config(&radarr_id, app_config).is_err());
+            fs::set_permissions(&identity_path, fs::Permissions::from_mode(0o600))
+                .expect("restore private permissions");
+        }
+        let mut wrong_device = payload.clone();
+        wrong_device.device_id = "another-node".into();
+        let wrong_device_value = serde_json::to_value(&wrong_device).expect("serialize altered payload");
+        let wrong_device_signature = root_signing_key.sign(
+            &crate::device_signing::canonical_json(&wrong_device_value).expect("canonicalize payload")
+        ).encode();
+        let wrong_device_signature_bytes: &[u8] = wrong_device_signature.as_ref();
+        let wrong_device_grant = {
+            let value = serde_json::json!({
+                "algorithm": crate::device_signing::ALGORITHM,
+                "rootPublicKey": BASE64.encode(root_public_key_bytes),
+                "rootFingerprint": root_fingerprint,
+                "signedPayload": wrong_device,
+                "signature": BASE64.encode(wrong_device_signature_bytes),
+                "encryptedIdentity": BASE64.encode(&encrypted_identity),
+            });
+            serde_json::to_vec(&value).expect("encode wrong-device grant")
+        };
+        assert!(AgeVault::install_app_key_grant_at(
+            &wrong_device_grant,
+            &root_fingerprint,
+            "fossil-test",
+            &vault.data_dir,
+        ).is_err());
+        let mut older_payload = payload;
+        older_payload.key_epoch = 0;
+        assert!(AgeVault::install_app_key_grant_at(
+            &make_grant(&older_payload, &encrypted_identity),
+            &root_fingerprint,
+            "fossil-test",
+            &vault.data_dir,
+        ).is_err());
+
         vault
             .stage_app_config(&radarr_id, app_config)
             .expect("encrypt app config to the Radarr identity");
         let path = vault.app_config_path(&radarr_id).expect("derive app config path");
-        assert!(path.starts_with(shared_in_dir_for(&shared_dir).join("apps")));
+        assert_eq!(path, root.join("evt/fossil/apps").join(&radarr_id).join("config.aged"));
         let ciphertext = fs::read(&path).expect("read staged ciphertext");
         assert!(ciphertext.starts_with(b"age-encryption.org/v1\n"));
         assert!(!ciphertext
