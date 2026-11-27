@@ -41,6 +41,31 @@ fn accepts_only_bounded_age_ciphertext() {
     assert!(!valid_ciphertext(&[AGE_MAGIC, &vec![b'x'; MAX_CONFIG_BYTES]].concat()));
 }
 
+fn fossil_revision(path: &str, counter: u64, device: &str, operation: &str, digest: Option<&str>) -> FossilRevision {
+    FossilRevision { schema_version: 1, root_fingerprint: "a".repeat(64), object_path: path.into(), device_id: device.into(), counter,
+        operation: operation.into(), ciphertext_digest: digest.map(str::to_owned), certificate: serde_json::Value::Null, signature: format!("sig-{device}-{counter}") }
+}
+
+#[test]
+fn fossil_object_paths_are_fixed_to_aged_metadata_under_the_domain() {
+    for path in ["metadata/movies/text/a.json.aged", "metadata/tv/artwork/poster.aged", "metadata/library/text/hash.json.aged"] {
+        assert!(valid_fossil_path(path), "{path}");
+    }
+    for path in ["config.aged", "../metadata/movies/text/a.aged", "metadata/../../secret.aged", "metadata/movies/a.json", "metadata\\movies\\a.aged", "metadata/movies//a.aged"] {
+        assert!(!valid_fossil_path(path), "{path}");
+    }
+}
+
+#[test]
+fn fossil_merkle_and_conflict_order_are_deterministic_and_keep_tombstones() {
+    let older = fossil_revision("metadata/movies/text/a.json.aged", 2, "node-a", "put", Some(&"b".repeat(64)));
+    let tombstone = fossil_revision("metadata/movies/text/a.json.aged", 3, "node-b", "delete", None);
+    assert_eq!(fossil_merkle_root(&[older.clone(), tombstone.clone()]), fossil_merkle_root(&[tombstone.clone(), older.clone()]));
+    assert_ne!(fossil_merkle_root(&[older.clone()]), fossil_merkle_root(&[older.clone(), tombstone.clone()]));
+    let winner = fossil_winners(&[older, tombstone]).remove("metadata/movies/text/a.json.aged").unwrap();
+    assert_eq!(winner.operation, "delete");
+}
+
 #[test]
 fn peer_allowlist_requires_stable_ids_and_direct_tailnet_https_urls() {
     assert!(valid_peer_id("device-123abc"));
@@ -129,6 +154,11 @@ fn peer_challenges_are_bound_to_allowlisted_cert_method_path_and_one_use() {
     revision.signature=encode_hex(node_key.sign(&revision_payload).encode().as_ref());
     assert!(revision.verify(&root_fingerprint));
     let mut tampered=revision.clone();tampered.counter+=1;assert!(!tampered.verify(&root_fingerprint));
+    let mut fossil=FossilRevision {schema_version:1,root_fingerprint:root_fingerprint.clone(),object_path:"metadata/movies/text/42.json.aged".into(),device_id:"node-a".into(),counter:1,operation:"put".into(),ciphertext_digest:Some("c".repeat(64)),certificate:certificate.clone(),signature:String::new()};
+    let fossil_payload=crate::device_signing::canonical_json(&fossil.payload()).unwrap();
+    fossil.signature=encode_hex(node_key.sign(&fossil_payload).encode().as_ref());
+    assert!(fossil.verify(&root_fingerprint));
+    let mut tampered_fossil=fossil.clone();tampered_fossil.object_path="metadata/../secret.aged".into();assert!(!tampered_fossil.verify(&root_fingerprint));
     let receiver=PeerRpc::fixture("node-b",&root_fingerprint,HashMap::from([("node-a".to_owned(),"https://node-a".to_owned())]));
     let (nonce,_)=receiver.issue_challenge().unwrap();
     let request_payload=serde_json::json!({"domain":"rawrarr-config-peer-request-v1","version":1,"senderId":"node-a","receiverId":"node-b","method":"GET","path":"/config-peer/manifest","bodySha256":hex(&Sha256::digest([])),"nonce":nonce});

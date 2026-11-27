@@ -2830,9 +2830,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let identity_path = env::var_os("RAWARR_AGE_IDENTITY_FILE")
         .filter(|path| !path.is_empty())
         .or_else(|| {
-            let local_identity = env::var_os("RAWARR_DATA_DIR")
+            let local_identity = env::var_os("RAWARR_LOCAL_DIR").or_else(|| env::var_os("RAWARR_DATA_DIR"))
                 .map(std::path::PathBuf::from)
-                .unwrap_or_else(|| std::path::PathBuf::from("data"))
+                .unwrap_or_else(|| std::path::PathBuf::from("local"))
                 .join("age-identity");
             local_identity
                 .is_file()
@@ -2932,6 +2932,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let peer_mirror = mirror.clone();
                 let peer_path = path.clone();
                 let peer_certificate = revision_certificate.clone();
+                if env::var("RAWARR_EVT_WRITE_MODE").is_ok_and(|mode| mode.eq_ignore_ascii_case("evt")) {
+                    let fossil_device_id = revision_device_id.clone();
+                    let fossil_certificate = revision_certificate.clone();
+                    if let Some(certificate) = fossil_certificate.as_ref() {
+                        let certificate = certificate.clone();
+                        if let Err(error) = tokio::task::spawn_blocking(move || {
+                            config_repair::record_local_fossil_changes(&fossil_device_id, &certificate)
+                        }).await.unwrap_or_else(|_| Err(std::io::Error::other("fossil scan task failed"))) {
+                            eprintln!("rawrarr fossil revision scan failed: {error}");
+                        }
+                    }
+                    let _ = peer_state.reconcile_fossil_once(peer_certificate.as_ref()).await;
+                }
                 let repaired = peer_state.reconcile_once(&peer_mirror, &peer_path, peer_certificate.as_ref(), &application_state.config_peer_status).await;
                 if repaired {
                     let vault = application_state.vault.read().await.clone();
@@ -3126,6 +3139,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/config-peer/challenge", get(config_repair::challenge))
         .route("/config-peer/manifest", get(config_repair::manifest))
         .route("/config-peer/config/{digest}", get(config_repair::config_object))
+        .route("/config-peer/fossil-manifest", get(config_repair::fossil_manifest))
+        .route("/config-peer/fossil-object/{digest}", get(config_repair::fossil_object))
         .merge(direct_protected)
         .layer(middleware::from_fn(log_request))
         .layer(middleware::from_fn(direct_api_cors))
@@ -3135,15 +3150,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .route("/config-peer/challenge", get(config_repair::challenge))
             .route("/config-peer/manifest", get(config_repair::manifest))
             .route("/config-peer/config/{digest}", get(config_repair::config_object))
+            .route("/config-peer/fossil-manifest", get(config_repair::fossil_manifest))
+            .route("/config-peer/fossil-object/{digest}", get(config_repair::fossil_object))
             .layer(middleware::from_fn(log_request))
             .with_state(state.clone());
         let peer_listener = tokio::net::TcpListener::bind("127.0.0.1:8443").await?;
         tokio::spawn(async move {
             if let Err(error) = axum::serve(peer_listener, peer_app).await {
-                eprintln!("Rawrarr Rayfish config-peer listener failed: {error}");
+                eprintln!("rawrarr Rayfish config-peer listener failed: {error}");
             }
         });
-        println!("Rawrarr Rayfish config-peer HTTP listening on 127.0.0.1:8443");
+        println!("rawrarr Rayfish config-peer HTTP listening on 127.0.0.1:8443");
     }
     let app = Router::new()
         .route("/health", get(health))

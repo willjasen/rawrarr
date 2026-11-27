@@ -41,9 +41,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg libssl3 librsvg2-bin libjxl-tools openssl python3 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin rustarr \
-    && mkdir -p /data /shared/in /shared/out /ui \
-    && ln -s /shared/in/metadata /metadata \
-    && chown 10001:10001 /data /shared /shared/in /shared/out /ui
+    && mkdir -p /local /evt/fossil /evt/boneyard /shared/in /shared/out /ui \
+    && ln -s /evt/fossil/metadata /metadata \
+    && chown 10001:10001 /local /evt /evt/fossil /evt/boneyard /shared /shared/in /shared/out /ui
 COPY --from=builder /rust-arr /usr/local/bin/rust-arr
 COPY --from=builder /rust-arr-build-revision /usr/share/rawrarr/build-revision
 COPY --from=builder /rust-arr-target-arch /usr/share/rawrarr/target-arch
@@ -54,9 +54,11 @@ RUN test "$(cat /usr/share/rawrarr/target-arch)" = "$TARGETARCH"
 USER 10001:10001
 EXPOSE 8080
 ENV RUST_ARR_LISTEN_ADDR=0.0.0.0:8080
-ENV RAWARR_DATA_DIR=/data
+ENV RAWARR_LOCAL_DIR=/local
+ENV RAWARR_DATA_DIR=/local
+ENV RAWARR_EVENT_DIR=/evt
 ENV RAWARR_SHARED_DATA_DIR=/shared
-ENV RAWARR_METADATA_DIR=/metadata
+ENV RAWARR_EVT_WRITE_MODE=legacy
 ENV RAWARR_BUILD_REVISION_FILE=/usr/share/rawrarr/build-revision
 ENTRYPOINT ["/usr/local/bin/rawrarr-entrypoint"]
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=5 \

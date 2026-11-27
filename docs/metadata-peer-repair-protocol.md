@@ -1,16 +1,17 @@
-# Encrypted config peer-repair protocol
+# Encrypted fossil peer-repair protocol
 
 ## Status
 
-Approved design for the initial two-fossil implementation. The code now has a ciphertext-only local Valkey mirror, signed durable revision records, challenge-authenticated fixed-object peer RPC, and periodic manifest/Merkle reconciliation. The isolated end-to-end reconnect gate is still pending. At the initial inspection, the MacBook Valkey service cached encrypted artwork only, the Mac mini fossil had no Valkey service, the MacBook had `/shared/config.aged`, and the Mac mini did not. See [issue #100](https://github.com/willjasen/rawrarr/issues/100) and the [task runbook](../runbooks/2026-10-26-valkey-metadata-mirror-rpc.md).
+The initial config repair is deployed in code; this change adds fixed-path encrypted metadata RPC behind explicit `/evt` write mode. The isolated end-to-end reconnect/conflict gate remains pending, and production deployment must wait for it. The legacy write mode remains the default during mixed-version rollout. See [issue #100](https://github.com/willjasen/rawrarr/issues/100), [issue #486](https://github.com/willjasen/rawrarr/issues/486), and the [task runbook](../runbooks/2026-10-26-valkey-metadata-mirror-rpc.md).
 
 ## Scope and data boundary
 
-- Replicate only the encrypted `/shared/config.aged` object and its signed, versioned revision/tombstone records through peer RPC and Merkle reconciliation.
-- Keep app metadata and artwork under `/shared/metadata` on their existing Syncthing path. They are outside the Valkey mirror, RPC manifest, and Merkle tree for this phase.
-- Keep `/shared/config.aged` as the path consumed by the application, but exclude it from Syncthing on each fossil. Add the root-level pattern `/config.aged` to a local `.stignore` in each Syncthing folder. Syncthing does not propagate `.stignore`; both nodes require separate configuration. Make this change only after both fossils run the RPC-capable published release.
+- In legacy mode, keep config and metadata under `/shared` while compatible releases roll out.
+- In event mode (`RAWARR_EVT_WRITE_MODE=evt`), place config at `/evt/fossil/config.aged` and encrypted metadata at `/evt/fossil/metadata`; exchange metadata objects and signed revisions with authorized fossil peers over RPC. Never mount `/evt/fossil` in Syncthing.
+- Config RPC and its current Syncthing exclusion remain a separate existing setup. Add the root-level pattern `/config.aged` to `.stignore` on each fossil only after all participating nodes run the RPC-capable release.
+- `/evt/boneyard` remains a separate Syncthing folder for explicitly selected files and media.
 - Store and transmit exact age ciphertext bytes. Never decrypt configuration in Valkey, the RPC service, coordinator, or logs. Configuration may contain API credentials and metadata filename keys.
-- A local Valkey entry is a disposable mirror. `/shared/config.aged` is the active local application file; an authorized peer can restore it if it is missing. If the active file, local mirror, and every peer copy are lost, Rawrarr cannot reconstruct the ciphertext or its secrets.
+- A local Valkey entry is a disposable config mirror. The local event file is authoritative in event mode; an authorized peer can restore it if it is missing. Fossil metadata objects are retained in a node-local content-addressed cache so prior signed revisions remain transferable after a later write. If every ciphertext copy is lost, Rawrarr cannot reconstruct it or its secrets.
 
 ## Valkey representation and rebuild
 
@@ -24,13 +25,13 @@ On peer repair, stream the ciphertext to a node-local staging file, enforce the 
 
 ## Revisions, offline writes, and conflicts
 
-Each config write creates an immutable signed revision record in node-local durable `/data/config-revisions/`; it is transferred through RPC and mirrored in Valkey but is not placed in `/shared/metadata`. The signed canonical payload binds protocol/schema version, the pinned instance-root fingerprint, stable author device ID, per-device logical counter, operation (`put` or `delete`), and ciphertext digest (for `put`). It includes no config plaintext and no host timestamp.
+Each config write creates an immutable signed revision record in node-local durable `/local/config-revisions/`; it is transferred through RPC and mirrored in Valkey. Each metadata object has a parallel signed record in `/local/fossil-revisions/`. Its canonical payload binds protocol/schema version, pinned instance-root fingerprint, fixed relative object path under `metadata/`, author device ID, logical counter, operation, and ciphertext digest (for `put`). It contains no plaintext or host timestamp. Exact encrypted objects are cached at `/local/fossil-objects/<digest>` for repair.
 
-Before signing a local revision, advance a counter persisted atomically under `/data` above the highest verified counter known to that node. Offline writes remain allowed. Preserve every signed revision and tombstone in the initial two-node phase. Concurrent revisions for the same config converge on the lexicographically greatest `(counter, stable device ID, ciphertext digest)` tuple; host clocks do not select a winner. A delete is a signed tombstone and remains until each currently authorized peer acknowledges it. Since device revocation is not implemented, do not compact tombstones automatically.
+Before signing a local revision, advance its logical counter above the highest verified counter known to that node. Offline writes remain allowed. Preserve every signed revision and tombstone. Concurrent revisions for the same object converge on the lexicographically greatest `(counter, stable device ID, ciphertext digest)` tuple; host clocks do not select a winner. A delete is a signed tombstone. Tombstones are retained indefinitely because peer acknowledgements and device revocation/compaction are not implemented.
 
 On first enrollment into this protocol, the existing MacBook config file is imported as a baseline revision without rewriting its ciphertext. The Mac mini obtains and verifies that revision and exact ciphertext before it begins local config writes. A malformed existing config, counter rollback, incompatible schema, or unknown root fails closed and retains the prior file for recovery.
 
-This detects many partial rollbacks when a peer retains a newer signed revision. It cannot prove continuity if every copy of both `/shared` and node-local `/data` is restored from the same older snapshot. Record this limit; do not claim hardware-backed anti-rollback.
+This detects many partial rollbacks when a peer retains a newer signed revision. It cannot prove continuity if every copy of event data and node-local `/local` is restored from the same older snapshot. Do not claim hardware-backed anti-rollback.
 
 ## Peer authorization and RPC
 
@@ -58,33 +59,31 @@ grant. Do not put API keys or age identities in the peer map or sidecar config.
 
 Before transfer, peers use a protocol-versioned challenge exchange with a fresh 256-bit receiver nonce. The sender signs a canonical proof binding the nonce, sender ID, receiver ID, protocol version, and requested capability. Challenges expire after 30 seconds and are one-use. Each request signs the method, exact path, body digest, sender ID, receiver ID, and a fresh nonce. Reject unknown peers, invalid signatures, expired/reused challenges, unsupported versions, and mismatched targets.
 
-The protocol exposes only:
+The existing RPC exposes challenge-authenticated config revision pages and config ciphertext by digest. Event mode adds only:
 
-1. `hello`: challenge, identity/capability exchange, and config revision Merkle root;
-2. `manifest-page`: bounded revision leaves for a requested range;
-3. `get-config`: fetch ciphertext by verified revision digest;
-4. `get-revision`: fetch one signed config revision or tombstone;
-5. `acknowledge`: record a verified revision generation.
+- `GET /config-peer/fossil-manifest?offset=&limit=` — at most 128 signed metadata revision records per page.
+- `GET /config-peer/fossil-object/<sha256>` — ciphertext by digest; no caller-supplied path.
 
-Limit a manifest page to 128 revision leaves, config ciphertext to 2 MiB, concurrent transfers per peer, total staged bytes, and request rate. Route through Tailscale where available, but require device-key authentication at the application layer. Never allow callers to choose a filesystem path or fetch `/shared/metadata` through this API.
+Each request uses the existing one-use, 30-second challenge and device signature, and requires a metadata-role certificate from an allowlisted peer under the pinned instance root. Object paths in signed records must be relative `.aged` files below `metadata/`; symlinks and non-regular entries are rejected. The receiver verifies certificate, signature, path, operation, ciphertext prefix, 8 MiB object limit, and SHA-256 before caching or writing. Config ciphertext remains limited to 2 MiB. Transfers are sequential per peer; response bodies are streamed with a hard size cap. The coordinator receives no ciphertext, revisions, age identities, or signing seeds.
 
 The coordinator may assist discovery later but receives no configuration ciphertext, plaintext, age identity, or signing seed. The prototype has no primary lease and no coordinator-held write authority.
 
 ## Merkle inventory
 
-The Merkle tree covers signed config revision records only. Sort leaves by revision ID (SHA-256 of the canonical signed payload plus signature). Canonically encode each leaf and hash with SHA-256 domain separation:
+The config Merkle tree covers signed config revisions; event mode also computes a separate Merkle tree over signed fossil-object revisions. Each tree sorts leaves by revision ID (SHA-256 of the canonical signed payload plus signature). Canonically encode each leaf and hash with SHA-256 domain separation:
 
 - leaf payload: schema version, revision ID, device ID, logical counter, operation, and ciphertext digest;
 - leaf hash: `SHA256(0x00 || canonical_leaf)`;
 - parent hash: `SHA256(0x01 || left_hash || right_hash)`;
 - an unpaired final child is carried unchanged to the next level;
-- empty root: `SHA256("rawrarr-config-merkle-empty-v1\\0")`.
+- config empty root: `SHA256("rawrarr-config-merkle-empty-v1\\0")`;
+- fossil empty root: `SHA256("rawrarr-fossil-merkle-empty-v1\\0")`.
 
 Merkle equality is an integrity/reconciliation hint, not authorization. Verify peer certificates, revision signatures, authorization, schema, ciphertext length, digest, and age format independently before accepting data.
 
 ## Two-node verification gate
 
-An isolated integration must use two fossil services with independent `/data`, `/shared`, and Valkey instances. It must verify:
+An isolated integration must use two fossil services with independent `/local`, `/evt`, legacy `/shared`, and Valkey instances. It must verify:
 
 - initial import and exact repair from the MacBook-present/Mac-mini-missing state;
 - Valkey loss and rebuild from local `config.aged`;
@@ -93,11 +92,14 @@ An isolated integration must use two fossil services with independent `/data`, `
 - idempotent retries and recovery from interrupted transfer;
 - rejection of unknown certificates, invalid signatures, replay, stale challenges, unsupported schema, oversized data, and arbitrary object paths;
 - tombstone retention while a peer is offline;
+- metadata/artwork object repair, digest verification, simultaneous offline edits, deterministic winner convergence, and retained delete tombstones;
+- rejection of malformed metadata paths, object symlinks, unauthorized fossil certificates, oversized/chunked object responses, invalid signatures, and digest mismatches;
+- that `/evt/fossil` is absent from Syncthing and selected `/evt/boneyard` content remains in the Syncthing domain;
 - no config plaintext or API credentials in Valkey, peer payloads, coordinator observations, or logs;
 - `.stignore` excludes exactly root `/config.aged` on each device while app metadata and artwork continue syncing through Syncthing.
 
-Passing this gate demonstrates config convergence and repair for this two-node topology only. It does not demonstrate automatic failover, RF=3, or recovery when all ciphertext and replicas are lost.
+Passing this gate demonstrates config and fossil-object convergence for this two-node topology only. It does not demonstrate automatic failover, RF=3, or recovery when all ciphertext and replicas are lost.
 
 ## Review gate
 
-Before durable RPC routes or live Syncthing exclusions are implemented, review the fixed-object API, per-device peer allowlist, counter/tombstone rules, 2 MiB limit, challenge framing, and two-node test gate. Deploy the exclusion only after both services run code that can repair config over RPC. Verify each restored ciphertext can be decrypted by the intended owner flow; a byte-for-byte hash check alone proves transfer integrity, not decryptability.
+Before enabling event write mode on nodes, deploy the compatible release to every authorized fossil, run the isolated object repair/conflict gate, verify data has copied into `/evt/fossil`, and validate owner decryption. The current release leaves generated Compose in legacy mode by default. Rollback after event-mode writes requires quiescing all writers, copying the selected winning revisions back to `/shared`, verifying digests and owner decryption, then returning every peer to legacy mode; never delete either tree automatically. This protocol does not change coordinator storage or Syncthing membership.

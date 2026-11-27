@@ -127,7 +127,7 @@ pub struct ScanScheduler {
 impl ScanScheduler {
     pub fn load() -> Result<Self, Box<dyn Error>> {
         let path =
-            PathBuf::from(std::env::var_os("RAWARR_DATA_DIR").unwrap_or_else(|| "/data".into()))
+            PathBuf::from(std::env::var_os("RAWARR_LOCAL_DIR").or_else(|| std::env::var_os("RAWARR_DATA_DIR")).unwrap_or_else(|| "/local".into()))
                 .join("storage-scan-schedule.json");
         let state = match fs::read(&path) {
             Ok(bytes) => {
@@ -607,7 +607,7 @@ struct ScanFingerprint {
 }
 
 fn scan_cache_path() -> PathBuf {
-    PathBuf::from(std::env::var_os("RAWARR_DATA_DIR").unwrap_or_else(|| "/data".into()))
+    PathBuf::from(std::env::var_os("RAWARR_LOCAL_DIR").or_else(|| std::env::var_os("RAWARR_DATA_DIR")).unwrap_or_else(|| "/local".into()))
         .join("storage-sidecar-cache.json")
 }
 

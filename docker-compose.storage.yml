@@ -7,9 +7,11 @@ services:
     environment:
       RAWARR_ROLE: storage
       RUST_ARR_LISTEN_ADDR: 127.0.0.1:8080
-      RAWARR_DATA_DIR: /data
+      RAWARR_LOCAL_DIR: /local
+      RAWARR_DATA_DIR: /local
+      RAWARR_EVENT_DIR: /evt
       RAWARR_SHARED_DATA_DIR: /shared
-      RAWARR_METADATA_DIR: /metadata
+      RAWARR_EVT_WRITE_MODE: ${RAWARR_EVT_WRITE_MODE:-legacy}
       RAWARR_LIBRARY_PATH: /media
       RAWARR_LIBRARY_NAME: ${RAWARR_LIBRARY_NAME:-Mac mini media}
       RAWARR_DEVICE_NAME: ${RAWARR_DEVICE_NAME:-Mac mini}
@@ -18,14 +20,15 @@ services:
       RAWARR_DEVICE_ID: ${RAWARR_NODE_ID:-mac-mini-storage}
       RAWARR_WEBAUTHN_RP_ID: localhost
       RAWARR_WEBAUTHN_ORIGIN: http://localhost:7297
-      RAWARR_NODE_TOKEN_FILE: /data/node-token
+      RAWARR_NODE_TOKEN_FILE: /local/node-token
       RAWARR_NODE_ENROLLMENT_ENABLED: ${RAWARR_NODE_ENROLLMENT_ENABLED:-true}
       RAWARR_STORAGE_SCAN_TIMEZONE: ${RAWARR_STORAGE_SCAN_TIMEZONE:-UTC}
       RUST_ARR_DIRECT_LISTEN_ADDR: 127.0.0.1:8083
       RAWARR_DIRECT_ALLOWED_ORIGIN: https://rawrarr.risk-mermaid.ts.net
       RAWARR_LOCAL_PLAINTEXT_CONFIG: "false"
     volumes:
-      - rawrarr-data:/data
+      - rawrarr-data:/local
+      - rawrarr-evt:/evt
       - rawrarr-ui:/ui
       - type: bind
         source: "${RAWARR_SHARED_DATA_PATH:-${HOME}/Library/Application Support/rawrarr/shared-data}"
@@ -44,4 +47,5 @@ services:
     restart: unless-stopped
 volumes:
   rawrarr-data:
+  rawrarr-evt:
   rawrarr-ui:

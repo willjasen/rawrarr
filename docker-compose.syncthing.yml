@@ -13,8 +13,8 @@ services:
     volumes:
       - rawrarr-syncthing-state:/var/syncthing
       - type: bind
-        source: "${RAWARR_SHARED_DATA_PATH:-${HOME}/Library/Application Support/rawrarr/shared-data}"
-        target: /shared
+        source: "${RAWARR_BONEYARD_DATA_PATH:?Set RAWARR_BONEYARD_DATA_PATH to the approved Syncthing folder}"
+        target: /evt/boneyard
         bind:
           create_host_path: false
     networks:

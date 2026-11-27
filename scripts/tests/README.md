@@ -5,7 +5,7 @@
 - `test_rawrarr_metadata_cache.rs` — verifies regular metadata caching, same-length replacement invalidation, and symlink rejection before decryption. Included in the isolated Rust suite as `metadata_cache`.
 
 - `test_rawrarr_coordinator_arr_links.mjs` — checks the coordinator's encrypted Radarr slug flow, direct metadata route, browser-only reachability gate, and year-cell icon wiring for Movies and TV. Run with `node --test scripts/tests/test_rawrarr_coordinator_arr_links.mjs`.
-- `test_rawrarr_subscriber_compose.mjs` — checks subscriber role Compose generation, fossil-prefixed generated IDs, and anonymous public GHCR pulls without GitHub credentials; run `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
+- `test_rawrarr_subscriber_compose.mjs` — checks subscriber role Compose generation, `/local` and `/evt` mounts with legacy `/shared` compatibility, fossil-prefixed generated IDs, and anonymous public GHCR pulls without GitHub credentials; run `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs` (Node.js 26 per `.nvmrc`).
 # Rawrarr tests
 
 - `rayfish_standalone_docker.py --binary /path/to/rust-arr` -- runs a fresh
@@ -254,7 +254,7 @@
 - `secure_config::tests::node_signing_key_is_created_once_and_reused_separately_from_user_identity` and `invalid_existing_node_signing_key_is_not_replaced` — Subscriber ML-DSA-65 key creation, derivation stability across restarts, separation from the user's age identity, restrictive permissions, and fail-closed invalid-file behavior; run with `cargo test --locked --manifest-path rust-arr/Cargo.toml node_signing_key` in the Rust test environment.
 
 - `test_rawrarr_admin_preview.mjs` — checks that the admin preview is paused with no Docker build/launch definition, and that retained mockup source remains sample-only and has no production data connection. Run with `node --test scripts/tests/test_rawrarr_admin_preview.mjs`.
-- `test_rawrarr_subscriber_compose.mjs` — Validates subscriber fossil/boneyard Compose output, the pinned instance-root fingerprint, internal Tailscale coordinator URL and selected Headscale modes, secret-file auth, node-local Tailscale state, custom device names, and invalid network settings; run with `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
+- `test_rawrarr_subscriber_compose.mjs` — Validates subscriber fossil/boneyard Compose output, `/local` and `/evt` with legacy `/shared` compatibility, the pinned instance-root fingerprint, internal Tailscale coordinator URL and selected Headscale modes, secret-file auth, node-local Tailscale state, custom device names, and invalid network settings; run with `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs` using Node.js 26 per `.nvmrc`.
 - `test_rawrarr_subscriber_onboarding_browser.mjs` — Chromium checks that first passkey registration enters the age/signing-key setup flow, backup gates and private-key boundaries, explicit optional Compose setup, supported node/network choices, safe Compose generation/download, and the Devices continuation; run in the isolated test image.
 - `coordinator::approved_node_registry_tests` — verifies a valid empty approved-node registry lets a new coordinator start without pre-provisioned devices while malformed registries still fail; run with the Rust unit suite.
 - `test_rawrarr_ai_chat.mjs` — checks browser-local movie filters, Movies-versus-TV disk usage shares, candid missing-data responses, and Rawr's gently playful answer style. Run `node --test scripts/tests/test_rawrarr_ai_chat.mjs`.
@@ -272,7 +272,7 @@
 - `test_rawrarr_arr_summary.mjs` — checks that Radarr and Sonarr use the shared configurable four-card summary renderer. Run with `node --test scripts/tests/test_rawrarr_arr_summary.mjs`.
 
 - `test_rawrarr_metadata_sizes.mjs` — checks the metadata API and Movies/TV cards report separate media-subtree sizes. Run with `node --test scripts/tests/test_rawrarr_metadata_sizes.mjs`.
-- `test_rawrarr_metadata_storage.rs` — verifies repeatable fresh-volume metadata initialization, encrypted writes through the container alias, preservation of existing ciphertext, invalid-directory rejection, and exact nested file-size/error reporting. Included in the isolated Rust suite through `secure_config::metadata_storage_tests`.
+- `test_rawrarr_metadata_storage.rs` — verifies repeatable metadata initialization, compatibility copying into `/evt/fossil` without deleting sources or overwriting conflicts, encrypted writes through the container alias, invalid-directory rejection, and exact nested file-size/error reporting. Included in the isolated Rust suite through `secure_config::metadata_storage_tests`.
 
 - `test_rawrarr_sonarr_completion_ui.mjs` — confirms Movies and TV use the shared provider-aware scrape status/progress updater, and that the TV view hides scrape completion and successful-load messages after the Sonarr artwork cache is complete while retaining errors. Run with `node --test scripts/tests/test_rawrarr_sonarr_completion_ui.mjs`.
 
@@ -332,7 +332,7 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 - `test_rawrarr_ai_chat.mjs` — local library answers for year, genre, and disk-size shares, plus split-frame OpenAI SSE parsing. Run `node --test scripts/tests/test_rawrarr_ai_chat.mjs`.
 
 - `test_rawrarr_filename_secret.rs` — Rust tests for random key generation, validation, encrypted persistence, legacy migration, peer consistency, Radarr update/removal preservation, and plaintext-mirror exclusion. Included in the isolated Rust suite.
-- `test_rawrarr_config_repair.rs` — validates bounded, symlink-safe ciphertext reads and private atomic writes, direct Tailscale HTTPS peer allowlists, pinned-root revision signatures, one-use challenge/request signatures, Merkle roots, self-excluding configured peer counts, verified per-peer freshness and tailnet reachability status, and deterministic conflict ordering. Included in the isolated Rust suite as `config_repair`.
+- `test_rawrarr_config_repair.rs` — validates bounded, symlink-safe ciphertext reads and private atomic writes, direct Tailscale HTTPS peer allowlists, pinned-root revision signatures, one-use challenge/request signatures, config and fossil-object Merkle roots, fixed `.aged` metadata paths, retained tombstones, self-excluding peer counts, verified freshness, and deterministic conflict ordering. Included in the isolated Rust suite as `config_repair`.
 - `test_rawrarr_config_schema.rs` — Rust tests for legacy flat config migration to schema v1, service-array persistence including optional encrypted Radarr UI credentials, and unsupported-version rejection. Included in the isolated Rust suite.
 - `test_rawrarr_hmac_metadata_filenames.rs` — checks domain-separated opaque movie filenames, byte-identical ciphertext migration, decryption after migration, and rejection of symlinked legacy files. Included in the isolated Rust suite.
 

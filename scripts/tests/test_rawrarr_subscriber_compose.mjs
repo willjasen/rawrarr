@@ -22,9 +22,12 @@ test('subscriber Compose offers fossil and boneyard with anonymous GHCR pulls an
     assert.doesNotMatch(yaml, /RAWARR_UI_GITHUB_TOKEN|rawrarr_ui_github_token/);
     assert.match(yaml, new RegExp(`TS_HOSTNAME: rawrarr-my-${role === 'storage' ? 'boneyard' : 'fossil'}-node`));
     assert.match(yaml, /tailscale-state:\/var\/lib\/tailscale/);
-    assert.match(yaml, /rawrarr-data:\/data/);
+    assert.match(yaml, /rawrarr-data:\/local/);
+    assert.match(yaml, /rawrarr-evt:\/evt/);
     assert.match(yaml, /rawrarr-shared:\/shared/);
-    assert.match(yaml, /RAWARR_NODE_TOKEN_FILE: \/data\/node-token/);
+    assert.match(yaml, /RAWARR_LOCAL_DIR: \/local/);
+    assert.match(yaml, /RAWARR_EVENT_DIR: \/evt/);
+    assert.match(yaml, /RAWARR_NODE_TOKEN_FILE: \/local\/node-token/);
     assert.match(yaml, new RegExp(`RAWARR_INSTANCE_ROOT_FINGERPRINT: ${'a'.repeat(64)}`));
     assert.match(yaml, /RAWARR_DIRECT_ALLOWED_ORIGIN: "https:\/\/rawrarr\.example\.test"/);
     assert.match(yaml, /RUST_ARR_DIRECT_LISTEN_ADDR: 0\.0\.0\.0:8082/);
