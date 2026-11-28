@@ -69,7 +69,7 @@ struct PreparedAppIdentity {
     recipient: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct AppKeyGrant {
     algorithm: String,
@@ -92,6 +92,16 @@ struct AppKeyGrantPayload {
     device_recipient: String,
     key_epoch: u64,
     encrypted_identity_sha256: String,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct AppGrantProof {
+    algorithm: String,
+    root_public_key: String,
+    root_fingerprint: String,
+    signed_payload: AppKeyGrantPayload,
+    signature: String,
 }
 
 impl Drop for PreparedAppIdentity {
@@ -587,7 +597,46 @@ impl AgeVault {
             &payload.app_instance_id,
             payload.key_epoch,
             &app_identity,
-        )
+        )?;
+        persist_app_grant_proof_at(data_dir, &grant)
+    }
+
+    /// Public owner-signed authorization proof for this node's installed app key.
+    /// The device-encrypted identity envelope is deliberately excluded.
+    pub(crate) fn app_grant_proof(instance_id: &str) -> Result<Vec<u8>, VaultError> {
+        let data_dir = env::var_os("RAWARR_LOCAL_DIR").or_else(|| env::var_os("RAWARR_DATA_DIR"))
+            .map(PathBuf::from).unwrap_or_else(|| PathBuf::from("local"));
+        let path = app_grant_proof_path(&data_dir, instance_id)?;
+        read_private_file(&path, 16 * 1024)
+    }
+
+    pub(crate) fn verify_app_grant_proof(bytes: &[u8], instance_id: &str, device_id: &str, root: &str) -> Option<u64> {
+        let proof: AppGrantProof = serde_json::from_slice(bytes).ok()?;
+        let payload = &proof.signed_payload;
+        if proof.algorithm != crate::device_signing::ALGORITHM
+            || proof.root_fingerprint != root
+            || payload.domain != "rawrarr-app-key-grant-v1"
+            || payload.schema_version != 1
+            || payload.app_instance_id != instance_id
+            || payload.device_id != device_id
+            || payload.key_epoch == 0
+        { return None; }
+        let root_public_key = BASE64.decode(&proof.root_public_key).ok()?;
+        if crate::device_signing::fingerprint(&root_public_key) != root { return None; }
+        let signature = BASE64.decode(&proof.signature).ok()?;
+        let signed_payload = serde_json::to_value(payload).ok()?;
+        let canonical = crate::device_signing::canonical_json(&signed_payload).ok()?;
+        crate::device_signing::verify(&root_public_key, &signature, &canonical).then_some(payload.key_epoch)
+    }
+
+    pub(crate) fn installed_app_key_epoch(instance_id: &str) -> Option<u64> {
+        let data_dir = env::var_os("RAWARR_LOCAL_DIR").or_else(|| env::var_os("RAWARR_DATA_DIR"))
+            .map(PathBuf::from).unwrap_or_else(|| PathBuf::from("local"));
+        let path = app_identity_path(&data_dir, instance_id).ok()?;
+        let grant = app_grant_proof_path(&data_dir, instance_id).ok()?;
+        let identity = String::from_utf8(read_private_file(&path, 16 * 1024).ok()?).ok()?;
+        if !has_single_post_quantum_identity(&identity) || !read_private_file(&grant, 16 * 1024).is_ok_and(|bytes| !bytes.is_empty()) { return None; }
+        path.parent()?.file_name()?.to_str()?.strip_prefix("epoch-")?.parse().ok()
     }
 
     fn current_app_identity(&self, instance_id: &str) -> Result<Zeroizing<String>, VaultError> {
@@ -1989,6 +2038,26 @@ fn persist_app_identity_at(
     Ok(())
 }
 
+fn app_grant_proof_path(data_dir: &Path, instance_id: &str) -> Result<PathBuf, VaultError> {
+    let active = app_identity_root(data_dir, instance_id)?;
+    let epoch = String::from_utf8(read_private_file(&active.join("active-epoch"), 32)?)
+        .map_err(|_| VaultError::InvalidIdentity)?;
+    let epoch = epoch.trim().parse::<u64>().ok().filter(|value| *value > 0)
+        .ok_or(VaultError::InvalidIdentity)?;
+    Ok(active.join(format!("epoch-{epoch}")).join("grant-proof.json"))
+}
+
+fn persist_app_grant_proof_at(data_dir: &Path, grant: &AppKeyGrant) -> Result<(), VaultError> {
+    let proof = AppGrantProof {
+        algorithm: grant.algorithm.clone(), root_public_key: grant.root_public_key.clone(),
+        root_fingerprint: grant.root_fingerprint.clone(), signed_payload: grant.signed_payload.clone(),
+        signature: grant.signature.clone(),
+    };
+    let bytes = serde_json::to_vec(&proof).map_err(|_| VaultError::InvalidConfig)?;
+    let path = app_grant_proof_path(data_dir, &proof.signed_payload.app_instance_id)?;
+    write_private_atomic(&path, &bytes)
+}
+
 fn ensure_private_child_dir(parent: &Path, name: &str) -> Result<PathBuf, VaultError> {
     let path = parent.join(name);
     match fs::create_dir(&path) {
@@ -3283,6 +3352,7 @@ mod tests {
         let radarr = &registry.apps["radarr"];
         let sonarr = &registry.apps["sonarr"];
         let radarr_id = radarr.instance_id.clone();
+        let sonarr_id = sonarr.instance_id.clone();
         let sonarr_identity = Zeroizing::new(sonarr.identity.clone());
         let app_config = br#"{"schemaVersion":1,"connection":{"url":"http://radarr.example:7878","apiKey":"test-only credential marker"},"settings":{"backupSource":"/documents","retention":30}}"#;
 
@@ -3329,6 +3399,13 @@ mod tests {
             &vault.data_dir,
         )
         .expect("install root-authorized app key grant");
+        let proof_path = app_grant_proof_path(&vault.data_dir, &radarr_id).unwrap();
+        let public_proof = fs::read(&proof_path).expect("persist public owner grant proof");
+        assert_eq!(AgeVault::verify_app_grant_proof(&public_proof, &radarr_id, "fossil-test", &root_fingerprint), Some(1));
+        assert_eq!(AgeVault::verify_app_grant_proof(&public_proof, &sonarr_id, "fossil-test", &root_fingerprint), None);
+        assert_eq!(AgeVault::verify_app_grant_proof(&public_proof, &radarr_id, "another-node", &root_fingerprint), None);
+        assert_eq!(AgeVault::verify_app_grant_proof(&[], &radarr_id, "fossil-test", &root_fingerprint), None);
+        assert!(serde_json::from_slice::<serde_json::Value>(&public_proof).unwrap().get("encryptedIdentity").is_none());
         assert_eq!(
             fs::metadata(app_identity_path(&vault.data_dir, &radarr_id).expect("app identity path"))
                 .expect("app identity metadata").permissions().mode() & 0o777,

@@ -213,6 +213,20 @@ impl PeerRpc {
         crate::device_signing::canonical_json(&payload).is_ok_and(|bytes|crate::device_signing::verify(&public_key,&signature,&bytes))
     }
 
+    /// App RPC authorization adds proof that the caller's device is named by an
+    /// owner-root-signed grant for this exact app instance and key epoch. The
+    /// serving node must independently have that same app epoch installed.
+    pub fn authorize_app(&self, headers: &HeaderMap, method: &str, path: &str, app_instance_id: &str, key_epoch: u64) -> bool {
+        if !self.authorize(headers, method, path) || key_epoch == 0 { return false; }
+        let Some(peer_id) = headers.get("x-rawrarr-peer-id").and_then(|value| value.to_str().ok()) else { return false; };
+        let Some(proof_text) = headers.get("x-rawrarr-app-grant").and_then(|value| value.to_str().ok()) else { return false; };
+        if proof_text.len() > 24_000 { return false; }
+        let Ok(proof) = BASE64.decode(proof_text) else { return false; };
+        let Some(proof_epoch) = crate::secure_config::AgeVault::verify_app_grant_proof(&proof, app_instance_id, peer_id, &self.root_fingerprint) else { return false; };
+        proof_epoch == key_epoch
+            && crate::secure_config::AgeVault::installed_app_key_epoch(app_instance_id) == Some(key_epoch)
+    }
+
     fn client_for_peer(&self, base: &str) -> Result<reqwest::Client, ()> {
         let mut builder = reqwest::Client::builder().timeout(Duration::from_secs(10)).redirect(reqwest::redirect::Policy::none());
         if rayfish_peer_url(base) {
@@ -248,6 +262,12 @@ impl PeerRpc {
         headers.insert("x-rawrarr-peer-certificate",encoded_certificate.parse().map_err(|_|())?);
         headers.insert("x-rawrarr-peer-nonce",nonce.parse().map_err(|_|())?);
         headers.insert("x-rawrarr-peer-signature",encode_hex(&signature).parse().map_err(|_|())?);
+        let app_id = path.strip_prefix("/config-peer/apps/").and_then(|value| value.split('/').next())
+            .or_else(|| path.strip_prefix("/config-peer/app-object/").and_then(|value| value.split('/').next()));
+        if let Some(app_id) = app_id {
+            let proof = crate::secure_config::AgeVault::app_grant_proof(app_id).map_err(|_|())?;
+            headers.insert("x-rawrarr-app-grant", BASE64.encode(proof).parse().map_err(|_|())?);
+        }
         Ok(headers)
     }
 
@@ -494,6 +514,65 @@ pub async fn fossil_object(State(state): State<std::sync::Arc<crate::AppState>>,
         .header(header::CACHE_CONTROL, "private, no-store").body(Body::from(bytes)).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
+fn read_app_config_object(app_id: &str, digest: &str) -> Option<Vec<u8>> {
+    let root = crate::secure_config::AgeVault::event_dir().join("fossil");
+    let apps = root.join("apps");
+    let app_dir = apps.join(app_id);
+    crate::safe_fs::ensure_directory(&root).ok()?;
+    crate::safe_fs::ensure_directory(&apps).ok()?;
+    crate::safe_fs::ensure_directory(&app_dir).ok()?;
+    let target = app_dir.join("config.aged");
+    let canonical_root = fs::canonicalize(&root).ok()?;
+    let canonical_target = fs::canonicalize(target).ok()?;
+    if !canonical_target.starts_with(canonical_root) { return None; }
+    let bytes = crate::safe_fs::read_regular_file(&canonical_target, MAX_FOSSIL_OBJECT_BYTES as u64).ok()?;
+    (valid_fossil_ciphertext(&bytes) && hex(&Sha256::digest(&bytes)) == digest.to_ascii_lowercase()).then_some(bytes)
+}
+
+/// Read-only per-app manifest. Settings remain on the legacy path until the
+/// later fenced-writer and migration work is activated.
+pub async fn app_manifest(State(state): State<std::sync::Arc<crate::AppState>>, request: Request) -> Result<Json<serde_json::Value>, StatusCode> {
+    let params: HashMap<String,String> = url::form_urlencoded::parse(request.uri().query().unwrap_or("").as_bytes()).into_owned().collect();
+    let mut path_parts = request.uri().path().strip_prefix("/config-peer/apps/").ok_or(StatusCode::NOT_FOUND)?.split('/');
+    let app_id = path_parts.next().ok_or(StatusCode::NOT_FOUND)?;
+    if path_parts.next() != Some("epochs") { return Err(StatusCode::NOT_FOUND); }
+    let epoch = path_parts.next().and_then(|value| value.parse::<u64>().ok()).filter(|value| *value > 0).ok_or(StatusCode::BAD_REQUEST)?;
+    if path_parts.next() != Some("manifest") || path_parts.next().is_some() { return Err(StatusCode::NOT_FOUND); }
+    if uuid::Uuid::parse_str(app_id).is_err() || uuid::Uuid::parse_str(app_id).unwrap().to_string() != app_id
+        || !state.config_peer.authorize_app(request.headers(), "GET", request.uri().path(), app_id, epoch) { return Err(StatusCode::UNAUTHORIZED); }
+    let mut revisions = load_app_config_revisions().into_iter()
+        .filter(|revision| revision.app_instance_id == *app_id && revision.key_epoch == epoch)
+        .collect::<Vec<_>>();
+    revisions.sort_by_key(AppConfigRevision::revision_id);
+    let root = app_config_merkle_root(&revisions);
+    let total = revisions.len();
+    let offset = params.get("offset").and_then(|value| value.parse::<usize>().ok()).unwrap_or(0).min(500_000);
+    let limit = params.get("limit").and_then(|value| value.parse::<usize>().ok()).unwrap_or(128).clamp(1,128);
+    let page = revisions.into_iter().skip(offset.min(total)).take(limit).collect::<Vec<_>>();
+    Ok(Json(serde_json::json!({"schemaVersion":1,"appInstanceId":app_id,"keyEpoch":epoch,"merkleRoot":root,"total":total,"offset":offset,"revisions":page})))
+}
+
+pub async fn app_config_object(State(state): State<std::sync::Arc<crate::AppState>>, request: Request) -> Result<Response<Body>, StatusCode> {
+    let parts = request.uri().path().strip_prefix("/config-peer/app-object/").ok_or(StatusCode::NOT_FOUND)?;
+    let mut parts = parts.split('/');
+    let app_id = parts.next().ok_or(StatusCode::NOT_FOUND)?;
+    if parts.next() != Some("epochs") { return Err(StatusCode::NOT_FOUND); }
+    let epoch = parts.next().and_then(|value| value.parse::<u64>().ok()).filter(|value| *value > 0).ok_or(StatusCode::BAD_REQUEST)?;
+    let digest = parts.next().ok_or(StatusCode::NOT_FOUND)?;
+    if parts.next().is_some() || uuid::Uuid::parse_str(app_id).is_err() || uuid::Uuid::parse_str(app_id).unwrap().to_string() != app_id
+        || digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) { return Err(StatusCode::NOT_FOUND); }
+    if !state.config_peer.authorize_app(request.headers(), "GET", request.uri().path(), app_id, epoch) { return Err(StatusCode::UNAUTHORIZED); }
+    let revisions = load_app_config_revisions().into_iter().filter(|revision| revision.app_instance_id == app_id && revision.key_epoch == epoch).collect::<Vec<_>>();
+    let latest_generation = revisions.iter().map(|revision| revision.fencing_generation).max();
+    let latest = latest_generation.map(|generation| revisions.iter().filter(|revision| revision.fencing_generation == generation).collect::<Vec<_>>()).unwrap_or_default();
+    let permitted = latest.first().is_some_and(|revision| latest.iter().all(|candidate| candidate.revision_id() == revision.revision_id())
+        && revision.operation == "put" && revision.ciphertext_digest.as_deref() == Some(digest));
+    if !permitted { return Err(StatusCode::NOT_FOUND); }
+    let bytes = read_app_config_object(app_id, digest).or_else(|| read_cached_fossil_object(digest)).ok_or(StatusCode::NOT_FOUND)?;
+    Response::builder().status(StatusCode::OK).header(header::CONTENT_TYPE, "application/octet-stream")
+        .header(header::CACHE_CONTROL, "private, no-store").body(Body::from(bytes)).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
 fn read_ciphertext_file(path:&Path)->std::io::Result<Vec<u8>> {
     let bytes=crate::safe_fs::read_regular_file(path, MAX_CONFIG_BYTES as u64)?;
     if !valid_ciphertext(&bytes){return Err(std::io::Error::new(std::io::ErrorKind::InvalidData,"invalid age ciphertext"));}
@@ -529,6 +608,117 @@ pub struct FossilRevision {
     pub ciphertext_digest: Option<String>,
     pub certificate: serde_json::Value,
     pub signature: String,
+}
+
+/// Per-app revision envelope for the authorized RPC. The app path is derived
+/// from `app_instance_id`; callers cannot choose arbitrary filesystem paths.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AppConfigRevision {
+    pub schema_version: u8,
+    pub root_fingerprint: String,
+    pub app_instance_id: String,
+    pub key_epoch: u64,
+    pub device_id: String,
+    pub fencing_generation: u64,
+    pub operation_id: String,
+    pub operation: String,
+    pub ciphertext_digest: Option<String>,
+    /// Owner-root-signed grant metadata; it contains no encrypted identity.
+    pub grant_proof: String,
+    /// Owner-root-signed single-writer lease/fencing authorization.
+    pub writer_fence: String,
+    pub certificate: serde_json::Value,
+    pub signature: String,
+}
+
+impl AppConfigRevision {
+    fn payload(&self) -> serde_json::Value {
+        serde_json::json!({"domain":"rawrarr-app-config-revision-v1","schemaVersion":self.schema_version,
+            "rootFingerprint":self.root_fingerprint,"appInstanceId":self.app_instance_id,"keyEpoch":self.key_epoch,
+            "deviceId":self.device_id,"fencingGeneration":self.fencing_generation,"operationId":self.operation_id,
+            "operation":self.operation,"ciphertextDigest":self.ciphertext_digest,"grantProof":self.grant_proof,"writerFence":self.writer_fence})
+    }
+
+    pub fn revision_id(&self) -> String {
+        let payload = crate::device_signing::canonical_json(&self.payload()).unwrap_or_default();
+        let signature = decode_hex(&self.signature).unwrap_or_default();
+        let mut hash = Sha256::new(); hash.update(payload); hash.update(signature); hex(&hash.finalize())
+    }
+
+    pub fn verify(&self, root: &str) -> bool {
+        let Ok(app_id) = uuid::Uuid::parse_str(&self.app_instance_id) else { return false; };
+        let Ok(operation_id) = uuid::Uuid::parse_str(&self.operation_id) else { return false; };
+        let Ok(proof) = BASE64.decode(&self.grant_proof) else { return false; };
+        let Ok(fence_bytes) = BASE64.decode(&self.writer_fence) else { return false; };
+        if self.schema_version != 1 || self.root_fingerprint != root || app_id.to_string() != self.app_instance_id
+            || self.key_epoch == 0 || self.fencing_generation == 0 || operation_id.to_string() != self.operation_id
+            || !matches!(self.operation.as_str(), "put" | "delete")
+            || (self.operation == "put" && self.ciphertext_digest.as_deref().is_none_or(|digest| digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_hexdigit())))
+            || (self.operation == "delete" && self.ciphertext_digest.is_some())
+            || crate::secure_config::AgeVault::verify_app_grant_proof(&proof, &self.app_instance_id, &self.device_id, root) != Some(self.key_epoch)
+            || !verify_app_writer_fence(&fence_bytes, &self.app_instance_id, self.key_epoch, &self.device_id, self.fencing_generation, root)
+            || !crate::device_signing::verify_certificate(&self.certificate, root)
+            || self.certificate.get("nodeId").and_then(serde_json::Value::as_str) != Some(self.device_id.as_str())
+            || self.certificate.get("role").and_then(serde_json::Value::as_str) != Some("metadata") { return false; }
+        let Some(public_hex) = self.certificate.get("signingPublicKeyHex").and_then(serde_json::Value::as_str) else { return false; };
+        let Some(public_key) = decode_hex(public_hex) else { return false; };
+        let Some(signature) = decode_hex(&self.signature) else { return false; };
+        crate::device_signing::canonical_json(&self.payload()).is_ok_and(|bytes| crate::device_signing::verify(&public_key, &signature, &bytes))
+    }
+}
+
+fn verify_app_writer_fence(bytes: &[u8], app_id: &str, epoch: u64, device_id: &str, generation: u64, root: &str) -> bool {
+    let Ok(fence) = serde_json::from_slice::<serde_json::Value>(bytes) else { return false; };
+    let Some(payload) = fence.get("signedPayload") else { return false; };
+    if payload.get("domain").and_then(serde_json::Value::as_str) != Some("rawrarr-app-writer-fence-v1")
+        || payload.get("schemaVersion").and_then(serde_json::Value::as_u64) != Some(1)
+        || payload.get("appInstanceId").and_then(serde_json::Value::as_str) != Some(app_id)
+        || payload.get("keyEpoch").and_then(serde_json::Value::as_u64) != Some(epoch)
+        || payload.get("writerDeviceId").and_then(serde_json::Value::as_str) != Some(device_id)
+        || payload.get("fencingGeneration").and_then(serde_json::Value::as_u64) != Some(generation)
+        || fence.get("rootFingerprint").and_then(serde_json::Value::as_str) != Some(root) { return false; }
+    let Some(root_key_text) = fence.get("rootPublicKey").and_then(serde_json::Value::as_str) else { return false; };
+    let Ok(root_key) = BASE64.decode(root_key_text) else { return false; };
+    if crate::device_signing::fingerprint(&root_key) != root { return false; }
+    let Some(signature_text) = fence.get("signature").and_then(serde_json::Value::as_str) else { return false; };
+    let Ok(signature) = BASE64.decode(signature_text) else { return false; };
+    crate::device_signing::canonical_json(payload).is_ok_and(|canonical| crate::device_signing::verify(&root_key, &signature, &canonical))
+}
+
+pub fn app_config_revision_dir() -> PathBuf { local_dir().join("app-config-revisions") }
+
+pub fn load_app_config_revisions() -> Vec<AppConfigRevision> {
+    let Ok(entries) = fs::read_dir(app_config_revision_dir()) else { return Vec::new(); };
+    let root = env::var("RAWARR_INSTANCE_ROOT_FINGERPRINT").unwrap_or_default().to_ascii_lowercase();
+    entries.flatten().take(500_000).filter_map(|entry| {
+        let path = entry.path();
+        if path.extension().and_then(|value| value.to_str()) != Some("json") { return None; }
+        let metadata = fs::symlink_metadata(&path).ok()?;
+        if !metadata.file_type().is_file() || metadata.len() > 65_536 { return None; }
+        let revision: AppConfigRevision = serde_json::from_slice(&fs::read(path).ok()?).ok()?;
+        revision.verify(&root).then_some(revision)
+    }).collect()
+}
+
+pub fn app_config_merkle_root(revisions: &[AppConfigRevision]) -> String {
+    let mut leaves = revisions.iter().map(|revision| {
+        let canonical = crate::device_signing::canonical_json(&serde_json::json!({"revisionId":revision.revision_id(),
+            "appInstanceId":revision.app_instance_id,"keyEpoch":revision.key_epoch,"fencingGeneration":revision.fencing_generation,
+            "operationId":revision.operation_id,"operation":revision.operation,"ciphertextDigest":revision.ciphertext_digest})).unwrap_or_default();
+        let mut hash = Sha256::new(); hash.update([0]); hash.update(canonical); hash.finalize().to_vec()
+    }).collect::<Vec<_>>();
+    leaves.sort();
+    if leaves.is_empty() { return hex(&Sha256::digest(b"rawrarr-app-config-merkle-empty-v1\0")); }
+    while leaves.len() > 1 {
+        let mut next = Vec::with_capacity(leaves.len().div_ceil(2));
+        for pair in leaves.chunks(2) {
+            if pair.len() == 1 { next.push(pair[0].clone()); }
+            else { let mut hash = Sha256::new(); hash.update([1]); hash.update(&pair[0]); hash.update(&pair[1]); next.push(hash.finalize().to_vec()); }
+        }
+        leaves = next;
+    }
+    hex(&leaves[0])
 }
 
 impl FossilRevision {

@@ -64,6 +64,17 @@ The existing RPC exposes challenge-authenticated config revision pages and confi
 - `GET /config-peer/fossil-manifest?offset=&limit=` — at most 128 signed metadata revision records per page.
 - `GET /config-peer/fossil-object/<sha256>` — ciphertext by digest; no caller-supplied path.
 
+## Per-app config RPC extension (issue #499)
+
+App-scoped reads use separate paths so a general fossil manifest cannot disclose app object metadata:
+
+- `GET /config-peer/apps/<app-instance-id>/epochs/<key-epoch>/manifest?offset=&limit=` — paged signed app revision records.
+- `GET /config-peer/app-object/<app-instance-id>/epochs/<key-epoch>/<sha256>` — the current authorized app ciphertext by digest.
+
+The request still uses the one-use device challenge and node signature. It also carries the caller's owner-root-signed app grant proof, with the encrypted identity envelope omitted. The receiver checks the grant's root, app instance, caller device and epoch, then requires its own matching app key epoch to be installed. App revisions bind app ID, key epoch, device certificate, grant proof, and a separate owner-root-signed writer fence binding the one writer device and fencing generation. The owner must issue a higher generation to transfer or revoke the writer; a node cannot advance its own generation. Each revision also binds an operation UUID, operation and ciphertext digest. A delete is an explicit tombstone. The per-app Merkle root is independent from the metadata fossil root.
+
+This is an additive, read-only protocol slice. It does not currently create/import app revisions, reconcile app objects, or connect settings writers; the existing group-encrypted root `config.aged` remains authoritative. Do not cut over until a root-authorized single-writer fence is implemented and old writers are stopped. Preserve legacy reads during a repeatable copy/verification migration. Roll back before cutover by leaving legacy writers authoritative; after cutover, quiesce writers and verify a reverse copy or compatible reader before reverting.
+
 Each request uses the existing one-use, 30-second challenge and device signature, and requires a metadata-role certificate from an allowlisted peer under the pinned instance root. Object paths in signed records must be relative `.aged` files below `metadata/`; symlinks and non-regular entries are rejected. The receiver verifies certificate, signature, path, operation, ciphertext prefix, 8 MiB object limit, and SHA-256 before caching or writing. Config ciphertext remains limited to 2 MiB. Transfers are sequential per peer; response bodies are streamed with a hard size cap. The coordinator receives no ciphertext, revisions, age identities, or signing seeds.
 
 The coordinator may assist discovery later but receives no configuration ciphertext, plaintext, age identity, or signing seed. The prototype has no primary lease and no coordinator-held write authority.

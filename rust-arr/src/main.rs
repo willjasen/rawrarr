@@ -3169,6 +3169,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/config-peer/config/{digest}", get(config_repair::config_object))
         .route("/config-peer/fossil-manifest", get(config_repair::fossil_manifest))
         .route("/config-peer/fossil-object/{digest}", get(config_repair::fossil_object))
+        .route("/config-peer/apps/{app_id}/epochs/{key_epoch}/manifest", get(config_repair::app_manifest))
+        .route("/config-peer/app-object/{app_id}/epochs/{key_epoch}/{digest}", get(config_repair::app_config_object))
         .merge(direct_protected)
         .layer(middleware::from_fn(log_request))
         .layer(middleware::from_fn(direct_api_cors))
@@ -3180,6 +3182,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .route("/config-peer/config/{digest}", get(config_repair::config_object))
             .route("/config-peer/fossil-manifest", get(config_repair::fossil_manifest))
             .route("/config-peer/fossil-object/{digest}", get(config_repair::fossil_object))
+            .route("/config-peer/apps/{app_id}/epochs/{key_epoch}/manifest", get(config_repair::app_manifest))
+            .route("/config-peer/app-object/{app_id}/epochs/{key_epoch}/{digest}", get(config_repair::app_config_object))
             .layer(middleware::from_fn(log_request))
             .with_state(state.clone());
         let peer_listener = tokio::net::TcpListener::bind("127.0.0.1:8443").await?;
