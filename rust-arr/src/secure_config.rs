@@ -680,6 +680,15 @@ impl AgeVault {
             .unwrap_or_else(|| PathBuf::from("data/shared"))
     }
 
+    pub fn event_dir() -> PathBuf {
+        event_dir_for(
+            &Self::shared_dir(),
+            env::var_os("RAWARR_EVT_DIR")
+                .or_else(|| env::var_os("RAWARR_EVENT_DIR"))
+                .map(PathBuf::from),
+        )
+    }
+
     pub fn shared_in_dir() -> PathBuf {
         shared_in_dir_for(&Self::shared_dir())
     }
@@ -698,6 +707,7 @@ impl AgeVault {
     }
 
     pub fn initialize_metadata_storage() -> Result<(), VaultError> {
+        migrate_legacy_event_files(&Self::shared_dir(), &Self::event_dir().join("fossil"))?;
         migrate_legacy_metadata(&Self::shared_dir())
     }
 
@@ -2278,7 +2288,19 @@ fn shared_out_dir_for(shared_dir: &Path) -> PathBuf {
     shared_dir.join("out")
 }
 
+fn event_dir_for(shared_dir: &Path, override_dir: Option<PathBuf>) -> PathBuf {
+    override_dir.unwrap_or_else(|| {
+        shared_dir
+            .parent()
+            .map(|parent| parent.join("evt"))
+            .unwrap_or_else(|| PathBuf::from("evt"))
+    })
+}
+
 fn migrate_legacy_metadata(shared_dir: &Path) -> Result<(), VaultError> {
+    if let Some(event_dir) = env::var_os("RAWARR_EVT_DIR").or_else(|| env::var_os("RAWARR_EVENT_DIR")) {
+        migrate_legacy_metadata_to(shared_dir, &PathBuf::from(event_dir).join("fossil"))?;
+    }
     let legacy = shared_dir.join("metadata");
     let incoming = shared_in_dir_for(shared_dir);
     // Mounted shared volumes hide the image's directories. Create the alias
@@ -2302,6 +2324,73 @@ fn migrate_legacy_metadata(shared_dir: &Path) -> Result<(), VaultError> {
         return Err(VaultError::StorageFailed);
     }
     copy_missing_shared_tree(&legacy, &incoming.join("metadata"))
+}
+
+fn migrate_legacy_metadata_to(shared_dir: &Path, fossil_dir: &Path) -> Result<(), VaultError> {
+    let target_metadata = fossil_dir.join("metadata");
+    for directory in [fossil_dir, &target_metadata] {
+        match fs::symlink_metadata(directory) {
+            Ok(metadata) if !metadata.is_dir() => return Err(VaultError::StorageFailed),
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                fs::create_dir_all(directory).map_err(|_| VaultError::StorageFailed)?;
+            }
+            Err(_) => return Err(VaultError::StorageFailed),
+        }
+        set_shared_directory_permissions(directory)?;
+    }
+    for source in [shared_dir.join("metadata"), shared_in_dir_for(shared_dir).join("metadata")] {
+        if source == target_metadata {
+            continue;
+        }
+        match fs::symlink_metadata(&source) {
+            Ok(metadata) if !metadata.is_dir() => return Err(VaultError::StorageFailed),
+            Ok(_) => copy_missing_shared_tree(&source, &target_metadata)?,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err(VaultError::StorageFailed),
+        }
+    }
+    Ok(())
+}
+
+fn migrate_legacy_event_files(shared_dir: &Path, fossil_dir: &Path) -> Result<(), VaultError> {
+    fs::create_dir_all(fossil_dir).map_err(|_| VaultError::StorageFailed)?;
+    crate::safe_fs::ensure_directory(fossil_dir).map_err(|_| VaultError::StorageFailed)?;
+    for name in ["config.aged", "age-recipient", "group-age-recipient", "group-age-user-envelope.aged"] {
+        let source = shared_dir.join(name);
+        let target = fossil_dir.join(name);
+        match fs::symlink_metadata(&source) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(_) => return Err(VaultError::StorageFailed),
+            Ok(metadata) if !metadata.file_type().is_file() => return Err(VaultError::StorageFailed),
+            Ok(_) => {}
+        }
+        match fs::symlink_metadata(&target) {
+            Ok(metadata) if metadata.file_type().is_file() => continue,
+            Ok(_) => return Err(VaultError::StorageFailed),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err(VaultError::StorageFailed),
+        }
+        let (source_file, _) = crate::safe_fs::open_regular_file(&source).map_err(|_| VaultError::StorageFailed)?;
+        let temporary = temporary_path(&target);
+        crate::safe_fs::copy_open_file(source_file, &temporary).map_err(|_| VaultError::StorageFailed)?;
+        set_shared_ciphertext_permissions(&temporary)?;
+        fs::File::open(&temporary).and_then(|file| file.sync_all()).map_err(|_| VaultError::StorageFailed)?;
+        if sha256_regular_file(&source)? != sha256_regular_file(&temporary)? {
+            let _ = fs::remove_file(&temporary);
+            return Err(VaultError::StorageFailed);
+        }
+        match fs::hard_link(&temporary, &target) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(_) => {
+                let _ = fs::remove_file(&temporary);
+                return Err(VaultError::StorageFailed);
+            }
+        }
+        fs::remove_file(&temporary).map_err(|_| VaultError::StorageFailed)?;
+    }
+    Ok(())
 }
 
 fn copy_missing_shared_tree(source: &Path, target: &Path) -> Result<(), VaultError> {
@@ -2361,6 +2450,20 @@ fn copy_missing_shared_tree(source: &Path, target: &Path) -> Result<(), VaultErr
         copied?;
     }
     Ok(())
+}
+
+fn sha256_regular_file(path: &Path) -> Result<[u8; 32], VaultError> {
+    let (mut file, _) = crate::safe_fs::open_regular_file(path).map_err(|_| VaultError::StorageFailed)?;
+    let mut hash = Sha256::new();
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let count = file.read(&mut buffer).map_err(|_| VaultError::StorageFailed)?;
+        if count == 0 {
+            break;
+        }
+        hash.update(&buffer[..count]);
+    }
+    Ok(hash.finalize().into())
 }
 
 pub fn is_post_quantum_recipient(recipient: &str) -> bool {
@@ -2904,6 +3007,20 @@ mod tests {
         let shared = PathBuf::from("/shared");
         assert_eq!(shared.join("in"), shared_in_dir_for(&shared));
         assert_eq!(shared.join("out"), shared_out_dir_for(&shared));
+    }
+
+    #[test]
+    fn event_root_defaults_beside_shared_data_and_accepts_override() {
+        let shared = PathBuf::from("/var/lib/rawrarr/shared");
+        assert_eq!(
+            event_dir_for(&shared, None),
+            PathBuf::from("/var/lib/rawrarr/evt")
+        );
+        assert_eq!(
+            event_dir_for(&shared, Some(PathBuf::from("/evt"))),
+            PathBuf::from("/evt")
+        );
+        assert_eq!(event_dir_for(Path::new("shared"), None), PathBuf::from("evt"));
     }
 
     #[test]
