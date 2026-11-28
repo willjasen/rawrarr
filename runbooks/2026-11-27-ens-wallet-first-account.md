@@ -16,7 +16,8 @@ Allow a person without an existing passkey or Rawrarr account to establish the i
 
 ## Verification
 
-- `node --test scripts/tests/test_rawrarr_passkey_ui.mjs` — passed (7 tests).
+- `node --test scripts/tests/test_rawrarr_passkey_ui.mjs` — passed locally (7 tests) and in the offline Docker clone (7 tests).
+- `node --test /workspace/scripts/tests/test_rawrarr_passkey_ui_browser.mjs` — passed in the offline Docker clone (1 test), covering desktop and mobile layout.
 - `cargo check --locked --manifest-path rust-arr/Cargo.toml` — passed; emitted existing dead-code warnings.
 - `cargo test --locked --manifest-path rust-arr/Cargo.toml coordinator_crypto::tests:: -- --nocapture` — passed (9 tests).
 - `git diff --check` — passed.
@@ -24,4 +25,4 @@ Allow a person without an existing passkey or Rawrarr account to establish the i
 
 ## Final state
 
-Implementation is committed as `0152897` and published on PR [#530](https://github.com/willjasen/rawrarr/pull/530). The basic script CI workflow is still running; live ENS/SIWE and PostgreSQL-backed verification remain follow-up gaps. The artwork portion of #445 is not included.
+Implementation is committed as `0152897` and published on PR [#530](https://github.com/willjasen/rawrarr/pull/530). All configured PR checks passed or were skipped; live ENS/SIWE and PostgreSQL-backed verification remain follow-up gaps. The artwork portion of #445 is not included.
