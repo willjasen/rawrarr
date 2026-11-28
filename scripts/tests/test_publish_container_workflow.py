@@ -51,6 +51,7 @@ class PublishContainerWorkflowTests(unittest.TestCase):
         source = WORKFLOW.read_text()
         self.assertIn("uses: mozilla-actions/sccache-action@v0.0.9", source)
         self.assertIn("uses: actions/github-script@v7", source)
+        self.assertIn('install -m 0755 "$SCCACHE_PATH" rust-arr/sccache', source)
         self.assertIn("ACTIONS_RESULTS_URL", source)
         self.assertIn("ACTIONS_RUNTIME_TOKEN", source)
         self.assertIn("RUSTC_WRAPPER=sccache", source)
