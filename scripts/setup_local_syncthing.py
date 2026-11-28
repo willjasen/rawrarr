@@ -12,9 +12,12 @@ import io
 import tarfile
 import xml.etree.ElementTree as ET
 
+from safe_xml import fromstring as safe_fromstring
+
 CONTAINER = 'rawrarr-local-syncthing-1'
 CONFIG = '/var/syncthing/config/config.xml'
-FOLDER_ID = 'rawrarr-shared'
+LEGACY_FOLDER_ID = 'rawrarr-shared'
+BONEYARD_FOLDER_ID = 'rawrarr-boneyard'
 
 
 def docker(*args):
@@ -22,22 +25,28 @@ def docker(*args):
 
 
 def configure(raw):
-    root = ET.fromstring(raw)
+    root = safe_fromstring(raw)
     own_id = root.find('device').get('id')
     if len(root.findall('device')) != 1:
         raise ValueError('Refusing to modify a configuration with remote peers')
     folders = root.findall('folder')
-    if any(f.get('id') != FOLDER_ID or f.get('path') != '/shared' for f in folders):
+    allowed = {LEGACY_FOLDER_ID: '/shared', BONEYARD_FOLDER_ID: '/evt/boneyard'}
+    if len(folders) > len(allowed) or any(allowed.get(f.get('id')) != f.get('path') for f in folders):
         raise ValueError('Refusing to replace unrelated folders')
-    if not folders:
-        folder = copy.deepcopy(root.find('defaults/folder'))
-        folder.set('id', FOLDER_ID)
-        folder.set('label', 'rawrarr shared application data')
-        folder.set('path', '/shared')
-        for device in folder.findall('device'):
-            folder.remove(device)
-        ET.SubElement(folder, 'device', {'id': own_id})
-        root.insert(0, folder)
+    existing_ids = {folder.get('id') for folder in folders}
+    for folder_id, label, path in (
+        (LEGACY_FOLDER_ID, 'Rawrarr legacy compatibility data', '/shared'),
+        (BONEYARD_FOLDER_ID, 'Rawrarr boneyard', '/evt/boneyard'),
+    ):
+        if folder_id not in existing_ids:
+            folder = copy.deepcopy(root.find('defaults/folder'))
+            folder.set('id', folder_id)
+            folder.set('label', label)
+            folder.set('path', path)
+            for device in folder.findall('device'):
+                folder.remove(device)
+            ET.SubElement(folder, 'device', {'id': own_id})
+            root.insert(0, folder)
     options = root.find('options')
     for key in ('globalAnnounceEnabled', 'localAnnounceEnabled', 'relaysEnabled', 'natEnabled'):
         options.find(key).text = 'true'
@@ -46,6 +55,14 @@ def configure(raw):
     ET.SubElement(options, 'listenAddress').text = 'tcp://0.0.0.0:22000'
     options.find('urAccepted').text = '-1'
     return ET.tostring(root, encoding='utf-8', xml_declaration=True)
+
+
+def validate_data_paths(shared_path, boneyard_path):
+    shared = Path(shared_path).expanduser().resolve()
+    boneyard = Path(boneyard_path).expanduser().resolve()
+    if shared == boneyard or shared in boneyard.parents or boneyard in shared.parents:
+        raise ValueError('Legacy shared and boneyard host paths must be separate, non-overlapping directories')
+    return shared, boneyard
 
 
 def main():
@@ -57,13 +74,18 @@ def main():
     info = json.loads(docker('inspect', CONTAINER))[0]
     if info['Config']['Labels'].get('com.docker.compose.service') != 'syncthing':
         raise ValueError('Unexpected target service')
-    expected = str(Path.home() / 'Library/Application Support/rawrarr/shared-data')
-    mounts = [m for m in info['Mounts'] if m['Destination'] == '/shared']
-    if len(mounts) != 1 or mounts[0]['Source'] != expected:
-        raise ValueError('Unexpected shared folder mount')
+    shared_path = os.environ.get('RAWARR_SHARED_DATA_PATH') or str(Path.home() / 'Library/Application Support/rawrarr/shared-data')
+    boneyard_path = os.environ.get('RAWARR_BONEYARD_DATA_PATH')
+    if not boneyard_path:
+        parser.error('RAWARR_BONEYARD_DATA_PATH must identify the selected host boneyard directory')
+    shared_path, boneyard_path = validate_data_paths(shared_path, boneyard_path)
+    for expected, destination in ((str(shared_path), '/shared'), (str(boneyard_path), '/evt/boneyard')):
+        mounts = [m for m in info['Mounts'] if m['Destination'] == destination]
+        if len(mounts) != 1 or mounts[0]['Source'] != expected:
+            raise ValueError(f'Unexpected {destination} folder mount')
     raw = docker('exec', CONTAINER, 'cat', CONFIG)
     updated = configure(raw)
-    print('Target: MacBook rawrarr-local Syncthing only; /shared send-and-receive, no peers.')
+    print('Target: MacBook rawrarr-local Syncthing only; /shared compatibility and /evt/boneyard folders, no peers.')
     print('Enable Syncthing discovery, public relays, and NAT traversal; no host sync port is published.')
     if not args.apply:
         print('Dry run. Use --apply to save configuration and restart this container.')
@@ -94,6 +116,6 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except (ValueError, OSError, subprocess.CalledProcessError) as error:
+    except (ValueError, ET.ParseError, OSError, subprocess.CalledProcessError) as error:
         # Never print command stderr/configuration: it may contain private values.
         raise SystemExit('Setup failed: ' + (str(error) if isinstance(error, ValueError) else type(error).__name__))

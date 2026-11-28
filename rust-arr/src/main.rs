@@ -25,6 +25,7 @@ pub mod shared_logs;
 pub mod storage_node;
 pub mod syncthing;
 mod ui_assets;
+mod webrtc_direct;
 
 use axum::middleware::Next;
 use axum::{
@@ -262,6 +263,19 @@ async fn log_request(request: Request<Body>, next: Next) -> Response<Body> {
             status.as_u16()
         );
     }
+    response
+}
+
+pub(crate) async fn main_security_headers(request: Request<Body>, next: Next) -> Response<Body> {
+    let mut response = next.run(request).await;
+    response.headers_mut().insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static("default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.themoviedb.org; connect-src 'self' https: wss:; font-src 'self' data:; upgrade-insecure-requests"),
+    );
+    response.headers_mut().insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
     response
 }
 
@@ -810,14 +824,14 @@ async fn rawrarr_logo_jxl() -> Response<Body> {
     static_asset("image/jxl", ui_assets::bytes("assets/rawrarr-logo.jxl", include_bytes!("assets/rawrarr-logo.jxl")).await)
 }
 
-async fn rawrarr_favicon() -> Response<Body> {
+pub(crate) async fn rawrarr_favicon() -> Response<Body> {
     static_asset(
         "image/svg+xml",
         ui_assets::text("assets/rawrarr-favicon.svg", include_str!("assets/rawrarr-favicon.svg")).await.into_bytes(),
     )
 }
 
-async fn rawrarr_favicon_ico() -> Response<Body> {
+pub(crate) async fn rawrarr_favicon_ico() -> Response<Body> {
     static_asset(
         "image/x-icon",
         ui_assets::bytes("assets/rawrarr-favicon.ico", include_bytes!("assets/rawrarr-favicon.ico")).await,
@@ -1459,7 +1473,16 @@ struct MetadataStorageStatus {
     tv_bytes: u64,
 }
 
+const MAX_METADATA_SCAN_DEPTH: usize = 64;
+
 fn directory_size(path: &std::path::Path) -> std::io::Result<u64> {
+    directory_size_at_depth(path, 0)
+}
+
+fn directory_size_at_depth(path: &std::path::Path, depth: usize) -> std::io::Result<u64> {
+    if depth > MAX_METADATA_SCAN_DEPTH {
+        return Err(std::io::Error::other("Metadata directory nesting limit exceeded"));
+    }
     let mut entries = match std::fs::read_dir(path) {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
@@ -1469,7 +1492,7 @@ fn directory_size(path: &std::path::Path) -> std::io::Result<u64> {
         let entry = entry?;
         let file_type = entry.file_type()?;
         let bytes = if file_type.is_dir() {
-            directory_size(&entry.path())?
+            directory_size_at_depth(&entry.path(), depth + 1)?
         } else if file_type.is_file() {
             entry.metadata()?.len()
         } else {
@@ -2833,9 +2856,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let identity_path = env::var_os("RAWARR_AGE_IDENTITY_FILE")
         .filter(|path| !path.is_empty())
         .or_else(|| {
-            let local_identity = env::var_os("RAWARR_DATA_DIR")
+            let local_identity = env::var_os("RAWARR_LOCAL_DIR").or_else(|| env::var_os("RAWARR_DATA_DIR"))
                 .map(std::path::PathBuf::from)
-                .unwrap_or_else(|| std::path::PathBuf::from("data"))
+                .unwrap_or_else(|| std::path::PathBuf::from("local"))
                 .join("age-identity");
             local_identity
                 .is_file()
@@ -2936,6 +2959,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let peer_mirror = mirror.clone();
                 let peer_path = path.clone();
                 let peer_certificate = revision_certificate.clone();
+                if env::var("RAWARR_EVT_WRITE_MODE").is_ok_and(|mode| mode.eq_ignore_ascii_case("evt")) {
+                    let fossil_device_id = revision_device_id.clone();
+                    let fossil_certificate = revision_certificate.clone();
+                    if let Some(certificate) = fossil_certificate.as_ref() {
+                        let certificate = certificate.clone();
+                        if let Err(error) = tokio::task::spawn_blocking(move || {
+                            config_repair::record_local_fossil_changes(&fossil_device_id, &certificate)
+                        }).await.unwrap_or_else(|_| Err(std::io::Error::other("fossil scan task failed"))) {
+                            eprintln!("rawrarr fossil revision scan failed: {error}");
+                        }
+                    }
+                    let _ = peer_state.reconcile_fossil_once(peer_certificate.as_ref()).await;
+                }
                 let repaired = peer_state.reconcile_once(&peer_mirror, &peer_path, peer_certificate.as_ref(), &application_state.config_peer_status).await;
                 if repaired {
                     let vault = application_state.vault.read().await.clone();
@@ -3130,6 +3166,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/config-peer/challenge", get(config_repair::challenge))
         .route("/config-peer/manifest", get(config_repair::manifest))
         .route("/config-peer/config/{digest}", get(config_repair::config_object))
+        .route("/config-peer/fossil-manifest", get(config_repair::fossil_manifest))
+        .route("/config-peer/fossil-object/{digest}", get(config_repair::fossil_object))
         .merge(direct_protected)
         .layer(middleware::from_fn(log_request))
         .layer(middleware::from_fn(direct_api_cors))
@@ -3139,6 +3177,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .route("/config-peer/challenge", get(config_repair::challenge))
             .route("/config-peer/manifest", get(config_repair::manifest))
             .route("/config-peer/config/{digest}", get(config_repair::config_object))
+            .route("/config-peer/fossil-manifest", get(config_repair::fossil_manifest))
+            .route("/config-peer/fossil-object/{digest}", get(config_repair::fossil_object))
             .layer(middleware::from_fn(log_request))
             .with_state(state.clone());
         let peer_listener = tokio::net::TcpListener::bind("127.0.0.1:8443").await?;
@@ -3183,6 +3223,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .route("/setup/age", get(subscriber_ui_disabled))
     }
     .layer(middleware::from_fn(log_request))
+    .layer(middleware::from_fn(main_security_headers))
     .with_state(state);
     let listener = tokio::net::TcpListener::bind(socket_address).await?;
     if let Ok(direct_address) = env::var("RUST_ARR_DIRECT_LISTEN_ADDR") {

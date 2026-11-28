@@ -28,6 +28,28 @@ fn fresh_shared_volume_initializes_metadata_without_legacy_files() {
     fs::remove_dir_all(root).unwrap();
 }
 
+#[test]
+fn event_domain_copy_preserves_sources_and_existing_conflicts() {
+    let root = fixture_root("evt-copy");
+    let shared = root.join("shared");
+    let event = root.join("evt");
+    let fossil = event.join("fossil");
+    fs::create_dir_all(shared.join("metadata/movies/text")).unwrap();
+    fs::create_dir_all(&fossil).unwrap();
+    fs::write(shared.join("metadata/movies/text/movie.aged"), b"legacy metadata").unwrap();
+    fs::write(shared.join("config.aged"), b"legacy config ciphertext").unwrap();
+    fs::write(fossil.join("config.aged"), b"newer config ciphertext").unwrap();
+
+    migrate_legacy_metadata_to(&shared, &fossil).unwrap();
+    migrate_legacy_event_files(&shared, &fossil).unwrap();
+
+    assert_eq!(fs::read(fossil.join("metadata/movies/text/movie.aged")).unwrap(), b"legacy metadata");
+    assert_eq!(fs::read(fossil.join("config.aged")).unwrap(), b"newer config ciphertext");
+    assert_eq!(fs::read(shared.join("metadata/movies/text/movie.aged")).unwrap(), b"legacy metadata");
+    assert_eq!(fs::read(shared.join("config.aged")).unwrap(), b"legacy config ciphertext");
+    fs::remove_dir_all(root).unwrap();
+}
+
 #[cfg(unix)]
 #[test]
 fn fresh_volume_repairs_container_alias_and_accepts_encrypted_writes() {
@@ -94,5 +116,29 @@ fn storage_counts_nested_files_and_propagates_read_errors() {
     assert_eq!(crate::directory_size(&root.join("movies")).unwrap(), 5);
     assert_eq!(crate::directory_size(&root.join("tv")).unwrap(), 6);
     assert!(crate::directory_size(&root.join("movies/text/movie.aged")).is_err());
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn storage_size_scan_does_not_follow_symlinks() {
+    let root=fixture_root("symlink-size");
+    let outside=fixture_root("symlink-size-outside");
+    fs::create_dir_all(&root).unwrap(); fs::create_dir_all(&outside).unwrap();
+    fs::write(outside.join("secret.aged"), b"outside").unwrap();
+    std::os::unix::fs::symlink(&outside,root.join("linked")).unwrap();
+    assert_eq!(crate::directory_size(&root).unwrap(),0);
+    fs::remove_dir_all(root).unwrap(); fs::remove_dir_all(outside).unwrap();
+}
+
+#[test]
+fn storage_size_scan_rejects_excessive_directory_depth() {
+    let root=fixture_root("deep");
+    let mut current=root.clone();
+    for _ in 0..=crate::MAX_METADATA_SCAN_DEPTH {
+        current.push("nested");
+    }
+    fs::create_dir_all(&current).unwrap();
+    assert!(crate::directory_size(&root).is_err());
     fs::remove_dir_all(root).unwrap();
 }
