@@ -19,9 +19,9 @@ Allow a person without an existing passkey or Rawrarr account to establish the i
 - `node --test scripts/tests/test_rawrarr_passkey_ui.mjs` — passed (7 tests).
 - `cargo check --locked --manifest-path rust-arr/Cargo.toml` — passed; emitted existing dead-code warnings.
 - `cargo test --locked --manifest-path rust-arr/Cargo.toml coordinator_crypto::tests:: -- --nocapture` — passed (9 tests).
-- `git diff --check` — pending final review.
-- PostgreSQL-backed API test and live ENS/SIWE browser flow — not yet run.
+- `git diff --check` — passed.
+- PostgreSQL-backed API test — not run because `psql` is not installed and no disposable `_test` database is configured in this environment. Live ENS/SIWE flow remains unverified.
 
 ## Final state
 
-Implementation, database integration coverage and PR review remain in progress.
+Implementation is committed as `0152897` and published on PR [#530](https://github.com/willjasen/rawrarr/pull/530). The basic script CI workflow is still running; live ENS/SIWE and PostgreSQL-backed verification remain follow-up gaps. The artwork portion of #445 is not included.
