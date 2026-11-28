@@ -49,6 +49,7 @@ qualified.
 - `cargo test --locked --offline --manifest-path /workspace/rust-arr/Cargo.toml webrtc_direct::tests -- --nocapture` — passed (3/3) in a disposable native clone. The bridge was disconnected after dependency preparation; a unique project-labeled internal network kept loopback ICE available without an external route.
 - `cargo test --locked --offline --manifest-path /workspace/rust-arr/Cargo.toml webrtc_ -- --nocapture` — passed (5/5) after adding coordinator signaling, in a new disposable linked clone with its default bridge disconnected and a unique internal network.
 - `cargo test --locked --offline --manifest-path /workspace/rust-arr/Cargo.toml subscriber_payloads_cannot_be_proxied_to_coordinator -- --nocapture` — passed (1/1) in the same clone.
+- Repeated both focused Rust commands after rebasing onto current `origin/main` (including Syncthing XML hardening); results remained 5/5 and 1/1.
 - Build warning remains: `NodeAuth::poll_webrtc_offer` and `publish_webrtc_answer` are unused until the node worker is implemented.
 
 ## Adoption and rollback
