@@ -78,9 +78,9 @@ jobs:
             RAWARR_BUILD_REVISION=${{ github.event.workflow_run.head_sha }}
             SCCACHE_GHA_ENABLED=true
             RUSTC_WRAPPER=sccache
-          secrets: |
-            id=ACTIONS_RESULTS_URL,env=ACTIONS_RESULTS_URL
-            id=ACTIONS_RUNTIME_TOKEN,env=ACTIONS_RUNTIME_TOKEN
+          secret-envs: |
+            ACTIONS_RESULTS_URL=ACTIONS_RESULTS_URL
+            ACTIONS_RUNTIME_TOKEN=ACTIONS_RUNTIME_TOKEN
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha }}

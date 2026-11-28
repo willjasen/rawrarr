@@ -56,8 +56,9 @@ class PublishContainerWorkflowTests(unittest.TestCase):
         self.assertIn("ACTIONS_RUNTIME_TOKEN", source)
         self.assertIn("RUSTC_WRAPPER=sccache", source)
         self.assertIn("SCCACHE_GHA_ENABLED=true", source)
-        self.assertIn("id=ACTIONS_RESULTS_URL,env=ACTIONS_RESULTS_URL", source)
-        self.assertIn("id=ACTIONS_RUNTIME_TOKEN,env=ACTIONS_RUNTIME_TOKEN", source)
+        self.assertIn("secret-envs: |", source)
+        self.assertIn("ACTIONS_RESULTS_URL=ACTIONS_RESULTS_URL", source)
+        self.assertIn("ACTIONS_RUNTIME_TOKEN=ACTIONS_RUNTIME_TOKEN", source)
 
 
 if __name__ == "__main__":

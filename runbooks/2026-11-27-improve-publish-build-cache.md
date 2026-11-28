@@ -9,3 +9,4 @@
 - PR: [#539](https://github.com/willjasen/rawrarr/pull/539).
 - Remaining: verify the correction in a published image build and measure cache hits/duration.
 - Follow-up evidence: PR #539 merged as `10b9d0a`; publish run [46099267863](https://github.com/willjasen/rawrarr/actions/runs/46099267863) failed on both architectures because the `sccache` executable was absent from the Docker build stage. Stats reported zero compiler requests. Follow-up branch copies the runner-installed executable into the temporary build context and Docker builder stage; credentials remain BuildKit secrets.
+- Second follow-up: PR #540 merged as `767dbbf`; publish run [46099512063](https://github.com/willjasen/rawrarr/actions/runs/46099512063) still failed because build-push-action's `secrets` input does not map runner environment variables. Change to its `secret-envs` input so the two cache variables reach the Dockerfile's secret mounts. This attempt also had zero compiler requests.
