@@ -563,8 +563,8 @@ pub async fn app_config_object(State(state): State<std::sync::Arc<crate::AppStat
         || digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) { return Err(StatusCode::NOT_FOUND); }
     if !state.config_peer.authorize_app(request.headers(), "GET", request.uri().path(), app_id, epoch) { return Err(StatusCode::UNAUTHORIZED); }
     let revisions = load_app_config_revisions().into_iter().filter(|revision| revision.app_instance_id == app_id && revision.key_epoch == epoch).collect::<Vec<_>>();
-    let latest_generation = revisions.iter().map(|revision| revision.fencing_generation).max();
-    let latest = latest_generation.map(|generation| revisions.iter().filter(|revision| revision.fencing_generation == generation).collect::<Vec<_>>()).unwrap_or_default();
+    let latest_version = revisions.iter().map(|revision| (revision.fencing_generation, revision.revision_counter)).max();
+    let latest = latest_version.map(|version| revisions.iter().filter(|revision| (revision.fencing_generation, revision.revision_counter) == version).collect::<Vec<_>>()).unwrap_or_default();
     let permitted = latest.first().is_some_and(|revision| latest.iter().all(|candidate| candidate.revision_id() == revision.revision_id())
         && revision.operation == "put" && revision.ciphertext_digest.as_deref() == Some(digest));
     if !permitted { return Err(StatusCode::NOT_FOUND); }
@@ -621,6 +621,7 @@ pub struct AppConfigRevision {
     pub key_epoch: u64,
     pub device_id: String,
     pub fencing_generation: u64,
+    pub revision_counter: u64,
     pub operation_id: String,
     pub operation: String,
     pub ciphertext_digest: Option<String>,
@@ -636,7 +637,7 @@ impl AppConfigRevision {
     fn payload(&self) -> serde_json::Value {
         serde_json::json!({"domain":"rawrarr-app-config-revision-v1","schemaVersion":self.schema_version,
             "rootFingerprint":self.root_fingerprint,"appInstanceId":self.app_instance_id,"keyEpoch":self.key_epoch,
-            "deviceId":self.device_id,"fencingGeneration":self.fencing_generation,"operationId":self.operation_id,
+            "deviceId":self.device_id,"fencingGeneration":self.fencing_generation,"revisionCounter":self.revision_counter,"operationId":self.operation_id,
             "operation":self.operation,"ciphertextDigest":self.ciphertext_digest,"grantProof":self.grant_proof,"writerFence":self.writer_fence})
     }
 
@@ -652,7 +653,7 @@ impl AppConfigRevision {
         let Ok(proof) = BASE64.decode(&self.grant_proof) else { return false; };
         let Ok(fence_bytes) = BASE64.decode(&self.writer_fence) else { return false; };
         if self.schema_version != 1 || self.root_fingerprint != root || app_id.to_string() != self.app_instance_id
-            || self.key_epoch == 0 || self.fencing_generation == 0 || operation_id.to_string() != self.operation_id
+            || self.key_epoch == 0 || self.fencing_generation == 0 || self.revision_counter == 0 || operation_id.to_string() != self.operation_id
             || !matches!(self.operation.as_str(), "put" | "delete")
             || (self.operation == "put" && self.ciphertext_digest.as_deref().is_none_or(|digest| digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_hexdigit())))
             || (self.operation == "delete" && self.ciphertext_digest.is_some())
@@ -704,7 +705,7 @@ pub fn load_app_config_revisions() -> Vec<AppConfigRevision> {
 pub fn app_config_merkle_root(revisions: &[AppConfigRevision]) -> String {
     let mut leaves = revisions.iter().map(|revision| {
         let canonical = crate::device_signing::canonical_json(&serde_json::json!({"revisionId":revision.revision_id(),
-            "appInstanceId":revision.app_instance_id,"keyEpoch":revision.key_epoch,"fencingGeneration":revision.fencing_generation,
+            "appInstanceId":revision.app_instance_id,"keyEpoch":revision.key_epoch,"fencingGeneration":revision.fencing_generation,"revisionCounter":revision.revision_counter,
             "operationId":revision.operation_id,"operation":revision.operation,"ciphertextDigest":revision.ciphertext_digest})).unwrap_or_default();
         let mut hash = Sha256::new(); hash.update([0]); hash.update(canonical); hash.finalize().to_vec()
     }).collect::<Vec<_>>();

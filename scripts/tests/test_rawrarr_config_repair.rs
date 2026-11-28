@@ -97,7 +97,7 @@ fn app_config_revision_binds_app_epoch_grant_fence_and_tombstone() {
         "signingFingerprint":crate::device_signing::node_fingerprint(&device_public),"signedPayload":signed_device_approval,
         "signature":BASE64.encode(device_approval_signature)});
     let mut revision = AppConfigRevision { schema_version:1, root_fingerprint:root_fingerprint.clone(), app_instance_id:app_id.into(),
-        key_epoch:4, device_id:"node-a".into(), fencing_generation:7,
+        key_epoch:4, device_id:"node-a".into(), fencing_generation:7, revision_counter:1,
         operation_id:"22222222-2222-4222-8222-222222222222".into(), operation:"delete".into(), ciphertext_digest:None,
         grant_proof, writer_fence, certificate, signature:String::new() };
     revision.signature = encode_hex(device_key.sign(&crate::device_signing::canonical_json(&revision.payload()).unwrap()).encode().as_ref());
