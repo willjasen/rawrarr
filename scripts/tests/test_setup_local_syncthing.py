@@ -1,8 +1,10 @@
 """Sanitized tests for local-only Syncthing bootstrap safeguards."""
 import importlib.util
 from pathlib import Path
+import sys
 import unittest
 import xml.etree.ElementTree as ET
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 spec = importlib.util.spec_from_file_location('setup', Path(__file__).parents[1] / 'setup_local_syncthing.py')
 setup = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(setup)
@@ -43,5 +45,13 @@ class Configuration(unittest.TestCase):
     def test_reject_unrelated_folder(self):
         with self.assertRaises(ValueError):
             setup.configure(FIXTURE.replace(b'<gui>', b'<folder id="other" path="/elsewhere"/><gui>'))
+    def test_reject_dtd_and_entity_declarations(self):
+        for declaration in (
+            b'<!DOCTYPE configuration [<!ENTITY x "expanded">]>',
+            b'<!DOCTYPE configuration SYSTEM "file:///etc/passwd">',
+        ):
+            hostile = FIXTURE.replace(b'<configuration>', declaration + b'<configuration>')
+            with self.subTest(declaration=declaration), self.assertRaisesRegex(ValueError, 'DTD and entity'):
+                setup.configure(hostile)
 if __name__ == '__main__':
     unittest.main()

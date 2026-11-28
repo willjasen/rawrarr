@@ -12,6 +12,8 @@ import io
 import tarfile
 import xml.etree.ElementTree as ET
 
+from safe_xml import fromstring as safe_fromstring
+
 CONTAINER = 'rawrarr-local-syncthing-1'
 CONFIG = '/var/syncthing/config/config.xml'
 LEGACY_FOLDER_ID = 'rawrarr-shared'
@@ -23,7 +25,7 @@ def docker(*args):
 
 
 def configure(raw):
-    root = ET.fromstring(raw)
+    root = safe_fromstring(raw)
     own_id = root.find('device').get('id')
     if len(root.findall('device')) != 1:
         raise ValueError('Refusing to modify a configuration with remote peers')
@@ -114,6 +116,6 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except (ValueError, OSError, subprocess.CalledProcessError) as error:
+    except (ValueError, ET.ParseError, OSError, subprocess.CalledProcessError) as error:
         # Never print command stderr/configuration: it may contain private values.
         raise SystemExit('Setup failed: ' + (str(error) if isinstance(error, ValueError) else type(error).__name__))

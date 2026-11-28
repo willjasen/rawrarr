@@ -8,12 +8,21 @@ import unittest
 from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "share_storage_media.py"
+import sys
+sys.path.insert(0, str(SCRIPT.parent))
 spec = importlib.util.spec_from_file_location("share_storage_media", SCRIPT)
 media = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(media)
 
 
 class MediaShareTests(unittest.TestCase):
+    def test_syncthing_config_parser_rejects_dtd(self):
+        import safe_xml
+        parsed = safe_xml.fromstring(b"<configuration><gui><apikey>fixture</apikey></gui></configuration>")
+        self.assertEqual(parsed.findtext("gui/apikey"), "fixture")
+        with self.assertRaisesRegex(ValueError, "DTD and entity"):
+            safe_xml.fromstring(b'<!DOCTYPE configuration [<!ENTITY key "secret">]><configuration><gui><apikey>&key;</apikey></gui></configuration>')
+
     def setUp(self):
         self.args = SimpleNamespace(local_id="SOURCE", peer_id="DESTINATION",
             folder_id="rawrarr-media-test", path="/media/ebooks", peer_name="MacBook",
