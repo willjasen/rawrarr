@@ -36,7 +36,7 @@ test('coordinator saves Radarr and Sonarr settings over the direct metadata rout
     if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
     if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
     if (url.pathname === '/assets/coordinator-ai.mjs') return route.fulfill({ body: aiModule, contentType: 'text/javascript' });
-    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: "window.rawrarrMiniExport = { prepareGroupIdentityForDevice: async () => false, encryptIdentityForDevice: async identity => `age-ciphertext:${identity}` };" });
+    if (url.pathname === '/assets/metadata-export.js') return route.fulfill({ contentType: 'text/javascript', body: "window.rawrarrMiniExport = { prepareGroupIdentityForDevice: async () => false, encryptIdentityForDevice: async identity => `age-ciphertext:${identity}`, deriveProfileRecipient: async () => 'age1pq1validrecipient' };" });
     if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
     if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }] });
     if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
@@ -99,7 +99,7 @@ test('coordinator saves Radarr and Sonarr settings over the direct metadata rout
   await page.locator('#age-id').fill(identity);
   await page.locator('#unlock').click();
   await page.waitForFunction(() => document.getElementById('age-id').value === '');
-  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
+  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), identity, 'a validated private ID should be remembered');
   await page.locator('#radarr-node-note').getByText('Radarr is not configured on fossil.').waitFor();
   await page.click('[data-view="series"]');
   assert.equal(new URL(page.url()).hash, '#tv');
@@ -247,6 +247,81 @@ test('Movies and TV do not display cached library data without an age ID', async
   await page.click('[data-view="series"]');
   assert.equal(await page.locator('#sonarr-series .library-card').count(), 0);
   assert.doesNotMatch(await page.locator('#series-view').textContent(), /Private TV Cache Fixture/);
+});
+
+test('media pages stay behind an age ID gate without showing node errors', async t => {
+  const browser = await chromium.launch({ headless: true, executablePath: '/usr/bin/chromium', args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const apiRequests = [];
+  await page.route('http://rawrarr.test/**', async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === '/health') return route.fulfill({ status: 200, body: 'ok' });
+    if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
+    if (url.pathname === '/assets/coordinator-workspace.mjs') return route.fulfill({ body: script, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-availability.mjs') return route.fulfill({ body: availabilityModule, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-device-routes.mjs') return route.fulfill({ body: deviceRoutes, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-node-avatar.mjs') return route.fulfill({ body: nodeAvatar, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/profile-color.mjs') return route.fulfill({ body: profileColor, contentType: 'text/javascript' });
+    if (url.pathname === '/assets/coordinator-ai.mjs') return route.fulfill({ body: aiModule, contentType: 'text/javascript' });
+    if (url.pathname === '/api/workspace/profile') return route.fulfill({ json: { displayName: 'Test user' } });
+    if (url.pathname === '/api/workspace/nodes') return route.fulfill({ json: [{ nodeId: 'metadata-one', role: 'metadata', online: true, relayAvailable: true, directUrl: 'http://rawrarr.test/direct-api/' }] });
+    if (url.pathname === '/api/workspace/pending') return route.fulfill({ json: [] });
+    if (url.pathname === '/direct-api/health') return route.fulfill({ status: 204 });
+    if (url.pathname.startsWith('/direct-api/api/')) {
+      apiRequests.push(url.pathname);
+      return route.fulfill({ status: 503, json: { error: 'private node fixture error' } });
+    }
+    return route.fulfill({ status: 404, body: 'not found' });
+  });
+
+  await page.goto('http://rawrarr.test/#discovery');
+  await page.waitForFunction(() => document.querySelector('[data-node-id="metadata-one"]')?.dataset.selected === 'true');
+  assert.equal(await page.evaluate(() => localStorage.getItem('rawrarr.browser.age-id')), null);
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 375, height: 812 }]) {
+    await page.setViewportSize(viewport);
+    for (const [view, gate, content] of [
+      ['discovery', '#discovery-age-gate', '#discovery-age-content'],
+      ['series', '#series-age-gate', '#series-age-content'],
+      ['music', '#music-age-gate', '#music-age-content'],
+    ]) {
+      await page.click(`[data-view="${view}"]`);
+      assert.equal(await page.locator(gate).isVisible(), true, `${view} should show the age ID gate at ${viewport.width}px`);
+      assert.equal(await page.locator(content).isVisible(), false, `${view} details should remain hidden`);
+      assert.match(await page.locator(gate).textContent(), /Import your age private ID in Settings/);
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${view} should not overflow horizontally at ${viewport.width}px`);
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.click('[data-view="movies"]');
+  assert.equal(await page.locator('#age-id-entry').isVisible(), true, 'Movies keeps its existing age ID entry path');
+  assert.equal(await page.locator('#radarr-summary').isVisible(), false);
+  assert.equal(await page.locator('#content .library-panel').isVisible(), false);
+  assert.match(await page.locator('#content-status').textContent(), /Enter your age private ID/);
+  assert.deepEqual(apiRequests, [], 'no encrypted node configuration or library requests should run before import');
+  const identity = 'AGE-SECRET-KEY-PQ-1cross-tab-test-fixture';
+  await page.evaluate(value => {
+    localStorage.setItem('rawrarr.browser.age-id', value);
+    dispatchEvent(new StorageEvent('storage', { key: 'rawrarr.browser.age-id', newValue: value, storageArea: localStorage }));
+  }, identity);
+  await page.waitForFunction(() => document.getElementById('age-id-entry').hidden);
+  for (const [view, gate, content] of [
+    ['discovery', '#discovery-age-gate', '#discovery-age-content'],
+    ['series', '#series-age-gate', '#series-age-content'],
+    ['music', '#music-age-gate', '#music-age-content'],
+  ]) {
+    await page.click(`[data-view="${view}"]`);
+    assert.equal(await page.locator(gate).isVisible(), false, `${view} gate should open after ID import`);
+    const visibility = await page.evaluate(({ gate, content, view }) => ({
+      viewHidden: document.getElementById(`${view}-view`).hidden,
+      gateHidden: document.querySelector(gate).hidden,
+      contentHidden: document.querySelector(content).hidden,
+    }), { gate, content, view });
+    assert.equal(visibility.viewHidden, false, `${view} page should remain visible after ID import`);
+    assert.equal(visibility.contentHidden, false, `${view} content wrapper should open after ID import`);
+  }
 });
 
 test('age ID is remembered after validation, restored on reload, and cleared on sign-out', async t => {

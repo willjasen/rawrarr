@@ -152,24 +152,30 @@ function showView(name, updateHash = true) {
   if (updateHash) history.replaceState(null, '', `${location.pathname}${location.search}#${view === 'series' ? 'tv' : view}`);
   if (view === 'configuration' && updateHash) void loadClusterConfiguration();
   if (view === 'movies' && updateHash) {
-    void loadArrSettings('radarr');
-    updateAgeIdControls();
-    if (selectedNode) renderCachedMovies(selectedNode);
-    if (ageIdentityInMemory && selectedNode) void unlockMetadata();
-    else if (!ageIdentityInMemory) contentStatus.textContent = 'Enter your age private ID to unlock. It will be saved in this browser after validation.';
+    if (ageIdentityInMemory) {
+      void loadArrSettings('radarr');
+      if (selectedNode) renderCachedMovies(selectedNode);
+      if (selectedNode) void unlockMetadata();
+    } else if (!contentStatus.textContent.includes('metadata is locked')) {
+      contentStatus.textContent = 'Enter your age private ID to unlock. It will be saved in this browser after validation.';
+    }
   }
   if (view === 'series' && updateHash) {
-    const cachedSeries = ageIdentityInMemory ? readLibraryTextCache(selectedNode, 'tv') : null;
-    if (cachedSeries) {
-      renderSonarrSeries(cachedSeries, 'Cached TV library. Updating…');
-      void attachSonarrPosters(document.getElementById('sonarr-series'));
+    if (ageIdentityInMemory) {
+      const cachedSeries = readLibraryTextCache(selectedNode, 'tv');
+      if (cachedSeries) {
+        renderSonarrSeries(cachedSeries, 'Cached TV library. Updating…');
+        void attachSonarrPosters(document.getElementById('sonarr-series'));
+      }
+      void loadArrSettings('sonarr');
+      if (selectedNodeDetails) void chooseNodeRoute(selectedNodeDetails, true);
     }
-    void loadArrSettings('sonarr');
-    if (selectedNodeDetails) void chooseNodeRoute(selectedNodeDetails, true);
   }
   if (view === 'music' && updateHash) {
-    void loadArrSettings('lidarr');
-    if (selectedNodeDetails) void chooseNodeRoute(selectedNodeDetails, true);
+    if (ageIdentityInMemory) {
+      void loadArrSettings('lidarr');
+      if (selectedNodeDetails) void chooseNodeRoute(selectedNodeDetails, true);
+    }
   }
   if (view === 'settings' && updateHash) {
     void loadArrSettings('radarr');
@@ -177,7 +183,7 @@ function showView(name, updateHash = true) {
     void loadArrSettings('lidarr');
     void loadArrSettings('prowlarr');
   }
-  if (view === 'discovery') void loadProwlarrDiscovery();
+  if (view === 'discovery' && ageIdentityInMemory) void loadProwlarrDiscovery();
   if (view === 'overview' && updateHash) {
     void loadOverviewMetadata();
     if (selectedNodeDetails?.role === 'metadata') {
@@ -188,14 +194,11 @@ function showView(name, updateHash = true) {
   }
   if (view === 'assistant') void aiChat.refresh();
   if (view === 'roarlay') void checkRoarlayHealth();
-  if ((view === 'movies' || view === 'series') && updateHash) void loadMetadataSizes();
+  if (ageIdentityInMemory && (view === 'movies' || view === 'series') && updateHash) void loadMetadataSizes();
 }
 window.addEventListener('hashchange', () => showView(location.hash.slice(1) || 'overview'));
 document.querySelectorAll('.nav-item[data-view]').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
 document.getElementById('configure-sonarr')?.addEventListener('click', () => showView('settings'));
-showView(location.hash.slice(1) || 'overview', false);
-if (location.hash === '#devices') history.replaceState(null, '', `${location.pathname}${location.search}#fossils`);
-if (location.hash === '#series') history.replaceState(null, '', `${location.pathname}${location.search}#tv`);
 async function checkRoarlayHealth() {
   const button = document.getElementById('roarlay-health-refresh');
   button.disabled = true;
@@ -569,6 +572,31 @@ let ageIdentityStored = Boolean(rememberedAgeIdentity);
 // Invalidate pending consumers before clear, sign-out, or navigation can finish.
 let ageIdentityRevision = 0;
 ageInput.value = '';
+function updateMediaPageAccess() {
+  const hasIdentity = Boolean(ageIdentityInMemory);
+  for (const page of ['series', 'music', 'discovery']) {
+    document.getElementById(`${page}-age-gate`).hidden = hasIdentity;
+    document.getElementById(`${page}-age-content`).hidden = !hasIdentity;
+  }
+  document.getElementById('radarr-summary').hidden = !hasIdentity;
+  document.querySelector('#content .library-panel').hidden = !hasIdentity;
+  if (!hasIdentity) {
+    document.getElementById('radarr-connection-card').hidden = true;
+    document.getElementById('tv-library').hidden = true;
+    document.getElementById('sonarr-connection-card').hidden = true;
+    document.getElementById('lidarr-library-content').hidden = true;
+    document.getElementById('lidarr-artists').replaceChildren();
+    document.getElementById('lidarr-releases').replaceChildren();
+    document.getElementById('lidarr-library-status').dataset.state = '';
+    document.getElementById('lidarr-library-status').textContent = 'Import your age private ID in Settings to unlock Music.';
+    document.getElementById('prowlarr-discovery-content').hidden = true;
+    document.getElementById('prowlarr-not-configured').hidden = true;
+    document.getElementById('prowlarr-indexers').replaceChildren();
+    document.getElementById('prowlarr-search-results').replaceChildren();
+    document.getElementById('prowlarr-discovery-status').dataset.state = '';
+    document.getElementById('prowlarr-discovery-status').textContent = 'Import your age private ID in Settings to unlock Discover.';
+  }
+}
 if (location.hash === '#movies' && ageIdentityInMemory && selectedNode && readLibraryTextCache(selectedNode, 'movies')) {
   contentPanel.hidden = false;
   renderCachedMovies(selectedNode);
@@ -576,6 +604,7 @@ if (location.hash === '#movies' && ageIdentityInMemory && selectedNode && readLi
 
 function updateAgeIdControls() {
   const hasIdentity = Boolean(ageIdentityInMemory);
+  updateMediaPageAccess();
   ageIdEntry.hidden = hasIdentity;
   clearKeyButton.hidden = !hasIdentity;
   if (hasIdentity && contentStatus.textContent.trim() === 'Enter your age private ID to unlock. It will be saved in this browser after validation.') {
@@ -626,7 +655,7 @@ window.addEventListener('storage', event => {
     }
   }
   updateAgeIdControls();
-  if (ageIdentityInMemory && location.hash === '#movies' && selectedNode) void unlockMetadata();
+  if (identityChanged && ['movies', 'tv', 'series', 'music', 'discovery'].includes(location.hash.slice(1))) showView(location.hash.slice(1));
 });
 function updateAgeStorageSettings() {
   ageStorageStatus.dataset.state = '';
@@ -734,6 +763,7 @@ function clearAgeIdentity() {
     return false;
   }
   ageIdentityRevision += 1;
+  prowlarrDiscoveryGeneration += 1;
   aiMovies = null;
   aiSeries = null;
   ageIdentityInMemory = '';
@@ -753,9 +783,14 @@ function clearAgeIdentity() {
   resetArrSummary('radarr');
   resetArrSummary('sonarr');
   updateAgeIdControls();
+  if (['movies', 'tv', 'series', 'music', 'discovery'].includes(location.hash.slice(1))) showView(location.hash.slice(1));
   return true;
 }
 updateAgeIdControls();
+showView(location.hash.slice(1) || 'overview', false);
+if (location.hash === '#devices') history.replaceState(null, '', `${location.pathname}${location.search}#fossils`);
+if (location.hash === '#series') history.replaceState(null, '', `${location.pathname}${location.search}#tv`);
+document.querySelectorAll('[data-open-age-settings]').forEach(button => button.addEventListener('click', () => showView('settings')));
 window.addEventListener('pagehide', () => {
   ageIdentityRevision += 1;
   ageIdentityInMemory = '';
@@ -814,7 +849,7 @@ document.getElementById('age-storage-form').addEventListener('submit', async eve
     settingsAgeIdInput.value = '';
     contentStatus.textContent = ageStorageMessage.textContent;
     updateAgeIdControls();
-    if (location.hash === '#movies' && selectedNode) void unlockMetadata();
+    if (['movies', 'tv', 'series', 'music', 'discovery'].includes(location.hash.slice(1))) showView(location.hash.slice(1));
   } catch (error) {
     ageStorageMessage.dataset.state = 'error';
     ageStorageMessage.textContent = error.message || 'Could not validate or save the age private ID.';
@@ -1041,6 +1076,7 @@ const arrSettings = {
 
 async function loadArrSettings(service) {
   const fields = arrSettings[service];
+  const identityRevision = ageIdentityRevision;
   for (const id of fields.overviewCards) document.getElementById(id).hidden = true;
   for (const copy of fields.copies) {
     document.getElementById(copy.button).disabled = true;
@@ -1050,7 +1086,9 @@ async function loadArrSettings(service) {
   }
   try {
     await unlockMetadataVaultForSettings();
+    if (identityRevision !== ageIdentityRevision) return;
     const settings = await arrDirectRequest(fields.endpoint);
+    if (identityRevision !== ageIdentityRevision) return;
     for (const id of fields.overviewCards) document.getElementById(id).hidden = !settings.configured;
     if (service !== 'prowlarr') void probeArrBase(service, settings.url || '');
     if (fields.mediaCard) document.getElementById(fields.mediaCard).hidden = Boolean(settings.configured);
@@ -1109,6 +1147,7 @@ async function loadArrSettings(service) {
       document.getElementById('overview-movie-detail').textContent = 'Connect Radarr in Settings to see movie statistics.';
     }
   } catch (error) {
+    if (identityRevision !== ageIdentityRevision) return;
     document.getElementById(fields.saved).hidden = true;
     if (service === 'lidarr') {
       const status = document.getElementById('lidarr-library-status');
@@ -1245,6 +1284,7 @@ for (const [service, fields] of Object.entries(arrSettings)) {
 
 let lidarrLibraryGeneration = 0;
 async function loadLidarrLibrary() {
+  if (!ageIdentityInMemory) return;
   const status = document.getElementById('lidarr-library-status');
   const content = document.getElementById('lidarr-library-content');
   const generation = ++lidarrLibraryGeneration;
@@ -1254,6 +1294,7 @@ async function loadLidarrLibrary() {
   status.textContent = 'Loading music library from the selected fossil…';
   try {
     await unlockMetadataVaultForSettings();
+    if (!ageIdentityInMemory || identityRevision !== ageIdentityRevision) return;
     const result = await arrDirectRequest('/lidarr/library');
     if (generation !== lidarrLibraryGeneration || nodeId !== selectedNode || identityRevision !== ageIdentityRevision) return;
     const render = (containerId, items, heading, detail) => {
@@ -1356,7 +1397,9 @@ function renderProwlarrResults(results) {
 }
 
 async function loadProwlarrDiscovery() {
+  if (!ageIdentityInMemory) return;
   const generation = ++prowlarrDiscoveryGeneration;
+  const identityRevision = ageIdentityRevision;
   const status = document.getElementById('prowlarr-discovery-status');
   const content = document.getElementById('prowlarr-discovery-content');
   const setup = document.getElementById('prowlarr-not-configured');
@@ -1367,7 +1410,7 @@ async function loadProwlarrDiscovery() {
   document.getElementById('prowlarr-search-results').replaceChildren();
   try {
     const settings = await arrDirectRequest('/settings/prowlarr');
-    if (generation !== prowlarrDiscoveryGeneration) return;
+    if (generation !== prowlarrDiscoveryGeneration || identityRevision !== ageIdentityRevision || !ageIdentityInMemory) return;
     if (!settings.configured) {
       setup.hidden = false;
       status.textContent = `Prowlarr is not configured on ${selectedNodeLabel()}.`;
@@ -1375,12 +1418,12 @@ async function loadProwlarrDiscovery() {
       return;
     }
     const indexers = await arrDirectRequest('/prowlarr/indexers');
-    if (generation !== prowlarrDiscoveryGeneration) return;
+    if (generation !== prowlarrDiscoveryGeneration || identityRevision !== ageIdentityRevision || !ageIdentityInMemory) return;
     renderProwlarrIndexers(indexers);
     content.hidden = false;
     status.textContent = `Connected to Prowlarr on ${selectedNodeLabel()}.`;
   } catch (error) {
-    if (generation !== prowlarrDiscoveryGeneration) return;
+    if (generation !== prowlarrDiscoveryGeneration || identityRevision !== ageIdentityRevision || !ageIdentityInMemory) return;
     status.dataset.state = 'error';
     status.textContent = error.message || 'Could not load Prowlarr indexers.';
   }
@@ -1533,24 +1576,24 @@ function openNode(node) {
     } else {
       void chooseNodeRoute(node);
     }
-    if (location.hash === '#movies') void refreshRadarrBackfillStatus();
-    if (location.hash === '#tv' || location.hash === '#series') void refreshSonarrBackfillStatus();
+    if (ageIdentityInMemory && location.hash === '#movies') void refreshRadarrBackfillStatus();
+    if (ageIdentityInMemory && (location.hash === '#tv' || location.hash === '#series')) void refreshSonarrBackfillStatus();
     if (ageInput.value.trim() || ageIdentityInMemory) void unlockMetadata();
     const currentView = location.hash.slice(1);
     if (currentView === '' || currentView === '#overview' || currentView === 'overview') {
       void loadArrSettings('radarr');
       void loadArrSettings('sonarr');
     }
-    if (currentView === 'movies') void loadArrSettings('radarr');
-    if (currentView === 'tv' || currentView === 'series') void loadArrSettings('sonarr');
+    if (ageIdentityInMemory && currentView === 'movies') void loadArrSettings('radarr');
+    if (ageIdentityInMemory && (currentView === 'tv' || currentView === 'series')) void loadArrSettings('sonarr');
     if (currentView === 'settings') {
       void loadArrSettings('radarr');
       void loadArrSettings('sonarr');
       void loadArrSettings('lidarr');
       void loadArrSettings('prowlarr');
     }
-    if (currentView === 'music') void loadArrSettings('lidarr');
-    if (currentView === 'discovery') void loadProwlarrDiscovery();
+    if (ageIdentityInMemory && currentView === 'music') void loadArrSettings('lidarr');
+    if (ageIdentityInMemory && currentView === 'discovery') void loadProwlarrDiscovery();
   }
 }
 
@@ -2072,8 +2115,8 @@ async function refreshArrScrapeStatus(provider) {
 }
 
 window.setInterval(() => {
-  if (location.hash === '#movies' && selectedNodeDetails?.role === 'metadata') void refreshRadarrBackfillStatus();
-  if (location.hash === '#tv' || location.hash === '#series') void refreshSonarrBackfillStatus();
+  if (ageIdentityInMemory && location.hash === '#movies' && selectedNodeDetails?.role === 'metadata') void refreshRadarrBackfillStatus();
+  if (ageIdentityInMemory && (location.hash === '#tv' || location.hash === '#series')) void refreshSonarrBackfillStatus();
 }, 3000);
 
 function renderMovies(movies) {
@@ -2131,19 +2174,18 @@ async function unlockMetadata() {
   const node = selectedNodeDetails;
   if (!node || node.nodeId !== nodeId) return;
   const hasCachedMovies = renderCachedMovies(nodeId);
-  ageIdentityInMemory = identity;
   ageInput.value = '';
-  updateAgeIdControls();
-  if (location.hash === '#movies') void loadArrSettings('radarr');
-  if (location.hash === '#tv' || location.hash === '#series') void loadArrSettings('sonarr');
   contentStatus.textContent = hasCachedMovies ? 'Showing cached movie library while updating…' : 'Connecting to Radarr through the node direct route…';
   try {
     await import('/assets/metadata-export.js');
     const recipient = (await window.rawrarrMiniExport.deriveProfileRecipient(identity)).trim();
     if (!/^age1pq1[a-z0-9]+$/.test(recipient)) throw new Error('The age private ID is invalid. Check it and try again.');
     if (identityRevision !== ageIdentityRevision) return;
+    ageIdentityInMemory = identity;
     const persisted = rememberAgeIdentity(identity);
     updateAgeIdControls();
+    if (location.hash === '#movies') void loadArrSettings('radarr');
+    if (location.hash === '#tv' || location.hash === '#series') void loadArrSettings('sonarr');
     if (!persisted) contentStatus.textContent = 'Age ID validated. This browser could not save it, so keep this page open or enter it again after refreshing.';
     await unlockMetadataVaultForSettings();
     const liveMovies = await arrDirectRequest('/radarr/live-library');
@@ -2886,7 +2928,7 @@ await loadNodes();
 await loadPending();
 initialWorkspaceLoadFinished = true;
 if (location.hash === '#configuration') void loadClusterConfiguration();
-if (location.hash === '#movies') void loadArrSettings('radarr');
-if (location.hash === '#tv' || location.hash === '#series') void loadArrSettings('sonarr');
-if (location.hash === '#music') void loadArrSettings('lidarr');
+if (ageIdentityInMemory && location.hash === '#movies') void loadArrSettings('radarr');
+if (ageIdentityInMemory && (location.hash === '#tv' || location.hash === '#series')) void loadArrSettings('sonarr');
+if (ageIdentityInMemory && location.hash === '#music') void loadArrSettings('lidarr');
 setInterval(() => { void loadNodes(); void loadPending(); }, 10000);
