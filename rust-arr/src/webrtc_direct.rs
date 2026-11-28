@@ -158,8 +158,10 @@ pub(crate) fn node_proof_payload(
     answer_sdp: &str,
 ) -> Result<serde_json::Value, &'static str> {
     use sha2::{Digest, Sha256};
-    if challenge.len() != 64 || !challenge.bytes().all(|byte| byte.is_ascii_hexdigit())
-        || node_id.is_empty() || node_id.len() > 128
+    if challenge.len() != 64
+        || !challenge.bytes().all(|byte| byte.is_ascii_hexdigit())
+        || node_id.is_empty()
+        || node_id.len() > 128
         || offer_sdp.len() > MAX_WORKSPACE_FRAME_BYTES
         || answer_sdp.len() > MAX_WORKSPACE_FRAME_BYTES
     {
@@ -174,4 +176,102 @@ pub(crate) fn node_proof_payload(
         "offerSha256": format!("{:x}", Sha256::digest(offer_sdp.as_bytes())),
         "answerSha256": format!("{:x}", Sha256::digest(answer_sdp.as_bytes())),
     }))
+}
+
+/// Sign the node's transcript proof. The caller supplies the node-local signer
+/// so this module never handles or stores private key material.
+pub(crate) fn sign_node_proof(
+    session_id: Uuid,
+    node_id: &str,
+    challenge: &str,
+    offer_sdp: &str,
+    answer_sdp: &str,
+    sign: impl FnOnce(&[u8]) -> Result<Vec<u8>, &'static str>,
+) -> Result<serde_json::Value, &'static str> {
+    let payload = node_proof_payload(session_id, node_id, challenge, offer_sdp, answer_sdp)?;
+    let message = crate::device_signing::canonical_json(&payload)
+        .map_err(|_| "invalid WebRTC proof context")?;
+    let signature = sign(&message)?;
+    Ok(serde_json::json!({
+        "payload": payload,
+        "signature": encode_hex(&signature),
+    }))
+}
+
+/// Verify a peer proof against a root-verified certificate and the exact
+/// signaling transcript selected by the browser.
+pub(crate) fn verify_node_proof(
+    certificate: &serde_json::Value,
+    expected_root_fingerprint: &str,
+    proof: &serde_json::Value,
+    session_id: Uuid,
+    node_id: &str,
+    challenge: &str,
+    offer_sdp: &str,
+    answer_sdp: &str,
+) -> bool {
+    if !crate::device_signing::verify_certificate(certificate, expected_root_fingerprint)
+        || certificate
+            .get("nodeId")
+            .and_then(serde_json::Value::as_str)
+            != Some(node_id)
+    {
+        return false;
+    }
+    let Ok(expected_payload) =
+        node_proof_payload(session_id, node_id, challenge, offer_sdp, answer_sdp)
+    else {
+        return false;
+    };
+    let Some(payload) = proof.get("payload") else {
+        return false;
+    };
+    if payload != &expected_payload {
+        return false;
+    }
+    let Some(signature_text) = proof.get("signature").and_then(serde_json::Value::as_str) else {
+        return false;
+    };
+    let Some(signature) = decode_hex(signature_text) else {
+        return false;
+    };
+    let Some(public_key_text) = certificate
+        .get("signingPublicKeyHex")
+        .and_then(serde_json::Value::as_str)
+    else {
+        return false;
+    };
+    let Some(public_key) = decode_hex(public_key_text) else {
+        return false;
+    };
+    crate::device_signing::canonical_json(payload)
+        .is_ok_and(|message| crate::device_signing::verify(&public_key, &signature, &message))
+}
+
+fn encode_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut encoded = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        encoded.push(HEX[(byte >> 4) as usize] as char);
+        encoded.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    encoded
+}
+
+fn decode_hex(value: &str) -> Option<Vec<u8>> {
+    if value.len() % 2 != 0 {
+        return None;
+    }
+    value
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|pair| {
+            let digit = |byte: u8| match byte {
+                b'0'..=b'9' => Some(byte - b'0'),
+                b'a'..=b'f' => Some(byte - b'a' + 10),
+                _ => None,
+            };
+            Some(digit(pair[0])? * 16 + digit(pair[1])?)
+        })
+        .collect()
 }

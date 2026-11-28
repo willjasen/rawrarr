@@ -226,9 +226,17 @@ async fn local_data_channel_round_trips_without_signaling_or_turn_services() {
 fn node_proof_binds_challenge_session_node_and_both_descriptions() {
     let session = uuid::Uuid::new_v4();
     let challenge = "a".repeat(64);
-    let payload = super::node_proof_payload(session, "node-a", &challenge, "offer", "answer").unwrap();
+    let payload =
+        super::node_proof_payload(session, "node-a", &challenge, "offer", "answer").unwrap();
     for changed in [
-        super::node_proof_payload(uuid::Uuid::new_v4(), "node-a", &challenge, "offer", "answer").unwrap(),
+        super::node_proof_payload(
+            uuid::Uuid::new_v4(),
+            "node-a",
+            &challenge,
+            "offer",
+            "answer",
+        )
+        .unwrap(),
         super::node_proof_payload(session, "node-b", &challenge, "offer", "answer").unwrap(),
         super::node_proof_payload(session, "node-a", &"b".repeat(64), "offer", "answer").unwrap(),
         super::node_proof_payload(session, "node-a", &challenge, "other", "answer").unwrap(),
@@ -237,5 +245,111 @@ fn node_proof_binds_challenge_session_node_and_both_descriptions() {
         assert_ne!(payload, changed);
     }
     assert!(super::node_proof_payload(session, "node-a", "short", "offer", "answer").is_err());
-    assert!(super::node_proof_payload(session, "node-a", &challenge, &"x".repeat(49153), "answer").is_err());
+    assert!(
+        super::node_proof_payload(session, "node-a", &challenge, &"x".repeat(49153), "answer")
+            .is_err()
+    );
+}
+
+#[test]
+fn node_proof_requires_the_pinned_root_approved_node_and_exact_transcript() {
+    use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+    use ml_dsa::{
+        MlDsa65, SigningKey,
+        signature::{Keypair, Signer},
+    };
+
+    let root_key = SigningKey::<MlDsa65>::from_seed(&[91u8; 32].into());
+    let node_key = SigningKey::<MlDsa65>::from_seed(&[92u8; 32].into());
+    let root_public = root_key.verifying_key().encode().to_vec();
+    let node_public = node_key.verifying_key().encode().to_vec();
+    let root_fingerprint = crate::device_signing::fingerprint(&root_public);
+    let node_key_hex = node_public
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    let signed_payload = serde_json::json!({
+        "domain": "rawrarr-device-approval-v1",
+        "nodeId": "node-a",
+        "role": "metadata",
+        "publicKeyHex": node_key_hex,
+    });
+    let certificate_signature = root_key
+        .sign(&crate::device_signing::canonical_json(&signed_payload).unwrap())
+        .encode();
+    let certificate = serde_json::json!({
+        "algorithm": crate::device_signing::ALGORITHM,
+        "rootPublicKey": BASE64.encode(&root_public),
+        "rootFingerprint": root_fingerprint,
+        "signingPublicKeyHex": node_key_hex,
+        "signingFingerprint": crate::device_signing::node_fingerprint(&node_public),
+        "nodeId": "node-a",
+        "role": "metadata",
+        "signedPayload": signed_payload,
+        "signature": BASE64.encode(certificate_signature),
+    });
+
+    let session = uuid::Uuid::new_v4();
+    let challenge = "a".repeat(64);
+    let proof = super::sign_node_proof(
+        session,
+        "node-a",
+        &challenge,
+        "offer-sdp",
+        "answer-sdp",
+        |message| Ok(node_key.sign(message).encode().to_vec()),
+    )
+    .unwrap();
+    assert!(super::verify_node_proof(
+        &certificate,
+        &root_fingerprint,
+        &proof,
+        session,
+        "node-a",
+        &challenge,
+        "offer-sdp",
+        "answer-sdp",
+    ));
+    assert!(!super::verify_node_proof(
+        &certificate,
+        &"0".repeat(64),
+        &proof,
+        session,
+        "node-a",
+        &challenge,
+        "offer-sdp",
+        "answer-sdp",
+    ));
+    assert!(!super::verify_node_proof(
+        &certificate,
+        &root_fingerprint,
+        &proof,
+        session,
+        "node-b",
+        &challenge,
+        "offer-sdp",
+        "answer-sdp",
+    ));
+    assert!(!super::verify_node_proof(
+        &certificate,
+        &root_fingerprint,
+        &proof,
+        session,
+        "node-a",
+        &challenge,
+        "altered-offer",
+        "answer-sdp",
+    ));
+    let mut altered = proof;
+    altered["signature"] = serde_json::Value::String("00".to_owned());
+    assert!(!super::verify_node_proof(
+        &certificate,
+        &root_fingerprint,
+        &altered,
+        session,
+        "node-a",
+        &challenge,
+        "offer-sdp",
+        "answer-sdp",
+    ));
 }
