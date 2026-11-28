@@ -6,11 +6,17 @@ RUN go install filippo.io/age/cmd/...@v1.3.2
 FROM rust:1.88-bookworm AS builder
 ARG TARGETARCH
 ARG RAWARR_BUILD_REVISION=unknown
+ARG SCCACHE_GHA_ENABLED=false
+ARG RUSTC_WRAPPER=
+ENV SCCACHE_GHA_ENABLED=${SCCACHE_GHA_ENABLED}
+ENV RUSTC_WRAPPER=${RUSTC_WRAPPER}
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir src migrations \
     && printf '%s\n' 'fn main() {}' > src/main.rs
-RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+RUN --mount=type=secret,id=ACTIONS_RESULTS_URL,env=ACTIONS_RESULTS_URL,required=false \
+    --mount=type=secret,id=ACTIONS_RUNTIME_TOKEN,env=ACTIONS_RUNTIME_TOKEN,required=false \
+    --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git/db,sharing=locked \
     case "$TARGETARCH" in \
       amd64) rust_target=x86_64-unknown-linux-gnu ;; \
@@ -22,7 +28,9 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
 COPY src ./src
 COPY migrations ./migrations
 RUN find src migrations -type f -exec touch {} +
-RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+RUN --mount=type=secret,id=ACTIONS_RESULTS_URL,env=ACTIONS_RESULTS_URL,required=false \
+    --mount=type=secret,id=ACTIONS_RUNTIME_TOKEN,env=ACTIONS_RUNTIME_TOKEN,required=false \
+    --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git/db,sharing=locked \
     case "$TARGETARCH" in \
       amd64) rust_target=x86_64-unknown-linux-gnu ;; \
