@@ -224,7 +224,12 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
     let registry = std::fs::read_to_string(std::env::var("RAWARR_APPROVED_NODES_FILE")?)?;
     let nodes = parse_approved_nodes(&registry).map_err(|_| "invalid approved-node registry")?;
     let pool = crate::auth::database_pool().await?;
-    sqlx::migrate!("./migrations").run(&pool).await?;
+    // Keep additive schema upgrades compatible with the updater's image rollback:
+    // an older binary must be able to start while ignoring newer migration rows.
+    // Schema changes still need a forward-compatible rollout before deployment.
+    let mut migrator = sqlx::migrate!("./migrations");
+    migrator.ignore_missing = true;
+    migrator.run(&pool).await?;
     let web_rp_id = std::env::var("RAWARR_COORDINATOR_WEB_RP_ID")
         .unwrap_or_else(|_| "localhost".to_owned());
     let web_origin_text = std::env::var("RAWARR_COORDINATOR_WEB_ORIGIN")
