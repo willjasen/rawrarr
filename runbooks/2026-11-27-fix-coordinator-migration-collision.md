@@ -14,7 +14,7 @@ Relevant operational context: [coordinator auto-updater installation](2026-11-03
 - Configured the coordinator SQLx migrator to ignore newer recorded migration versions. This lets an older image start during rollback after an additive migration was recorded by a failed forward deployment. Forward schema changes still need to remain compatible with the supported rollback window.
 - Added a migration-version regression test and an updater regression proving that an internal deployment error stops before the public coordinator deployment.
 - The auto-updater already deploys internal before public and propagates internal deployment/verification errors; no production database or updater logic was changed.
-- Rebased the task branch onto `origin/main` at `0b0cc75` after three unrelated test-gating commits arrived; reran the focused Python and Node checks successfully.
+- Rebased the task branch as upstream commits arrived; the implementation was reviewed and merged through PR [#542](https://github.com/willjasen/rawrarr/pull/542) as `b99b4197b58451132832724777854b1baf5cc03c`.
 - Read the existing updater installation runbook and deployment guidance before making changes.
 
 ## Verification and final state
@@ -26,12 +26,13 @@ Relevant operational context: [coordinator auto-updater installation](2026-11-03
 - `node --test scripts/tests/test_rawrarr_docker_healthchecks.mjs` — passed (6 tests).
 - `cargo check --locked --offline --manifest-path /workspace/rust-arr/Cargo.toml` — passed in a uniquely named OrbStack test clone after copying current worktree source, preparing dependencies, and disconnecting the clone from the bridge; only existing dead-code warnings were reported.
 - `git diff --check` — passed.
-- Read-only do3 inspection succeeded through strict OpenSSH with a PTY after the Tailscale SSH wrapper could not open the remote terminal. The `ai` tmux session was left running.
-- Internal `rawrarr-int-roarlay` was restarting/unhealthy on revision `de33b099d4324f7e022521350fe807ec324a6eb8`; logs repeatedly reported `VersionMissing(13)`. PostgreSQL's `_sqlx_migrations` ledger showed versions 1–13 all marked successful.
-- Public `rawrarr-prod-roarlay` was healthy on the same `de33b099d4324f7e022521350fe807ec324a6eb8` revision. The host's local amd64 base image was revision `0b0cc7594351aed3666abac312b3368ba69e4dd2`.
-- The auto-update timer was enabled and waiting to retry. Its prior service run failed internal verification and restored the saved image. Neither coordinator deployment lock existed at inspection time.
-- No production database, container, timer, or deployment files were changed.
+- Published image workflow run [46099737645](https://github.com/willjasen/rawrarr/actions/runs/46099737645) succeeded for commit `b99b4197b58451132832724777854b1baf5cc03c` on amd64 and arm64.
+- Per the user's direction, deployed only the public coordinator on do3 using its existing updater and public deployment lock. The internal environment was left out of scope.
+- Public `rawrarr-prod-roarlay` now reports healthy on revision `b99b4197b58451132832724777854b1baf5cc03c`; its image architecture is `linux/amd64`. The actual application database (`rawrarr_passkey_reset_20261103`) records migrations 1–14 as successful, including versions 12, 13, and 14.
+- External `https://roarlay.rawrarr.net/health` returned HTTP 200 and the Roarlay health page. The updater's edge curl from do3 returned 403, but the public route check from the workstation succeeded.
+- The public deployment lock was released after verification. The remote Linux work was conducted in tmux session `ai`, which was left running.
+- No internal coordinator or database was changed.
 
 ## Adoption, recovery, and remaining work
 
-The fix adopts through the normal published application-image path. Migration 14 runs additively after existing migration 13. If a failed deployment records a newer migration, the previous image can start while ignoring that unknown version; preserve the database and roll forward when possible. Do not delete migration rows or manually alter production schema to recover. The public coordinator remains unchanged until the internal image is healthy and verified. Deployment is pending a reviewed merge and a subsequent published-image update. The live source of the rollback failure is verified: the restored `de33b099` binary lacks migration 13 while the database has successfully applied it.
+The fix adopts through the normal published application-image path. Migration 14 runs additively after existing migration 13. If a failed deployment records a newer migration, the previous image can start while ignoring that unknown version; preserve the database and roll forward when possible. Do not delete migration rows or manually alter production schema to recover. The change is merged and the public coordinator is deployed and verified at `b99b419`. Internal deployment was explicitly deferred by the user and remains outside this task's completed scope.
