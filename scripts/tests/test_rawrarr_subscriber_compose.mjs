@@ -24,6 +24,8 @@ test('subscriber Compose offers fossil and boneyard with anonymous GHCR pulls an
     assert.match(yaml, /tailscale-state:\/var\/lib\/tailscale/);
     assert.match(yaml, /rawrarr-data:\/local/);
     assert.match(yaml, /rawrarr-evt:\/evt/);
+    assert.match(yaml, /source: \$\{RAWARR_BONEYARD_DATA_PATH:\?Set RAWARR_BONEYARD_DATA_PATH to the approved Syncthing folder\}/);
+    assert.match(yaml, /target: \/evt\/boneyard/);
     assert.match(yaml, /rawrarr-shared:\/shared/);
     assert.match(yaml, /RAWARR_LOCAL_DIR: \/local/);
     assert.match(yaml, /RAWARR_EVENT_DIR: \/evt/);

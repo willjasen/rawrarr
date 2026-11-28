@@ -88,6 +88,11 @@ export function subscriberCompose({ role, nodeId, coordinatorUrl, deviceName, me
     '    volumes:',
     '      - rawrarr-data:/local',
     '      - rawrarr-evt:/evt',
+    '      - type: bind',
+    '        source: ${RAWARR_BONEYARD_DATA_PATH:?Set RAWARR_BONEYARD_DATA_PATH to the approved Syncthing folder}',
+    '        target: /evt/boneyard',
+    '        bind:',
+    '          create_host_path: false',
     '      - rawrarr-shared:/shared',
     '      - rawrarr-ui:/ui',
   );

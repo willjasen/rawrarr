@@ -70,6 +70,32 @@ class ComposeLayoutTests(unittest.TestCase):
         self.assertTrue((stack / "headscale" / "config.yaml").is_file())
         self.assertFalse((ROOT / "docker-compose.orbstack-test.yml").exists())
 
+    def test_subscriber_compose_mounts_keep_local_fossil_and_boneyard_separate(self):
+        boneyard_source = "source: ${RAWARR_BONEYARD_DATA_PATH:?Set RAWARR_BONEYARD_DATA_PATH to the approved Syncthing folder}"
+        for name in ("docker-compose.yml", "docker-compose.metadata.yml", "docker-compose.storage.yml"):
+            compose = (ROOT / name).read_text(encoding="utf-8")
+            with self.subTest(compose=name):
+                self.assertIn("RAWARR_LOCAL_DIR: /local", compose)
+                self.assertIn("- rawrarr-data:/local", compose)
+                self.assertIn("- rawrarr-evt:/evt", compose)
+                self.assertIn(boneyard_source, compose)
+                self.assertIn("target: /evt/boneyard", compose)
+                self.assertIn("create_host_path: false", compose)
+
+    def test_valkey_is_disposable_and_syncthing_keeps_domains_separate(self):
+        metadata = (ROOT / "docker-compose.metadata.yml").read_text(encoding="utf-8")
+        cache = metadata.split("  artwork-cache:", 1)[1].split("\n  fossil:", 1)[0]
+        self.assertIn('"--save", "", "--appendonly", "no"', cache)
+        self.assertNotIn("volumes:", cache)
+        self.assertIn("RAWARR_CONFIG_CACHE_URL: redis://artwork-cache:6379/", metadata)
+
+        syncthing = (ROOT / "docker-compose.syncthing.yml").read_text(encoding="utf-8")
+        self.assertIn("source: \"${RAWARR_BONEYARD_DATA_PATH:?Set RAWARR_BONEYARD_DATA_PATH to the approved Syncthing folder}\"", syncthing)
+        self.assertIn("target: /evt/boneyard", syncthing)
+        self.assertIn('source: "${RAWARR_SHARED_DATA_PATH:-${HOME}/Library/Application Support/rawrarr/shared-data}"', syncthing)
+        self.assertIn("target: /shared", syncthing)
+        self.assertNotIn("target: /evt/fossil", syncthing)
+
 
 if __name__ == "__main__":
     unittest.main()

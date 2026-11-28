@@ -44,15 +44,17 @@ use the environment-specific guidance in [AGENTS.md](../AGENTS.md). Preserve an
 existing installation's project and protected PostgreSQL password file; do not
 generate a replacement password for its database.
 
-Generic local Compose stores the shared Rawrarr data in `~/Library/Application Support/rawrarr/shared-data` by default, outside the source repository. Open it in Finder with:
+Generic local Compose keeps its legacy compatibility data in `~/Library/Application Support/rawrarr/shared-data` and requires a separately selected boneyard directory, both outside the source repository. Set the boneyard path before starting Compose; use the same value for the Syncthing companion:
 
 ```sh
-open "$HOME/Library/Application Support/rawrarr/shared-data"
+export RAWARR_BONEYARD_DATA_PATH="$HOME/Library/Application Support/rawrarr/boneyard"
+mkdir -p "$RAWARR_BONEYARD_DATA_PATH"
+open "$RAWARR_BONEYARD_DATA_PATH"
 ```
 
-To place it elsewhere, set `RAWARR_SHARED_DATA_PATH` to a persistent host directory before starting Compose. The PostgreSQL and `/data` state remain in Docker-managed volumes.
+Rawrarr and Syncthing mount that same selected folder at `/evt/boneyard`. Keep it separate from the legacy `shared-data` path; do not use the entire legacy tree or `/evt/fossil` for boneyard. During legacy-mode rollout, keep `RAWARR_SHARED_DATA_PATH` the same for both Compose invocations so `/shared` remains synchronized separately. PostgreSQL and `/local` state remain in Docker-managed volumes.
 
-`docker compose -p rawrarr-local down` stops the services but preserves named volumes and the host shared-data folder. Do not use `docker compose -p rawrarr-local down -v` unless you intend to delete the local PostgreSQL and Rawrarr data volumes.
+`docker compose -p rawrarr-local down` stops the services but preserves named volumes and both host data folders. Do not use `docker compose -p rawrarr-local down -v` unless you intend to delete the local PostgreSQL and Rawrarr data volumes.
 
 ## First login and age identity
 

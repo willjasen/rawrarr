@@ -31,6 +31,11 @@ services:
       - rawrarr-evt:/evt
       - rawrarr-ui:/ui
       - type: bind
+        source: ${RAWARR_BONEYARD_DATA_PATH:?Set RAWARR_BONEYARD_DATA_PATH to the approved Syncthing folder}
+        target: /evt/boneyard
+        bind:
+          create_host_path: false
+      - type: bind
         source: "${RAWARR_SHARED_DATA_PATH:-${HOME}/Library/Application Support/rawrarr/shared-data}"
         target: /shared
         bind:

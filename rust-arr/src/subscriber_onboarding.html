@@ -112,10 +112,10 @@
       <li>UI assets are included in the application image and update with the published container revision.</li>
       <li>Make the <code>rawrarr:local</code> image available on this computer. Confirm with <code>docker image inspect rawrarr:local</code>.</li>
       <li id="auth-key-instruction">For internal Tailscale, Compose contains the auth key; restrict the file to your user (for example, <code>chmod 600 compose.yaml</code>) and remove the key after the node joins. Headscale mode uses a separate local secret file.</li>
-      <li>Check the media path if you selected boneyard. Keep <code>/shared</code> on a separate Syncthing setup; it is not exposed as a Tailscale share.</li>
+      <li>Set <code>RAWARR_BONEYARD_DATA_PATH</code> to an existing, owner-selected host folder before running Compose. Rawrarr and Syncthing mount that same folder at <code>/evt/boneyard</code>; it is separate from the RPC data at <code>/evt/fossil</code>.</li>
       <li>In that folder run <code>docker compose config --quiet</code>, then <code>docker compose up -d</code>.</li>
       <li>Return to roarlay’s Fossils page and approve the pending node. Select the approved node there to continue setup. Direct <code>http://localhost:7297</code> sign-in requires a passkey registered for that localhost origin. Keep the age ID and encrypted user signing-key backup with you; do not put either in Compose.</li>
-      <li>Set up and verify a separate Syncthing peer before expecting <code>/shared</code> to replicate to another node. This file starts a standalone local volume; it does not join or share a Syncthing folder.</li>
+      <li>Set up the Syncthing companion with the same <code>RAWARR_BONEYARD_DATA_PATH</code>. Configure its folder at <code>/evt/boneyard</code> and verify an approved peer before expecting boneyard files to replicate. The generated Rawrarr Compose file does not add a Syncthing peer.</li>
     </ol>
   </section>
 </main>
