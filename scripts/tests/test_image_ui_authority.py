@@ -28,7 +28,9 @@ class ImageUiAuthorityTests(unittest.TestCase):
         image_workflow = self.read(".github/workflows/publish-container.yml")
         self.assertNotIn("Publish private UI bundle", tests_workflow)
         self.assertNotIn("package_ui_bundle", tests_workflow)
-        self.assertIn("- 'rust-arr/**'", image_workflow)
+        self.assertIn("context: rust-arr", image_workflow)
+        self.assertIn("workflows: [Tests]", image_workflow)
+        self.assertIn("types: [completed]", image_workflow)
 
     def test_coordinator_compose_no_longer_requires_a_ui_github_token(self):
         compose = self.read("deploy/do3/docker-compose.internal-coordinator.yml")
