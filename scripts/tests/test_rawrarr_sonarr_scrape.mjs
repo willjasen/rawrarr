@@ -13,7 +13,7 @@ const [main, sonarr, config, workspace, workspaceScript] = await Promise.all([
 ]);
 
 test('Sonarr metadata scraping starts on metadata nodes and repeats after six hours', () => {
-  assert.match(main, /if role == node_role::NodeRole::Metadata\s*\{[\s\S]*?tokio::spawn\(run_metadata_sonarr_backfill/);
+  assert.match(main, /if role\.supports_metadata\(\)\s*\{[\s\S]*?tokio::spawn\(run_metadata_sonarr_backfill/);
   assert.match(main, /async fn run_metadata_sonarr_backfill[\s\S]*?wait_for_sonarr_backfill\(&state, Duration::from_secs\(10\)\)/);
   assert.match(main, /wait_for_sonarr_backfill\(&state, Duration::from_secs\(6 \* 60 \* 60\)\)/);
   assert.match(main, /sonarr_scrape_notify\.notified\(\)/);

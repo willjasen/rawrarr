@@ -5,6 +5,9 @@ import test from 'node:test';
 import { chromium } from '/usr/local/lib/node_modules/playwright-core/index.mjs';
 
 const root = new URL('../../', import.meta.url);
+const workspaceScript = await readFile(new URL('rust-arr/src/coordinator-workspace.mjs', root), 'utf8');
+const walletVisibility = workspaceScript.split('\n').find(line => line.includes("getElementById('crypto-wallet-link-form').hidden"));
+assert.ok(walletVisibility, 'wallet form visibility is driven by account wallet data');
 const workspaceHtml = await readFile(new URL('rust-arr/src/coordinator_workspace.html', root), 'utf8');
 const pageHtml = workspaceHtml.replace(
   '<script type="module" src="/assets/coordinator-workspace.mjs"></script>',
@@ -78,6 +81,12 @@ test('Settings places profile, Ethereum/ENS, and age-ID cards responsively', asy
       } else {
         assert.ok(geometry.crypto.y > geometry.profile.y, 'ETH/ENS card should stack below the profile on mobile');
         assert.ok(geometry.age.y > geometry.crypto.y, 'age-ID card should stack below ETH/ENS on mobile');
+      }
+      for (const wallets of [[{ ensName: 'a-long-linked-wallet-name.eth' }], []]) {
+        await page.evaluate(({ code, wallets }) => { new Function('wallet', code)({ wallets }); }, { code: walletVisibility, wallets });
+        assert.equal(await crypto.locator('#crypto-link-wallet').isVisible(), wallets.length === 0);
+        assert.equal(await crypto.locator('#crypto-ens-name').isVisible(), wallets.length === 0);
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
       }
       await page.close();
     }

@@ -84,9 +84,8 @@
   <section class="step" id="deploy-step" aria-labelledby="deploy-title" hidden>
     <div class="step-summary"><p><strong>Node Compose setup</strong> · <span id="deploy-summary"></span></p><button type="button" class="secondary" data-reopen="deploy-step">Edit</button></div>
     <h2 id="deploy-title">Set up a node on your own computer</h2>
-    <p>Choose a fossil node for Radarr/Sonarr and encrypted library data, or a boneyard node when this computer has media files. Your account uses the existing roarlay; this installer offers no roarlay or coordinator role.</p>
-    <label for="node-role">Node type</label>
-    <select id="node-role"><option value="metadata">Fossil (metadata)</option><option value="storage">Boneyard (storage)</option></select>
+    <p>Set up one fossil node for metadata. If this computer also stores media, enable boneyard storage on the same fossil; it remains one enrolled node and one container.</p>
+    <label class="check"><input id="node-role" type="checkbox" value="storage">Enable boneyard media storage on this fossil</label>
     <label for="device-name">Device name</label>
     <input id="device-name" type="text" maxlength="64" autocomplete="off" value="My fossil node" aria-describedby="device-name-help">
     <p id="device-name-help">This name appears in the approval request and Fossils list. You can change it later.</p>

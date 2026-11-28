@@ -313,6 +313,7 @@ async function loadProfile() {
     accessStatus.textContent = access.tier === 'free'
       ? `Free tier · ${access.fossilNodes} of ${access.fossilNodeLimit} fossil nodes`
       : `${access.tier[0].toUpperCase()}${access.tier.slice(1)} tier${access.paidThrough ? ` · paid through ${new Date(access.paidThrough).toLocaleDateString()}` : ''}`;
+    document.getElementById('crypto-wallet-link-form').hidden = Boolean(wallet.wallets?.length);
     const walletName = wallet.wallets?.[0]?.ensName;
     walletStatus.textContent = walletName ? `Linked wallet · ${walletName}` : 'No ENS wallet linked';
     if (walletName) document.getElementById('crypto-ens-name').value = walletName;
@@ -2511,7 +2512,12 @@ function renderNodes(nodes, healthByNode, configPeerStatusByNode, configNode, se
         merkleBadge.setAttribute('aria-label', detail.textContent ? `${label.textContent}; ${detail.textContent}.` : `${label.textContent}.`);
         card.append(merkleBadge);
       }
-      if (node.role === 'storage') {
+      if (node.role === 'storage' || node.role === 'metadata') {
+        const storageDetails = document.createElement('details');
+        storageDetails.className = 'boneyard-storage-details';
+        const storageSummary = document.createElement('summary');
+        storageSummary.textContent = 'Boneyard media storage';
+        storageDetails.append(storageSummary);
         const scanActions = document.createElement('div');
         scanActions.className = 'storage-scan-actions';
         const actions = [
@@ -2632,7 +2638,8 @@ function renderNodes(nodes, healthByNode, configPeerStatusByNode, configNode, se
           event.stopPropagation();
           void saveStorageSchedule(node, scheduleForm, scheduleSummary, saveScheduleButton, scanMessage);
         });
-        card.append(scanActions, scanStatus, scheduleForm);
+        storageDetails.append(scanActions, scanStatus, scheduleForm);
+        card.append(storageDetails);
         void refreshStorageSchedule(node, scheduleForm, scheduleSummary, scanMessage);
       }
       card.append(editButton);

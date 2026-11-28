@@ -9,7 +9,7 @@ test('subscriber Compose offers fossil and boneyard with anonymous GHCR pulls an
   for (const role of ['metadata', 'storage']) {
     const yaml = subscriberCompose({ ...base, role, mediaPath: '/srv/media' });
     assert.doesNotMatch(yaml, /^\s*ports\s*:/m, `${role} subscriber Compose must not publish any container port to the host`);
-    assert.match(yaml, new RegExp(`RAWARR_ROLE: ${role}`));
+    assert.match(yaml, /RAWARR_ROLE: metadata/);
     assert.match(yaml, /network_mode: service:tailscale/);
     assert.match(yaml, /TS_AUTHKEY: "tskey-auth-test-fixture"/);
     assert.doesNotMatch(yaml, /tailscale-authkey/);
@@ -20,7 +20,7 @@ test('subscriber Compose offers fossil and boneyard with anonymous GHCR pulls an
     assert.doesNotMatch(yaml, /read:packages|docker login|GHCR_TOKEN|GitHub token/i);
     assert.doesNotMatch(yaml, /rawrarr:local/);
     assert.doesNotMatch(yaml, /RAWARR_UI_GITHUB_TOKEN|rawrarr_ui_github_token/);
-    assert.match(yaml, new RegExp(`TS_HOSTNAME: rawrarr-my-${role === 'storage' ? 'boneyard' : 'fossil'}-node`));
+    assert.match(yaml, /TS_HOSTNAME: rawrarr-my-fossil-node/);
     assert.match(yaml, /tailscale-state:\/var\/lib\/tailscale/);
     assert.match(yaml, /rawrarr-data:\/local/);
     assert.match(yaml, /rawrarr-evt:\/evt/);
@@ -37,15 +37,16 @@ test('subscriber Compose offers fossil and boneyard with anonymous GHCR pulls an
     assert.doesNotMatch(yaml, /AGE-SECRET|PRIVATE KEY|encryptedBackup|password/i);
   }
   const boneyard = subscriberCompose({ ...base, role: 'storage', mediaPath: '/srv/media' });
-  assert.match(boneyard, /  boneyard:\n/);
+  assert.match(boneyard, /  fossil:\n/);
   assert.match(boneyard, /source: "\/srv\/media"[\s\S]*read_only: true/);
   assert.match(subscriberCompose({ ...base, role: 'metadata' }), /  fossil:\n/);
   assert.doesNotMatch(subscriberCompose({ ...base, role: 'metadata' }), /target: \/media/);
-  assert.throws(() => subscriberCompose({ ...base, role: 'coordinator' }), /Only fossil and boneyard/);
-  assert.throws(() => subscriberCompose({ ...base, role: 'storage' }), /media folder/);
+  assert.throws(() => subscriberCompose({ ...base, role: 'coordinator' }), /Choose fossil with optional media storage/);
   assert.throws(() => subscriberCompose({ ...base, role: 'storage', mediaPath: '../media' }), /media folder/);
   assert.throws(() => subscriberCompose({ ...base, role: 'metadata', coordinatorUrl: 'https://rawrarr.example.test/path' }), /HTTPS origin/);
   assert.match(subscriberCompose({ ...base, role: 'storage', mediaPath: 'C:/Media' }), /source: "C:\/Media"/);
+  assert.match(subscriberCompose({ ...base, mediaPath: '/srv/media' }), /RAWARR_ROLE: metadata[\s\S]*RAWARR_LIBRARY_PATH: \/media/);
+  assert.match(subscriberCompose({ ...base, mediaPath: '/srv/media' }), /  fossil:[\s\S]*source: "\/srv\/media"[\s\S]*read_only: true/);
   assert.match(subscriberCompose({ ...base, role: 'metadata', deviceName: 'Office fossil' }), /RAWARR_DEVICE_NAME: "Office fossil"/);
   assert.throws(() => subscriberCompose({ ...base, role: 'metadata', deviceName: '   ' }), /device name/);
   assert.throws(() => subscriberCompose({ ...base, role: 'metadata', deviceName: 'x'.repeat(65) }), /device name/);
@@ -59,7 +60,7 @@ test('generated node IDs use the fossil prefix', () => {
     readFile(new URL('../../rust-arr/src/assets/subscriber-onboarding.js', import.meta.url), 'utf8'),
   ]).then(([source, bundle]) => {
     assert.match(source, /const nodeId = `fossil-/);
-    assert.match(bundle, /g0=`fossil-/);
+    assert.match(bundle, /`fossil-/);
     assert.match(bundle, /\^fossil-\[0-9a-f\]\{24\}\$/);
   });
 });

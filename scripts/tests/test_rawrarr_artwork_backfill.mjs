@@ -6,7 +6,7 @@ const ui = await readFile(new URL('../../rust-arr/src/ui.html', import.meta.url)
 const source = await readFile(new URL('../../rust-arr/src/main.rs', import.meta.url), 'utf8');
 
 test('metadata nodes backfill one uncached Radarr poster at a time', () => {
-  assert.match(source, /if role == node_role::NodeRole::Metadata\s*\{\s*tokio::spawn\(run_metadata_artwork_backfill/);
+  assert.match(source, /if role\.supports_metadata\(\)\s*\{\s*tokio::spawn\(run_metadata_artwork_backfill/);
   assert.match(source, /movie\.poster_url\.is_some\(\) && movie\.artwork_source\.as_deref\(\) == Some\("radarr"\)/);
   assert.match(source, /let total = movies\.iter\(\)\.filter\(\|movie\| movie\.poster_url\.is_some\(\)\)\.count\(\)/);
   assert.match(source, /let cached = vault\.as_ref\(\)\.is_some_and\(\|vault\| vault\.artwork_exists\(tmdb_id\)\)/);

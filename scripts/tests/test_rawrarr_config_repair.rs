@@ -97,15 +97,44 @@ fn peer_status_exposes_successfully_reached_tailnet_peers() {
 #[test]
 fn repaired_config_is_written_as_exact_private_ciphertext() {
     let root=std::env::temp_dir().join(format!("rawrarr-config-repair-{}",uuid::Uuid::new_v4().simple()));
-    let path=root.join("shared").join("config.aged");
+    std::fs::create_dir_all(root.join("shared")).unwrap();
+    let shared=std::fs::canonicalize(root.join("shared")).unwrap();
+    let path=shared.join("config.aged");
     let ciphertext=b"age-encryption.org/v1\nopaque-ciphertext";
-    write_active_ciphertext(&path,ciphertext).unwrap();
+    write_active_ciphertext(&path,ciphertext, &shared).unwrap();
     assert_eq!(std::fs::read(&path).unwrap(),ciphertext);
     #[cfg(unix)] {
         use std::os::unix::fs::PermissionsExt;
         assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,0o600);
     }
     std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn config_repair_rejects_paths_outside_the_configured_shared_root() {
+    let root=std::env::temp_dir().join(format!("rawrarr-config-repair-root-{}",uuid::Uuid::new_v4().simple()));
+    let outside=std::env::temp_dir().join(format!("rawrarr-config-repair-outside-{}",uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    let error=write_active_ciphertext(&outside.join("config.aged"), b"age-encryption.org/v1\nopaque", &root).unwrap_err();
+    assert_eq!(error.kind(),std::io::ErrorKind::PermissionDenied);
+    assert!(!outside.join("config.aged").exists());
+    std::fs::remove_dir_all(root).unwrap();
+    std::fs::remove_dir_all(outside).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn config_repair_rejects_symlinked_parent_components() {
+    use std::os::unix::fs::symlink;
+    let root=std::env::temp_dir().join(format!("rawrarr-config-repair-link-{}",uuid::Uuid::new_v4().simple()));
+    let outside=std::env::temp_dir().join(format!("rawrarr-config-repair-target-{}",uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&root).unwrap(); std::fs::create_dir_all(&outside).unwrap();
+    symlink(&outside,root.join("link")).unwrap();
+    let error=write_active_ciphertext(&root.join("link").join("config.aged"), b"age-encryption.org/v1\nopaque", &root).unwrap_err();
+    assert_eq!(error.kind(),std::io::ErrorKind::PermissionDenied);
+    assert!(!outside.join("config.aged").exists());
+    std::fs::remove_dir_all(root).unwrap(); std::fs::remove_dir_all(outside).unwrap();
 }
 
 #[cfg(unix)]

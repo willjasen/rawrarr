@@ -118,3 +118,27 @@ fn storage_counts_nested_files_and_propagates_read_errors() {
     assert!(crate::directory_size(&root.join("movies/text/movie.aged")).is_err());
     fs::remove_dir_all(root).unwrap();
 }
+
+#[cfg(unix)]
+#[test]
+fn storage_size_scan_does_not_follow_symlinks() {
+    let root=fixture_root("symlink-size");
+    let outside=fixture_root("symlink-size-outside");
+    fs::create_dir_all(&root).unwrap(); fs::create_dir_all(&outside).unwrap();
+    fs::write(outside.join("secret.aged"), b"outside").unwrap();
+    std::os::unix::fs::symlink(&outside,root.join("linked")).unwrap();
+    assert_eq!(crate::directory_size(&root).unwrap(),0);
+    fs::remove_dir_all(root).unwrap(); fs::remove_dir_all(outside).unwrap();
+}
+
+#[test]
+fn storage_size_scan_rejects_excessive_directory_depth() {
+    let root=fixture_root("deep");
+    let mut current=root.clone();
+    for _ in 0..=crate::MAX_METADATA_SCAN_DEPTH {
+        current.push("nested");
+    }
+    fs::create_dir_all(&current).unwrap();
+    assert!(crate::directory_size(&root).is_err());
+    fs::remove_dir_all(root).unwrap();
+}
