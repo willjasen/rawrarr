@@ -2130,7 +2130,7 @@ fn claim_webrtc_offer(
     node_id: &str,
 ) -> Option<WebRtcOfferForNode> {
     let session_id = signals.iter()
-        .filter(|(_, signal)| signal.node_id == node_id && !signal.claimed)
+        .filter(|(_, signal)| signal.node_id == node_id && !signal.claimed && signal.created_at.elapsed() < WEBRTC_SIGNAL_TTL)
         .min_by_key(|(_, signal)| signal.created_at)
         .map(|(session_id, _)| *session_id)?;
     let signal = signals.get_mut(&session_id)?;

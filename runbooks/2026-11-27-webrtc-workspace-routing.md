@@ -66,3 +66,12 @@ it must retain coordinator fallback for mixed-version nodes and clients.
 Rollback removes the new routes and in-memory state while keeping current
 direct Tailscale and coordinator paths available. Do not deploy before issue
 #495's security review and qualification checks pass.
+
+## Continued signaling review
+
+Offer pickup now checks expiry at the claim boundary itself, rather than relying
+on its caller to prune first. Added a regression case for an expired offer with
+no cleanup pass. This closes a stale-offer acceptance path for future polling
+callers. Node peer worker and browser integration remain pending. No persistent
+state or migration impact. Verification: diff whitespace check passed; the new
+Rust regression has not yet been executed.

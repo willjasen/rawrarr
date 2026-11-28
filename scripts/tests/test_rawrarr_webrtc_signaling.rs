@@ -65,3 +65,19 @@ fn signaling_offers_are_node_scoped_one_time_and_expire() {
     prune_webrtc_signals(&mut signals);
     assert!(!signals.contains_key(&old_id));
 }
+
+#[test]
+fn signaling_expired_offer_cannot_be_claimed_without_a_cleanup_pass() {
+    let mut signals = HashMap::new();
+    let id = Uuid::new_v4();
+    signals.insert(id, WebRtcSignal {
+        owner_user_id: Uuid::new_v4(),
+        node_id: "metadata-a".to_owned(),
+        offer_sdp: SDP.to_owned(),
+        answer_sdp: None,
+        created_at: Instant::now() - WEBRTC_SIGNAL_TTL - Duration::from_secs(1),
+        claimed: false,
+    });
+    assert!(claim_webrtc_offer(&mut signals, "metadata-a").is_none());
+    assert!(!signals[&id].claimed);
+}
