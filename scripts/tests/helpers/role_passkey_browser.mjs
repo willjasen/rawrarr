@@ -50,9 +50,9 @@ try {
   const lines = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
   for await (const command of lines) {
     if (command === 'quit') break;
-    const grantMatch = /^(grant|wrong-target) ([a-z0-9-]+) ([a-f0-9]{64})$/.exec(command);
+    const grantMatch = /^(grant|wrong-target) ([a-z0-9-]+) ([a-f0-9]{64})(?: ([a-z0-9-]+))?$/.exec(command);
     if (grantMatch) {
-      const [_, action, nodeId, sessionToken] = grantMatch;
+      const [_, action, nodeId, sessionToken, appType = 'radarr'] = grantMatch;
       const recipientResponse = await fetch('http://127.0.0.1:8080/api/metadata/export/node-recipient', {
         cache: 'no-store', headers: { Cookie: `rawrarr_session=${sessionToken}` },
       });
@@ -60,7 +60,7 @@ try {
       const deviceRecipient = (await recipientResponse.text()).trim();
       let appIdentity = await generateHybridIdentity();
       const appRecipient = await identityToRecipient(appIdentity);
-      const appInstanceId = 'a762f7d8-cad2-41e2-a2ab-3e79e99181da';
+      const appInstanceId = crypto.randomUUID();
       const envelopeWriter = new Encrypter();
       envelopeWriter.addRecipient(deviceRecipient);
       const envelope = new Uint8Array(await envelopeWriter.encrypt(encoder.encode(appIdentity)));
@@ -73,7 +73,7 @@ try {
       const secretKey = fromBase64(root.secretKey);
       const signedPayload = {
         domain: 'rawrarr-app-key-grant-v1', schemaVersion: 1, appInstanceId,
-        appType: 'radarr', appRecipient, deviceId: nodeId, deviceRecipient,
+        appType, appRecipient, deviceId: nodeId, deviceRecipient,
         keyEpoch: 1, encryptedIdentitySha256: digest,
       };
       const signature = ml_dsa65.sign(encoder.encode(canonicalJson(signedPayload)), secretKey);
@@ -93,7 +93,7 @@ try {
       const expectedStatuses = action === 'grant' ? [201, 204] : [403, 403];
       assert.deepEqual([firstStatus, retryStatus], expectedStatuses);
       if (action === 'grant') {
-        console.log(`GRANT ${appInstanceId} ${deviceRecipient} ${toBase64(encoder.encode(appIdentity))} ${toBase64(grantBytes)} ${firstStatus} ${retryStatus}`);
+        console.log(`GRANT ${appType} ${appInstanceId} ${deviceRecipient} ${toBase64(encoder.encode(appIdentity))} ${toBase64(grantBytes)} ${firstStatus} ${retryStatus}`);
       } else {
         console.log(`WRONG_TARGET ${nodeId} ${firstStatus} ${retryStatus}`);
       }

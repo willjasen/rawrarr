@@ -253,29 +253,44 @@ def main():
             storage_sql = f"INSERT INTO rawrarr_sessions(token_hash,user_id,expires_at,node_id) VALUES(decode('{storage_digest}','hex'),'{user_id}'::uuid,now()+interval '5 minutes','storage-test')"
             docker('exec', '-i', postgres, 'psql', '-U', 'rawrarr', '-d', 'rawrarr_test', '-v', 'ON_ERROR_STOP=1', input=storage_sql)
 
-            helper.stdin.write('grant metadata-test ' + session + '\n')
-            helper.stdin.flush()
-            raw_grant_line = helper.stdout.readline().strip()
-            grant_line = raw_grant_line.split()
-            if len(grant_line) != 7 or grant_line[0] != 'GRANT':
-                detail = helper.stderr.read()[-1600:] if helper.poll() is not None else ''
-                raise RuntimeError('owner grant fixture failed: ' + ' '.join(grant_line[:2]) + ('; ' + detail if detail else ''))
-            _, app_instance_id, device_recipient, app_identity_b64, grant_bundle_b64, first_status, retry_status = grant_line
-            assert (first_status, retry_status) == ('201', '204'), 'grant submission or identical retry was not accepted idempotently'
-            app_identity = base64.b64decode(app_identity_b64)
-            grant_bundle = base64.b64decode(grant_bundle_b64)
-            parsed_grant = json.loads(grant_bundle)
-            assert parsed_grant['signedPayload']['deviceId'] == 'metadata-test'
-            assert parsed_grant['signedPayload']['deviceRecipient'] == device_recipient
-            assert app_identity not in grant_bundle, 'coordinator request bundle exposed the plaintext app identity'
-            stored_bundle_hex = docker('exec', postgres, 'psql', '-U', 'rawrarr', '-d', 'rawrarr_test', '-Atc',
-                "SELECT encode(bundle,'hex') FROM rawrarr_app_key_grants WHERE app_instance_id='" + app_instance_id + "' AND device_id='metadata-test'").stdout.strip()
-            stored_bundle = bytes.fromhex(stored_bundle_hex)
-            assert stored_bundle == grant_bundle, 'coordinator did not preserve the grant bytes exactly'
-            assert app_identity not in stored_bundle, 'coordinator database contains the plaintext app identity'
-            encrypted_identity = base64.b64decode(parsed_grant['encryptedIdentity'])
-            assert app_identity not in encrypted_identity, 'device envelope contains plaintext app identity'
-            print('PASS owner-signed grant submission, byte-exact storage, idempotent retry, and ciphertext-only database contents')
+            app_types = ('radarr', 'sonarr', 'lidarr', 'prowlarr', 'duplicati')
+            grants = []
+            for app_type in app_types:
+                helper.stdin.write(f'grant metadata-test {session} {app_type}\n')
+                helper.stdin.flush()
+                grant_line = helper.stdout.readline().strip().split()
+                if len(grant_line) != 8 or grant_line[0] != 'GRANT':
+                    detail = helper.stderr.read()[-1600:] if helper.poll() is not None else ''
+                    raise RuntimeError('owner grant fixture failed: ' + ' '.join(grant_line[:2]) + ('; ' + detail if detail else ''))
+                _, actual_type, app_instance_id, device_recipient, app_identity_b64, grant_bundle_b64, first_status, retry_status = grant_line
+                assert actual_type == app_type, f'grant helper changed app type {app_type!r} to {actual_type!r}'
+                assert (first_status, retry_status) == ('201', '204'), f'{app_type} grant submission or identical retry was not accepted idempotently'
+                app_identity = base64.b64decode(app_identity_b64)
+                grant_bundle = base64.b64decode(grant_bundle_b64)
+                parsed_grant = json.loads(grant_bundle)
+                assert parsed_grant['signedPayload']['appType'] == app_type
+                assert parsed_grant['signedPayload']['deviceId'] == 'metadata-test'
+                assert parsed_grant['signedPayload']['deviceRecipient'] == device_recipient
+                assert app_identity not in grant_bundle, f'{app_type} request bundle exposed the plaintext app identity'
+                stored_bundle_hex = docker('exec', postgres, 'psql', '-U', 'rawrarr', '-d', 'rawrarr_test', '-Atc',
+                    "SELECT encode(bundle,'hex') FROM rawrarr_app_key_grants WHERE app_instance_id='" + app_instance_id + "' AND device_id='metadata-test'").stdout.strip()
+                stored_bundle = bytes.fromhex(stored_bundle_hex)
+                assert stored_bundle == grant_bundle, f'{app_type} grant was not preserved byte-for-byte'
+                assert app_identity not in stored_bundle, f'coordinator database contains the plaintext {app_type} identity'
+                encrypted_identity = base64.b64decode(parsed_grant['encryptedIdentity'])
+                assert app_identity not in encrypted_identity, f'{app_type} device envelope contains plaintext identity'
+                grants.append({
+                    'type': app_type,
+                    'app_instance_id': app_instance_id,
+                    'device_recipient': device_recipient,
+                    'app_identity': app_identity,
+                    'bundle': grant_bundle,
+                })
+            assert {grant['type'] for grant in grants} == set(app_types)
+            app_instance_id = grants[0]['app_instance_id']
+            device_recipient = grants[0]['device_recipient']
+            grant_bundle = grants[0]['bundle']
+            print('PASS app-type-neutral signed grants for Radarr, Sonarr, Lidarr, Prowlarr, and Duplicati; retries are idempotent and every stored bundle is ciphertext-only and byte-exact')
 
             anonymous_status, _ = request(f'http://127.0.0.1:{coordinator_port}', '/api/nodes/app-key-grants', 'POST',
                 {'appInstanceId': app_instance_id, 'recipient': device_recipient})
@@ -286,15 +301,17 @@ def main():
             wrong_instance_status, wrong_instance_body = node_grant_request(metadata, {
                 'appInstanceId': '00000000-0000-0000-0000-000000000000', 'recipient': device_recipient,
             }, session)
-            valid_status, retrieved_bundle = node_grant_request(metadata, {
-                'appInstanceId': app_instance_id, 'recipient': device_recipient,
-            }, session)
-            assert (wrong_recipient_status, wrong_instance_status, valid_status) == (404, 404, 200), (
+            assert (wrong_recipient_status, wrong_instance_status) == (404, 404), (
                 'grant routing denial or delivery status was incorrect: '
-                f'{wrong_recipient_status}/{wrong_instance_status}/{valid_status}; '
+                f'{wrong_recipient_status}/{wrong_instance_status}; '
                 f'bodies={wrong_recipient_body[:120]!r}/{wrong_instance_body[:120]!r}')
-            assert retrieved_bundle == grant_bundle, 'fossil did not receive the original grant bytes'
-            print('PASS signed fossil retrieval, recipient and cross-instance denial, anonymous denial, and exact delivery')
+            for grant in grants:
+                valid_status, retrieved_bundle = node_grant_request(metadata, {
+                    'appInstanceId': grant['app_instance_id'], 'recipient': grant['device_recipient'],
+                }, session)
+                assert valid_status == 200 and retrieved_bundle == grant['bundle'], (
+                    f"{grant['type']} fossil retrieval did not return the original grant bytes")
+            print('PASS signed retrieval delivers each app type byte-exactly; recipient, cross-instance, and anonymous requests are denied')
 
             helper.stdin.write('wrong-target storage-test ' + session + '\n')
             helper.stdin.flush()
@@ -315,11 +332,12 @@ def main():
                 assert revoked == ['REVOKED', 'metadata-test', '204'], 'approved fossil revocation failed'
                 remaining_grants = docker('exec', postgres, 'psql', '-U', 'rawrarr', '-d', 'rawrarr_test', '-Atc',
                     "SELECT count(*) FROM rawrarr_app_key_grants WHERE device_id='metadata-test'").stdout.strip()
-                revoked_status, _ = node_grant_request(metadata, {
-                    'appInstanceId': app_instance_id, 'recipient': device_recipient,
-                }, session)
-                assert remaining_grants == '0' and revoked_status == 401, 'revoked fossil retained or retrieved its grant'
-                print('PASS fossil revocation removes stored grants and blocks further retrieval')
+                revoked_statuses = [node_grant_request(metadata, {
+                    'appInstanceId': grant['app_instance_id'], 'recipient': grant['device_recipient'],
+                }, session)[0] for grant in grants]
+                assert remaining_grants == '0' and revoked_statuses == [401] * len(grants), (
+                    'revoked fossil retained or retrieved one or more app-type grants')
+                print('PASS fossil revocation removes every app-type grant and blocks subsequent retrieval')
                 return 0
 
             config_mode = 'metadata-age' if args.age_unlock_only else 'metadata'
