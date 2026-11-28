@@ -21,4 +21,8 @@ This static route change does not affect persistent state, database schemas, sub
 
 ## Final state
 
-The focused favicon regression passed in the isolated Chromium test container (3 tests, 0 failures). The first direct invocation lacked the test runner's Playwright module alias and failed during module resolution; adding the same alias the runner normally creates allowed the test to pass. The temporary container was removed. The public service has not been changed; verify the published coordinator image's favicon responses after deployment. Issue #512 remains open until the live routes return the expected image content types without authentication.
+The focused favicon regression passed in the isolated Chromium test container (3 tests, 0 failures). The first direct invocation lacked the test runner's Playwright module alias and failed during module resolution; adding the same alias the runner normally creates allowed the test to pass. The temporary container was removed.
+
+GitHub Actions publish run [46091210620](https://github.com/willjasen/rawrarr/actions/runs/46091210620) completed successfully for both architectures. The do3 published-image updater deployed revision `6ec609ddc8b451307026c8c857c1ed47fef5fd1b` to the public and internal coordinators. Both containers report healthy and `/api/version` reports the deployed revision; the updater finished inactive and released both deployment locks. No application data or service configuration changed.
+
+Live public verification: `/auth` returns HTTP 200; `/assets/rawrarr-favicon.svg` returns HTTP 200 with `image/svg+xml`; `/favicon.ico` returns HTTP 200 with `image/x-icon`; and `/health` returns HTTP 200. Issue #512 is resolved and can be closed.
