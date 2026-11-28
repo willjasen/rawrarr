@@ -84,7 +84,8 @@ for fixture in \
     test_rawrarr_sonarr_metadata.rs \
     test_rawrarr_config_schema.rs \
     test_rawrarr_storage_node.rs \
-    test_rawrarr_webrtc_direct.rs; do
+    test_rawrarr_webrtc_direct.rs \
+    test_rawrarr_webrtc_signaling.rs; do
     if [ ! -f "/workspace/scripts/tests/$fixture" ]; then
         echo "ERROR: required Rust test fixture was not copied into the test clone: $fixture" >&2
         exit 1
