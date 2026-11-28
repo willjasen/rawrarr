@@ -48,6 +48,10 @@ test('Rawrarr image compiles locked dependencies before copying application sour
     'dependency artifacts must be part of the cached image layer, not an ephemeral cache mount');
   assert.match(dockerfile, /--mount=type=cache,target=\/usr\/local\/cargo\/registry,sharing=locked/);
   assert.match(dockerfile, /--mount=type=cache,target=\/usr\/local\/cargo\/git\/db,sharing=locked/);
+  assert.match(dockerfile, /ARG SCCACHE_GHA_ENABLED=false/);
+  assert.match(dockerfile, /ARG RUSTC_WRAPPER=/);
+  assert.equal((dockerfile.match(/id=ACTIONS_RESULTS_URL,env=ACTIONS_RESULTS_URL,required=false/g) || []).length, 2);
+  assert.equal((dockerfile.match(/id=ACTIONS_RUNTIME_TOKEN,env=ACTIONS_RUNTIME_TOKEN,required=false/g) || []).length, 2);
   assert.match(dockerfile, /printf '%s\\n' 'fn main\(\) \{\}' > src\/main\.rs/);
 });
 
