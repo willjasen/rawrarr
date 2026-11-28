@@ -85,3 +85,10 @@ it does not yet sign, transmit, or verify a proof. Added regression coverage
 for changing each bound value and malformed/oversized inputs. Whitespace check
 passed; new Rust tests have not run. Worker, browser verification, routing,
 and end-to-end qualification remain pending. No deployment or state migration.
+
+## Merge verification
+
+Before publishing, the isolated linked clone passed all seven focused WebRTC
+checks (including stale offer and proof binding) and the node-auth proxy boundary
+check (1/1). Existing routing is unchanged. Full environment/browser routing is
+not qualified; #495 remains open. No deployment was performed.
