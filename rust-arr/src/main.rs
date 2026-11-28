@@ -3001,6 +3001,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let protected = Router::new()
         .route("/api/auth/logout", post(logout))
+        .route("/api/auth/app-key-grants", post(node_auth::proxy))
         .route("/api/events", get(dashboard_events))
         .route("/api/library", get(library_info))
         .route("/api/devices", get(list_devices))
