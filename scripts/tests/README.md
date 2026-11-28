@@ -8,6 +8,8 @@
 - `test_rawrarr_subscriber_compose.mjs` — checks subscriber role Compose generation, `/local` and `/evt` mounts with legacy `/shared` compatibility, fossil-prefixed generated IDs, and anonymous public GHCR pulls without GitHub credentials; run `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs` (Node.js 26 per `.nvmrc`).
 # Rawrarr tests
 
+- `test_rawrarr_security_headers.mjs` — checks that the Rust app applies its CSP and `X-Content-Type-Options` headers through common middleware. Run with `node --test scripts/tests/test_rawrarr_security_headers.mjs`.
+
 - `rayfish_standalone_docker.py --binary /path/to/rust-arr` -- runs a fresh
   `roarlay` coordinator, two signed nodes labeled `metadata-a` and `metadata-b`,
   and disposable support services (`mesh-owner`, `rayfish-coord`, `discovery`, `peer-a`,
@@ -199,10 +201,9 @@
   `python3 -m unittest discover -s scripts/tests -p test_browser_enrollment_docker.py`.
 
 - `test_compose_layout.py` — checks root Compose inventory coverage, separate
-  `/local`, `/evt`, and `/evt/boneyard` mounts, a memory-only Valkey cache,
-  Syncthing's separate legacy `/shared` and `/evt/boneyard` host binds, the absolute `deploy/testing/compose.yml`
-  integration entry point, explicit test project, rebased build context, and
-  colocated static fixtures. Run
+  `/local`, `/evt/fossil`, and `/evt/boneyard` mounts, memory-only Valkey, Syncthing
+  boneyard paths, the absolute `deploy/testing/compose.yml` integration entry point,
+  explicit test project, rebased build context, and colocated static fixtures. Run
   `python3 -m unittest discover -s scripts/tests -p test_compose_layout.py`.
 - `test_rawrarr_test_runner_fixtures.py` — checks that regression snapshots copy
   `deploy/`, including the relocated environment definition, as well as root
@@ -256,8 +257,8 @@
 - `secure_config::tests::node_signing_key_is_created_once_and_reused_separately_from_user_identity` and `invalid_existing_node_signing_key_is_not_replaced` — Subscriber ML-DSA-65 key creation, derivation stability across restarts, separation from the user's age identity, restrictive permissions, and fail-closed invalid-file behavior; run with `cargo test --locked --manifest-path rust-arr/Cargo.toml node_signing_key` in the Rust test environment.
 
 - `test_rawrarr_admin_preview.mjs` — checks that the admin preview is paused with no Docker build/launch definition, and that retained mockup source remains sample-only and has no production data connection. Run with `node --test scripts/tests/test_rawrarr_admin_preview.mjs`.
-- `test_rawrarr_subscriber_compose.mjs` — Validates subscriber fossil/boneyard Compose output, `/local` and `/evt` with legacy `/shared` compatibility, the pinned instance-root fingerprint, internal Tailscale coordinator URL and selected Headscale modes, secret-file auth, node-local Tailscale state, custom device names, and invalid network settings; run with `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs` using Node.js 26 per `.nvmrc`.
-- `test_rawrarr_subscriber_onboarding_browser.mjs` — Chromium checks that first passkey registration enters the age/signing-key setup flow, backup gates and private-key boundaries, explicit optional Compose setup, supported node/network choices, safe Compose generation/download, and the Devices continuation; run in the isolated test image.
+- `test_rawrarr_subscriber_compose.mjs` — Validates one fossil service with metadata role, `/local` and `/evt` plus legacy `/shared` compatibility, optional read-only boneyard media mount, the pinned instance-root fingerprint, internal Tailscale and Headscale modes, secret-file auth, node-local Tailscale state, custom device names, and invalid network settings; run with `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs` using Node.js 26 per `.nvmrc`.
+- `test_rawrarr_subscriber_onboarding_browser.mjs` — Chromium checks first passkey registration, age/signing-key backup gates, private-key boundaries, optional boneyard promotion on one fossil, safe Compose generation/download, and the Devices continuation; run in the isolated test image.
 - `coordinator::approved_node_registry_tests` — verifies a valid empty approved-node registry lets a new coordinator start without pre-provisioned devices while malformed registries still fail; run with the Rust unit suite.
 - `test_rawrarr_ai_chat.mjs` — checks browser-local movie filters, Movies-versus-TV disk usage shares, candid missing-data responses, and Rawr's gently playful answer style. Run `node --test scripts/tests/test_rawrarr_ai_chat.mjs`.
 
@@ -274,7 +275,7 @@
 - `test_rawrarr_arr_summary.mjs` — checks that Radarr and Sonarr use the shared configurable four-card summary renderer. Run with `node --test scripts/tests/test_rawrarr_arr_summary.mjs`.
 
 - `test_rawrarr_metadata_sizes.mjs` — checks the metadata API and Movies/TV cards report separate media-subtree sizes. Run with `node --test scripts/tests/test_rawrarr_metadata_sizes.mjs`.
-- `test_rawrarr_metadata_storage.rs` — verifies repeatable metadata initialization, compatibility copying into `/evt/fossil` without deleting sources or overwriting conflicts, encrypted writes through the container alias, invalid-directory rejection, and exact nested file-size/error reporting. Included in the isolated Rust suite through `secure_config::metadata_storage_tests`.
+- `test_rawrarr_metadata_storage.rs` — verifies repeatable fresh-volume metadata initialization, encrypted writes through the container alias, preservation of existing ciphertext, invalid-directory rejection, and exact nested file-size/error reporting. Included in the isolated Rust suite through `secure_config::metadata_storage_tests`.
 
 - `test_rawrarr_sonarr_completion_ui.mjs` — confirms Movies and TV use the shared provider-aware scrape status/progress updater, and that the TV view hides scrape completion and successful-load messages after the Sonarr artwork cache is complete while retaining errors. Run with `node --test scripts/tests/test_rawrarr_sonarr_completion_ui.mjs`.
 
@@ -334,7 +335,8 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 - `test_rawrarr_ai_chat.mjs` — local library answers for year, genre, and disk-size shares, plus split-frame OpenAI SSE parsing. Run `node --test scripts/tests/test_rawrarr_ai_chat.mjs`.
 
 - `test_rawrarr_filename_secret.rs` — Rust tests for random key generation, validation, encrypted persistence, legacy migration, peer consistency, Radarr update/removal preservation, and plaintext-mirror exclusion. Included in the isolated Rust suite.
-- `test_rawrarr_config_repair.rs` — validates bounded, symlink-safe ciphertext reads and private atomic writes, direct Tailscale HTTPS peer allowlists, pinned-root revision signatures, one-use challenge/request signatures, config and fossil-object Merkle roots, fixed `.aged` metadata paths, retained tombstones, self-excluding peer counts, verified freshness, and deterministic conflict ordering. Its two-node fossil RPC test launches isolated node processes in both directions against authorized mock peers and checks stale reconnect repair, encrypted object transfer, deterministic concurrent-edit conflict resolution, tombstone propagation, and idempotent retry. Included in the isolated Rust suite as `config_repair`; run focused with `cargo test --locked --offline --manifest-path rust-arr/Cargo.toml config_repair --no-fail-fast`.
+- `test_rawrarr_config_repair.rs` — validates bounded, symlink-safe ciphertext reads and private atomic writes, direct Tailscale HTTPS peer allowlists, pinned-root revision signatures, one-use challenge/request signatures, config and fossil-object Merkle roots, fixed fossil object paths, tombstones, self-excluding peer counts, verified freshness, and deterministic conflict ordering. Its two-node fossil RPC integration test launches isolated node processes in both directions against authorized mock peers and checks stale reconnect repair, encrypted object transfer, concurrent-edit conflict resolution, tombstone propagation, and idempotent retry. Included in the isolated Rust suite as `config_repair`; run focused with `cargo test --locked --offline --manifest-path rust-arr/Cargo.toml config_repair --no-fail-fast`.
+- `test_rawrarr_metadata_storage.rs` — verifies repeatable migration of legacy metadata into `/evt/fossil` without deleting sources or overwriting conflicts, encrypted writes through the container alias, invalid-directory rejection, and file-size/error reporting. Included in the isolated Rust suite as `secure_config::metadata_storage_tests`.
 - `test_rawrarr_config_schema.rs` — Rust tests for legacy flat config migration to schema v1, service-array persistence including optional encrypted Radarr UI credentials, and unsupported-version rejection. Included in the isolated Rust suite.
 - `test_rawrarr_hmac_metadata_filenames.rs` — checks domain-separated opaque movie filenames, byte-identical ciphertext migration, decryption after migration, and rejection of symlinked legacy files. Included in the isolated Rust suite.
 
@@ -344,7 +346,7 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 
 - `test_rawrarr_metadata_cache.rs` — vault-local ciphertext cache reuse, same-length replacement invalidation, missing files, identity isolation, and concurrent replacement safety. Run `cargo test metadata_cache`.
 
-- `test_setup_local_syncthing.py` — Sanitized local-review bootstrap tests: preserve API key and the legacy `/shared` folder, add `/evt/boneyard`, reject overlapping host paths, preserve idempotence, enable global discovery/public relays/NAT, and reject remote peers and unrelated folders. Run `python3 scripts/tests/test_setup_local_syncthing.py`; no Docker required.
+- `test_setup_local_syncthing.py` — Sanitized local-review bootstrap tests: preserve API key and legacy `/shared`, add `/evt/boneyard`, reject overlapping host paths, preserve idempotence, enable global discovery/public relays/NAT, and reject remote peers/unrelated folders. Run `python3 scripts/tests/test_setup_local_syncthing.py`; no Docker required.
 
 - `test_rawrarr_movie_snapshot.rs` — snapshot lifetime, empty libraries, shared client clones, replacement-client isolation, and direct Radarr poster records cached by TMDb ID. Run `cargo test movie_snapshot`. The responsiveness browser tests also cover immediate snapshot display and late-response ordering.
 
@@ -353,6 +355,7 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 - `test_rawrarr_sonarr_metadata.rs`: TVDB-domain-separated HMAC names and age-encrypted Sonarr metadata/artwork storage; run `cargo test sonarr_metadata` in the isolated test image.
 - `secure_config::tests::encrypted_config_and_artwork_are_shareable_age_ciphertexts` — encrypted 512 KiB artwork round-trip regression for large age subprocess pipe deadlocks; run `cargo test --locked --manifest-path rust-arr/Cargo.toml secure_config::tests::encrypted_config_and_artwork_are_shareable_age_ciphertexts -- --exact` in the isolated Rust test image.
 - `secure_config::tests::prepared_app_identities_are_group_encrypted_without_changing_config_or_metadata` and `malformed_prepared_app_identity_registry_is_not_replaced` — verify the additive group-encrypted Radarr/Sonarr identity registry, stable IDs, v1 config and metadata compatibility, deferred app-key activation, and fail-closed malformed-registry handling. Run `cargo test --locked --manifest-path rust-arr/Cargo.toml prepared` in the isolated Rust test image.
+- `secure_config::tests::staged_app_configuration_uses_only_its_app_identity` — verifies staged JSON config is written as ciphertext under `/shared/in/apps/<app-instance-id>/config.aged`, round-trips with the matching app identity, fails with a different app identity, and rejects invalid IDs/payloads. Run `cargo test --locked --manifest-path rust-arr/Cargo.toml staged_app_configuration` in the isolated Rust test image. This tests the crypto/storage primitive only; it does not establish app-key authorization or activate production replication.
 - `test_rawrarr_sonarr_scrape.mjs`: metadata-node Sonarr backfill startup, cache-first scraping, shared one-record-at-a-time low-rate scheduling across Radarr and Sonarr, immediate save notification, six-hour repeat, allowlisted TVDB artwork fallback, and TV metadata storage boundaries; run `node --test scripts/tests/test_rawrarr_sonarr_scrape.mjs`.
 - `test_rawrarr_arr_settings.rs`: encrypted cross-app save/clear isolation and filename-key preservation, including Lidarr; `cargo test arr_settings` (age required).
 - `age_vault_open_error_tests` in `rust-arr/src/main.rs` and `test_rawrarr_configuration.py` check that malformed user IDs, unavailable group identities/envelopes, node age-tool/storage failures, and encrypted-config failures receive distinct safe errors. Run the Rust tests in the isolated Rust image; run the API assertions with `python3 scripts/tests/test_rawrarr_role_deployment.py --apply --age-unlock-only`.
@@ -387,4 +390,4 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 - `test_rawrarr_coordinator_build_info.mjs` — checks the coordinator build revision/deployment-time endpoint and the workspace sidebar timestamp. Run with `node --test scripts/tests/test_rawrarr_coordinator_build_info.mjs`.
 - `test_do3_coordinator_auto_updater.py` — checks coordinator-path selection, exact-SHA anonymous GHCR image pulls and metadata validation, waits for published images to catch up with runtime changes, Compose timestamp overrides, protected analytics env-file wiring, single-service/no-pull deployment arguments, and that failed runs report an error and exit 1 instead of raising. Run with `python3 scripts/tests/test_do3_coordinator_auto_updater.py`.
 - `test_rawrarr_coordinator_build_info_playwright.mjs` — verifies the live coordinator timestamp endpoint rendering at 1280×800 and 375×812, including bottom-left placement and horizontal overflow. Run in the isolated Playwright test image.
-- `test_rawrarr_settings_crypto_card.mjs` — verifies the profile, Ethereum/ENS, and age-ID controls render in separate Settings cards, the ENS input starts blank without a personal-name placeholder, their actions remain available, and all three cards share a wide desktop row while fitting at desktop (1280×800) and narrow mobile (375×812) widths. Run in the isolated Playwright test image.
+- `test_rawrarr_settings_crypto_card.mjs` — verifies the profile, Ethereum/ENS, and age-ID controls render in separate Settings cards, the ENS input starts blank without a personal-name placeholder, wallet linking controls hide for linked accounts and return for unlinked accounts, their other actions remain available, and all three cards share a wide desktop row while fitting at desktop (1280×800) and narrow mobile (375×812) widths. Run in the isolated Playwright test image.
