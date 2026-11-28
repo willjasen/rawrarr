@@ -7,8 +7,9 @@ import { chromium } from 'playwright';
 const root = new URL('../../', import.meta.url);
 const read = path => readFile(new URL(path, root));
 const readText = path => readFile(new URL(path, root), 'utf8');
-const [serverSource, svg, ico, htmlPages, healthHtml] = await Promise.all([
+const [serverSource, coordinatorSource, svg, ico, htmlPages, healthHtml] = await Promise.all([
   readText('rust-arr/src/main.rs'),
+  readText('rust-arr/src/coordinator.rs'),
   readText('rust-arr/src/assets/rawrarr-favicon.svg'),
   read('rust-arr/src/assets/rawrarr-favicon.ico'),
   Promise.all([
@@ -36,6 +37,11 @@ test('SVG and /favicon.ico routes serve their matching formats with embedded fal
   assert.match(serverSource, /static_asset\(\s*"image\/x-icon",\s*ui_assets::bytes\("assets\/rawrarr-favicon\.ico",\s*include_bytes!\("assets\/rawrarr-favicon\.ico"\)\)/);
   assert.match(serverSource, /\.route\("\/assets\/rawrarr-favicon\.svg", get\(rawrarr_favicon\)\)/);
   assert.match(serverSource, /\.route\("\/favicon\.ico", get\(rawrarr_favicon_ico\)\)/);
+
+  const publicCoordinatorRoutes = coordinatorSource.match(/let public = Router::new\(\)([\s\S]*?)\.with_state\(state\.clone\(\)\);/)?.[1];
+  assert.ok(publicCoordinatorRoutes, 'coordinator exposes an unauthenticated public router');
+  assert.match(publicCoordinatorRoutes, /\.route\("\/assets\/rawrarr-favicon\.svg", get\(crate::rawrarr_favicon\)\)/);
+  assert.match(publicCoordinatorRoutes, /\.route\("\/favicon\.ico", get\(crate::rawrarr_favicon_ico\)\)/);
 
   assert.equal(ico.readUInt16LE(0), 0);
   assert.equal(ico.readUInt16LE(2), 1);
