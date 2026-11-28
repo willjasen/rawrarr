@@ -68,6 +68,56 @@ fn fossil_merkle_and_conflict_order_are_deterministic_and_keep_tombstones() {
 }
 
 #[test]
+fn app_config_revision_binds_app_epoch_grant_fence_and_tombstone() {
+    let root_key = SigningKey::<MlDsa65>::from_seed(&[91u8; 32].into());
+    let device_key = SigningKey::<MlDsa65>::from_seed(&[92u8; 32].into());
+    let root_public = root_key.verifying_key().encode().to_vec();
+    let device_public = device_key.verifying_key().encode().to_vec();
+    let root_fingerprint = crate::device_signing::fingerprint(&root_public);
+    let app_id = "11111111-1111-4111-8111-111111111111";
+    let grant_payload = serde_json::json!({
+        "domain":"rawrarr-app-key-grant-v1","schemaVersion":1,"appInstanceId":app_id,
+        "appType":"radarr","appRecipient":"age1pq1app","deviceId":"node-a",
+        "deviceRecipient":"age1pq1device","keyEpoch":4,"encryptedIdentitySha256":"a".repeat(64)
+    });
+    let grant_signature = root_key.sign(&crate::device_signing::canonical_json(&grant_payload).unwrap()).encode();
+    let proof = serde_json::json!({"algorithm":crate::device_signing::ALGORITHM,"rootPublicKey":BASE64.encode(&root_public),
+        "rootFingerprint":root_fingerprint,"signedPayload":grant_payload,"signature":BASE64.encode(grant_signature)});
+    let grant_proof = BASE64.encode(serde_json::to_vec(&proof).unwrap());
+    let fence_payload = serde_json::json!({"domain":"rawrarr-app-writer-fence-v1","schemaVersion":1,"appInstanceId":app_id,
+        "keyEpoch":4,"writerDeviceId":"node-a","fencingGeneration":7});
+    let fence_signature = root_key.sign(&crate::device_signing::canonical_json(&fence_payload).unwrap()).encode();
+    let fence = serde_json::json!({"rootPublicKey":BASE64.encode(&root_public),"rootFingerprint":root_fingerprint,
+        "signedPayload":fence_payload,"signature":BASE64.encode(fence_signature)});
+    let writer_fence = BASE64.encode(serde_json::to_vec(&fence).unwrap());
+    let signed_device_approval = serde_json::json!({"domain":"rawrarr-device-approval-v1","nodeId":"node-a","role":"metadata","publicKeyHex":encode_hex(&device_public)});
+    let device_approval_signature = root_key.sign(&crate::device_signing::canonical_json(&signed_device_approval).unwrap()).encode();
+    let certificate = serde_json::json!({"algorithm":"ML-DSA-65","rootPublicKey":BASE64.encode(&root_public),"rootFingerprint":root_fingerprint,
+        "nodeId":"node-a","role":"metadata","signingPublicKeyHex":encode_hex(&device_public),
+        "signingFingerprint":crate::device_signing::node_fingerprint(&device_public),"signedPayload":signed_device_approval,
+        "signature":BASE64.encode(device_approval_signature)});
+    let mut revision = AppConfigRevision { schema_version:1, root_fingerprint:root_fingerprint.clone(), app_instance_id:app_id.into(),
+        key_epoch:4, device_id:"node-a".into(), fencing_generation:7, revision_counter:1,
+        operation_id:"22222222-2222-4222-8222-222222222222".into(), operation:"delete".into(), ciphertext_digest:None,
+        grant_proof, writer_fence, certificate, signature:String::new() };
+    revision.signature = encode_hex(device_key.sign(&crate::device_signing::canonical_json(&revision.payload()).unwrap()).encode().as_ref());
+    assert!(revision.verify(&root_fingerprint));
+    assert_ne!(app_config_merkle_root(&[]), app_config_merkle_root(&[revision.clone()]));
+    let mut cross_app = revision.clone();
+    cross_app.app_instance_id = "33333333-3333-4333-8333-333333333333".into();
+    assert!(!cross_app.verify(&root_fingerprint), "owner grant is bound to one app instance");
+    let mut stale_epoch = revision.clone();
+    stale_epoch.key_epoch = 3;
+    assert!(!stale_epoch.verify(&root_fingerprint), "owner grant is bound to one key epoch");
+    let mut stale_fence = revision.clone();
+    stale_fence.fencing_generation = 8;
+    stale_fence.signature = encode_hex(device_key.sign(&crate::device_signing::canonical_json(&stale_fence.payload()).unwrap()).encode().as_ref());
+    assert!(!stale_fence.verify(&root_fingerprint), "a node cannot advance the owner-issued fencing generation");
+    revision.operation = "put".into();
+    assert!(!revision.verify(&root_fingerprint), "put revisions require a ciphertext digest");
+}
+
+#[test]
 fn peer_allowlist_requires_stable_ids_and_direct_tailnet_https_urls() {
     assert!(valid_peer_id("device-123abc"));
     assert!(!valid_peer_id("../device"));
