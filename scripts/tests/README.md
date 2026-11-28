@@ -5,7 +5,7 @@
 - `test_rawrarr_metadata_cache.rs` — verifies regular metadata caching, same-length replacement invalidation, and symlink rejection before decryption. Included in the isolated Rust suite as `metadata_cache`.
 
 - `test_rawrarr_coordinator_arr_links.mjs` — checks the coordinator's encrypted Radarr slug flow, direct metadata route, browser-only reachability gate, and year-cell icon wiring for Movies and TV. Run with `node --test scripts/tests/test_rawrarr_coordinator_arr_links.mjs`.
-- `test_rawrarr_subscriber_compose.mjs` — checks subscriber role Compose generation, fossil-prefixed generated IDs, and anonymous public GHCR pulls without GitHub credentials; run `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
+- `test_rawrarr_subscriber_compose.mjs` — checks subscriber role Compose generation, `/local` and `/evt` mounts with legacy `/shared` compatibility, fossil-prefixed generated IDs, and anonymous public GHCR pulls without GitHub credentials; run `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs` (Node.js 26 per `.nvmrc`).
 # Rawrarr tests
 
 - `test_rawrarr_security_headers.mjs` — checks that the Rust app applies its CSP and `X-Content-Type-Options` headers through common middleware. Run with `node --test scripts/tests/test_rawrarr_security_headers.mjs`.
@@ -200,9 +200,10 @@
   disposable browser tier's isolation, dispatch and cleanup paths. Run with
   `python3 -m unittest discover -s scripts/tests -p test_browser_enrollment_docker.py`.
 
-- `test_compose_layout.py` — checks root Compose inventory coverage, the absolute
-  `deploy/testing/compose.yml` integration entry point, explicit test project,
-  rebased build context, and colocated static fixtures. Run
+- `test_compose_layout.py` — checks root Compose inventory coverage, separate
+  `/local`, `/evt/fossil`, and `/evt/boneyard` mounts, memory-only Valkey, Syncthing
+  boneyard paths, the absolute `deploy/testing/compose.yml` integration entry point,
+  explicit test project, rebased build context, and colocated static fixtures. Run
   `python3 -m unittest discover -s scripts/tests -p test_compose_layout.py`.
 - `test_rawrarr_test_runner_fixtures.py` — checks that regression snapshots copy
   `deploy/`, including the relocated environment definition, as well as root
@@ -256,7 +257,7 @@
 - `secure_config::tests::node_signing_key_is_created_once_and_reused_separately_from_user_identity` and `invalid_existing_node_signing_key_is_not_replaced` — Subscriber ML-DSA-65 key creation, derivation stability across restarts, separation from the user's age identity, restrictive permissions, and fail-closed invalid-file behavior; run with `cargo test --locked --manifest-path rust-arr/Cargo.toml node_signing_key` in the Rust test environment.
 
 - `test_rawrarr_admin_preview.mjs` — checks that the admin preview is paused with no Docker build/launch definition, and that retained mockup source remains sample-only and has no production data connection. Run with `node --test scripts/tests/test_rawrarr_admin_preview.mjs`.
-- `test_rawrarr_subscriber_compose.mjs` — Validates one fossil service with metadata role, optional read-only boneyard media mount, the pinned instance-root fingerprint, internal Tailscale and Headscale modes, secret-file auth, node-local Tailscale state, custom device names, and invalid network settings; run with `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs`.
+- `test_rawrarr_subscriber_compose.mjs` — Validates one fossil service with metadata role, `/local` and `/evt` plus legacy `/shared` compatibility, optional read-only boneyard media mount, the pinned instance-root fingerprint, internal Tailscale and Headscale modes, secret-file auth, node-local Tailscale state, custom device names, and invalid network settings; run with `node --test scripts/tests/test_rawrarr_subscriber_compose.mjs` using Node.js 26 per `.nvmrc`.
 - `test_rawrarr_subscriber_onboarding_browser.mjs` — Chromium checks first passkey registration, age/signing-key backup gates, private-key boundaries, optional boneyard promotion on one fossil, safe Compose generation/download, and the Devices continuation; run in the isolated test image.
 - `coordinator::approved_node_registry_tests` — verifies a valid empty approved-node registry lets a new coordinator start without pre-provisioned devices while malformed registries still fail; run with the Rust unit suite.
 - `test_rawrarr_ai_chat.mjs` — checks browser-local movie filters, Movies-versus-TV disk usage shares, candid missing-data responses, and Rawr's gently playful answer style. Run `node --test scripts/tests/test_rawrarr_ai_chat.mjs`.
@@ -334,8 +335,8 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 - `test_rawrarr_ai_chat.mjs` — local library answers for year, genre, and disk-size shares, plus split-frame OpenAI SSE parsing. Run `node --test scripts/tests/test_rawrarr_ai_chat.mjs`.
 
 - `test_rawrarr_filename_secret.rs` — Rust tests for random key generation, validation, encrypted persistence, legacy migration, peer consistency, Radarr update/removal preservation, and plaintext-mirror exclusion. Included in the isolated Rust suite.
-- `test_rawrarr_config_repair.rs` — validates bounded, symlink-safe ciphertext reads, shared-root-confined private atomic writes, rejection of traversal/symlinked parents, direct Tailscale HTTPS peer allowlists, pinned-root revision signatures, one-use challenge/request signatures, Merkle roots, self-excluding configured peer counts, verified per-peer freshness and tailnet reachability status, and deterministic conflict ordering. Included in the isolated Rust suite as `config_repair`.
-- `test_rawrarr_metadata_storage.rs` — validates metadata initialization, symlink rejection, storage sizing without following symlinks, and the maximum recursive scan depth. Included in the isolated Rust suite as `metadata_storage_tests`.
+- `test_rawrarr_config_repair.rs` — validates bounded, symlink-safe ciphertext reads and private atomic writes, direct Tailscale HTTPS peer allowlists, pinned-root revision signatures, one-use challenge/request signatures, config and fossil-object Merkle roots, fixed fossil object paths, tombstones, self-excluding peer counts, verified freshness, and deterministic conflict ordering. Its two-node fossil RPC integration test launches isolated node processes in both directions against authorized mock peers and checks stale reconnect repair, encrypted object transfer, concurrent-edit conflict resolution, tombstone propagation, and idempotent retry. Included in the isolated Rust suite as `config_repair`; run focused with `cargo test --locked --offline --manifest-path rust-arr/Cargo.toml config_repair --no-fail-fast`.
+- `test_rawrarr_metadata_storage.rs` — verifies repeatable migration of legacy metadata into `/evt/fossil` without deleting sources or overwriting conflicts, encrypted writes through the container alias, invalid-directory rejection, and file-size/error reporting. Included in the isolated Rust suite as `secure_config::metadata_storage_tests`.
 - `test_rawrarr_config_schema.rs` — Rust tests for legacy flat config migration to schema v1, service-array persistence including optional encrypted Radarr UI credentials, and unsupported-version rejection. Included in the isolated Rust suite.
 - `test_rawrarr_hmac_metadata_filenames.rs` — checks domain-separated opaque movie filenames, byte-identical ciphertext migration, decryption after migration, and rejection of symlinked legacy files. Included in the isolated Rust suite.
 
@@ -345,7 +346,7 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 
 - `test_rawrarr_metadata_cache.rs` — vault-local ciphertext cache reuse, same-length replacement invalidation, missing files, identity isolation, and concurrent replacement safety. Run `cargo test metadata_cache`.
 
-- `test_setup_local_syncthing.py` — Sanitized local-review bootstrap tests: preserve API key, idempotent folder setup, enable global discovery/public relays/NAT, reject remote peers and unrelated folders. Run `python3 scripts/tests/test_setup_local_syncthing.py`; no Docker required.
+- `test_setup_local_syncthing.py` — Sanitized local-review bootstrap tests: preserve API key and legacy `/shared`, add `/evt/boneyard`, reject overlapping host paths, preserve idempotence, enable global discovery/public relays/NAT, and reject remote peers/unrelated folders. Run `python3 scripts/tests/test_setup_local_syncthing.py`; no Docker required.
 
 - `test_rawrarr_movie_snapshot.rs` — snapshot lifetime, empty libraries, shared client clones, replacement-client isolation, and direct Radarr poster records cached by TMDb ID. Run `cargo test movie_snapshot`. The responsiveness browser tests also cover immediate snapshot display and late-response ordering.
 

@@ -53,9 +53,11 @@ services:
     image: rawrarr:local
     environment:
       RUST_ARR_LISTEN_ADDR: 0.0.0.0:8080
-      RAWARR_DATA_DIR: /data
+      RAWARR_LOCAL_DIR: /local
+      RAWARR_DATA_DIR: /local
+      RAWARR_EVENT_DIR: /evt
       RAWARR_SHARED_DATA_DIR: /shared
-      RAWARR_METADATA_DIR: /metadata
+      RAWARR_EVT_WRITE_MODE: ${RAWARR_EVT_WRITE_MODE:-legacy}
       RAWARR_LOCAL_PLAINTEXT_CONFIG: ${RAWARR_LOCAL_PLAINTEXT_CONFIG:-true}
       RAWARR_QUIET_LOGS: ${RAWARR_QUIET_LOGS:-false}
       RAWARR_LIBRARY_PATH: ${RAWARR_LIBRARY_PATH:-}
@@ -73,8 +75,14 @@ services:
       - rawrarr_node_token
       - rawrarr_syncthing_api_key
     volumes:
-      - rawrarr-data:/data
+      - rawrarr-data:/local
+      - rawrarr-evt:/evt
       - rawrarr-fossil-ui:/ui
+      - type: bind
+        source: ${RAWARR_BONEYARD_DATA_PATH:?Set RAWARR_BONEYARD_DATA_PATH to the approved Syncthing folder}
+        target: /evt/boneyard
+        bind:
+          create_host_path: false
       - type: bind
         source: "${RAWARR_SHARED_DATA_PATH:-${HOME}/Library/Application Support/rawrarr/shared-data}"
         target: /shared
@@ -86,6 +94,7 @@ volumes:
   rawrarr-roarlay-ui:
   rawrarr-fossil-ui:
   rawrarr-data:
+  rawrarr-evt:
   rawrarr-postgres-data:
 
 secrets:

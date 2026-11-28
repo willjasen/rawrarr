@@ -538,6 +538,10 @@ impl AgeVault {
             .unwrap_or_else(|| PathBuf::from("data/shared"))
     }
 
+    pub fn event_dir() -> PathBuf {
+        env::var_os("RAWARR_EVENT_DIR").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("evt"))
+    }
+
     pub fn shared_in_dir() -> PathBuf {
         shared_in_dir_for(&Self::shared_dir())
     }
@@ -546,21 +550,27 @@ impl AgeVault {
         shared_out_dir_for(&Self::shared_dir())
     }
 
-    /// The metadata domain is mounted at /metadata in the container and remains
-    /// a subtree of the Syncthing shared root by default.
+    /// Metadata remains on the compatibility tree until EVT write mode is enabled.
     pub fn metadata_dir() -> PathBuf {
-        metadata_dir_for(
-            &Self::shared_dir(),
-            env::var_os("RAWARR_METADATA_DIR").map(PathBuf::from),
-        )
+        if env::var("RAWARR_EVT_WRITE_MODE").unwrap_or_else(|_| "legacy".to_owned()).eq_ignore_ascii_case("legacy") {
+            return env::var_os("RAWARR_METADATA_DIR").map(PathBuf::from)
+                .unwrap_or_else(|| Self::shared_dir().join("in/metadata"));
+        }
+        env::var_os("RAWARR_METADATA_DIR").map(PathBuf::from)
+            .unwrap_or_else(|| Self::event_dir().join("fossil/metadata"))
     }
 
     pub fn initialize_metadata_storage() -> Result<(), VaultError> {
+        migrate_legacy_event_files(&Self::shared_dir(), &Self::event_dir().join("fossil"))?;
         migrate_legacy_metadata(&Self::shared_dir())
     }
 
     pub fn config_path() -> PathBuf {
-        Self::shared_dir().join("config.aged")
+        if env::var("RAWARR_EVT_WRITE_MODE").unwrap_or_else(|_| "legacy".to_owned()).eq_ignore_ascii_case("legacy") {
+            Self::shared_dir().join("config.aged")
+        } else {
+            Self::event_dir().join("fossil/config.aged")
+        }
     }
 
     pub fn local_config_path() -> PathBuf {
@@ -1083,9 +1093,9 @@ impl AgeVault {
     }
 
     pub fn persist_identity_locally(&self) -> Result<(), VaultError> {
-        let data_dir = env::var_os("RAWARR_DATA_DIR")
+        let data_dir = env::var_os("RAWARR_LOCAL_DIR").or_else(|| env::var_os("RAWARR_DATA_DIR"))
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("data"));
+            .unwrap_or_else(|| PathBuf::from("local"));
         fs::create_dir_all(&data_dir).map_err(|_| VaultError::StorageFailed)?;
         set_private_directory_permissions(&data_dir)?;
         let path = data_dir.join("age-identity");
@@ -1127,7 +1137,7 @@ impl AgeVault {
         local_config_path: PathBuf,
         local_plaintext_config: bool,
     ) -> Result<Self, VaultError> {
-        let data_dir = env::var_os("RAWARR_DATA_DIR")
+        let data_dir = env::var_os("RAWARR_LOCAL_DIR").or_else(|| env::var_os("RAWARR_DATA_DIR"))
             .map(PathBuf::from)
             .unwrap_or_else(|| shared_dir.join(".node-state"));
         Self::from_identity_in_data_dir(identity, shared_dir, data_dir, local_config_path, local_plaintext_config)
@@ -1291,17 +1301,26 @@ impl AgeVault {
         } else {
             encrypt_shared_file(&user_recipient, &user_envelope_path, group_identity.as_bytes())?;
         }
+        let evt_write_mode = env::var("RAWARR_EVT_WRITE_MODE").unwrap_or_else(|_| "legacy".to_owned());
+        let (metadata_dir, config_path) = if evt_write_mode.eq_ignore_ascii_case("legacy") {
+            (
+                env::var_os("RAWARR_METADATA_DIR").map(PathBuf::from).unwrap_or_else(|| shared_dir.join("in/metadata")),
+                shared_dir.join("config.aged"),
+            )
+        } else {
+            (
+                env::var_os("RAWARR_METADATA_DIR").map(PathBuf::from).unwrap_or_else(|| AgeVault::event_dir().join("fossil/metadata")),
+                AgeVault::event_dir().join("fossil/config.aged"),
+            )
+        };
         let vault = Self {
             movie_metadata_cache: Default::default(),
             identity,
             user_recipient,
             group_identity,
             recipient,
-            metadata_dir: metadata_dir_for(
-                &shared_dir,
-                env::var_os("RAWARR_METADATA_DIR").map(PathBuf::from),
-            ),
-            config_path: shared_dir.join("config.aged"),
+            metadata_dir,
+            config_path,
             local_config_path,
             local_plaintext_config,
             metadata_filename_key: std::sync::Arc::new(std::sync::OnceLock::new()),
@@ -1352,41 +1371,41 @@ impl AgeVault {
     /// Ensure this subscriber node has a persistent age identity separate from the user's vault.
     /// Existing malformed files are deliberately left untouched for recovery.
     pub fn ensure_node_identity() -> Result<String, VaultError> {
-        let data_dir = env::var_os("RAWARR_DATA_DIR")
+        let data_dir = env::var_os("RAWARR_LOCAL_DIR").or_else(|| env::var_os("RAWARR_DATA_DIR"))
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("data"));
+            .unwrap_or_else(|| PathBuf::from("local"));
         ensure_node_identity_at(&data_dir.join("node-age-identity"))
     }
 
     /// Ensure this subscriber has a persistent signing key separate from the user's signing authority.
     /// Existing malformed files are deliberately left untouched for recovery.
     pub fn ensure_node_signing_key() -> Result<(), VaultError> {
-        let data_dir = env::var_os("RAWARR_DATA_DIR")
+        let data_dir = env::var_os("RAWARR_LOCAL_DIR").or_else(|| env::var_os("RAWARR_DATA_DIR"))
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("data"));
+            .unwrap_or_else(|| PathBuf::from("local"));
         ensure_node_signing_key_at(&data_dir.join("node-signing-key"))
     }
 
     pub fn node_signing_public_key() -> Result<Vec<u8>, VaultError> {
-        let data_dir = env::var_os("RAWARR_DATA_DIR")
+        let data_dir = env::var_os("RAWARR_LOCAL_DIR").or_else(|| env::var_os("RAWARR_DATA_DIR"))
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("data"));
+            .unwrap_or_else(|| PathBuf::from("local"));
         let key = load_node_signing_key(&data_dir.join("node-signing-key"))?;
         Ok(key.verifying_key().encode().to_vec())
     }
 
     pub fn sign_node_message(message: &[u8]) -> Result<Vec<u8>, VaultError> {
-        let data_dir = env::var_os("RAWARR_DATA_DIR")
+        let data_dir = env::var_os("RAWARR_LOCAL_DIR").or_else(|| env::var_os("RAWARR_DATA_DIR"))
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("data"));
+            .unwrap_or_else(|| PathBuf::from("local"));
         let key = load_node_signing_key(&data_dir.join("node-signing-key"))?;
         Ok(key.sign(message).encode().to_vec())
     }
 
     pub fn node_identity_recipient() -> Result<String, VaultError> {
-        let data_dir = env::var_os("RAWARR_DATA_DIR")
+        let data_dir = env::var_os("RAWARR_LOCAL_DIR").or_else(|| env::var_os("RAWARR_DATA_DIR"))
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("data"));
+            .unwrap_or_else(|| PathBuf::from("local"));
         node_identity_recipient(&data_dir.join("node-age-identity"))
     }
 
@@ -1704,9 +1723,9 @@ fn local_plaintext_config_enabled() -> bool {
 }
 
 fn local_data_dir() -> PathBuf {
-    env::var_os("RAWARR_DATA_DIR")
+    env::var_os("RAWARR_LOCAL_DIR").or_else(|| env::var_os("RAWARR_DATA_DIR"))
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("data"))
+        .unwrap_or_else(|| PathBuf::from("local"))
 }
 
 fn identity_to_recipient(identity: &str) -> Result<String, VaultError> {
@@ -1985,8 +2004,8 @@ fn set_private_directory_permissions(path: &Path) -> Result<(), VaultError> {
     Ok(())
 }
 
-fn metadata_dir_for(shared_dir: &Path, override_dir: Option<PathBuf>) -> PathBuf {
-    override_dir.unwrap_or_else(|| shared_dir.join("in").join("metadata"))
+fn metadata_dir_for(fossil_dir: &Path, override_dir: Option<PathBuf>) -> PathBuf {
+    override_dir.unwrap_or_else(|| fossil_dir.join("metadata"))
 }
 
 fn shared_in_dir_for(shared_dir: &Path) -> PathBuf {
@@ -1998,11 +2017,18 @@ fn shared_out_dir_for(shared_dir: &Path) -> PathBuf {
 }
 
 fn migrate_legacy_metadata(shared_dir: &Path) -> Result<(), VaultError> {
+    let fossil = env::var_os("RAWARR_EVENT_DIR").map(PathBuf::from)
+        .map(|event_dir| event_dir.join("fossil"));
+    let fossil = fossil.as_deref().unwrap_or(shared_dir);
+    migrate_legacy_metadata_to(shared_dir, fossil)
+}
+
+fn migrate_legacy_metadata_to(shared_dir: &Path, fossil_dir: &Path) -> Result<(), VaultError> {
     let legacy = shared_dir.join("metadata");
-    let incoming = shared_in_dir_for(shared_dir);
+    let target_metadata = if fossil_dir == shared_dir { fossil_dir.join("in/metadata") } else { fossil_dir.join("metadata") };
     // Mounted shared volumes hide the image's directories. Create the alias
     // target even when there is no legacy tree to copy.
-    for directory in [&incoming, &incoming.join("metadata")] {
+    for directory in [fossil_dir, target_metadata.parent().unwrap_or(fossil_dir), &target_metadata] {
         match fs::symlink_metadata(directory) {
             Ok(metadata) if !metadata.is_dir() => return Err(VaultError::StorageFailed),
             Ok(_) => {}
@@ -2013,14 +2039,54 @@ fn migrate_legacy_metadata(shared_dir: &Path) -> Result<(), VaultError> {
         }
         set_shared_directory_permissions(directory)?;
     }
-    if !legacy.exists() {
-        return Ok(());
+    for source in [legacy, shared_dir.join("in/metadata")] {
+        if source == target_metadata { continue; }
+        let metadata = match fs::symlink_metadata(&source) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(_) => return Err(VaultError::StorageFailed),
+        };
+        if !metadata.is_dir() { return Err(VaultError::StorageFailed); }
+        copy_missing_shared_tree(&source, &target_metadata)?;
     }
-    let legacy_type = fs::symlink_metadata(&legacy).map_err(|_| VaultError::StorageFailed)?;
-    if !legacy_type.is_dir() {
-        return Err(VaultError::StorageFailed);
+    Ok(())
+}
+
+fn migrate_legacy_event_files(shared_dir: &Path, fossil_dir: &Path) -> Result<(), VaultError> {
+    fs::create_dir_all(fossil_dir).map_err(|_| VaultError::StorageFailed)?;
+    crate::safe_fs::ensure_directory(fossil_dir).map_err(|_| VaultError::StorageFailed)?;
+    for name in ["config.aged", "age-recipient", "group-age-recipient", "group-age-user-envelope.aged"] {
+        let source = shared_dir.join(name);
+        let target = fossil_dir.join(name);
+        match fs::symlink_metadata(&source) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(_) => return Err(VaultError::StorageFailed),
+            Ok(metadata) if !metadata.file_type().is_file() => return Err(VaultError::StorageFailed),
+            Ok(_) => {}
+        }
+        match fs::symlink_metadata(&target) {
+            Ok(metadata) if metadata.file_type().is_file() => continue,
+            Ok(_) => return Err(VaultError::StorageFailed),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err(VaultError::StorageFailed),
+        }
+        let (source_file, _) = crate::safe_fs::open_regular_file(&source).map_err(|_| VaultError::StorageFailed)?;
+        let temporary = temporary_path(&target);
+        crate::safe_fs::copy_open_file(source_file, &temporary).map_err(|_| VaultError::StorageFailed)?;
+        set_shared_ciphertext_permissions(&temporary)?;
+        fs::File::open(&temporary).and_then(|file| file.sync_all()).map_err(|_| VaultError::StorageFailed)?;
+        if sha256_regular_file(&source)? != sha256_regular_file(&temporary)? {
+            let _ = fs::remove_file(&temporary);
+            return Err(VaultError::StorageFailed);
+        }
+        match fs::hard_link(&temporary, &target) {
+            Ok(()) => {},
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {},
+            Err(_) => { let _ = fs::remove_file(&temporary); return Err(VaultError::StorageFailed); }
+        }
+        fs::remove_file(&temporary).map_err(|_| VaultError::StorageFailed)?;
     }
-    copy_missing_shared_tree(&legacy, &incoming.join("metadata"))
+    Ok(())
 }
 
 fn copy_missing_shared_tree(source: &Path, target: &Path) -> Result<(), VaultError> {
@@ -2070,6 +2136,9 @@ fn copy_missing_shared_tree(source: &Path, target: &Path) -> Result<(), VaultErr
             fs::File::open(&temporary)
                 .and_then(|file| file.sync_all())
                 .map_err(|_| VaultError::StorageFailed)?;
+            if sha256_regular_file(&source_path)? != sha256_regular_file(&temporary)? {
+                return Err(VaultError::StorageFailed);
+            }
             match fs::hard_link(&temporary, &target_path) {
                 Ok(()) => Ok(()),
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
@@ -2080,6 +2149,18 @@ fn copy_missing_shared_tree(source: &Path, target: &Path) -> Result<(), VaultErr
         copied?;
     }
     Ok(())
+}
+
+fn sha256_regular_file(path: &Path) -> Result<[u8; 32], VaultError> {
+    let (mut file, _) = crate::safe_fs::open_regular_file(path).map_err(|_| VaultError::StorageFailed)?;
+    let mut hash = Sha256::new();
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let count = file.read(&mut buffer).map_err(|_| VaultError::StorageFailed)?;
+        if count == 0 { break; }
+        hash.update(&buffer[..count]);
+    }
+    Ok(hash.finalize().into())
 }
 
 pub fn is_post_quantum_recipient(recipient: &str) -> bool {
@@ -2109,15 +2190,6 @@ fn encrypt_shared_file(recipient: &str, path: &Path, plaintext: &[u8]) -> Result
     }
     let directory = path.parent().ok_or(VaultError::StorageFailed)?;
     fs::create_dir_all(directory).map_err(|_| VaultError::StorageFailed)?;
-    if let Some(metadata_directory) = directory.parent() {
-        // Do not try to change permissions on the filesystem root for files
-        // stored directly under the shared root (for example, the group key
-        // envelope). Nested metadata folders still need Syncthing-readable
-        // parent permissions.
-        if metadata_directory.parent().is_some() {
-            set_shared_directory_permissions(metadata_directory)?;
-        }
-    }
     set_shared_directory_permissions(directory)?;
     let temporary = temporary_path(path);
     let result = Command::new("age")
@@ -2604,11 +2676,11 @@ mod tests {
     }
 
     #[test]
-    fn metadata_domain_defaults_to_shared_subtree_and_accepts_container_alias() {
-        let shared = PathBuf::from("/shared");
+    fn metadata_domain_defaults_to_fossil_subtree_and_accepts_container_alias() {
+        let shared = PathBuf::from("/evt/fossil");
         assert_eq!(
             metadata_dir_for(&shared, None),
-            PathBuf::from("/shared/in/metadata")
+            PathBuf::from("/evt/fossil/metadata")
         );
         assert_eq!(
             metadata_dir_for(&shared, Some(PathBuf::from("/metadata"))),

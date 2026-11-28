@@ -71,9 +71,9 @@ pub fn load_or_create_device_id() -> Result<String, io::Error> {
         ));
     }
 
-    let data_dir = env::var_os("RAWARR_DATA_DIR")
+    let data_dir = env::var_os("RAWARR_LOCAL_DIR").or_else(|| env::var_os("RAWARR_DATA_DIR"))
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("data"));
+        .unwrap_or_else(|| PathBuf::from("local"));
     fs::create_dir_all(&data_dir)?;
     let id_path = data_dir.join("device-id");
     match fs::read_to_string(&id_path) {
