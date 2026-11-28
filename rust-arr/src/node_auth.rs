@@ -533,6 +533,7 @@ fn allowed_path(path: &str) -> bool {
             | "/api/auth/session"
             | "/api/auth/logout"
             | "/api/nodes/register"
+            | "/api/auth/app-key-grants"
             | "/api/nodes/signing-certificate"
             | "/api/nodes/enroll"
             | "/api/nodes/enroll/status"
@@ -552,7 +553,23 @@ fn coordinator_path(path: &str) -> &str {
         "/api/auth/login/finish" => "/api/nodes/auth/login/finish",
         "/api/auth/session" => "/api/nodes/auth/session",
         "/api/auth/logout" => "/api/nodes/auth/logout",
+        "/api/auth/app-key-grants" => "/api/nodes/app-key-grants",
         _ => path,
+    }
+}
+
+#[cfg(test)]
+mod app_key_grant_proxy_tests {
+    use super::{allowed_path, coordinator_path};
+
+    #[test]
+    fn app_key_grant_retrieval_uses_the_signed_node_proxy_path() {
+        assert!(allowed_path("/api/auth/app-key-grants"));
+        assert_eq!(
+            coordinator_path("/api/auth/app-key-grants"),
+            "/api/nodes/app-key-grants"
+        );
+        assert!(!allowed_path("/api/auth/app-key-grants/other"));
     }
 }
 

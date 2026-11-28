@@ -44,14 +44,35 @@ def request(base, path, method='GET', payload=None, cookie=None):
         return error.code, error.read()
 
 
+def node_grant_request(node, payload, cookie):
+    script = '''import base64,json,sys,urllib.error,urllib.request
+fixture=json.loads(sys.stdin.read())
+body=json.dumps(fixture["payload"],separators=(",",":")).encode()
+req=urllib.request.Request("http://127.0.0.1:8080/api/auth/app-key-grants",data=body,method="POST",headers={"Content-Type":"application/json","Cookie":"rawrarr_session="+fixture["session"]})
+try:
+ response=urllib.request.urlopen(req,timeout=20); status=response.status; data=response.read()
+except urllib.error.HTTPError as error:
+ status=error.code; data=error.read()
+print(status); print(base64.b64encode(data).decode())
+'''
+    result = docker('exec', '-i', node, 'python3', '-c', script,
+        input=json.dumps({'payload': payload, 'session': cookie}))
+    status_text, body_text = result.stdout.splitlines()[:2]
+    return int(status_text), base64.b64decode(body_text)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--age-unlock-only', action='store_true',
         help='limit metadata configuration checks to age-vault unlock errors')
+    parser.add_argument('--app-key-grants-only', action='store_true',
+        help='run only the authenticated app-key grant delivery and revocation integration')
     parser.add_argument('--image', default='rawrarr:roles-test')
     parser.add_argument('--browser-image', default='rawrarr-testing-base:local')
     args = parser.parse_args()
+    if args.age_unlock_only and args.app_key_grants_only:
+        parser.error('--age-unlock-only and --app-key-grants-only cannot be combined')
     if not args.apply:
         print('Dry run: create a disposable coordinator and PostgreSQL DB, bootstrap the owner in Chromium, enroll metadata and storage nodes with signed approval, test role/session/outage boundaries, and remove only uniquely named fixtures. Pass --apply.')
         return 0
@@ -152,8 +173,9 @@ def main():
             else:
                 raise RuntimeError('disposable PostgreSQL did not become ready')
 
+            coordinator_port = free_port()
             coordinator = run('coordinator', args.image, '--network', network, '--network-alias', 'coordinator',
-                '-p', f'127.0.0.1:{free_port()}:8080', '--entrypoint', '/usr/local/bin/rust-arr',
+                '-p', f'127.0.0.1:{coordinator_port}:8080', '--entrypoint', '/usr/local/bin/rust-arr',
                 '-e', 'RAWARR_ROLE=coordinator', '-e', 'RAWARR_PG_HOST=postgres', '-e', 'RAWARR_PG_DATABASE=rawrarr_test',
                 '-e', 'RAWARR_PG_PASSWORD=disposable-fixture-password',
                 '-e', 'RAWARR_APPROVED_NODES_FILE=/registry.json', '-e', 'RAWARR_COORDINATOR_WEB_RP_ID=localhost',
@@ -166,7 +188,9 @@ def main():
                     break
                 time.sleep(0.25)
             else:
-                raise RuntimeError('disposable coordinator did not become ready')
+                logs = docker('logs', coordinator, check=False)
+                detail = (logs.stdout + logs.stderr).splitlines()[-24:]
+                raise RuntimeError('disposable coordinator did not become ready: ' + ' | '.join(detail)[-2400:])
 
             metadata_namespace = sidecar('metadata-test')
             caddy = prefix + '-coordinator-web-proxy'
@@ -224,6 +248,80 @@ def main():
             assert metadata_status == '200' and storage_status == '401', 'session was not scoped to its metadata node'
             print('PASS PostgreSQL-backed sessions are scoped to the approved node')
 
+            storage_session = secrets.token_hex(32)
+            storage_digest = hashlib.sha256(storage_session.encode()).hexdigest()
+            storage_sql = f"INSERT INTO rawrarr_sessions(token_hash,user_id,expires_at,node_id) VALUES(decode('{storage_digest}','hex'),'{user_id}'::uuid,now()+interval '5 minutes','storage-test')"
+            docker('exec', '-i', postgres, 'psql', '-U', 'rawrarr', '-d', 'rawrarr_test', '-v', 'ON_ERROR_STOP=1', input=storage_sql)
+
+            helper.stdin.write('grant metadata-test ' + session + '\n')
+            helper.stdin.flush()
+            raw_grant_line = helper.stdout.readline().strip()
+            grant_line = raw_grant_line.split()
+            if len(grant_line) != 7 or grant_line[0] != 'GRANT':
+                detail = helper.stderr.read()[-1600:] if helper.poll() is not None else ''
+                raise RuntimeError('owner grant fixture failed: ' + ' '.join(grant_line[:2]) + ('; ' + detail if detail else ''))
+            _, app_instance_id, device_recipient, app_identity_b64, grant_bundle_b64, first_status, retry_status = grant_line
+            assert (first_status, retry_status) == ('201', '204'), 'grant submission or identical retry was not accepted idempotently'
+            app_identity = base64.b64decode(app_identity_b64)
+            grant_bundle = base64.b64decode(grant_bundle_b64)
+            parsed_grant = json.loads(grant_bundle)
+            assert parsed_grant['signedPayload']['deviceId'] == 'metadata-test'
+            assert parsed_grant['signedPayload']['deviceRecipient'] == device_recipient
+            assert app_identity not in grant_bundle, 'coordinator request bundle exposed the plaintext app identity'
+            stored_bundle_hex = docker('exec', postgres, 'psql', '-U', 'rawrarr', '-d', 'rawrarr_test', '-Atc',
+                "SELECT encode(bundle,'hex') FROM rawrarr_app_key_grants WHERE app_instance_id='" + app_instance_id + "' AND device_id='metadata-test'").stdout.strip()
+            stored_bundle = bytes.fromhex(stored_bundle_hex)
+            assert stored_bundle == grant_bundle, 'coordinator did not preserve the grant bytes exactly'
+            assert app_identity not in stored_bundle, 'coordinator database contains the plaintext app identity'
+            encrypted_identity = base64.b64decode(parsed_grant['encryptedIdentity'])
+            assert app_identity not in encrypted_identity, 'device envelope contains plaintext app identity'
+            print('PASS owner-signed grant submission, byte-exact storage, idempotent retry, and ciphertext-only database contents')
+
+            anonymous_status, _ = request(f'http://127.0.0.1:{coordinator_port}', '/api/nodes/app-key-grants', 'POST',
+                {'appInstanceId': app_instance_id, 'recipient': device_recipient})
+            assert anonymous_status == 401, 'anonymous grant retrieval was not denied'
+            wrong_recipient_status, wrong_recipient_body = node_grant_request(metadata, {
+                'appInstanceId': app_instance_id, 'recipient': 'age1pq1' + ('0' * 48),
+            }, session)
+            wrong_instance_status, wrong_instance_body = node_grant_request(metadata, {
+                'appInstanceId': '00000000-0000-0000-0000-000000000000', 'recipient': device_recipient,
+            }, session)
+            valid_status, retrieved_bundle = node_grant_request(metadata, {
+                'appInstanceId': app_instance_id, 'recipient': device_recipient,
+            }, session)
+            assert (wrong_recipient_status, wrong_instance_status, valid_status) == (404, 404, 200), (
+                'grant routing denial or delivery status was incorrect: '
+                f'{wrong_recipient_status}/{wrong_instance_status}/{valid_status}; '
+                f'bodies={wrong_recipient_body[:120]!r}/{wrong_instance_body[:120]!r}')
+            assert retrieved_bundle == grant_bundle, 'fossil did not receive the original grant bytes'
+            print('PASS signed fossil retrieval, recipient and cross-instance denial, anonymous denial, and exact delivery')
+
+            helper.stdin.write('wrong-target storage-test ' + session + '\n')
+            helper.stdin.flush()
+            wrong_target = helper.stdout.readline().strip().split()
+            assert wrong_target == ['WRONG_TARGET', 'storage-test', '403', '403'], 'owner submission accepted a non-fossil target'
+            print('PASS owner cannot submit app-key grants to a storage-role node')
+
+            storage_grant_status, _ = node_grant_request(storage, {
+                'appInstanceId': app_instance_id, 'recipient': device_recipient,
+            }, storage_session)
+            assert storage_grant_status == 403, 'storage-role node retrieved a metadata grant'
+            print('PASS storage-role request cannot retrieve a fossil app-key grant')
+
+            if args.app_key_grants_only:
+                helper.stdin.write('revoke metadata-test\n')
+                helper.stdin.flush()
+                revoked = helper.stdout.readline().strip().split()
+                assert revoked == ['REVOKED', 'metadata-test', '204'], 'approved fossil revocation failed'
+                remaining_grants = docker('exec', postgres, 'psql', '-U', 'rawrarr', '-d', 'rawrarr_test', '-Atc',
+                    "SELECT count(*) FROM rawrarr_app_key_grants WHERE device_id='metadata-test'").stdout.strip()
+                revoked_status, _ = node_grant_request(metadata, {
+                    'appInstanceId': app_instance_id, 'recipient': device_recipient,
+                }, session)
+                assert remaining_grants == '0' and revoked_status == 401, 'revoked fossil retained or retrieved its grant'
+                print('PASS fossil revocation removes stored grants and blocks further retrieval')
+                return 0
+
             config_mode = 'metadata-age' if args.age_unlock_only else 'metadata'
             config_full = docker('exec', '-i', metadata, 'python3', '/tests/test_rawrarr_configuration.py', config_mode,
                 input=json.dumps({'session': session}))
@@ -239,10 +337,6 @@ def main():
                 print('PASS age unlock API distinguishes malformed identities, group-envelope failures, and encrypted-config failures')
                 return 0
 
-            storage_session = secrets.token_hex(32)
-            storage_digest = hashlib.sha256(storage_session.encode()).hexdigest()
-            storage_sql = f"INSERT INTO rawrarr_sessions(token_hash,user_id,expires_at,node_id) VALUES(decode('{storage_digest}','hex'),'{user_id}'::uuid,now()+interval '5 minutes','storage-test')"
-            docker('exec', '-i', postgres, 'psql', '-U', 'rawrarr', '-d', 'rawrarr_test', '-v', 'ON_ERROR_STOP=1', input=storage_sql)
             config_storage = docker('exec', '-i', storage, 'python3', '/tests/test_rawrarr_configuration.py', 'storage',
                 input=json.dumps({'session': storage_session, 'identity': test_identity}))
             if config_storage.returncode:
@@ -275,6 +369,18 @@ def main():
                 time.sleep(0.2)
             assert state['Status'] == 'exited' and state['ExitCode'] != 0, 'a metadata credential was accepted for storage role'
             print('PASS role mismatch fails closed')
+
+            helper.stdin.write('revoke metadata-test\n')
+            helper.stdin.flush()
+            revoked = helper.stdout.readline().strip().split()
+            assert revoked == ['REVOKED', 'metadata-test', '204'], 'approved fossil revocation failed'
+            remaining_grants = docker('exec', postgres, 'psql', '-U', 'rawrarr', '-d', 'rawrarr_test', '-Atc',
+                "SELECT count(*) FROM rawrarr_app_key_grants WHERE device_id='metadata-test'").stdout.strip()
+            revoked_status, _ = node_grant_request(metadata, {
+                'appInstanceId': app_instance_id, 'recipient': device_recipient,
+            }, session)
+            assert remaining_grants == '0' and revoked_status == 401, 'revoked fossil retained or retrieved its grant'
+            print('PASS fossil revocation removes stored grants and blocks further retrieval')
 
             docker('stop', coordinator)
             outage = docker('exec', metadata, 'python3', '-c',

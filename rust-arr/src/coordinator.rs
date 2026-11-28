@@ -5,6 +5,8 @@ mod ai;
 mod stripe;
 #[path = "coordinator_owner.rs"]
 mod owner;
+#[path = "coordinator_app_key_grants.rs"]
+mod app_key_grants;
 use crate::{auth::AuthState, node_role::NodeRole};
 use axum::{
     Extension, Json, Router,
@@ -415,6 +417,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/api/auth/logout", post(logout))
         .route("/api/workspace/nodes", get(workspace_nodes))
         .route("/api/workspace/nodes/{node_id}", delete(delete_workspace_node))
+        .route("/api/workspace/app-key-grants", post(app_key_grants::submit))
         .route("/api/workspace/profile", get(workspace_profile))
         .route("/api/workspace/environment-owner", get(owner::get).post(owner::provision))
         .route("/api/workspace/billing", get(stripe::status))
@@ -467,6 +470,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/api/nodes/register", post(register))
         .route("/api/nodes/webrtc/poll", get(webrtc_poll_offer))
         .route("/api/nodes/webrtc/answer", post(webrtc_publish_answer))
+        .route("/api/nodes/app-key-grants", post(app_key_grants::retrieve))
         .route("/api/nodes/signing-certificate", get(node_signing_certificate))
         .route("/api/nodes/pending", get(pending_nodes))
         .route("/api/nodes/approve", post(approve_node))
