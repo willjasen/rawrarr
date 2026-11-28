@@ -70,7 +70,7 @@ test('coordinator labels the Sonarr section TV in navigation and its page headin
   assert.match(workspace, /\.connection-form input \{ width:100%; min-height:42px/);
   assert.match(workspaceScript, /name === 'tv' \? 'series' : name/);
   assert.match(workspaceScript, /view === 'series' \? 'tv' : view/);
-  assert.match(workspaceScript, /if \(view === 'movies' && updateHash\)[\s\S]*?updateAgeIdControls\(\)[\s\S]*?if \(ageIdentityInMemory && selectedNode\) void unlockMetadata\(\)/);
+  assert.match(workspaceScript, /if \(view === 'movies' && updateHash\)[\s\S]*?if \(ageIdentityInMemory\)[\s\S]*?if \(selectedNode\) void unlockMetadata\(\)/);
   assert.match(workspaceScript, /catch \(error\) \{[\s\S]*?moviesPanel\.replaceChildren\(\);\s*updateAgeIdControls\(\);\s*contentStatus\.textContent/);
 });
 
@@ -93,8 +93,15 @@ test('Roarlay has a dedicated coordinator page and uses the same-origin health c
 
 test('Movies and TV cached library data stays hidden until an age ID is loaded', () => {
   assert.match(workspaceScript, /async function unlockMetadata\(\) \{[\s\S]*?if \(!selectedNode \|\| !identity\) return;/);
-  assert.match(workspaceScript, /if \(view === 'movies' && updateHash\) \{[\s\S]*?if \(ageIdentityInMemory && selectedNode\) void unlockMetadata\(\)/);
-  assert.match(workspaceScript, /if \(view === 'series' && updateHash\) \{\s*const cachedSeries = ageIdentityInMemory \? readLibraryTextCache\(selectedNode, 'tv'\) : null;/);
+  assert.match(workspaceScript, /function updateMediaPageAccess\(\)[\s\S]*?document\.getElementById\('radarr-summary'\)\.hidden = !hasIdentity/);
+  assert.match(workspaceScript, /if \(view === 'movies' && updateHash\) \{[\s\S]*?if \(ageIdentityInMemory\)[\s\S]*?if \(selectedNode\) void unlockMetadata\(\)/);
+  assert.match(workspaceScript, /if \(view === 'series' && updateHash\) \{\s*if \(ageIdentityInMemory\) \{\s*const cachedSeries = readLibraryTextCache\(selectedNode, 'tv'\);/);
+  assert.match(workspaceScript, /if \(view === 'discovery' && ageIdentityInMemory\) void loadProwlarrDiscovery\(\)/);
+  assert.match(workspaceScript, /async function loadLidarrLibrary\(\) \{\s*if \(!ageIdentityInMemory\) return;/);
+  for (const view of ['series', 'music', 'discovery']) {
+    assert.match(workspace, new RegExp(`id="${view}-age-gate"`));
+    assert.match(workspace, new RegExp(`id="${view}-age-content"`));
+  }
 });
 
 test('pending-node approval dialog is outside the hidden Settings section', () => {

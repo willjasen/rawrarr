@@ -359,6 +359,8 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/api/version", get(coordinator_version))
         .route("/assets/rawrarr-logo.png", get(coordinator_rawrarr_logo))
         .route("/assets/rawrarr-logo.jxl", get(coordinator_rawrarr_logo_jxl))
+        .route("/assets/rawrarr-favicon.svg", get(crate::rawrarr_favicon))
+        .route("/favicon.ico", get(crate::rawrarr_favicon_ico))
         .route("/assets/coordinator-workspace.mjs", get(coordinator_workspace_script))
         .route("/assets/coordinator-billing.mjs", get(coordinator_billing_script))
         .route("/assets/coordinator-availability.mjs", get(coordinator_availability_script))

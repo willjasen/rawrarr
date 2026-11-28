@@ -824,14 +824,14 @@ async fn rawrarr_logo_jxl() -> Response<Body> {
     static_asset("image/jxl", ui_assets::bytes("assets/rawrarr-logo.jxl", include_bytes!("assets/rawrarr-logo.jxl")).await)
 }
 
-async fn rawrarr_favicon() -> Response<Body> {
+pub(crate) async fn rawrarr_favicon() -> Response<Body> {
     static_asset(
         "image/svg+xml",
         ui_assets::text("assets/rawrarr-favicon.svg", include_str!("assets/rawrarr-favicon.svg")).await.into_bytes(),
     )
 }
 
-async fn rawrarr_favicon_ico() -> Response<Body> {
+pub(crate) async fn rawrarr_favicon_ico() -> Response<Body> {
     static_asset(
         "image/x-icon",
         ui_assets::bytes("assets/rawrarr-favicon.ico", include_bytes!("assets/rawrarr-favicon.ico")).await,

@@ -7,8 +7,9 @@ import { chromium } from 'playwright';
 const root = new URL('../../', import.meta.url);
 const read = path => readFile(new URL(path, root));
 const readText = path => readFile(new URL(path, root), 'utf8');
-const [serverSource, svg, ico, htmlPages, healthHtml] = await Promise.all([
+const [serverSource, coordinatorSource, svg, ico, htmlPages, healthHtml] = await Promise.all([
   readText('rust-arr/src/main.rs'),
+  readText('rust-arr/src/coordinator.rs'),
   readText('rust-arr/src/assets/rawrarr-favicon.svg'),
   read('rust-arr/src/assets/rawrarr-favicon.ico'),
   Promise.all([
@@ -18,6 +19,22 @@ const [serverSource, svg, ico, htmlPages, healthHtml] = await Promise.all([
   ].map(path => readText(`rust-arr/src/${path}`))),
   readText('rust-arr/src/main.rs').then(source => source.match(/async fn health\(\)[\s\S]*?\n\}/)?.[0] ?? ''),
 ]);
+const landingHtml = await readText('website/index.html');
+const landingSvg = await readText('website/assets/rawrarr-favicon.svg');
+const landingIco = await read('website/favicon.ico');
+
+test('public landing page ships the coordinator favicon artwork and versioned links', () => {
+  assert.equal(landingSvg, svg, 'landing SVG matches the coordinator SVG byte for byte');
+  assert.deepEqual(landingIco, ico, 'landing ICO matches the coordinator ICO byte for byte');
+  assert.match(landingHtml, /<link rel="icon" type="image\/svg\+xml" href="\/assets\/rawrarr-favicon\.svg\?v=1">/);
+  assert.match(landingHtml, /<link rel="icon" type="image\/x-icon" href="\/favicon\.ico\?v=1">/);
+
+  const netlify = readFile(new URL('netlify.toml', root), 'utf8');
+  return netlify.then(source => {
+    assert.match(source, /for = "\/assets\/rawrarr-favicon\.svg"[\s\S]*?Cache-Control = "public, max-age=0, must-revalidate"[\s\S]*?Content-Type = "image\/svg\+xml"/);
+    assert.match(source, /for = "\/favicon\.ico"[\s\S]*?Cache-Control = "public, max-age=0, must-revalidate"[\s\S]*?Content-Type = "image\/x-icon"/);
+  });
+});
 
 test('all Rawrarr HTML entry pages advertise self-contained SVG and ICO favicons', () => {
   for (const [index, page] of htmlPages.entries()) {
@@ -36,6 +53,11 @@ test('SVG and /favicon.ico routes serve their matching formats with embedded fal
   assert.match(serverSource, /static_asset\(\s*"image\/x-icon",\s*ui_assets::bytes\("assets\/rawrarr-favicon\.ico",\s*include_bytes!\("assets\/rawrarr-favicon\.ico"\)\)/);
   assert.match(serverSource, /\.route\("\/assets\/rawrarr-favicon\.svg", get\(rawrarr_favicon\)\)/);
   assert.match(serverSource, /\.route\("\/favicon\.ico", get\(rawrarr_favicon_ico\)\)/);
+
+  const publicCoordinatorRoutes = coordinatorSource.match(/let public = Router::new\(\)([\s\S]*?)\.with_state\(state\.clone\(\)\);/)?.[1];
+  assert.ok(publicCoordinatorRoutes, 'coordinator exposes an unauthenticated public router');
+  assert.match(publicCoordinatorRoutes, /\.route\("\/assets\/rawrarr-favicon\.svg", get\(crate::rawrarr_favicon\)\)/);
+  assert.match(publicCoordinatorRoutes, /\.route\("\/favicon\.ico", get\(crate::rawrarr_favicon_ico\)\)/);
 
   assert.equal(ico.readUInt16LE(0), 0);
   assert.equal(ico.readUInt16LE(2), 1);
