@@ -47,6 +47,9 @@ test('Settings places profile, Ethereum/ENS, and age-ID cards responsively', asy
       assert.equal(await age.locator('#settings-age-id').count(), 1);
       assert.equal(await age.locator('#save-age-id').count(), 1);
 
+      assert.equal(await crypto.locator('#crypto-link-wallet').isVisible(), false, 'link action stays hidden before wallet data loads');
+      assert.equal(await crypto.locator('#crypto-ens-name').isVisible(), false);
+      await page.evaluate(code => { new Function('wallet', code)({ wallets: [] }); }, walletVisibility);
       const geometry = await page.evaluate(() => {
         const bounds = selector => {
           const rect = document.querySelector(selector).getBoundingClientRect();
