@@ -170,6 +170,7 @@
     #content[hidden] { display:none }
     #age-id { width:min(720px,100%); padding:10px; color:var(--text); background:#101411; border:1px solid #46574a; border-radius:8px }
     .summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:18px 0 }
+    .summary[hidden] { display:none }
     .overview-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); gap:14px; margin:18px 0 }
     .overview-card { min-width:0; padding:18px; border:1px solid var(--line); border-radius:12px; background:var(--panel) }
     .overview-card h2 { margin:0 0 12px; font-size:16px }
@@ -438,6 +439,8 @@
     </section>
     </section>
     <section id="series-view" hidden><h1 class="page-title">TV</h1>
+      <div id="series-age-gate" class="connection-card age-id-page-gate" hidden><h2>Age ID required</h2><p>Import your age private ID in Settings to unlock TV and other media pages.</p><button type="button" data-open-age-settings>Open age ID settings</button></div>
+      <div id="series-age-content">
       <article id="sonarr-connection-card" class="connection-card" aria-labelledby="sonarr-connection-title" hidden>
         <h2 id="sonarr-connection-title">Sonarr connection</h2>
         <p class="connection-intro" id="sonarr-node-note">Select an online fossil node in Fossils. The URL and API key go directly from this browser to that node; roarlay never receives the API key. Settings are saved in its age-encrypted config.</p>
@@ -461,16 +464,22 @@
           <div id="sonarr-series" class="library-grid" aria-label="TV series"></div>
         </article>
       </section>
+      </div>
     </section>
     <section id="music-view" hidden><h1 class="page-title">Music</h1>
+      <div id="music-age-gate" class="connection-card age-id-page-gate" hidden><h2>Age ID required</h2><p>Import your age private ID in Settings to unlock Music and other media pages.</p><button type="button" data-open-age-settings>Open age ID settings</button></div>
+      <div id="music-age-content">
       <p id="lidarr-library-status" class="connection-message" role="status" aria-live="polite">Select an online fossil node to check Lidarr.</p>
       <div class="connection-actions"><button id="configure-lidarr-from-music" type="button">Configure Lidarr</button><button id="refresh-lidarr-library" type="button">Refresh music library</button></div>
       <article id="lidarr-library-content" class="panel library-panel" hidden>
         <h2>Artists</h2><div id="lidarr-artists" class="library-grid" aria-label="Lidarr artists"></div>
         <h2>Releases</h2><div id="lidarr-releases" class="library-grid" aria-label="Lidarr releases"></div>
       </article>
+      </div>
     </section>
     <section id="discovery-view" hidden><h1 class="page-title">Discover</h1>
+      <div id="discovery-age-gate" class="connection-card age-id-page-gate" hidden><h2>Age ID required</h2><p>Import your age private ID in Settings to unlock Discover and other media pages.</p><button type="button" data-open-age-settings>Open age ID settings</button></div>
+      <div id="discovery-age-content">
       <p class="connection-intro">Search the configured Prowlarr indexers from the selected fossil node. Searches are owner initiated and read-only; Rawrarr does not download or fulfill results.</p>
       <p id="prowlarr-discovery-status" class="connection-message" role="status" aria-live="polite">Select an online fossil node to check Prowlarr.</p>
       <article id="prowlarr-not-configured" class="connection-card" hidden>
@@ -495,6 +504,7 @@
           <div id="prowlarr-search-results" class="discovery-results" aria-label="Prowlarr search results"></div>
         </article>
       </section>
+      </div>
     </section>
     <section id="configuration-view" hidden><h1 class="page-title">Cluster configuration</h1>
       <p class="sub">Shared age-encrypted configuration, decrypted in this browser. Secret values are replaced with &lt;REDACTED&gt;.</p>
