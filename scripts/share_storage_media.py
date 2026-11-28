@@ -8,10 +8,10 @@ import re
 import shutil
 import subprocess
 import sys
-import xml.etree.ElementTree as ET
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 
+from safe_xml import fromstring as safe_fromstring
 
 def api(base, key, path, body=None):
     data = None if body is None else json.dumps(body).encode()
@@ -146,7 +146,7 @@ def main():
                 docker, "--context", "orbstack", "exec", args.docker_container,
                 "cat", "/var/syncthing/config/config.xml",
             ], stderr=subprocess.DEVNULL)
-            key = (ET.fromstring(raw).findtext("gui/apikey") or "").strip()
+            key = (safe_fromstring(raw).findtext("gui/apikey") or "").strip()
         else:
             key = args.api_key_file.read_text().strip()
         if not key:

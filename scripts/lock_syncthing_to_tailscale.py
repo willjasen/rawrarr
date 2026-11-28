@@ -7,9 +7,9 @@ import json
 import shutil
 import subprocess
 import sys
-import xml.etree.ElementTree as ET
 from urllib.request import Request, urlopen
 
+from safe_xml import fromstring as safe_fromstring
 from share_storage_media import api, validate_url
 
 
@@ -20,7 +20,7 @@ def key_from_container(name):
     docker = shutil.which("docker") or "/usr/local/bin/docker"
     raw = subprocess.check_output([docker, "--context", "orbstack", "exec", name,
                                    "cat", "/var/syncthing/config/config.xml"], stderr=subprocess.DEVNULL)
-    return (ET.fromstring(raw).findtext("gui/apikey") or "").strip()
+    return (safe_fromstring(raw).findtext("gui/apikey") or "").strip()
 
 
 def patch(base, key, path, value):
@@ -78,7 +78,7 @@ def main():
               {"addresses": [address], "autoAcceptFolders": False})
         print("Saved. Verify Compose ALL_PROXY_NO_FALLBACK=1, Tailscale Serve TCP, and a tcp connection.")
         return 0
-    except (OSError, ValueError, KeyError, TypeError, ET.ParseError, subprocess.CalledProcessError) as error:
+    except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as error:
         print("Tailnet lock failed: " + (str(error) if isinstance(error, ValueError) else type(error).__name__), file=sys.stderr)
         return 1
 

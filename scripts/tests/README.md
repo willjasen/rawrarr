@@ -346,7 +346,8 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 
 - `test_rawrarr_metadata_cache.rs` — vault-local ciphertext cache reuse, same-length replacement invalidation, missing files, identity isolation, and concurrent replacement safety. Run `cargo test metadata_cache`.
 
-- `test_setup_local_syncthing.py` — Sanitized local-review bootstrap tests: preserve API key and legacy `/shared`, add `/evt/boneyard`, reject overlapping host paths, preserve idempotence, enable global discovery/public relays/NAT, and reject remote peers/unrelated folders. Run `python3 scripts/tests/test_setup_local_syncthing.py`; no Docker required.
+- `test_setup_local_syncthing.py` — Sanitized local-review bootstrap tests: preserve API key and legacy `/shared`, add `/evt/boneyard`, reject overlapping host paths, preserve idempotence, enable global discovery/public relays/NAT, reject remote peers/unrelated folders, and reject DTD/entity XML declarations. Run `python3 scripts/tests/test_setup_local_syncthing.py`; no Docker required.
+- `test_share_storage_media.py` — Checks storage media pairing and shared Syncthing XML parsing, including normal API-key extraction and rejection of DTD/entity declarations. Run `python3 scripts/tests/test_share_storage_media.py`; no Docker required.
 
 - `test_rawrarr_movie_snapshot.rs` — snapshot lifetime, empty libraries, shared client clones, replacement-client isolation, and direct Radarr poster records cached by TMDb ID. Run `cargo test movie_snapshot`. The responsiveness browser tests also cover immediate snapshot display and late-response ordering.
 
