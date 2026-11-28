@@ -32,7 +32,8 @@ class PublishContainerWorkflowTests(unittest.TestCase):
         self.assertIn('"$IMAGE:sha-$COMMIT_SHA-amd64"', source)
         self.assertIn('"$IMAGE:sha-$COMMIT_SHA-arm64"', source)
         self.assertIn("packages: write", source)
-        self.assertIn("cancel-in-progress: false", source)
+        self.assertIn("group: publish-container-main", source)
+        self.assertIn("cancel-in-progress: true", source)
 
     def test_binary_build_revision_matches_the_oci_revision_label(self):
         source = WORKFLOW.read_text()
