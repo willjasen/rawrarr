@@ -381,7 +381,7 @@ The tests below cover Rawrarr application behavior. Some require a disposable Po
 `test_rawrarr_library_detail_link_layout.mjs` checks that Movies and TV display year and Arr detail links in the artwork/title column. Run with `node --test scripts/tests/test_rawrarr_library_detail_link_layout.mjs`.
 
 `test_rawrarr_library_detail_link_layout.mjs` checks that Movies and TV display year and Arr detail links in the artwork/title column. Run with `node --test scripts/tests/test_rawrarr_library_detail_link_layout.mjs`.
-- `test_rawrarr_favicon.mjs` — Verifies coordinator pages advertise both favicon formats, both paths are registered on the coordinator's public router, the SVG has no external dependencies, the ICO fallback is bundled and served with its correct MIME type, and Chromium can render both assets. Run in the isolated Playwright test image.
+- `test_rawrarr_favicon.mjs` — Verifies coordinator pages and the public landing page advertise the shared SVG and ICO, the landing assets match coordinator artwork byte for byte, both coordinator routes are registered and served with their correct MIME types, Netlify revalidates its icon assets, the SVG has no external dependencies, and Chromium can render both formats. Run in the isolated Playwright test image.
 - `test_rawrarr_coordinator_workspace.mjs` — Checks that Movies unlocking requires an age ID and that cached TV data is not rendered without one; run `node --test scripts/tests/test_rawrarr_coordinator_workspace.mjs`.
 
 - `test_rawrarr_analytics.mjs` — Verifies opt-in fixed-label tracking, disabled-by-default coordinator configuration, the separate Umami services Compose file, and internal-only Caddy dashboard routing. Run `node --test scripts/tests/test_rawrarr_analytics.mjs`.

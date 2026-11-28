@@ -25,6 +25,22 @@ Strict-Transport-Security = "max-age=31536000"
 X-Content-Type-Options = "nosniff"
 X-Frame-Options = "DENY"
 
+[[headers]]
+for = "/assets/rawrarr-favicon.svg"
+
+[headers.values]
+Cache-Control = "public, max-age=0, must-revalidate"
+Content-Type = "image/svg+xml"
+X-Content-Type-Options = "nosniff"
+
+[[headers]]
+for = "/favicon.ico"
+
+[headers.values]
+Cache-Control = "public, max-age=0, must-revalidate"
+Content-Type = "image/x-icon"
+X-Content-Type-Options = "nosniff"
+
 [[redirects]]
 from = "/analytics/script.js"
 to = "https://roarlay.rawrarr.net/analytics/script.js"
