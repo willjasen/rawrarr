@@ -12,6 +12,8 @@ async fn owner_recipient_endpoint_returns_only_the_user_public_recipient() {
         group_identity: "synthetic group identity must not be returned".to_owned(),
         recipient: group_recipient.to_owned(),
         shared_dir: PathBuf::new(),
+        data_dir: PathBuf::new(),
+        evt_dir: PathBuf::new(),
         metadata_dir: PathBuf::new(),
         config_path: PathBuf::new(),
         local_config_path: PathBuf::new(),

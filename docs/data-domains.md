@@ -4,10 +4,16 @@ Rawrarr uses stable container paths to describe where each kind of data belongs.
 
 The data domains separate managed app configuration, portable metadata, media, and local state. Fossil metadata and authorized managed-app configuration use bounded, authenticated RPC with signatures and conflict reconciliation; this data is excluded from Syncthing. Syncthing replicates the boneyard tree, including media folders selected for sharing. Existing deployments migrate legacy paths repeatably while preserving their content. During rollout, readers support old paths and writers use the selected new path after migration. `/local` and PostgreSQL remain node-local.
 
+The node-side app-key grant verifier and bounded app-config ciphertext primitive are preparatory. They stage app ciphertext under `/evt/fossil/apps/<app-instance-id>/config.aged` using an installed app identity, but no owner-side grant delivery, live settings integration, or app-specific RPC replication path is connected. The group-encrypted app identity registry is not an authorization source.
+
+The node-side app-key grant verifier and bounded app-config ciphertext primitive are preparatory. They stage app ciphertext under `/evt/fossil/apps/<app-instance-id>/config.aged` using an installed app identity, but no owner-side grant delivery, live settings integration, or app-specific RPC replication path is connected. The group-encrypted app identity registry is not an authorization source.
+
 | Domain | Container path | Present on | Persistence and sync | Contents |
 |---|---|---|---|---|
 | Local state | `/local` | Each node | Node-local persistent volume; never synced | Device identity, runtime state, credentials, and node-local databases or caches |
 | Fossil data | `/evt/fossil` | Authorized nodes | Authenticated RPC replication; never Syncthing | Encrypted app metadata and authorized managed-app configuration objects |
+| Staged app configuration | `/evt/fossil/apps/<app-instance-id>/config.aged` | Local staging only; RPC exchange is not active | App-recipient age ciphertext; does not use Syncthing | Versioned app JSON that requires the matching installed app key |
+| Staged app configuration | `/evt/fossil/apps/<app-instance-id>/config.aged` | Local staging only; RPC exchange is not active | App-recipient age ciphertext; does not use Syncthing | Versioned app JSON that requires the matching installed app key |
 | Boneyard | `/evt/boneyard` | Nodes selected for shared media | Syncthing folder; only approved peers | Media folders and files selected for replication |
 | Media source | `/media` | Storage nodes that can read media | Host media mount, read-only in Rawrarr; never copied automatically | Original movie, TV, music, book, subtitle, and other library files |
 | Database | PostgreSQL data volume | Coordinator | Node-local database volume; never Syncthing | Coordinator authentication and application state |
@@ -34,5 +40,7 @@ This registry defines placement and sync boundaries. It does not imply that a we
 Older releases used `/shared` as a Syncthing root, with `/shared/in/metadata` for encrypted media metadata and `/shared/out` for selected published files. Older local state used `/data`. Keep compatibility reads during staged upgrades; do not treat old paths as the active placement contract. Root `config.aged` was previously synchronized and is not an authorization boundary by itself. The new RPC path must enforce approved peers and preserve conflict/tombstone semantics.
 
 The prior [local backup feature](local-backups.md) stores a target device ID and local destination in shared encrypted configuration. Keep backup archives outside `/evt` so Syncthing cannot replicate them back into the instance.
+
+Older releases kept metadata in `/shared/in/metadata` and published files in `/shared/out`; vault unlock copied missing legacy metadata without deleting its source. These paths remain compatibility sources during migration, not current placement targets. Portable metadata should eventually reach offline peers, but that does not make every database row or setting shared.
 
 For historical media metadata structure and encryption details, see [metadata architecture](metadata-peer-repair-protocol.md) and the linked runbooks. Those descriptions document legacy compatibility and do not change the current `/evt/fossil` and `/evt/boneyard` placement rules.
