@@ -75,3 +75,13 @@ no cleanup pass. This closes a stale-offer acceptance path for future polling
 callers. Node peer worker and browser integration remain pending. No persistent
 state or migration impact. Verification: diff whitespace check passed; the new
 Rust regression has not yet been executed.
+
+## Node proof context
+
+Added a bounded, domain-separated proof payload binding protocol version,
+signaling session, node ID, fresh browser challenge, and SHA-256 digests of
+both SDP descriptions. This prepares transcript-bound node authentication;
+it does not yet sign, transmit, or verify a proof. Added regression coverage
+for changing each bound value and malformed/oversized inputs. Whitespace check
+passed; new Rust tests have not run. Worker, browser verification, routing,
+and end-to-end qualification remain pending. No deployment or state migration.

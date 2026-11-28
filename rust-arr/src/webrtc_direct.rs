@@ -147,3 +147,31 @@ fn workspace_operation_allowed(method: WorkspaceMethod, path: &str) -> bool {
 #[cfg(test)]
 #[path = "../../scripts/tests/test_rawrarr_webrtc_direct.rs"]
 mod tests;
+
+/// Bind a browser challenge and the negotiated SDP to the approved node key.
+/// Callers must verify the certificate against their independently pinned root.
+pub(crate) fn node_proof_payload(
+    session_id: Uuid,
+    node_id: &str,
+    challenge: &str,
+    offer_sdp: &str,
+    answer_sdp: &str,
+) -> Result<serde_json::Value, &'static str> {
+    use sha2::{Digest, Sha256};
+    if challenge.len() != 64 || !challenge.bytes().all(|byte| byte.is_ascii_hexdigit())
+        || node_id.is_empty() || node_id.len() > 128
+        || offer_sdp.len() > MAX_WORKSPACE_FRAME_BYTES
+        || answer_sdp.len() > MAX_WORKSPACE_FRAME_BYTES
+    {
+        return Err("invalid WebRTC proof context");
+    }
+    Ok(serde_json::json!({
+        "domain": "rawrarr-webrtc-node-proof-v1",
+        "version": WORKSPACE_PROTOCOL_VERSION,
+        "sessionId": session_id,
+        "nodeId": node_id,
+        "challenge": challenge,
+        "offerSha256": format!("{:x}", Sha256::digest(offer_sdp.as_bytes())),
+        "answerSha256": format!("{:x}", Sha256::digest(answer_sdp.as_bytes())),
+    }))
+}

@@ -221,3 +221,21 @@ async fn local_data_channel_round_trips_without_signaling_or_turn_services() {
     offer_peer.close().await.expect("offer connection closes");
     answer_peer.close().await.expect("answer connection closes");
 }
+
+#[test]
+fn node_proof_binds_challenge_session_node_and_both_descriptions() {
+    let session = uuid::Uuid::new_v4();
+    let challenge = "a".repeat(64);
+    let payload = super::node_proof_payload(session, "node-a", &challenge, "offer", "answer").unwrap();
+    for changed in [
+        super::node_proof_payload(uuid::Uuid::new_v4(), "node-a", &challenge, "offer", "answer").unwrap(),
+        super::node_proof_payload(session, "node-b", &challenge, "offer", "answer").unwrap(),
+        super::node_proof_payload(session, "node-a", &"b".repeat(64), "offer", "answer").unwrap(),
+        super::node_proof_payload(session, "node-a", &challenge, "other", "answer").unwrap(),
+        super::node_proof_payload(session, "node-a", &challenge, "offer", "other").unwrap(),
+    ] {
+        assert_ne!(payload, changed);
+    }
+    assert!(super::node_proof_payload(session, "node-a", "short", "offer", "answer").is_err());
+    assert!(super::node_proof_payload(session, "node-a", &challenge, &"x".repeat(49153), "answer").is_err());
+}
