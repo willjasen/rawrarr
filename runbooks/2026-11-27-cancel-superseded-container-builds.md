@@ -26,4 +26,5 @@ Allow the newest public container image publish run to proceed without waiting f
 ## Final state
 
 - Future publish workflow runs cancel older queued or in-progress runs in the same group; the newest run can build and publish after both architecture builds succeed.
-- Pending commit and pull request review.
+- Implementation and focused coverage are committed locally as `63caa01` (`fix: cancel superseded image builds (#528)`).
+- The branch has not been pushed; hosted Actions behavior remains to be confirmed after review and merge.
