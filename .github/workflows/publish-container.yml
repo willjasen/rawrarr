@@ -57,6 +57,9 @@ jobs:
             core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
+      - name: Add compiler cache executable to build context
+        run: install -m 0755 "$SCCACHE_PATH" rust-arr/sccache
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -75,9 +78,9 @@ jobs:
             RAWARR_BUILD_REVISION=${{ github.event.workflow_run.head_sha }}
             SCCACHE_GHA_ENABLED=true
             RUSTC_WRAPPER=sccache
-          secrets: |
-            id=ACTIONS_RESULTS_URL,env=ACTIONS_RESULTS_URL
-            id=ACTIONS_RUNTIME_TOKEN,env=ACTIONS_RUNTIME_TOKEN
+          secret-envs: |
+            ACTIONS_RESULTS_URL=ACTIONS_RESULTS_URL
+            ACTIONS_RUNTIME_TOKEN=ACTIONS_RUNTIME_TOKEN
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha }}

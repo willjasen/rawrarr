@@ -68,7 +68,7 @@ test('offers passkey sign-in and account creation without username or password s
 
 test('first wallet signup uses a distinct challenge and creates the session via the existing setup route', async () => {
   const crypto = await readFile(new URL('../../rust-arr/src/coordinator_crypto.rs', import.meta.url), 'utf8');
-  const migration = await readFile(new URL('../../rust-arr/migrations/0013_wallet_first_account.sql', import.meta.url), 'utf8');
+  const migration = await readFile(new URL('../../rust-arr/migrations/0014_wallet_first_account.sql', import.meta.url), 'utf8');
   assert.match(crypto, /let flow = if user_id\.is_some\(\) \{ "wallet_login" \} else \{ "wallet_signup" \}/);
   assert.match(crypto, /flow IN \('wallet_login','wallet_signup'\)/);
   assert.match(crypto, /pg_advisory_xact_lock\(8257193821\)/);

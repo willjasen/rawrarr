@@ -243,6 +243,28 @@ class CoordinatorAutoUpdaterTests(unittest.TestCase):
         written = "".join(call.args[0] for call in stderr.write.call_args_list)
         self.assertIn("coordinator update failed: internal verification failed", written)
 
+    def test_internal_deployment_failure_never_promotes_public(self):
+        head = "a" * 40
+        old_revision = "b" * 40
+        image = "ghcr.io/willjasen/rawrarr:sha-" + head
+        image_id = "sha256:" + "c" * 64
+        with (
+            patch.object(UPDATER, "command", return_value=
+                         UPDATER.subprocess.CompletedProcess([], 0, "linux/x86_64", "")),
+            patch.object(UPDATER, "load_token", return_value="token"),
+            patch.object(UPDATER, "get_main_sha", return_value=head),
+            patch.object(UPDATER, "deployed_revision", side_effect=[old_revision, old_revision]),
+            patch.object(UPDATER, "changed_paths", return_value=["rust-arr/src/coordinator.rs"]),
+            patch.object(UPDATER, "pull_latest_published_image", return_value=(image, image_id, head)),
+            patch.object(UPDATER, "preserve_tag"),
+            patch.object(UPDATER, "preserve_image"),
+            patch.object(UPDATER, "deploy_role", side_effect=RuntimeError("VersionMissing(13)")) as deploy,
+        ):
+            with self.assertRaisesRegex(RuntimeError, r"VersionMissing\(13\)"):
+                UPDATER.run_once()
+
+        deploy.assert_called_once_with("internal", UPDATER.INTERNAL, image, image_id, head)
+
 
 if __name__ == "__main__":
     unittest.main()

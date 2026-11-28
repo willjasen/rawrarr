@@ -10,6 +10,7 @@ ARG SCCACHE_GHA_ENABLED=false
 ARG RUSTC_WRAPPER=
 ENV SCCACHE_GHA_ENABLED=${SCCACHE_GHA_ENABLED}
 ENV RUSTC_WRAPPER=${RUSTC_WRAPPER}
+COPY sccache /usr/local/bin/sccache
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir src migrations \
