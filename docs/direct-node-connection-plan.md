@@ -30,24 +30,28 @@ See [device architecture](device-architecture.md), [cloud access architecture](c
 
 The coordinator continues handling login, discovery, node approvals, route tickets, and fallback traffic. Media bytes remain on storage nodes and must not be proxied by the coordinator. Where browser-visible content is required to remain hidden from the coordinator, use the ciphertext-only browser decryption boundary in [blind coordinator content](blind-coordinator-content.md) on both direct and fallback paths.
 
-### Rayfish and browser-direct options (planned)
+### WebRTC workspace routing (planned, #495)
 
-Each user should have a separate closed Rayfish network, with the coordinator
-participating separately; account-bound provisioning is not implemented. Nodes
-continue to communicate with the coordinator over HTTPS. A browser on the
-user's Rayfish network could probe an authorized node's `host.network.ray` URL
-and use it directly when available, retaining the coordinator route otherwise.
-Node-side rootless Rayfish does not install routes or DNS on the browser device,
-and a `.ray` name does not itself provide a browser-trusted HTTPS certificate.
-Do not broaden the current direct-origin allowlist or send handoff credentials
-until node identity, certificate trust, ownership, origin and CORS are established.
+Keep the coordinator workspace as the browser origin. For each approved node,
+use authenticated, bounded, ephemeral coordinator signaling to establish a
+browser WebRTC data channel. Bind the peer to that node's approved device
+signing certificate and require the node to validate the existing short-lived,
+node-scoped session and exact API operation for every request. The data channel
+carries a versioned, size-limited protocol for documented workspace operations;
+it does not expose arbitrary node APIs or TCP forwarding. Roarlay may authenticate,
+authorize, exchange SDP offers and answers, and handle fallback, but must not
+relay workspace data-channel requests or responses. Start without TURN. If the
+peer identity, authorization, channel, or operation check fails, retain the
+existing coordinator route and show the active path to the user.
 
-A WebRTC data channel is an alternative if the browser device does not run
-Rayfish. HTTPS signaling would authenticate the account and bind the connection's
-DTLS fingerprint to the owner-approved node identity; the node needs its own
-WebRTC endpoint and a bounded application protocol. ICE may require a TURN
-relay. A data channel is not a URL that existing `fetch` calls can use directly.
-Neither Rayfish browser-direct routing nor WebRTC is implemented or qualified.
+This route is independent of Rayfish membership and does not need `.ray` DNS or
+browser-trusted node HTTPS. Rayfish can provide a separate device mesh for
+node-to-node communication. Issue #489 may use the authenticated data channel to
+send one-use invite material directly from an approved subscriber to the user's
+browser for use in the installed Rayfish app; invite creation and mesh management
+remain outside #495. The protocol schema and local loopback peer probe are now
+test-only foundations. Authenticated signaling, node identity proof, request
+dispatch, browser routing, fallback, and security qualification remain planned.
 
 ## Decisions and prerequisites
 

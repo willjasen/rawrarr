@@ -16,6 +16,8 @@ fn subscriber_payloads_cannot_be_proxied_to_coordinator() {
     assert!(allowed_path("/api/nodes/enroll/status"));
     assert!(allowed_path("/api/nodes/pending"));
     assert!(allowed_path("/api/nodes/approve"));
+    assert!(allowed_path("/api/nodes/webrtc/poll"));
+    assert!(allowed_path("/api/nodes/webrtc/answer"));
     assert!(allowed_path("/api/auth/passkeys/coordinator/link"));
     assert!(!allowed_path("/api/nodes/pending/other"));
     assert_eq!(coordinator_path("/api/auth/register/start"), "/api/nodes/auth/register/start");

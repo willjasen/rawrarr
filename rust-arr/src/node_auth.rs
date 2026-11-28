@@ -311,6 +311,54 @@ impl NodeAuth {
         self.signing_certificate.read().unwrap_or_else(|poisoned| poisoned.into_inner()).clone()
     }
 
+    pub(crate) async fn poll_webrtc_offer(
+        &self,
+    ) -> Result<Option<(Uuid, String)>, ()> {
+        let response = self
+            .send(reqwest::Method::GET, "/api/nodes/webrtc/poll", &HeaderMap::new(), Vec::new())
+            .await?;
+        if response.status() == StatusCode::NO_CONTENT {
+            return Ok(None);
+        }
+        if !response.status().is_success() {
+            return Err(());
+        }
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct Offer {
+            session_id: Uuid,
+            offer_sdp: String,
+        }
+        let bytes = to_bytes(response.into_body(), 64 * 1024).await.map_err(|_| ())?;
+        let offer: Offer = serde_json::from_slice(&bytes).map_err(|_| ())?;
+        if offer.offer_sdp.len() > 48 * 1024 {
+            return Err(());
+        }
+        Ok(Some((offer.session_id, offer.offer_sdp)))
+    }
+
+    pub(crate) async fn publish_webrtc_answer(
+        &self,
+        session_id: Uuid,
+        answer_sdp: &str,
+    ) -> Result<(), ()> {
+        if answer_sdp.len() > 48 * 1024 {
+            return Err(());
+        }
+        let body = serde_json::to_vec(&serde_json::json!({
+            "sessionId": session_id,
+            "answerSdp": answer_sdp,
+        })).map_err(|_| ())?;
+        let response = self
+            .send(reqwest::Method::POST, "/api/nodes/webrtc/answer", &HeaderMap::new(), body)
+            .await?;
+        if response.status() == StatusCode::NO_CONTENT {
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
     fn start_heartbeat(&self, role: crate::node_role::NodeRole) {
         let auth = self.clone();
         tokio::spawn(async move {
@@ -490,6 +538,8 @@ fn allowed_path(path: &str) -> bool {
             | "/api/nodes/enroll/status"
             | "/api/nodes/pending"
             | "/api/nodes/approve"
+            | "/api/nodes/webrtc/poll"
+            | "/api/nodes/webrtc/answer"
     )
 }
 

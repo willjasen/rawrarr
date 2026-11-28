@@ -96,6 +96,7 @@ async fn environment_owner_database_and_api() {
         web_origin: "https://coordinator.example".to_owned(),
         relay_targets: HashMap::new(),
         direct_targets: HashMap::new(),
+        webrtc_signals: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         relay_client: reqwest::Client::builder()
             .no_proxy()
             .redirect(reqwest::redirect::Policy::none())

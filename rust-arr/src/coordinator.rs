@@ -20,8 +20,8 @@ use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::{PgPool, Row};
-use std::{collections::{HashMap, HashSet}, env, sync::Arc, time::Duration};
-use tokio::sync::RwLock;
+use std::{collections::{HashMap, HashSet}, env, sync::Arc, time::{Duration, Instant}};
+use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
 
 #[derive(Deserialize)]
@@ -82,6 +82,7 @@ pub(super) struct CoordinatorState {
     coordinator_auth: AuthState,
     relay_targets: HashMap<String, reqwest::Url>,
     direct_targets: HashMap<String, reqwest::Url>,
+    webrtc_signals: Arc<Mutex<HashMap<Uuid, WebRtcSignal>>>,
     relay_client: reqwest::Client,
     stripe_billing: stripe::BillingState,
     avatar_cache: Arc<RwLock<HashMap<String, Arc<Vec<u8>>>>>,
@@ -173,6 +174,48 @@ struct SigningCertificate {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct DirectSessionRequest {
     node_id: String,
+}
+
+const WEBRTC_SIGNAL_TTL: Duration = Duration::from_secs(45);
+const WEBRTC_SDP_LIMIT: usize = 48 * 1024;
+const WEBRTC_SIGNAL_MAX_PENDING: usize = 128;
+const WEBRTC_SIGNAL_MAX_PER_OWNER: usize = 4;
+
+#[derive(Clone)]
+struct WebRtcSignal {
+    owner_user_id: Uuid,
+    node_id: String,
+    offer_sdp: String,
+    answer_sdp: Option<String>,
+    created_at: Instant,
+    claimed: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct WebRtcOfferRequest {
+    node_id: String,
+    offer_sdp: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct WebRtcAnswerRequest {
+    session_id: Uuid,
+    answer_sdp: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WebRtcOfferForNode {
+    session_id: Uuid,
+    offer_sdp: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WebRtcAnswerForBrowser {
+    answer_sdp: String,
 }
 
 pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
@@ -300,6 +343,7 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         coordinator_auth,
         relay_targets,
         direct_targets,
+        webrtc_signals: Arc::new(Mutex::new(HashMap::new())),
         relay_client,
         stripe_billing,
         avatar_cache: Arc::new(RwLock::new(HashMap::new())),
@@ -381,6 +425,8 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/api/workspace/device-picture/{seed}/jxl", get(workspace_device_picture_jxl))
         .route("/api/workspace/device-picture/{seed}/png", get(workspace_device_picture_png))
         .route("/api/workspace/direct-session", post(direct_session))
+        .route("/api/workspace/webrtc/offer", post(webrtc_create_offer))
+        .route("/api/workspace/webrtc/session/{session_id}", get(webrtc_get_answer))
         .route("/api/workspace/pending", get(pending_nodes))
         .route("/api/workspace/approve", post(approve_node))
         .route("/api/workspace/reject", post(reject_node))
@@ -419,6 +465,8 @@ pub async fn router() -> Result<Router, Box<dyn std::error::Error>> {
         .route("/api/nodes/auth/session", get(session))
         .route("/api/nodes/auth/logout", post(logout))
         .route("/api/nodes/register", post(register))
+        .route("/api/nodes/webrtc/poll", get(webrtc_poll_offer))
+        .route("/api/nodes/webrtc/answer", post(webrtc_publish_answer))
         .route("/api/nodes/signing-certificate", get(node_signing_certificate))
         .route("/api/nodes/pending", get(pending_nodes))
         .route("/api/nodes/approve", post(approve_node))
@@ -1462,6 +1510,10 @@ mod tests;
 #[path = "../../scripts/tests/test_rayfish_relay_proxy.rs"]
 mod rayfish_relay_proxy_tests;
 
+#[cfg(test)]
+#[path = "../../scripts/tests/test_rawrarr_webrtc_signaling.rs"]
+mod webrtc_signaling_tests;
+
 async fn coordinator_health() -> axum::response::Html<String> {
     axum::response::Html(crate::ui_assets::text("coordinator_health.html", include_str!("coordinator_health.html")).await)
 }
@@ -1922,6 +1974,175 @@ async fn direct_session(
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     }
+    response
+}
+
+async fn webrtc_create_offer(
+    State(state): State<CoordinatorState>,
+    Extension(auth): Extension<AuthState>,
+    request: Request,
+) -> Response {
+    let (parts, body) = request.into_parts();
+    if parts.headers.get(header::ORIGIN).and_then(|value| value.to_str().ok())
+        != Some(state.web_origin.as_str())
+    {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let Some(owner_user_id) = crate::auth::authenticated_user_id(&auth, &parts.headers).await else {
+        return StatusCode::UNAUTHORIZED.into_response();
+    };
+    let body = match to_bytes(body, WEBRTC_SDP_LIMIT + 4096).await {
+        Ok(body) => body,
+        Err(_) => return StatusCode::PAYLOAD_TOO_LARGE.into_response(),
+    };
+    let request: WebRtcOfferRequest = match serde_json::from_slice(&body) {
+        Ok(request) => request,
+        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+    };
+    if !valid_webrtc_sdp(&request.offer_sdp) {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+    let node = match sqlx::query("SELECT role, last_seen > now() - interval '90 seconds' AS online FROM rawrarr_nodes WHERE id=$1 AND user_id=$2")
+        .bind(&request.node_id).bind(owner_user_id).fetch_optional(&state.pool).await {
+        Ok(Some(node)) => node,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+    };
+    let role = match node.try_get::<String, _>("role") {
+        Ok(role) if matches!(role.as_str(), "metadata" | "storage") => role,
+        Ok(_) => return StatusCode::FORBIDDEN.into_response(),
+        Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+    };
+    if !node.try_get::<bool, _>("online").unwrap_or(false) {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    }
+    if role == "metadata" {
+        match crate::coordinator_crypto::free_tier_allows_existing_fossil(
+            &state.pool, owner_user_id, &request.node_id,
+        ).await {
+            Ok(true) => {}
+            Ok(false) => return StatusCode::PAYMENT_REQUIRED.into_response(),
+            Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+        }
+    }
+    let session_id = Uuid::new_v4();
+    let mut signals = state.webrtc_signals.lock().await;
+    prune_webrtc_signals(&mut signals);
+    if signals.len() >= WEBRTC_SIGNAL_MAX_PENDING
+        || signals.values().filter(|signal| signal.owner_user_id == owner_user_id).count()
+            >= WEBRTC_SIGNAL_MAX_PER_OWNER
+    {
+        return StatusCode::TOO_MANY_REQUESTS.into_response();
+    }
+    signals.insert(session_id, WebRtcSignal {
+        owner_user_id,
+        node_id: request.node_id,
+        offer_sdp: request.offer_sdp,
+        answer_sdp: None,
+        created_at: Instant::now(),
+        claimed: false,
+    });
+    no_store(Json(serde_json::json!({"sessionId": session_id})).into_response())
+}
+
+async fn webrtc_poll_offer(
+    State(state): State<CoordinatorState>,
+    Extension(auth): Extension<AuthState>,
+) -> Response {
+    let mut signals = state.webrtc_signals.lock().await;
+    prune_webrtc_signals(&mut signals);
+    let Some(offer) = claim_webrtc_offer(&mut signals, &auth.node_id) else {
+        return no_store(StatusCode::NO_CONTENT.into_response());
+    };
+    no_store(Json(offer).into_response())
+}
+
+async fn webrtc_publish_answer(
+    State(state): State<CoordinatorState>,
+    Extension(auth): Extension<AuthState>,
+    request: Request,
+) -> Response {
+    let body = match to_bytes(request.into_body(), WEBRTC_SDP_LIMIT + 4096).await {
+        Ok(body) => body,
+        Err(_) => return StatusCode::PAYLOAD_TOO_LARGE.into_response(),
+    };
+    let request: WebRtcAnswerRequest = match serde_json::from_slice(&body) {
+        Ok(request) => request,
+        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+    };
+    if !valid_webrtc_sdp(&request.answer_sdp) {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+    let mut signals = state.webrtc_signals.lock().await;
+    let Some(signal) = signals.get_mut(&request.session_id) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    if signal.created_at.elapsed() >= WEBRTC_SIGNAL_TTL {
+        signals.remove(&request.session_id);
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    if signal.node_id != auth.node_id || !signal.claimed || signal.answer_sdp.is_some() {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    signal.answer_sdp = Some(request.answer_sdp);
+    no_store(StatusCode::NO_CONTENT.into_response())
+}
+
+async fn webrtc_get_answer(
+    State(state): State<CoordinatorState>,
+    Extension(auth): Extension<AuthState>,
+    Path(session_id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Response {
+    let Some(owner_user_id) = crate::auth::authenticated_user_id(&auth, &headers).await else {
+        return StatusCode::UNAUTHORIZED.into_response();
+    };
+    let signals = state.webrtc_signals.lock().await;
+    let Some(signal) = signals.get(&session_id) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    if signal.created_at.elapsed() >= WEBRTC_SIGNAL_TTL || signal.owner_user_id != owner_user_id {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    match signal.answer_sdp.as_ref() {
+        Some(answer_sdp) => no_store(Json(WebRtcAnswerForBrowser {
+            answer_sdp: answer_sdp.clone(),
+        }).into_response()),
+        None => no_store(StatusCode::ACCEPTED.into_response()),
+    }
+}
+
+fn valid_webrtc_sdp(sdp: &str) -> bool {
+    sdp.len() <= WEBRTC_SDP_LIMIT
+        && sdp.starts_with("v=0\r\n")
+        && sdp.contains("m=application ")
+        && sdp.contains("a=ice-ufrag:")
+        && sdp.contains("a=ice-pwd:")
+        && sdp.bytes().all(|byte| byte == b'\r' || byte == b'\n' || (b' '..=b'~').contains(&byte))
+}
+
+fn prune_webrtc_signals(signals: &mut HashMap<Uuid, WebRtcSignal>) {
+    signals.retain(|_, signal| signal.created_at.elapsed() < WEBRTC_SIGNAL_TTL);
+}
+
+fn claim_webrtc_offer(
+    signals: &mut HashMap<Uuid, WebRtcSignal>,
+    node_id: &str,
+) -> Option<WebRtcOfferForNode> {
+    let session_id = signals.iter()
+        .filter(|(_, signal)| signal.node_id == node_id && !signal.claimed && signal.created_at.elapsed() < WEBRTC_SIGNAL_TTL)
+        .min_by_key(|(_, signal)| signal.created_at)
+        .map(|(session_id, _)| *session_id)?;
+    let signal = signals.get_mut(&session_id)?;
+    signal.claimed = true;
+    Some(WebRtcOfferForNode {
+        session_id,
+        offer_sdp: signal.offer_sdp.clone(),
+    })
+}
+
+fn no_store(mut response: Response) -> Response {
+    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
 }
 
