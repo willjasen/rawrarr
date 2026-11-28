@@ -330,11 +330,18 @@ async fn start_wallet_login(
     let user_id = sqlx::query_scalar::<_, Uuid>("SELECT user_id FROM rawrarr_eth_wallets WHERE address=$1")
         .bind(&address).fetch_optional(&state.pool).await;
     let user_id = match user_id {
-        Ok(Some(id)) => id,
-        Ok(None) => return client_error("This ENS wallet is not linked to a Rawrarr account. Sign in with your passkey to link it first."),
+        Ok(Some(id)) => Some(id),
+        Ok(None) => match sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM rawrarr_users)")
+            .fetch_one(&state.pool).await
+        {
+            Ok(false) => None,
+            Ok(true) => return client_error("This ENS wallet is not linked to a Rawrarr account. Sign in with your passkey to link it first."),
+            Err(_) => return unavailable(),
+        },
         Err(_) => return unavailable(),
     };
-    create_challenge(&state, &address, &ens_name, "wallet_login", Some(user_id)).await
+    let flow = if user_id.is_some() { "wallet_login" } else { "wallet_signup" };
+    create_challenge(&state, &address, &ens_name, flow, user_id).await
 }
 
 async fn finish_wallet_login(
@@ -342,7 +349,7 @@ async fn finish_wallet_login(
     Extension(auth): Extension<crate::auth::AuthState>,
     Json(request): Json<SiweFinishRequest>,
 ) -> Response {
-    let challenge = match load_challenge(&state, request.challenge_id, "wallet_login").await {
+    let challenge = match load_wallet_login_challenge(&state, request.challenge_id).await {
         Ok(Some(row)) => row,
         Ok(None) => return client_error("This sign-in request expired or was already used. Start again."),
         Err(_) => return unavailable(),
@@ -359,19 +366,53 @@ async fn finish_wallet_login(
         Err(_) => return unavailable(),
     }
     let mut tx = match state.pool.begin().await { Ok(tx) => tx, Err(_) => return unavailable() };
-    let locked = sqlx::query("SELECT user_id,address,ens_name,message FROM rawrarr_eth_auth_challenges WHERE id=$1 AND flow='wallet_login' AND expires_at>now() AND consumed_at IS NULL FOR UPDATE")
+    if sqlx::query("SELECT pg_advisory_xact_lock(8257193821)")
+        .execute(&mut *tx).await.is_err() { return unavailable(); }
+    let locked = sqlx::query("SELECT user_id,address,ens_name,message FROM rawrarr_eth_auth_challenges WHERE id=$1 AND flow IN ('wallet_login','wallet_signup') AND expires_at>now() AND consumed_at IS NULL FOR UPDATE")
         .bind(request.challenge_id).fetch_optional(&mut *tx).await;
     let Ok(Some(locked)) = locked else { return client_error("This sign-in request expired or was already used. Start again."); };
-    let Some(user_id) = locked.try_get::<Option<Uuid>, _>("user_id").ok().flatten() else { return unavailable(); };
+    let challenge_user_id = locked.try_get::<Option<Uuid>, _>("user_id").ok().flatten();
     if locked.try_get::<String,_>("address").ok().as_deref() != Some(address.as_str())
         || locked.try_get::<String,_>("ens_name").ok().as_deref() != Some(ens_name.as_str())
         || locked.try_get::<String,_>("message").ok().as_deref() != Some(message.as_str())
     { return StatusCode::UNAUTHORIZED.into_response(); }
     let mapped_user = sqlx::query_scalar::<_, Uuid>("SELECT user_id FROM rawrarr_eth_wallets WHERE address=$1")
         .bind(&address).fetch_optional(&mut *tx).await;
-    if !matches!(mapped_user, Ok(Some(mapped)) if mapped == user_id) {
-        return StatusCode::UNAUTHORIZED.into_response();
-    }
+    let user_id = match (challenge_user_id, mapped_user) {
+        (Some(challenge_user), Ok(Some(mapped))) if mapped == challenge_user => challenge_user,
+        (Some(_), _) => return StatusCode::UNAUTHORIZED.into_response(),
+        (None, Ok(None)) => {
+            let exists = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM rawrarr_users)")
+                .fetch_one(&mut *tx).await;
+            if !matches!(exists, Ok(false)) { return StatusCode::UNAUTHORIZED.into_response(); }
+            let user_id = Uuid::new_v4();
+            let display_name = crate::auth::generated_account_name(user_id);
+            let mut username = display_name.clone();
+            let mut suffix = 2_u32;
+            loop {
+                let exists = sqlx::query_scalar::<_, bool>(
+                    "SELECT EXISTS(SELECT 1 FROM rawrarr_users WHERE username=$1) OR EXISTS(SELECT 1 FROM rawrarr_auth_challenges WHERE flow='registration' AND username=$1 AND expires_at>now())"
+                ).bind(&username).fetch_one(&mut *tx).await;
+                match exists {
+                    Ok(false) => break,
+                    Ok(true) => { username = format!("{display_name}-{suffix}"); suffix += 1; }
+                    Err(_) => return unavailable(),
+                }
+            }
+            let public_signup = env::var("RAWARR_BILLING_AUDIENCE").is_ok_and(|value| value == "public");
+            if sqlx::query("INSERT INTO rawrarr_users(id,username,display_name,trial_started_at) VALUES ($1,$2,$3,CASE WHEN $4 THEN now() ELSE NULL END)")
+                .bind(user_id).bind(username).bind(display_name).bind(public_signup)
+                .execute(&mut *tx).await.is_err()
+                || sqlx::query("UPDATE rawrarr_nodes SET user_id=$1 WHERE user_id IS NULL")
+                    .bind(user_id).execute(&mut *tx).await.is_err()
+                || sqlx::query("INSERT INTO rawrarr_eth_wallets(address,user_id,ens_name,last_auth_at) VALUES ($1,$2,$3,now())")
+                    .bind(&address).bind(user_id).bind(&ens_name).execute(&mut *tx).await.is_err()
+            { return unavailable(); }
+            user_id
+        }
+        (None, Ok(Some(_))) => return StatusCode::UNAUTHORIZED.into_response(),
+        (None, Err(_)) => return unavailable(),
+    };
     if sqlx::query("UPDATE rawrarr_eth_auth_challenges SET consumed_at=now() WHERE id=$1")
         .bind(request.challenge_id).execute(&mut *tx).await.is_err()
         || sqlx::query("UPDATE rawrarr_eth_wallets SET last_auth_at=now(), ens_name=$2 WHERE address=$1")
@@ -503,6 +544,9 @@ async fn create_challenge(
     flow: &str,
     user_id: Option<Uuid>,
 ) -> Response {
+    if flow == "wallet_signup" && user_id.is_some() {
+        return unavailable();
+    }
     let challenge_id = Uuid::new_v4();
     let nonce = Uuid::new_v4().simple().to_string();
     let message = match siwe_message(&state.origin, address, ens_name, &nonce) {
@@ -529,6 +573,14 @@ async fn load_challenge(
 ) -> Result<Option<sqlx::postgres::PgRow>, sqlx::Error> {
     sqlx::query("SELECT address,ens_name,message,user_id FROM rawrarr_eth_auth_challenges WHERE id=$1 AND flow=$2 AND expires_at>now() AND consumed_at IS NULL")
         .bind(challenge_id).bind(flow).fetch_optional(&state.pool).await
+}
+
+async fn load_wallet_login_challenge(
+    state: &CoordinatorCryptoState,
+    challenge_id: Uuid,
+) -> Result<Option<sqlx::postgres::PgRow>, sqlx::Error> {
+    sqlx::query("SELECT address,ens_name,message,user_id FROM rawrarr_eth_auth_challenges WHERE id=$1 AND flow IN ('wallet_login','wallet_signup') AND expires_at>now() AND consumed_at IS NULL")
+        .bind(challenge_id).fetch_optional(&state.pool).await
 }
 
 async fn claim_subscription(

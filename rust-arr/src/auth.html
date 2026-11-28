@@ -29,7 +29,7 @@
   <main>
     <div class="brand">rawrarr</div>
     <h1>Sign in</h1>
-    <p id="intro">Sign in with a passkey or create an account. Wallet sign-in is also available.</p>
+    <p id="intro">Sign in with a passkey or create an account. A verified ENS wallet can create the first account or sign in.</p>
     <section id="login-panel" hidden>
       <button id="sign-in" type="button">Sign in with passkey</button>
     </section>
@@ -41,7 +41,7 @@
       <label for="ens-name">ENS name</label>
       <input id="ens-name" name="ensName" type="text" autocomplete="off" spellcheck="false" placeholder="willjasen.eth" aria-label="ENS name">
       <button id="sign-in-ens" type="button">Sign in with ENS wallet</button>
-      <p>Wallet sign-in requires an ENS name linked to an existing rawrarr account and an Ethereum wallet extension.</p>
+      <p id="wallet-login-help">Use an ENS name you control and sign a one-time request with its resolved Ethereum wallet. The first wallet can create the initial account.</p>
     </section>
     <div id="message" role="status" aria-live="polite"></div>
   </main>
@@ -126,8 +126,8 @@
         const status = await response.json();
         document.getElementById('login-panel').hidden = !status.userExists;
         document.getElementById('intro').textContent = status.userExists
-          ? 'Sign in with a passkey or create a separate account.'
-          : 'Create an account with a passkey, or sign in with an ENS-linked wallet.';
+          ? 'Sign in with a passkey or create a separate account. ENS wallets linked to an account can also sign in.'
+          : 'Create the first account with a passkey or a verified ENS wallet.';
       } catch (_) { message.textContent = 'Could not connect to the account service.'; }
     })();
   </script>
