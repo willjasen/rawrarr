@@ -142,7 +142,7 @@ function roleLabel(role) {
 }
 function showView(name, updateHash = true) {
   const requestedView = name === 'tv' ? 'series' : name === 'devices' ? 'fossils' : name;
-  const view = views[requestedView] ? requestedView : 'overview';
+  const view = views[requestedView] && requestedView !== 'assistant' ? requestedView : 'overview';
   for (const [key, element] of Object.entries(views)) element.hidden = key !== view;
   for (const button of document.querySelectorAll('.nav-item[data-view]')) {
     const active = button.dataset.view === view;

@@ -47,6 +47,12 @@ test('rawrs Talk stays available from a persistent bottom-left voice panel', () 
   assert.doesNotMatch(workspace, /id="ai-tab-voice"/);
 });
 
+test('assistant page is temporarily hidden from navigation and direct hashes', () => {
+  assert.doesNotMatch(workspace, /data-view="assistant"/);
+  assert.match(workspace, /<section id="assistant-view" hidden inert>/);
+  assert.match(workspaceScript, /views\[requestedView\] && requestedView !== 'assistant' \? requestedView : 'overview'/);
+});
+
 test('coordinator labels the Sonarr section TV in navigation and its page heading', () => {
   assert.doesNotMatch(workspace, /id="tv-route-status" class="route-status"/);
   assert.match(workspace, /data-view=\"series\"[^>]*>[\s\S]*?<span class=\"nav-text\">TV<\/span>/);
@@ -79,7 +85,7 @@ test('left navigation renders every visible option in lowercase', () => {
   assert.ok(sidebar, 'main navigation sidebar exists');
   assert.match(workspace, /\.nav-text\s*\{[^}]*text-transform:\s*lowercase/i);
   const labels = [...sidebar.matchAll(/<span class="nav-text">([^<]+)<\/span>/g)].map(([, label]) => label);
-  assert.deepEqual(labels.map(label => label.toLowerCase()), ['overview', 'subscription', 'roarlay', 'fossils', 'discover', 'movies', 'tv', 'music', 'rawrs', 'configuration', 'settings', 'about']);
+  assert.deepEqual(labels.map(label => label.toLowerCase()), ['overview', 'subscription', 'roarlay', 'fossils', 'discover', 'movies', 'tv', 'music', 'configuration', 'settings', 'about']);
   assert.match(sidebar, /<a class="nav-item" href="\/billing" aria-label="Subscription"[\s\S]*?<span class="nav-text">Subscription<\/span><\/a>/);
 });
 
