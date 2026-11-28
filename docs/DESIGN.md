@@ -7,10 +7,13 @@ This is the living product-design guide for how Rawrarr should behave and feel t
 ## Design goals
 
 An experimental, operator-selected [Rayfish parallel transport](rayfish-transport.md)
-may carry specific authenticated node requests beside Tailscale. It does not
-replace Rawrarr's coordinator or change browser/passkey origins. Route changes
-must be explicit and reversible, with visible failures rather than hidden
-transport fallback. Internal rollout and public adoption remain gated on testing.
+may carry authenticated node-to-node requests beside Tailscale. A separate
+planned browser WebRTC path keeps the coordinator portal as the browser origin
+and uses short-lived, bounded signaling to reach approved nodes. It does not
+replace the coordinator or make Rayfish membership an authorization check. Route
+changes remain reversible, report the active path, and fall back to existing
+coordinator routing after direct failure. Internal rollout and public adoption
+remain gated on security review and testing.
 
 - **Private by default.** Make it clear which information is public, encrypted, shared, or local. Do not reveal private identities, credentials, media paths, or full identifiers in ordinary UI.
 - **Friendly and calm.** Use the Rawrarr dinosaur identity and green accents with a clean, modern interface. Keep setup focused and avoid overwhelming first-time users with advanced configuration.
@@ -175,6 +178,10 @@ When the Radarr UI requires authentication for its backup ZIP, accept optional U
 ### Direct Radarr UI access (planned)
 
 Let the user open the Radarr UI managed by a selected subscriber node, while the browser communicates with that node directly. The coordinator must not proxy, receive, or log the Radarr UI session. Reuse the established node-direct route where possible; do not expose Radarr through a coordinator reverse proxy.
+
+### Direct workspace requests over WebRTC (planned)
+
+Keep the signed-in Rawrarr workspace at the coordinator origin. After bounded coordinator signaling and a node-identity proof against the approved device signing certificate, send only documented workspace API operations over an end-to-end encrypted WebRTC data channel. The node validates the existing short-lived node-scoped session and the operation allowlist for each request. The coordinator may authenticate, authorize, signal, and provide fallback, but does not relay or inspect data-channel requests or responses. Start without TURN. Report whether the direct channel or coordinator route handled each selected-node session. WebRTC is independent of Rayfish membership; #489 may use the same authenticated channel to deliver a one-use invite from the node to the user's browser. This remains planned until signaling, identity proof, request dispatch, browser fallback, and direct-path security qualification are implemented.
 
 ### Local scans and metadata
 
